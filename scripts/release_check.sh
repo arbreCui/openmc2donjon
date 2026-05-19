@@ -30,6 +30,7 @@ Run the release/handoff checks for the accepted C5G7 assembly-wise baseline.
 Default:
   - package tests
   - CLI help/version smoke
+  - recipe/statepoint exporter smoke
   - C5G7 converter readback smoke
   - accepted baseline manifest validation
   - C5G7 statepoint exporter parity check when C5G7_STATEPOINT exists
@@ -124,6 +125,12 @@ echo "== CLI smoke =="
 "$PYTHON_BIN" -m openmc2donjon.cli --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.export_cli --version
 "$PYTHON_BIN" -m openmc2donjon.export_cli --help >/dev/null
+
+echo
+echo "== Recipe export smoke =="
+RUN_DIR="$RUN_DIR/recipe_export_smoke" \
+PYTHON_BIN="$PYTHON_BIN" \
+  bash "$REPO_ROOT/scripts/run_recipe_export_smoke.sh"
 
 echo
 echo "== C5G7 converter smoke =="

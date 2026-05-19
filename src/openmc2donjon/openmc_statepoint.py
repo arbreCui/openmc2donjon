@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib.util
 import inspect
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
@@ -128,6 +129,7 @@ def load_recipe_module(recipe_path: str | Path) -> ModuleType:
     if spec is None or spec.loader is None:
         raise ImportError(f"cannot import recipe {path}")
     module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
     spec.loader.exec_module(module)
     return module
 

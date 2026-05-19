@@ -185,16 +185,19 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
 
     def test_export_cli_reads_recipe_and_statepoint(self) -> None:
         recipe = """
+            from dataclasses import dataclass
+
             import numpy as np
             from openmc2donjon import DomainExportSpec
 
             class EnergyGroups:
                 group_edges = np.array([1.0e-5, 1.0, 1.0e7])
 
+            @dataclass(frozen=True)
             class Domain:
-                name = "mesh"
-                id = 9001
-                volume = 1.0
+                name: str = "mesh"
+                id: int = 9001
+                volume: float = 1.0
 
             class MGXS:
                 def __init__(self, values):

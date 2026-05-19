@@ -51,6 +51,12 @@ PYTHONPATH=src python -m openmc2donjon.export_cli --help
 PYTHONPATH=src python -m openmc2donjon.export_cli --version
 ```
 
+Run the recipe/statepoint export smoke:
+
+```sh
+bash scripts/run_recipe_export_smoke.sh
+```
+
 Run the portable C5G7 demo:
 
 ```sh

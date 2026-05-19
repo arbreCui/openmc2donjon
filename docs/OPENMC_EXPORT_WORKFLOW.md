@@ -19,6 +19,16 @@ structure, MGXS domain type, spatial domain partition, and stable mixture names.
 The CLI owns the package handoff: loading the statepoint into the recipe's
 library and writing the documented HDF5 contract.
 
+For a small workflow check before using a real OpenMC model:
+
+```sh
+bash scripts/run_recipe_export_smoke.sh
+```
+
+That smoke uses `examples/recipe_export_smoke/minimal_recipe.py`, a tiny
+MGXS-like recipe that exercises the same CLI hooks without being a physics
+benchmark.
+
 Minimal recipe shape:
 
 ```python

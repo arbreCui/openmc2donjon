@@ -52,6 +52,12 @@ Fast smoke:
 bash scripts/run_c5g7_demo.sh
 ```
 
+Recipe/statepoint export smoke:
+
+```sh
+bash scripts/run_recipe_export_smoke.sh
+```
+
 Release/handoff check:
 
 ```sh
@@ -130,6 +136,13 @@ openmc2donjon-export \
 The recipe builds the OpenMC `mgxs.Library` for the case and can provide stable
 domain names or explicit `DomainExportSpec` objects. See
 [`docs/OPENMC_EXPORT_WORKFLOW.md`](docs/OPENMC_EXPORT_WORKFLOW.md).
+
+A tiny recipe smoke that does not require OpenMC data is available for checking
+the workflow mechanics:
+
+```sh
+bash scripts/run_recipe_export_smoke.sh
+```
 
 If you already have an OpenMC `mgxs.Library` object in Python, export the
 converter-facing HDF5 directly:
