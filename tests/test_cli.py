@@ -49,6 +49,48 @@ class CliTests(unittest.TestCase):
         self.assertIn("mgxs_input_contract_failed", stream.getvalue())
         self.assertIn("/energy_bounds dataset is missing", stream.getvalue())
 
+    def test_inspect_command_reports_hdf5_contents(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            path = tmp / "mgxs.h5"
+            summary_path = tmp / "inspect_summary.json"
+            write_valid_mgxs(path)
+            with h5py.File(path, "a") as h5:
+                fuel = h5["mixtures/fuel"]
+                fuel.create_dataset("H-FACTOR", data=np.array([10.0, 20.0]))
+                adf = fuel.create_group("adf")
+                adf.create_dataset("FD_XMIN", data=np.array([1.01, 0.99]))
+                adf.create_dataset("FD_XMAX", data=np.array([1.02, 0.98]))
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = cli_main(
+                    [
+                        "inspect",
+                        str(path),
+                        "--summary-json",
+                        str(summary_path),
+                    ]
+                )
+
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+
+        output = stream.getvalue()
+        self.assertEqual(rc, 0)
+        self.assertIn("OpenMC-to-DONJON MGXS inspect", output)
+        self.assertIn("mixtures=1 calculations=1 state_points=1", output)
+        self.assertIn("transport_total=1/1", output)
+        self.assertIn("h_factor=1/1", output)
+        self.assertIn("adf=1/1 faces=FD_XMAX,FD_XMIN", output)
+        self.assertIn("fuel states=1", output)
+        self.assertEqual(payload["schema"], "openmc2donjon.mgxs-inspect.v1")
+        self.assertEqual(payload["inputs"][0]["mixture_count"], 1)
+        self.assertEqual(payload["inputs"][0]["mixtures"][0]["name"], "fuel")
+        self.assertEqual(
+            set(payload["inputs"][0]["mixtures"][0]["adf_faces"]),
+            {"FD_XMIN", "FD_XMAX"},
+        )
+
     def test_convert_check_writes_output_for_valid_hdf5(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)

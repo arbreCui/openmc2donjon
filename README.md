@@ -169,6 +169,7 @@ openmc2donjon-from-openmc --recipe export_recipe.py --dry-run -o out.mcompo.txt 
 Convert with input-contract preflight:
 
 ```sh
+openmc2donjon inspect mgxs_library.h5
 openmc2donjon mgxs_library.h5 -o out.mcompo.txt --check
 ```
 

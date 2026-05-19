@@ -22,6 +22,8 @@
 - Bumped the from-OpenMC summary schema to v2 with checked preflight provenance.
 - Added `openmc2donjon-from-openmc --dry-run` for one-step conversion-plan
   checks that do not write HDF5, summary JSON, or DONJON ASCII files.
+- Added `openmc2donjon inspect` for read-only MGXS HDF5 inventory reports with
+  optional JSON output.
 - Extended release check so the C5G7 statepoint parity path exercises
   `openmc2donjon-from-openmc`, reads back the generated MCO, and validates the
   summary manifest.

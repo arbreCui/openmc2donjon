@@ -23,6 +23,7 @@ STATEPOINT="$RUN_DIR/statepoint.fake.h5"
 MGXS="$RUN_DIR/minimal_recipe_mgxs.h5"
 MCO="$RUN_DIR/minimal_recipe.mcompo.txt"
 MAC="$RUN_DIR/minimal_recipe.macrolib.txt"
+INSPECT_SUMMARY="$RUN_DIR/minimal_recipe_inspect_summary.json"
 ONE_STEP_H5="$RUN_DIR/one_step_mgxs.h5"
 ONE_STEP_MCO="$RUN_DIR/one_step.mcompo.txt"
 ONE_STEP_SUMMARY="$RUN_DIR/one_step_summary.json"
@@ -52,6 +53,24 @@ echo "== Recipe export =="
   --recipe "$RECIPE" \
   --statepoint "$STATEPOINT" \
   -o "$MGXS"
+
+echo
+echo "== HDF5 inspect =="
+"$PYTHON_BIN" -m openmc2donjon.cli inspect "$MGXS" \
+  --limit 5 \
+  --summary-json "$INSPECT_SUMMARY"
+"$PYTHON_BIN" - "$INSPECT_SUMMARY" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+if payload["schema"] != "openmc2donjon.mgxs-inspect.v1":
+    raise SystemExit("unexpected inspect summary schema")
+summary = payload["inputs"][0]
+if summary["mixture_count"] != 2 or summary["calculation_count"] != 2:
+    raise SystemExit(f"unexpected inspect summary counts: {summary}")
+PY
 
 echo
 echo "== HDF5 preflight =="

@@ -8,6 +8,7 @@ import sys
 
 from . import __version__
 from .macrolib import convert_mgxs_hdf5_to_macrolib
+from .mgxs_inspect import inspect_files
 from .mgxs_input_contract import run_preflight
 from .multicompo import DEFAULT_ROOT_NAME, convert_mgxs_hdf5
 
@@ -17,7 +18,8 @@ def build_parser() -> argparse.ArgumentParser:
         prog="openmc2donjon",
         description=(
             "Convert an OpenMC MGXS HDF5 dump to DONJON ASCII LCM objects. "
-            "Use 'openmc2donjon check <input_h5>' for input-contract preflight."
+            "Use 'openmc2donjon inspect <input_h5>' to inspect an HDF5 handoff "
+            "or 'openmc2donjon check <input_h5>' for input-contract preflight."
         ),
     )
     parser.add_argument(
@@ -170,8 +172,36 @@ def build_check_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_inspect_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="openmc2donjon inspect",
+        description="Inspect OpenMC MGXS HDF5 files without converting them.",
+    )
+    parser.add_argument("input_h5", type=Path, nargs="+", help="MGXS HDF5 input file")
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="number of mixtures to list per file (default: 20)",
+    )
+    parser.add_argument(
+        "--all-mixtures",
+        action="store_true",
+        help="list every mixture instead of applying --limit",
+    )
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        default=None,
+        help="write a machine-readable inspection JSON",
+    )
+    return parser
+
+
 def main(argv: list[str] | None = None) -> int:
     raw_argv = sys.argv[1:] if argv is None else list(argv)
+    if raw_argv and raw_argv[0] == "inspect":
+        return _inspect_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "check":
         return _check_main(raw_argv[1:])
 
@@ -231,6 +261,17 @@ def _check_main(argv: list[str]) -> int:
         summary_json=args.summary_json,
     )
     return 0 if ok or args.no_fail else 1
+
+
+def _inspect_main(argv: list[str]) -> int:
+    args = build_inspect_parser().parse_args(argv)
+    reports = inspect_files(
+        args.input_h5,
+        limit=args.limit,
+        all_mixtures=args.all_mixtures,
+        summary_json=args.summary_json,
+    )
+    return 0 if all(report.ok for report in reports) else 1
 
 
 if __name__ == "__main__":

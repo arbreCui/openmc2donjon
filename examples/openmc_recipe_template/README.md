@@ -100,6 +100,7 @@ openmc2donjon-from-openmc \
 ## Check The HDF5 Handoff
 
 ```sh
+openmc2donjon inspect mgxs_library.h5
 openmc2donjon check mgxs_library.h5
 ```
 

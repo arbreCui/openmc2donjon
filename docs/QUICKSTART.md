@@ -30,6 +30,7 @@ This checks:
 - recipe dry-run metadata preflight;
 - one-step dry-run conversion-plan preflight;
 - recipe/statepoint export to the HDF5 handoff contract;
+- HDF5 inventory inspect;
 - HDF5 preflight;
 - `L_MULTICOMPO` write/readback;
 - root `L_MACROLIB` write/readback;
@@ -89,6 +90,7 @@ openmc2donjon-export \
   --statepoint statepoint.120.h5 \
   -o mgxs_library.h5
 
+openmc2donjon inspect mgxs_library.h5
 openmc2donjon mgxs_library.h5 -o out.mcompo.txt --check
 ```
 

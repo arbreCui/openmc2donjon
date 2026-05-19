@@ -264,7 +264,17 @@ Experimental burnup-axis variant:
 
 ## Preflight Checks
 
-The packaged CLI can enforce the contract before writing:
+The packaged CLI can inspect the handoff inventory without converting:
+
+```sh
+openmc2donjon inspect mgxs_library.h5
+```
+
+`inspect` lists root attributes, energy groups, mixture names, state counts,
+optional dataset coverage, scatter-axis metadata, ADF faces, and can write
+`--summary-json` for automation.
+
+The packaged CLI can also enforce the contract before writing:
 
 ```sh
 openmc2donjon check mgxs_library.h5
