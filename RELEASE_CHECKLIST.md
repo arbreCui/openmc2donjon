@@ -75,6 +75,8 @@ bash examples/donjon_openmc2donjon/run_acceptance.sh
   `examples/donjon_openmc2donjon/c5g7_validation/C5G7_VALIDATION_CHARTER.md`
 - [x] Reviewer validation summary:
   `docs/VALIDATION.md`
+- [x] Reviewer handoff note:
+  `docs/HANDOFF_NOTE.md`
 - [x] Architecture summary:
   `docs/ARCHITECTURE.md`
 - [x] Roadmap:

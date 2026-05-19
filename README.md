@@ -28,6 +28,7 @@ Current validation status:
 Start here:
 
 - [HDF5 input contract](docs/HDF5_INPUT_CONTRACT.md)
+- [Handoff note](docs/HANDOFF_NOTE.md)
 - [Validation summary](docs/VALIDATION.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Roadmap](docs/ROADMAP.md)
