@@ -8,16 +8,7 @@ import sys
 
 from . import __version__
 from .macrolib import convert_mgxs_hdf5_to_macrolib
-from .mgxs_input_contract import (
-    FAIL_DECISION,
-    PASS_DECISION,
-    SCHEMA as MGXS_INPUT_CONTRACT_SCHEMA,
-    output_name_issue,
-    print_report,
-    split_csv,
-    validate_input,
-    write_summary,
-)
+from .mgxs_input_contract import run_preflight
 from .multicompo import DEFAULT_ROOT_NAME, convert_mgxs_hdf5
 
 
@@ -194,7 +185,7 @@ def main(argv: list[str] | None = None) -> int:
         output_path = Path("out.mcompo.txt")
 
     if args.check:
-        ok = _run_preflight(
+        ok = run_preflight(
             [input_path],
             output_format=args.format,
             output_path=output_path,
@@ -229,7 +220,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def _check_main(argv: list[str]) -> int:
     args = build_check_parser().parse_args(argv)
-    ok = _run_preflight(
+    ok = run_preflight(
         args.input_h5,
         output_format=args.format,
         output_path=args.output,
@@ -240,52 +231,6 @@ def _check_main(argv: list[str]) -> int:
         summary_json=args.summary_json,
     )
     return 0 if ok or args.no_fail else 1
-
-
-def _run_preflight(
-    input_paths: list[Path],
-    *,
-    output_format: str,
-    output_path: Path | None,
-    require_adf: bool,
-    expected_adf_faces: str | None,
-    require_transport_dataset: bool,
-    require_volume: bool,
-    summary_json: Path | None,
-) -> bool:
-    expected_faces = split_csv(expected_adf_faces)
-    reports = [
-        validate_input(
-            path,
-            require_adf=require_adf,
-            require_transport_dataset=require_transport_dataset,
-            require_volume=require_volume,
-            expected_adf_faces=expected_faces,
-        )
-        for path in input_paths
-    ]
-    output_issue = output_name_issue(output_path, output_format)
-    ok = all(report.ok for report in reports) and output_issue is None
-    decision = PASS_DECISION if ok else FAIL_DECISION
-
-    print("OpenMC-to-DONJON MGXS input contract")
-    print(f"  schema: {MGXS_INPUT_CONTRACT_SCHEMA}")
-    print()
-    for report in reports:
-        print_report(report)
-    if output_path:
-        status = "PASS" if output_issue is None else "FAIL"
-        print(f"  {status}  output name: {output_path}")
-        if output_issue:
-            print(f"        {output_issue}")
-        print()
-    print("MGXS input contract decision")
-    print(f"  {decision}")
-
-    if summary_json:
-        write_summary(summary_json, reports, decision, output_issue)
-
-    return ok
 
 
 if __name__ == "__main__":

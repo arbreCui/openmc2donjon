@@ -48,7 +48,8 @@ openmc2donjon-export --recipe export_recipe.py --no-load-statepoint --dry-run
 openmc2donjon-from-openmc \
   --recipe export_recipe.py \
   --statepoint statepoint.120.h5 \
-  -o out.mcompo.txt
+  -o out.mcompo.txt \
+  --check
 ```
 
 To keep the intermediate HDF5 handoff for audit/debugging:

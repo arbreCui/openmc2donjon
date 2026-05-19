@@ -26,6 +26,7 @@ MAC="$RUN_DIR/minimal_recipe.macrolib.txt"
 ONE_STEP_H5="$RUN_DIR/one_step_mgxs.h5"
 ONE_STEP_MCO="$RUN_DIR/one_step.mcompo.txt"
 ONE_STEP_SUMMARY="$RUN_DIR/one_step_summary.json"
+ONE_STEP_CHECK_SUMMARY="$RUN_DIR/one_step_check_summary.json"
 
 echo "== openmc2donjon recipe export smoke =="
 echo "repo: $REPO_ROOT"
@@ -76,9 +77,13 @@ echo "== One-step from OpenMC recipe =="
   --statepoint "$STATEPOINT" \
   --keep-hdf5 "$ONE_STEP_H5" \
   -o "$ONE_STEP_MCO" \
-  --summary-json "$ONE_STEP_SUMMARY"
+  --summary-json "$ONE_STEP_SUMMARY" \
+  --check \
+  --require-volume \
+  --require-transport-dataset \
+  --check-summary-json "$ONE_STEP_CHECK_SUMMARY"
 
-"$PYTHON_BIN" - "$MGXS" "$MCO" "$MAC" "$STATEPOINT" "$ONE_STEP_H5" "$ONE_STEP_MCO" "$ONE_STEP_SUMMARY" <<'PY'
+"$PYTHON_BIN" - "$MGXS" "$MCO" "$MAC" "$STATEPOINT" "$ONE_STEP_H5" "$ONE_STEP_MCO" "$ONE_STEP_SUMMARY" "$ONE_STEP_CHECK_SUMMARY" <<'PY'
 import json
 from pathlib import Path
 import sys
@@ -94,6 +99,7 @@ statepoint = str(Path(sys.argv[4]))
 one_step_h5 = Path(sys.argv[5])
 one_step_mco = Path(sys.argv[6])
 summary = Path(sys.argv[7])
+check_summary = Path(sys.argv[8])
 
 for path in (mgxs, one_step_h5):
     with h5py.File(path, "r") as h5:
@@ -116,6 +122,9 @@ payload = json.loads(summary.read_text(encoding="utf-8"))
 summary_errors = validate_from_openmc_summary_v1(payload)
 if summary_errors:
     raise SystemExit("invalid summary schema: " + "; ".join(summary_errors))
+check_payload = json.loads(check_summary.read_text(encoding="utf-8"))
+if check_payload["decision"] != "mgxs_input_contract_passed":
+    raise SystemExit("one-step checked conversion preflight did not pass")
 if payload["mixture_names"] != ["FUEL_A", "MOD_A"]:
     raise SystemExit("unexpected summary mixture names")
 if payload["hdf5"] != str(one_step_h5) or payload["output"] != str(one_step_mco):

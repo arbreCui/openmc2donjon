@@ -98,6 +98,92 @@ class FromOpenMCCliTests(unittest.TestCase):
             self.assertIsNone(payload["single_point_burnup"])
             self.assertIsNone(payload["h_factor_default"])
 
+    def test_recipe_to_multicompo_with_checked_hdf5(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        recipe = repo_root / "examples/recipe_export_smoke/minimal_recipe.py"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            statepoint = tmp / "statepoint.fake.h5"
+            hdf5 = tmp / "mgxs.h5"
+            output = tmp / "out.mcompo.txt"
+            check_summary = tmp / "check_summary.json"
+            statepoint.write_text("fake statepoint\n", encoding="utf-8")
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = from_openmc_main(
+                    [
+                        "--recipe",
+                        str(recipe),
+                        "--statepoint",
+                        str(statepoint),
+                        "--keep-hdf5",
+                        str(hdf5),
+                        "-o",
+                        str(output),
+                        "--check",
+                        "--require-volume",
+                        "--require-transport-dataset",
+                        "--check-summary-json",
+                        str(check_summary),
+                    ]
+                )
+
+            payload = json.loads(check_summary.read_text(encoding="utf-8"))
+            output_exists = output.exists()
+
+        self.assertEqual(rc, 0)
+        self.assertTrue(output_exists)
+        self.assertEqual(payload["decision"], "mgxs_input_contract_passed")
+        self.assertIn("mgxs_input_contract_passed", stream.getvalue())
+
+    def test_recipe_check_failure_does_not_write_output(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        recipe = repo_root / "examples/recipe_export_smoke/minimal_recipe.py"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            statepoint = tmp / "statepoint.fake.h5"
+            hdf5 = tmp / "mgxs.h5"
+            output = tmp / "out.mcompo.txt"
+            check_summary = tmp / "check_summary.json"
+            conversion_summary = tmp / "conversion_summary.json"
+            statepoint.write_text("fake statepoint\n", encoding="utf-8")
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = from_openmc_main(
+                    [
+                        "--recipe",
+                        str(recipe),
+                        "--statepoint",
+                        str(statepoint),
+                        "--keep-hdf5",
+                        str(hdf5),
+                        "-o",
+                        str(output),
+                        "--summary-json",
+                        str(conversion_summary),
+                        "--check",
+                        "--require-adf",
+                        "--check-summary-json",
+                        str(check_summary),
+                    ]
+                )
+
+            payload = json.loads(check_summary.read_text(encoding="utf-8"))
+            output_exists = output.exists()
+            hdf5_exists = hdf5.exists()
+            conversion_summary_exists = conversion_summary.exists()
+
+        self.assertEqual(rc, 1)
+        self.assertTrue(hdf5_exists)
+        self.assertFalse(output_exists)
+        self.assertFalse(conversion_summary_exists)
+        self.assertEqual(payload["decision"], "mgxs_input_contract_failed")
+        self.assertIn("mgxs_input_contract_failed", stream.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -41,7 +41,8 @@ openmc2donjon-from-openmc \
   --statepoint statepoint.120.h5 \
   --keep-hdf5 mgxs_library.h5 \
   -o out.mcompo.txt \
-  --summary-json run_summary.json
+  --summary-json run_summary.json \
+  --check
 ```
 
 Omit `--keep-hdf5` to use a temporary HDF5 handoff file. Keep it during

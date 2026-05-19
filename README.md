@@ -15,7 +15,8 @@ bash scripts/run_recipe_export_smoke.sh
 openmc2donjon-from-openmc \
   --recipe export_recipe.py \
   --statepoint statepoint.120.h5 \
-  -o out.mcompo.txt
+  -o out.mcompo.txt \
+  --check
 ```
 
 For a first pass through the workflow, start with

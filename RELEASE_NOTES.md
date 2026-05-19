@@ -17,6 +17,8 @@
   preflight entry point.
 - Added `openmc2donjon ... --check` to run input-contract preflight before
   writing DONJON ASCII.
+- Added checked conversion support to `openmc2donjon-from-openmc` so the
+  recipe/statepoint one-step path can fail before writing DONJON ASCII.
 - Extended release check so the C5G7 statepoint parity path exercises
   `openmc2donjon-from-openmc`, reads back the generated MCO, and validates the
   summary manifest.

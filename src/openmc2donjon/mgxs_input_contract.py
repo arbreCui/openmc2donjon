@@ -805,6 +805,56 @@ def output_name_issue(path: Path | None, output_format: str) -> str | None:
     return f"output should end with one of: {', '.join(allowed)}"
 
 
+def run_preflight(
+    input_paths: list[Path],
+    *,
+    output_format: str = "any",
+    output_path: Path | None = None,
+    require_adf: bool = False,
+    expected_adf_faces: str | list[str] | None = None,
+    require_transport_dataset: bool = False,
+    require_volume: bool = False,
+    summary_json: Path | None = None,
+) -> bool:
+    expected_faces = (
+        split_csv(expected_adf_faces)
+        if isinstance(expected_adf_faces, str) or expected_adf_faces is None
+        else expected_adf_faces
+    )
+    reports = [
+        validate_input(
+            path,
+            require_adf=require_adf,
+            require_transport_dataset=require_transport_dataset,
+            require_volume=require_volume,
+            expected_adf_faces=expected_faces,
+        )
+        for path in input_paths
+    ]
+    output_issue = output_name_issue(output_path, output_format)
+    ok = all(report.ok for report in reports) and output_issue is None
+    decision = PASS_DECISION if ok else FAIL_DECISION
+
+    print("OpenMC-to-DONJON MGXS input contract")
+    print(f"  schema: {SCHEMA}")
+    print()
+    for report in reports:
+        print_report(report)
+    if output_path:
+        status = "PASS" if output_issue is None else "FAIL"
+        print(f"  {status}  output name: {output_path}")
+        if output_issue:
+            print(f"        {output_issue}")
+        print()
+    print("MGXS input contract decision")
+    print(f"  {decision}")
+
+    if summary_json:
+        write_summary(summary_json, reports, decision, output_issue)
+
+    return ok
+
+
 def print_report(report: InputReport) -> None:
     status = "PASS" if report.ok else "FAIL"
     calculation_count = report.calculations or report.mixtures

@@ -10,6 +10,7 @@ from pathlib import Path
 from . import __version__
 from .from_openmc_summary import FROM_OPENMC_SUMMARY_SCHEMA
 from .macrolib import convert_mgxs_hdf5_to_macrolib
+from .mgxs_input_contract import run_preflight
 from .multicompo import DEFAULT_ROOT_NAME, convert_mgxs_hdf5, read_mgxs_hdf5_histories
 from .openmc_statepoint import export_openmc_statepoint_recipe
 
@@ -105,6 +106,37 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="write a machine-readable conversion summary JSON",
     )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="run HDF5 input-contract preflight after export and before conversion",
+    )
+    parser.add_argument(
+        "--require-adf",
+        action="store_true",
+        help="with --check, require ADF data for every mixture",
+    )
+    parser.add_argument(
+        "--expected-adf-faces",
+        default=None,
+        help="with --check, comma-separated ADF face names expected on every ADF-bearing mixture",
+    )
+    parser.add_argument(
+        "--require-transport-dataset",
+        action="store_true",
+        help="with --check, require explicit transport_total datasets",
+    )
+    parser.add_argument(
+        "--require-volume",
+        action="store_true",
+        help="with --check, require positive volume attributes",
+    )
+    parser.add_argument(
+        "--check-summary-json",
+        type=Path,
+        default=None,
+        help="with --check, write a machine-readable preflight summary JSON",
+    )
     return parser
 
 
@@ -116,11 +148,11 @@ def main(argv: list[str] | None = None) -> int:
 
     output_path = _output_path(args.output, args.format)
     if args.keep_hdf5 is not None:
-        _run_pipeline(args, args.keep_hdf5, output_path, hdf5_kept=True)
+        return 0 if _run_pipeline(args, args.keep_hdf5, output_path, hdf5_kept=True) else 1
     else:
         with tempfile.TemporaryDirectory(prefix="openmc2donjon_") as tmpdir:
-            _run_pipeline(args, Path(tmpdir) / "mgxs_library.h5", output_path, hdf5_kept=False)
-    return 0
+            ok = _run_pipeline(args, Path(tmpdir) / "mgxs_library.h5", output_path, hdf5_kept=False)
+            return 0 if ok else 1
 
 
 def _run_pipeline(
@@ -129,7 +161,7 @@ def _run_pipeline(
     output_path: Path,
     *,
     hdf5_kept: bool,
-) -> None:
+) -> bool:
     recipe_summary = export_openmc_statepoint_recipe(
         args.recipe,
         hdf5_path,
@@ -143,6 +175,22 @@ def _run_pipeline(
         f"{export_summary.energy_groups} groups, P{export_summary.legendre_order} "
         f"from recipe {recipe_summary.recipe_path}"
     )
+
+    if args.check:
+        ok = run_preflight(
+            [hdf5_path],
+            output_format=args.format,
+            output_path=output_path,
+            require_adf=args.require_adf,
+            expected_adf_faces=args.expected_adf_faces,
+            require_transport_dataset=args.require_transport_dataset,
+            require_volume=args.require_volume,
+            summary_json=args.check_summary_json,
+        )
+        if not ok:
+            if hdf5_kept:
+                print(f"kept HDF5: {hdf5_path}")
+            return False
 
     histories, _energy_bounds, burnup_values = read_mgxs_hdf5_histories(
         hdf5_path,
@@ -191,6 +239,7 @@ def _run_pipeline(
         )
         _write_json(args.summary_json, summary)
         print(f"wrote summary: {args.summary_json}")
+    return True
 
 
 def _output_path(raw_output: str | None, output_format: str) -> Path:
