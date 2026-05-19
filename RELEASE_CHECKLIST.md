@@ -7,7 +7,7 @@ This checklist covers the current `0.1.0` internal handoff state.
 - [x] `L_MULTICOMPO` ASCII writer for one-state OpenMC MGXS libraries.
 - [x] Root `L_MACROLIB` ASCII writer for direct DONJON solves.
 - [x] Duck-typed OpenMC `mgxs.Library` exporter for the documented HDF5 input
-  contract.
+  contract, including explicit mesh/cell subdomain export specs.
 - [x] DRAGON/DONJON scatter triplet conversion with contiguous descending
   incoming-group spans.
 - [x] Multiple Legendre moments from `[moment, G_in, G_out]` or OpenMC-style
@@ -40,6 +40,14 @@ Run the portable C5G7 demo:
 
 ```sh
 bash scripts/run_c5g7_demo.sh
+```
+
+Optionally regenerate the C5G7 HDF5 handoff from a saved OpenMC statepoint:
+
+```sh
+PYTHONPATH=src python scripts/export_c5g7_statepoint.py \
+  --statepoint /Users/wen/openmc-workspace/c5g7_converter_test/runs/assembly_p1/statepoint.120.h5 \
+  -o /private/tmp/openmc2donjon_c5g7_exporter_assembly_p1.h5
 ```
 
 Run the DONJON-side C5G7 acceptance from a full local DRAGON/DONJON checkout:

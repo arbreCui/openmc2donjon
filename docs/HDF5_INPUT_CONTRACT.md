@@ -7,7 +7,7 @@ format with one group structure and one or more spatial MGXS domains.
 The package includes a duck-typed OpenMC exporter for this contract:
 
 ```python
-from openmc2donjon import export_openmc_mgxs_library
+from openmc2donjon import DomainExportSpec, export_openmc_mgxs_library
 
 export_openmc_mgxs_library(library, "mgxs_library.h5")
 ```
@@ -15,6 +15,23 @@ export_openmc_mgxs_library(library, "mgxs_library.h5")
 It expects an OpenMC `mgxs.Library`-like object with `energy_groups`, `domains`,
 and `get_mgxs(domain, mgxs_type)`. It writes one HDF5 mixture group per OpenMC
 MGXS domain.
+
+For mesh or cell subdomains, use explicit export specs:
+
+```python
+export_openmc_mgxs_library(
+    library,
+    "mgxs_library.h5",
+    domain_specs=[
+        DomainExportSpec(
+            domain=mesh,
+            name="ASM_Y01_X01",
+            xs_kwargs={"subdomains": [(1, 1, 1)]},
+            volume=assembly_volume,
+        ),
+    ],
+)
+```
 
 ## Domain Rule
 

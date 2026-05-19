@@ -11,6 +11,7 @@ import time; instead it expects an object with the parts of the OpenMC
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
@@ -24,7 +25,12 @@ MGXS_TYPE_ALIASES: dict[str, tuple[str, ...]] = {
     "fission": ("fission",),
     "nu_fission": ("nu-fission", "nu_fission"),
     "chi": ("chi",),
-    "scatter_matrix": ("scatter matrix", "scatter_matrix"),
+    "scatter_matrix": (
+        "scatter matrix",
+        "scatter_matrix",
+        "consistent nu-scatter matrix",
+        "nu-scatter matrix",
+    ),
     "transport_total": ("transport", "transport_total"),
     "inverse_velocity": ("inverse-velocity", "inverse_velocity"),
 }
@@ -36,6 +42,18 @@ class ExportedDomain:
 
     name: str
     source: Any
+    xs_kwargs: Mapping[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class DomainExportSpec:
+    """Describe one OpenMC MGXS domain or mesh subdomain export."""
+
+    domain: Any
+    name: str | None = None
+    xs_kwargs: Mapping[str, Any] | None = None
+    volume: float | None = None
+    attrs: Mapping[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -52,7 +70,9 @@ def export_openmc_mgxs_library(
     library: Any,
     output_path: str | Path,
     *,
+    domain_specs: Sequence[DomainExportSpec | Mapping[str, Any]] | None = None,
     domain_names: Mapping[Any, str] | None = None,
+    root_attrs: Mapping[str, Any] | None = None,
     overwrite: bool = True,
 ) -> ExportSummary:
     """Write an OpenMC MGXS-like library to the HDF5 input contract.
@@ -63,9 +83,14 @@ def export_openmc_mgxs_library(
         OpenMC ``mgxs.Library`` or a compatible object.
     output_path:
         HDF5 file to write.
+    domain_specs:
+        Optional explicit export specs. Use this for mesh or cell subdomains
+        where a single OpenMC domain produces multiple DONJON mixtures.
     domain_names:
         Optional mapping from domain object, domain id, or domain name to a
         stable output name.
+    root_attrs:
+        Optional HDF5 root attributes to copy into the output file.
     overwrite:
         If ``False``, fail when the output file already exists.
     """
@@ -81,24 +106,37 @@ def export_openmc_mgxs_library(
     if ngroups <= 0:
         raise ValueError("energy group structure must contain at least one group")
 
-    domains = list(getattr(library, "domains", []) or [])
-    if not domains:
+    specs = _export_specs_from_library(library, domain_specs)
+    if not specs:
         raise ValueError("library contains no domains")
 
     exported: list[tuple[ExportedDomain, dict[str, Any]]] = []
     legendre_order = 0
     used_names: set[str] = set()
-    for index, domain in enumerate(domains, start=1):
-        name = _domain_name(domain, index, domain_names, used_names)
-        data = _domain_data(library, domain, ngroups)
+    for index, spec in enumerate(specs, start=1):
+        name = _domain_name(spec.domain, index, domain_names, used_names, spec.name)
+        data = _domain_data(library, spec.domain, ngroups, xs_kwargs=spec.xs_kwargs)
+        if spec.volume is not None:
+            data["volume"] = float(spec.volume)
         legendre_order = max(legendre_order, data["scatter_matrix"].shape[0] - 1)
-        exported.append((ExportedDomain(name=name, source=domain), data))
+        exported.append(
+            (
+                ExportedDomain(
+                    name=name,
+                    source=spec.domain,
+                    xs_kwargs=spec.xs_kwargs,
+                ),
+                data | {"attrs": spec.attrs or {}},
+            )
+        )
 
     path.parent.mkdir(parents=True, exist_ok=True)
     with h5py.File(path, "w") as h5:
         h5.attrs["energy_groups"] = ngroups
         h5.attrs["legendre_order"] = legendre_order
         h5.attrs["source"] = "OpenMC mgxs.Library"
+        for attr_key, attr_value in (root_attrs or {}).items():
+            _write_hdf5_attr(h5, str(attr_key), attr_value)
         h5.create_dataset("energy_bounds", data=energy_bounds)
         mixtures = h5.create_group("mixtures")
         for domain_summary, data in exported:
@@ -107,6 +145,8 @@ def export_openmc_mgxs_library(
             group.attrs["scatter_format"] = "legendre"
             group.attrs["scatter_axes"] = "moment,from,to"
             group.attrs["volume"] = float(data["volume"])
+            for attr_key, attr_value in data["attrs"].items():
+                _write_hdf5_attr(group, str(attr_key), attr_value)
             for key in (
                 "total",
                 "absorption",
@@ -132,14 +172,44 @@ def export_openmc_mgxs_library(
     )
 
 
-def _domain_data(library: Any, domain: Any, ngroups: int) -> dict[str, Any]:
-    total = _required_vector(library, domain, "total", ngroups)
-    absorption = _required_vector(library, domain, "absorption", ngroups)
-    scatter = _required_scatter(library, domain, ngroups)
+def _export_specs_from_library(
+    library: Any,
+    domain_specs: Sequence[DomainExportSpec | Mapping[str, Any]] | None,
+) -> list[DomainExportSpec]:
+    if domain_specs is None:
+        return [
+            DomainExportSpec(domain=domain)
+            for domain in getattr(library, "domains", []) or []
+        ]
+    specs: list[DomainExportSpec] = []
+    for spec in domain_specs:
+        if isinstance(spec, DomainExportSpec):
+            specs.append(spec)
+        else:
+            specs.append(DomainExportSpec(**dict(spec)))
+    return specs
 
-    fission = _optional_vector(library, domain, "fission", ngroups)
-    nu_fission = _optional_vector(library, domain, "nu_fission", ngroups)
-    chi = _optional_vector(library, domain, "chi", ngroups)
+
+def _domain_data(
+    library: Any,
+    domain: Any,
+    ngroups: int,
+    *,
+    xs_kwargs: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    total = _required_vector(library, domain, "total", ngroups, xs_kwargs=xs_kwargs)
+    absorption = _required_vector(
+        library,
+        domain,
+        "absorption",
+        ngroups,
+        xs_kwargs=xs_kwargs,
+    )
+    scatter = _required_scatter(library, domain, ngroups, xs_kwargs=xs_kwargs)
+
+    fission = _optional_vector(library, domain, "fission", ngroups, xs_kwargs=xs_kwargs)
+    nu_fission = _optional_vector(library, domain, "nu_fission", ngroups, xs_kwargs=xs_kwargs)
+    chi = _optional_vector(library, domain, "chi", ngroups, xs_kwargs=xs_kwargs)
     has_fission_source = (
         nu_fission is not None
         and chi is not None
@@ -160,15 +230,34 @@ def _domain_data(library: Any, domain: Any, ngroups: int) -> dict[str, Any]:
         "nu_fission": nu_fission,
         "chi": chi,
         "scatter_matrix": scatter,
-        "transport_total": _optional_vector(library, domain, "transport_total", ngroups),
-        "inverse_velocity": _optional_vector(library, domain, "inverse_velocity", ngroups),
+        "transport_total": _optional_vector(
+            library,
+            domain,
+            "transport_total",
+            ngroups,
+            xs_kwargs=xs_kwargs,
+        ),
+        "inverse_velocity": _optional_vector(
+            library,
+            domain,
+            "inverse_velocity",
+            ngroups,
+            xs_kwargs=xs_kwargs,
+        ),
         "volume": _domain_volume(domain),
         "fissionable": bool(_domain_fissionable(domain, has_fission_source)),
     }
 
 
-def _required_vector(library: Any, domain: Any, key: str, ngroups: int) -> np.ndarray:
-    vector = _optional_vector(library, domain, key, ngroups)
+def _required_vector(
+    library: Any,
+    domain: Any,
+    key: str,
+    ngroups: int,
+    *,
+    xs_kwargs: Mapping[str, Any] | None,
+) -> np.ndarray:
+    vector = _optional_vector(library, domain, key, ngroups, xs_kwargs=xs_kwargs)
     if vector is None:
         raise ValueError(f"domain {_domain_label(domain)}: missing required MGXS {key!r}")
     return vector
@@ -179,20 +268,37 @@ def _optional_vector(
     domain: Any,
     key: str,
     ngroups: int,
+    *,
+    xs_kwargs: Mapping[str, Any] | None,
 ) -> np.ndarray | None:
     mgxs = _get_mgxs_optional(library, domain, key)
     if mgxs is None:
         return None
-    return _as_group_vector(_mgxs_values(mgxs), ngroups, _domain_label(domain), key)
+    return _as_group_vector(
+        _mgxs_values(mgxs, xs_kwargs=xs_kwargs),
+        ngroups,
+        _domain_label(domain),
+        key,
+    )
 
 
-def _required_scatter(library: Any, domain: Any, ngroups: int) -> np.ndarray:
+def _required_scatter(
+    library: Any,
+    domain: Any,
+    ngroups: int,
+    *,
+    xs_kwargs: Mapping[str, Any] | None,
+) -> np.ndarray:
     mgxs = _get_mgxs_optional(library, domain, "scatter_matrix")
     if mgxs is None:
         raise ValueError(
             f"domain {_domain_label(domain)}: missing required MGXS 'scatter matrix'"
         )
-    return _as_scatter_moments(_mgxs_values(mgxs), ngroups, _domain_label(domain))
+    return _as_scatter_moments(
+        _mgxs_values(mgxs, xs_kwargs=xs_kwargs),
+        ngroups,
+        _domain_label(domain),
+    )
 
 
 def _get_mgxs_optional(library: Any, domain: Any, key: str) -> Any | None:
@@ -209,13 +315,15 @@ def _get_mgxs_optional(library: Any, domain: Any, key: str) -> Any | None:
     return None
 
 
-def _mgxs_values(mgxs: Any) -> np.ndarray:
+def _mgxs_values(mgxs: Any, *, xs_kwargs: Mapping[str, Any] | None) -> np.ndarray:
+    extra_kwargs = dict(xs_kwargs or {})
     if hasattr(mgxs, "get_xs"):
-        for kwargs in (
+        for base_kwargs in (
             {"nuclides": "sum"},
             {"nuclides": "sum", "xs_type": "macro"},
             {},
         ):
+            kwargs = {**base_kwargs, **extra_kwargs}
             try:
                 return np.asarray(mgxs.get_xs(**kwargs), dtype=float)
             except TypeError:
@@ -301,8 +409,9 @@ def _domain_name(
     index: int,
     domain_names: Mapping[Any, str] | None,
     used: set[str],
+    preferred_name: str | None = None,
 ) -> str:
-    raw = _mapped_domain_name(domain, domain_names)
+    raw = preferred_name or _mapped_domain_name(domain, domain_names)
     if raw is None:
         raw = getattr(domain, "name", None) or getattr(domain, "id", None) or f"domain_{index}"
     name = _safe_hdf5_name(str(raw))
@@ -365,3 +474,10 @@ def _domain_fissionable(domain: Any, fallback: bool) -> bool:
     if fill is not None and hasattr(fill, "fissionable"):
         return bool(getattr(fill, "fissionable"))
     return fallback
+
+
+def _write_hdf5_attr(target: Any, key: str, value: Any) -> None:
+    if isinstance(value, (list, tuple)):
+        target.attrs[key] = np.asarray(value)
+    else:
+        target.attrs[key] = value

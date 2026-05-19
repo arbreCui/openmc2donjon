@@ -83,7 +83,7 @@ If you already have an OpenMC `mgxs.Library` object in Python, export the
 converter-facing HDF5 directly:
 
 ```python
-from openmc2donjon import export_openmc_mgxs_library
+from openmc2donjon import DomainExportSpec, export_openmc_mgxs_library
 
 export_openmc_mgxs_library(library, "mgxs_library.h5")
 ```
@@ -97,6 +97,24 @@ export_openmc_mgxs_library(
     library,
     "mgxs_library.h5",
     domain_names={101: "ASM_Y01_X01"},
+)
+```
+
+For OpenMC mesh or cell subdomains, pass explicit specs. Each spec becomes one
+HDF5 mixture and therefore one DONJON mixture:
+
+```python
+export_openmc_mgxs_library(
+    library,
+    "mgxs_library.h5",
+    domain_specs=[
+        DomainExportSpec(
+            domain=mesh,
+            name="ASM_Y01_X01",
+            xs_kwargs={"subdomains": [(1, 1, 1)]},
+            volume=assembly_volume,
+        ),
+    ],
 )
 ```
 
@@ -125,6 +143,15 @@ checkout and set the DONJON root:
 OPENMC2DONJON_ROOT=/path/to/dragon-5.1 \
 OPENMC2DONJON_DATA_DIR=/path/to/dragon-5.1/Donjon/data/openmc2donjon \
   bash scripts/run_c5g7_demo.sh --run-donjon
+```
+
+To regenerate a C5G7 HDF5 handoff from an existing OpenMC statepoint through
+the package exporter:
+
+```sh
+PYTHONPATH=src python scripts/export_c5g7_statepoint.py \
+  --statepoint /Users/wen/openmc-workspace/c5g7_converter_test/runs/assembly_p1/statepoint.120.h5 \
+  -o /private/tmp/openmc2donjon_c5g7_exporter_assembly_p1.h5
 ```
 
 ## Validation Workspace

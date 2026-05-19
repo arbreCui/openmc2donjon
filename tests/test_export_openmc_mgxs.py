@@ -12,7 +12,10 @@ import h5py
 import numpy as np
 
 from openmc2donjon.export_cli import build_parser, main as export_cli_main
-from openmc2donjon.export_openmc_mgxs import export_openmc_mgxs_library
+from openmc2donjon.export_openmc_mgxs import (
+    DomainExportSpec,
+    export_openmc_mgxs_library,
+)
 from openmc2donjon.multicompo import read_mgxs_hdf5
 
 
@@ -22,6 +25,13 @@ class FakeDomain:
     id: int
     volume: float
     fissionable: bool
+
+
+@dataclass
+class FakeMeshDomain:
+    name: str
+    id: int
+    volume: float
 
 
 class FakeEnergyGroups:
@@ -64,6 +74,53 @@ class KeywordOnlyFakeLibrary:
         if key not in self._data:
             raise KeyError(key)
         return FakeMGXS(self._data[key])
+
+
+class SubdomainFakeMGXS:
+    def __init__(self, values_by_subdomain: dict[tuple[int, int, int], np.ndarray]) -> None:
+        self._values_by_subdomain = values_by_subdomain
+
+    def get_xs(self, **kwargs: object) -> np.ndarray:
+        subdomains = kwargs.get("subdomains")
+        if not subdomains:
+            raise TypeError("subdomains are required")
+        subdomain = tuple(subdomains[0])  # type: ignore[index]
+        return self._values_by_subdomain[subdomain]
+
+
+class SubdomainFakeLibrary:
+    def __init__(self) -> None:
+        self.energy_groups = FakeEnergyGroups()
+        self.mesh = FakeMeshDomain("mesh", 201, 1.0)
+        self.domains = [self.mesh]
+        self._data = {
+            "total": {
+                (1, 1, 1): np.array([0.5, 0.6, 0.7]),
+                (2, 1, 1): np.array([0.8, 0.9, 1.0]),
+            },
+            "absorption": {
+                (1, 1, 1): np.array([0.05, 0.06, 0.07]),
+                (2, 1, 1): np.array([0.08, 0.09, 0.10]),
+            },
+            "nu-fission": {
+                (1, 1, 1): np.array([0.025, 0.0, 0.0]),
+                (2, 1, 1): np.array([0.0, 0.0, 0.0]),
+            },
+            "chi": {
+                (1, 1, 1): np.array([1.0, 0.0, 0.0]),
+                (2, 1, 1): np.array([0.0, 0.0, 0.0]),
+            },
+            "consistent nu-scatter matrix": {
+                (1, 1, 1): np.eye(3),
+                (2, 1, 1): np.eye(3) * 2.0,
+            },
+        }
+        self._data["fission"] = self._data["nu-fission"]
+
+    def get_mgxs(self, domain: FakeMeshDomain, mgxs_type: str) -> SubdomainFakeMGXS:
+        if domain is not self.mesh or mgxs_type not in self._data:
+            raise KeyError((domain, mgxs_type))
+        return SubdomainFakeMGXS(self._data[mgxs_type])
 
 
 class ExportOpenMCMGXSTests(unittest.TestCase):
@@ -124,6 +181,50 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
             self.assertEqual(rc, 0)
             self.assertTrue(output_path.exists())
             self.assertIn("exported 2 domains, 3 groups, P1", stream.getvalue())
+
+    def test_exports_explicit_subdomain_specs(self) -> None:
+        library = SubdomainFakeLibrary()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "assembly.h5"
+            export_openmc_mgxs_library(
+                library,
+                path,
+                domain_specs=[
+                    DomainExportSpec(
+                        domain=library.mesh,
+                        name="ASM/Y01/X01",
+                        xs_kwargs={"subdomains": [(1, 1, 1)]},
+                        volume=10.0,
+                        attrs={"mesh_index": [1, 1, 1]},
+                    ),
+                    {
+                        "domain": library.mesh,
+                        "name": "ASM/Y01/X02",
+                        "xs_kwargs": {"subdomains": [(2, 1, 1)]},
+                        "volume": 20.0,
+                        "attrs": {"mesh_index": [2, 1, 1]},
+                    },
+                ],
+                root_attrs={"domain_mode": "assembly", "mesh_dimension": 2},
+            )
+            mixtures, _energy_bounds = read_mgxs_hdf5(path)
+
+            with h5py.File(path, "r") as h5:
+                domain_mode = h5.attrs["domain_mode"]
+                mesh_dimension = int(h5.attrs["mesh_dimension"])
+                mesh_index = h5["mixtures"]["ASM_Y01_X02"].attrs["mesh_index"]
+
+        by_name = {mixture.name: mixture for mixture in mixtures}
+        self.assertEqual(domain_mode, "assembly")
+        self.assertEqual(mesh_dimension, 2)
+        np.testing.assert_array_equal(mesh_index, [2, 1, 1])
+        np.testing.assert_allclose(by_name["ASM_Y01_X01"].total, [0.5, 0.6, 0.7])
+        np.testing.assert_allclose(by_name["ASM_Y01_X02"].total, [0.8, 0.9, 1.0])
+        self.assertEqual(by_name["ASM_Y01_X01"].volume, 10.0)
+        self.assertEqual(by_name["ASM_Y01_X02"].volume, 20.0)
+        self.assertTrue(by_name["ASM_Y01_X01"].fissionable)
+        self.assertFalse(by_name["ASM_Y01_X02"].fissionable)
 
     def test_export_cli_version_option(self) -> None:
         stream = io.StringIO()

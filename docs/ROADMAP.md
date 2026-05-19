@@ -4,7 +4,8 @@
 
 - C5G7 assembly-wise validation is accepted.
 - HDF5 input contract is documented.
-- OpenMC `mgxs.Library` exporter is available for the documented HDF5 contract.
+- OpenMC `mgxs.Library` exporter is available for the documented HDF5 contract,
+  including explicit mesh/cell subdomain exports.
 - Portable C5G7 converter demo is available.
 - Optional DONJON handoff smoke is available for machines with a local
   DRAGON/DONJON checkout.
@@ -19,7 +20,7 @@
    - Avoid adding new benchmark claims without a reproducible source path.
 
 2. Harden the OpenMC exporter path with real cases.
-   - Validate the exporter against the accepted C5G7 OpenMC workflow.
+   - Keep the exporter-to-C5G7 statepoint smoke reproducible.
    - Keep the spatial domain naming stable enough to map back to DONJON
      mixtures.
 

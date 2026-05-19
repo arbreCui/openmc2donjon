@@ -30,6 +30,31 @@ The accepted source HDF5 snapshot is:
 examples/donjon_openmc2donjon/c5g7_assembly_p1_adf_production.h5
 ```
 
+## OpenMC Exporter Integration
+
+The OpenMC-side exporter has been checked against the existing C5G7
+assembly-wise P1 statepoint. The local upstream driver now rebuilds the
+OpenMC `mgxs.Library`, loads the saved statepoint, and writes the HDF5 contract
+through `export_openmc_mgxs_library`.
+
+Smoke result:
+
+```text
+mixtures = 9
+groups = 7
+scatter_matrix shape = (2, 7, 7)
+transport_total present = true
+max_abs_diff vs previous custom HDF5 dump = 0.0
+```
+
+Local reproduction command:
+
+```sh
+PYTHONPATH=src python scripts/export_c5g7_statepoint.py \
+  --statepoint /Users/wen/openmc-workspace/c5g7_converter_test/runs/assembly_p1/statepoint.120.h5 \
+  -o /private/tmp/openmc2donjon_c5g7_exporter_assembly_p1.h5
+```
+
 ## Reproduce Converter-Side Smoke
 
 ```sh
