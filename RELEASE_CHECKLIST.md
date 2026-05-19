@@ -32,6 +32,12 @@ PYTHONPATH=src python -m openmc2donjon.cli --help
 PYTHONPATH=src python -m openmc2donjon.cli --version
 ```
 
+Run the portable C5G7 demo:
+
+```sh
+bash scripts/run_c5g7_demo.sh
+```
+
 Run the DONJON-side C5G7 acceptance from a full local DRAGON/DONJON checkout:
 
 ```sh
@@ -46,6 +52,8 @@ bash examples/donjon_openmc2donjon/run_acceptance.sh
   `examples/donjon_openmc2donjon/ACCEPTED_ARTIFACTS.md`
 - [x] Accepted baseline manifest:
   `examples/donjon_openmc2donjon/accepted_baseline_manifest.json`
+- [x] HDF5 input contract:
+  `docs/HDF5_INPUT_CONTRACT.md`
 
 ## Known Limits
 

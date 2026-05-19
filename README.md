@@ -7,6 +7,16 @@ The package writes:
 - `L_MULTICOMPO` for homogenized assembly-wise or domain-wise data.
 - root `L_MACROLIB` for direct DONJON consumption in large one-state cases.
 
+Data flow:
+
+```text
+OpenMC MGXS domains
+  -> HDF5 input contract
+  -> openmc2donjon
+  -> L_MULTICOMPO or L_MACROLIB
+  -> DONJON mixture map
+```
+
 Current validation status:
 
 - C5G7 assembly-wise is the accepted validation line.
@@ -52,6 +62,27 @@ openmc2donjon mgxs_library.h5 -o out.mcompo.txt
 openmc2donjon --format macrolib mgxs_library.h5 -o out.macrolib.txt
 ```
 
+## C5G7 Demo
+
+Run the portable converter-side C5G7 demo from the repository snapshot:
+
+```sh
+bash scripts/run_c5g7_demo.sh
+```
+
+This runs package tests, converts the accepted C5G7 HDF5 to fresh
+`L_MULTICOMPO` and `L_MACROLIB` outputs under `/private/tmp`, and reads both
+outputs back through the LCM ASCII parser.
+
+To include the DONJON consumer smoke, run from a machine with a DRAGON/DONJON
+checkout and set the DONJON root:
+
+```sh
+OPENMC2DONJON_ROOT=/path/to/dragon-5.1 \
+OPENMC2DONJON_DATA_DIR=/path/to/dragon-5.1/Donjon/data/openmc2donjon \
+  bash scripts/run_c5g7_demo.sh --run-donjon
+```
+
 ## Validation Workspace
 
 This repository includes a DONJON-side handoff snapshot under
@@ -64,6 +95,9 @@ Useful entry points:
 - `examples/donjon_openmc2donjon/ACCEPTED_BASELINE.md`
 - `examples/donjon_openmc2donjon/run_acceptance.sh`
 - `examples/donjon_openmc2donjon/run_handoff_smoke.sh`
+
+The HDF5 handoff schema is documented in
+`docs/HDF5_INPUT_CONTRACT.md`.
 
 ## Current Scope
 

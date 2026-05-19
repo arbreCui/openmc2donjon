@@ -1,0 +1,172 @@
+# HDF5 Input Contract
+
+`openmc2donjon` consumes a compact HDF5 export of OpenMC MGXS data. The file is
+not required to be an OpenMC statepoint; it is a deliberately small handoff
+format with one group structure and one or more spatial MGXS domains.
+
+## Domain Rule
+
+The mapping is spatial:
+
+```text
+one OpenMC MGXS domain
+  -> one homogenized cross-section set
+  -> one DONJON mixture
+```
+
+Do not collapse domains just because they share a material label. If two
+assemblies or components occupy different positions, keep them as distinct
+domains so OpenMC spectrum, leakage, and neighbor effects are retained.
+
+For 3D cases, choose the spatial partition explicitly. A common choice is:
+
+```text
+assembly position + axial layer -> one MGXS domain -> one DONJON mixture
+```
+
+## Required Root Items
+
+Required attributes:
+
+| Path | Type | Meaning |
+| --- | --- | --- |
+| `/attrs/energy_groups` | integer | number of energy groups `G` |
+| `/attrs/legendre_order` | integer | highest scattering Legendre order `L` |
+
+Required datasets:
+
+| Path | Shape | Units/Order |
+| --- | --- | --- |
+| `/energy_bounds` | `(G + 1,)` | eV, ascending low-to-high |
+
+The converter writes DONJON `ENERGY` as `energy_bounds[::-1]`. Cross-section
+arrays are kept in OpenMC group-index order, which is high energy to low energy
+for the group structures used here.
+
+## Required Mixture Items
+
+For each spatial domain:
+
+```text
+/mixtures/<domain_name>/
+    total
+    absorption
+    scatter_matrix
+```
+
+Required datasets:
+
+| Dataset | Shape | DONJON field |
+| --- | --- | --- |
+| `total` | `(G,)` | `NTOT0` |
+| `absorption` | `(G,)` | used for balance checks and macrolib fields |
+| `scatter_matrix` | `(L + 1, G_in, G_out)` or `(G_in, G_out, L + 1)` | `SIGSxx` and `SCATxx` |
+
+Fission datasets are required only for domains with a physical fission source:
+
+| Dataset | Shape | DONJON field |
+| --- | --- | --- |
+| `nu_fission` | `(G,)` | `NUSIGF` |
+| `chi` | `(G,)` | `CHI` |
+
+The writer suppresses fission fields when `nu_fission` or `chi` is effectively
+zero. This avoids carrying Monte Carlo noise as a real fission spectrum in
+non-fuel domains.
+
+Recommended mixture attributes:
+
+| Attribute | Type | Meaning |
+| --- | --- | --- |
+| `fissionable` | bool | source-domain hint |
+| `scatter_format` | string | normally `legendre` |
+
+## Optional Mixture Items
+
+| Dataset | Shape | DONJON field |
+| --- | --- | --- |
+| `transport_total` | `(G,)` | `STRD` |
+| `inverse_velocity`, `inverse-velocity`, `OVERV`, or `overv` | `(G,)` | `OVERV` |
+| `volume` | scalar | mixture volume |
+| `flux` or `flux_integral` | `(G,)` | `FLUX-INTG` when writing root `L_MACROLIB` |
+| `h_factor`, `H-FACTOR`, `H_FACTOR`, `kappa_fission`, `kappa_fission_xs`, or `kappa_fission_cross_section` | `(G,)` | `H-FACTOR` |
+
+If `transport_total` is absent and P1 scattering is present, the converter
+derives:
+
+```text
+STRD = NTOT0 - sum_out(SCAT01)
+```
+
+If neither is available, `STRD` falls back to `NTOT0`.
+
+## Optional ADF Payload
+
+Assembly discontinuity factors are stored under each mixture:
+
+```text
+/mixtures/<domain_name>/adf/<face_name>  shape=(G,)
+```
+
+Typical Cartesian face names are:
+
+```text
+FD_XMIN
+FD_XMAX
+FD_YMIN
+FD_YMAX
+```
+
+When ADF datasets are present, the MULTICOMPO writer emits the embedded
+`MACROLIB/ADF` payload and sets the corresponding DONJON state-vector flags.
+
+## Scattering Convention
+
+The dense scatter matrix is interpreted as:
+
+```text
+scatter_matrix[moment, from_group, to_group]
+```
+
+If the HDF5 stores OpenMC-style `(G_in, G_out, L + 1)`, the reader normalizes it
+internally before writing.
+
+The values are bare Legendre moments. `openmc2donjon` writes DRAGON/DONJON
+`NJJS/IJJS/SCAT` triplets with contiguous incoming-group spans and descending
+incoming-group order.
+
+## Minimal Tree
+
+```text
+/attrs:
+    energy_groups = G
+    legendre_order = L
+/energy_bounds
+/mixtures/ASM_Y01_X01/
+    total
+    absorption
+    nu_fission
+    chi
+    scatter_matrix
+    transport_total          optional
+    volume                   optional
+    /adf/FD_XMIN             optional
+    /adf/FD_XMAX             optional
+    /adf/FD_YMIN             optional
+    /adf/FD_YMAX             optional
+/mixtures/ASM_Y01_X02/
+    ...
+```
+
+## Preflight Checks
+
+The helper wrapper can enforce the contract before writing:
+
+```sh
+PYTHONPATH=src python examples/donjon_openmc2donjon/convert_mgxs_with_preflight.py \
+  examples/donjon_openmc2donjon/c5g7_assembly_p1_adf_production.h5 \
+  --require-transport-dataset \
+  --require-volume \
+  --require-adf \
+  --expected-adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
+  -o /private/tmp/c5g7pa.mco
+```
