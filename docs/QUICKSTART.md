@@ -106,4 +106,5 @@ bash scripts/release_check.sh --run-donjon
 
 - [OpenMC export workflow](OPENMC_EXPORT_WORKFLOW.md)
 - [HDF5 input contract](HDF5_INPUT_CONTRACT.md)
+- [From-OpenMC summary JSON](FROM_OPENMC_SUMMARY_SCHEMA.md)
 - [Validation summary](VALIDATION.md)

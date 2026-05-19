@@ -28,6 +28,7 @@ Start here:
 - [Quickstart](docs/QUICKSTART.md)
 - [OpenMC export workflow](docs/OPENMC_EXPORT_WORKFLOW.md)
 - [HDF5 input contract](docs/HDF5_INPUT_CONTRACT.md)
+- [From-OpenMC summary JSON](docs/FROM_OPENMC_SUMMARY_SCHEMA.md)
 - [Validation summary](docs/VALIDATION.md)
 - [Handoff note](docs/HANDOFF_NOTE.md)
 - [Architecture](docs/ARCHITECTURE.md)
@@ -161,6 +162,9 @@ openmc2donjon-from-openmc \
   -o out.mcompo.txt \
   --summary-json run_summary.json
 ```
+
+The summary manifest schema is documented in
+[`docs/FROM_OPENMC_SUMMARY_SCHEMA.md`](docs/FROM_OPENMC_SUMMARY_SCHEMA.md).
 
 If you already have an OpenMC `mgxs.Library` object in Python, export the
 converter-facing HDF5 directly:

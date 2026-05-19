@@ -39,6 +39,7 @@ one OpenMC MGXS domain -> one cross-section set -> one DONJON mixture
 | --- | --- |
 | `docs/HDF5_INPUT_CONTRACT.md` | HDF5 schema expected by the converter. |
 | `docs/OPENMC_EXPORT_WORKFLOW.md` | User-facing OpenMC recipe/statepoint export workflow. |
+| `docs/FROM_OPENMC_SUMMARY_SCHEMA.md` | Machine-readable summary schema for one-step OpenMC conversions. |
 | `examples/recipe_export_smoke/minimal_recipe.py` | tiny no-OpenMC-data recipe used to test the export workflow mechanics. |
 | `scripts/run_recipe_export_smoke.sh` | portable recipe/statepoint export smoke, HDF5 preflight, and converter readback. |
 | `scripts/run_c5g7_demo.sh` | portable C5G7 converter demo and optional DONJON smoke entry point. |

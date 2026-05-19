@@ -1,0 +1,116 @@
+# From-OpenMC Summary JSON
+
+`openmc2donjon-from-openmc --summary-json run_summary.json` writes a
+machine-readable manifest for one recipe/statepoint export and DONJON ASCII
+conversion.
+
+The summary is meant for workflow automation and handoff records. It records
+what was run, which intermediate HDF5 was used, what DONJON ASCII file was
+written, and the compact physics-shape metadata needed for quick checks.
+
+## Schema Id
+
+```text
+openmc2donjon.from-openmc-summary.v1
+```
+
+The schema id is stored in the top-level `schema` field.
+
+## Example
+
+```json
+{
+  "burnup_axis": {
+    "present": false
+  },
+  "energy_groups": 7,
+  "format": "multicompo",
+  "h_factor_default": null,
+  "hdf5": "mgxs_library.h5",
+  "hdf5_kept": true,
+  "legendre_order": 1,
+  "loaded_statepoint": true,
+  "mixture_count": 2,
+  "mixture_names": [
+    "ASM_Y01_X01",
+    "ASM_Y01_X02"
+  ],
+  "output": "out.mcompo.txt",
+  "package_version": "0.1.2",
+  "recipe": "/case/export_recipe.py",
+  "root_name": "CPO",
+  "schema": "openmc2donjon.from-openmc-summary.v1",
+  "selected_mixtures": null,
+  "single_point_burnup": null,
+  "state_points": 1,
+  "statepoint": "/case/statepoint.120.h5"
+}
+```
+
+## Fields
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `schema` | string | Literal schema id. |
+| `package_version` | string | `openmc2donjon` package version that wrote the file. |
+| `recipe` | string | Python recipe path loaded by the OpenMC exporter. |
+| `statepoint` | string or null | OpenMC statepoint path, or null when no statepoint was provided. |
+| `loaded_statepoint` | boolean | False only when `--no-load-statepoint` was used. |
+| `hdf5` | string | Intermediate MGXS HDF5 handoff path used by the conversion. |
+| `hdf5_kept` | boolean | True when `--keep-hdf5` was used. |
+| `output` | string | DONJON ASCII output path. |
+| `format` | string | `multicompo` or `macrolib`. |
+| `energy_groups` | integer | Number of energy groups exported to HDF5. |
+| `legendre_order` | integer | Highest Legendre scattering order exported. |
+| `mixture_count` | integer | Number of mixtures seen in the HDF5 handoff before optional output filtering. |
+| `mixture_names` | array of strings | Mixture names in HDF5 order. |
+| `state_points` | integer | Number of calculation states per mixture. One for the default production path. |
+| `burnup_axis` | object | Burnup-axis summary. See below. |
+| `selected_mixtures` | array of strings or null | Values passed with `--mixture`, or null when all mixtures were requested. |
+| `root_name` | string or null | Root `L_MULTICOMPO` directory name, or null for root `L_MACROLIB` output. |
+| `single_point_burnup` | number or null | Value passed with `--burnup`, when present. |
+| `h_factor_default` | number or null | Value passed with `--h-factor-default`, when present. |
+
+## Burnup Axis
+
+When the HDF5 handoff has no `/state_points/burnup` axis:
+
+```json
+{
+  "present": false
+}
+```
+
+When a one-dimensional burnup history is present:
+
+```json
+{
+  "count": 3,
+  "present": true,
+  "values": [0.0, 5.0, 10.0]
+}
+```
+
+## Path Notes
+
+Treat path strings as provenance fields. `recipe` and `statepoint` are recorded
+from the recipe loader, while `hdf5` and `output` reflect the paths used by the
+one-step CLI.
+
+If `hdf5_kept` is false, the `hdf5` value points to a temporary handoff file
+that is deleted when `openmc2donjon-from-openmc` exits. Use `--keep-hdf5` when a
+reproducible handoff artifact is required.
+
+## Minimal Consumer Check
+
+```python
+import json
+from pathlib import Path
+
+summary = json.loads(Path("run_summary.json").read_text())
+assert summary["schema"] == "openmc2donjon.from-openmc-summary.v1"
+assert summary["format"] in {"multicompo", "macrolib"}
+assert summary["mixture_count"] == len(summary["mixture_names"])
+assert summary["energy_groups"] > 0
+assert summary["state_points"] > 0
+```

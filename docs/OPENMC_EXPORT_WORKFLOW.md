@@ -33,7 +33,8 @@ openmc2donjon-from-openmc \
 Omit `--keep-hdf5` to use a temporary HDF5 handoff file. Keep it during
 debugging or for reproducible handoff records. `--summary-json` writes a small
 manifest with recipe, statepoint, HDF5, output, group count, Legendre order, and
-mixture names.
+mixture names. The manifest schema is documented in
+[From-OpenMC summary JSON](FROM_OPENMC_SUMMARY_SCHEMA.md).
 
 For a small workflow check before using a real OpenMC model:
 
