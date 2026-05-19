@@ -3,7 +3,7 @@
 ## Stable Tag
 
 ```text
-v0.1.0-c5g7-accepted
+v0.1.1-c5g7-handoff
 ```
 
 This tag is the current internal handoff point for `openmc2donjon`.
@@ -71,9 +71,12 @@ locked decks.
 ## Scope
 
 - One state point by default.
-- Experimental `BURN` history serialization exists, but no burnup/history/branch
-  parameter axis is accepted as a physics validation line yet. A tiny DONJON
-  `NCR:` smoke verifies the serializer's `BURN` selection plumbing.
+- Experimental one-dimensional `BURN` history serialization exists, but no
+  burnup/history/branch parameter axis is accepted as a physics validation line
+  yet. A tiny DONJON `NCR:` smoke verifies the serializer's `BURN` selection
+  plumbing.
+- General multi-axis branch libraries are rejected by preflight and converter
+  code rather than being silently ignored.
 - Spatial mapping is one OpenMC MGXS domain or subdomain to one DONJON mixture.
 - Hex-domain conversion/modeling support exists, but no accepted hex benchmark
   is included in this release.

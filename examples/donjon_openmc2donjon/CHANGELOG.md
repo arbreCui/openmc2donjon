@@ -12,3 +12,4 @@
 - Wired the `BURN`-axis DONJON smoke to run HDF5 preflight before conversion.
 - Rejected unsupported multi-parameter branch axes instead of silently ignoring
   them.
+- Prepared the `v0.1.1-c5g7-handoff` package release notes and handoff tag.

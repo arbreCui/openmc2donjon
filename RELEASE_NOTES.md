@@ -1,0 +1,56 @@
+# Release Notes
+
+## v0.1.1-c5g7-handoff - 2026-05-19
+
+This is the current internal handoff release for `openmc2donjon`.
+
+### Accepted Validation Line
+
+- C5G7 assembly-wise homogenization is the accepted physics validation line.
+- The production path is:
+
+```text
+OpenMC MGXS/ADF HDF5
+  -> openmc2donjon L_MULTICOMPO / L_MACROLIB
+  -> DONJON assembly-wise diffusion/SPN smokes
+```
+
+- Spatial mapping remains one OpenMC MGXS domain or subdomain to one DONJON
+  mixture.
+- Locked reference results are documented in `docs/VALIDATION.md`.
+
+### Changes Since v0.1.0-c5g7-accepted
+
+- Added a reviewer handoff note for the accepted C5G7 line.
+- Added experimental one-dimensional `BURN` multi-state serialization.
+- Added a tiny DONJON `NCR:` smoke that proves `PARKEY=BURN`, `TREE`, and
+  `CALCULATIONS` select the expected state.
+- Extended HDF5 preflight to validate `BURN`-axis multi-state inputs.
+- Rejected unsupported multi-axis branch-library inputs instead of silently
+  ignoring extra `/state_points/*` axes.
+- Documented supported HDF5 schema variants in the README and input contract.
+
+### Supported Scope
+
+- Production: one-state MGXS HDF5 to `L_MULTICOMPO` or root `L_MACROLIB`.
+- Experimental: one-dimensional `BURN` multi-state HDF5 serialization.
+- Capability only: hex spatial-domain conversion/modeling.
+- Not supported: general multi-axis branch libraries such as boron,
+  temperature, coolant-density, or control-state grids.
+
+### Required Checks
+
+```sh
+bash scripts/release_check.sh
+bash examples/donjon_openmc2donjon/run_burnup_axis_smoke.sh
+```
+
+Full local acceptance with DONJON decks:
+
+```sh
+bash scripts/release_check.sh --run-donjon
+```
+
+## v0.1.0-c5g7-accepted - 2026-05-19
+
+Initial accepted C5G7 assembly-wise handoff tag.

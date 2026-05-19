@@ -72,8 +72,8 @@ PYTHONPATH=/Users/wen/openmc-workspace/openmc2donjon/src \
 ## Current Result
 
 - CLI help prints the expected options, including `--format {multicompo,macrolib}`.
-- CLI version prints `openmc2donjon 0.1.0`.
-- Unit tests: `21 passed`.
+- CLI version prints `openmc2donjon 0.1.1`.
+- Unit tests: `34 passed`.
 - MULTICOMPO CLI smoke:
   - size: about `58K`
   - read-back blocks: `303`

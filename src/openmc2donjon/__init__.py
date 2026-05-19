@@ -1,6 +1,6 @@
 """OpenMC MGXS to DRAGON/DONJON ASCII conversion tools."""
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 from .macrolib import write_macrolib
 from .multicompo import (

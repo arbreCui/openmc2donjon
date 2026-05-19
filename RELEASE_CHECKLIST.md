@@ -1,6 +1,6 @@
 # openmc2donjon Release Checklist
 
-This checklist covers the current `0.1.0` internal handoff state.
+This checklist covers the current `0.1.1` internal handoff state.
 
 ## Package Scope
 
@@ -16,6 +16,9 @@ This checklist covers the current `0.1.0` internal handoff state.
   `STRD`.
 - [x] Optional `H-FACTOR`, `OVERV`, ADF/HADF, single-mixture filtering, and
   single-point `BURN` axis helpers.
+- [x] Experimental one-dimensional `BURN` multi-state serialization with a
+  DONJON `NCR:` consumer smoke.
+- [x] Preflight rejection for unsupported multi-axis branch-library inputs.
 
 ## Required Smoke Commands
 
@@ -54,6 +57,12 @@ Run the portable C5G7 demo:
 bash scripts/run_c5g7_demo.sh
 ```
 
+Run the experimental `BURN`-axis consumer smoke:
+
+```sh
+bash examples/donjon_openmc2donjon/run_burnup_axis_smoke.sh
+```
+
 Optionally regenerate the C5G7 HDF5 handoff from a saved OpenMC statepoint:
 
 ```sh
@@ -90,7 +99,8 @@ bash examples/donjon_openmc2donjon/run_acceptance.sh
 
 ## Known Limits
 
-- [ ] Multiple state points are not implemented.
+- [ ] General multi-axis branch libraries are not implemented; only the
+  experimental one-dimensional `BURN` path is supported.
 - [ ] Hex support is implemented as capability work, but no accepted hex
   benchmark is included yet.
 - [ ] Full-core production use should keep validating against the local
@@ -104,5 +114,5 @@ C5G7 DONJON-side acceptance remains green.
 Accepted release tag:
 
 ```text
-v0.1.0-c5g7-accepted
+v0.1.1-c5g7-handoff
 ```

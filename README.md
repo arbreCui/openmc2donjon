@@ -43,6 +43,7 @@ Start here:
 - [Validation summary](docs/VALIDATION.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Roadmap](docs/ROADMAP.md)
+- [Release notes](RELEASE_NOTES.md)
 
 Fast smoke:
 
