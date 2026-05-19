@@ -19,6 +19,18 @@ This checklist covers the current `0.1.0` internal handoff state.
 
 ## Required Smoke Commands
 
+Run the release/handoff check:
+
+```sh
+bash scripts/release_check.sh
+```
+
+Run the full local acceptance with DONJON decks:
+
+```sh
+bash scripts/release_check.sh --run-donjon
+```
+
 Run unit tests:
 
 ```sh
@@ -86,3 +98,9 @@ bash examples/donjon_openmc2donjon/run_acceptance.sh
 
 The package is ready for internal handoff when the package tests pass and the
 C5G7 DONJON-side acceptance remains green.
+
+Accepted release tag:
+
+```text
+v0.1.0-c5g7-accepted
+```

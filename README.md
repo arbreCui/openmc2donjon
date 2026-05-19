@@ -38,6 +38,18 @@ Fast smoke:
 bash scripts/run_c5g7_demo.sh
 ```
 
+Release/handoff check:
+
+```sh
+bash scripts/release_check.sh
+```
+
+Full local acceptance with DONJON decks:
+
+```sh
+bash scripts/release_check.sh --run-donjon
+```
+
 ## Spatial Domain Mapping
 
 The production mapping is spatial, not material-collapsed:
