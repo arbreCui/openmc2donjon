@@ -27,6 +27,7 @@ bash scripts/run_recipe_export_smoke.sh
 
 This checks:
 
+- recipe dry-run metadata preflight;
 - recipe/statepoint export to the HDF5 handoff contract;
 - HDF5 preflight;
 - `L_MULTICOMPO` write/readback;
@@ -38,6 +39,10 @@ This checks:
 For a real OpenMC case, write a small recipe that builds the case's
 `openmc.mgxs.Library`. You can start from
 [`examples/openmc_recipe_template/`](../examples/openmc_recipe_template/). Then run:
+
+```sh
+openmc2donjon-export --recipe export_recipe.py --no-load-statepoint --dry-run
+```
 
 ```sh
 openmc2donjon-from-openmc \

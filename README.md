@@ -154,6 +154,12 @@ the workflow mechanics:
 bash scripts/run_recipe_export_smoke.sh
 ```
 
+Check a recipe before writing an HDF5 handoff:
+
+```sh
+openmc2donjon-export --recipe export_recipe.py --no-load-statepoint --dry-run
+```
+
 For a one-command export plus conversion:
 
 ```sh

@@ -12,6 +12,7 @@
   automation and handoff checks.
 - Added shared summary schema validation for unittest and smoke-script checks.
 - Added an editable OpenMC recipe template for user production cases.
+- Added `openmc2donjon-export --dry-run` for recipe/domain preflight checks.
 - Extended release check so the C5G7 statepoint parity path exercises
   `openmc2donjon-from-openmc`, reads back the generated MCO, and validates the
   summary manifest.

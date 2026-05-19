@@ -34,6 +34,15 @@ assembly or one assembly subdomain before tallying MGXS.
 
 ## Prepare OpenMC Tallies
 
+Dry-run the recipe before generating tallies:
+
+```sh
+openmc2donjon-export --recipe export_recipe.py --no-load-statepoint --dry-run
+```
+
+Check that the reported mixture count and names match the intended spatial
+homogenization map.
+
 Use the same recipe to add MGXS tallies before running OpenMC:
 
 ```sh

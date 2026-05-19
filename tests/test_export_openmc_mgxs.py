@@ -278,6 +278,66 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
         self.assertEqual(mixtures[0].volume, 12.5)
         np.testing.assert_array_equal(mesh_index, [1, 1, 1])
 
+    def test_export_cli_recipe_dry_run_without_statepoint_or_output(self) -> None:
+        recipe = """
+            from dataclasses import dataclass
+
+            import numpy as np
+
+            class EnergyGroups:
+                group_edges = np.array([1.0e-5, 1.0, 1.0e7])
+
+            @dataclass(frozen=True)
+            class Domain:
+                name: str
+                id: int
+                volume: float
+
+            class Library:
+                def __init__(self):
+                    self.energy_groups = EnergyGroups()
+                    self.domain_type = "cell"
+                    self.legendre_order = 1
+                    self.mgxs_types = [
+                        "total",
+                        "absorption",
+                        "consistent nu-scatter matrix",
+                        "transport",
+                    ]
+                    self.domains = [
+                        Domain("ASM/1", 1, 10.0),
+                        Domain("ASM/1", 2, 20.0),
+                    ]
+
+            def build_library():
+                return Library()
+
+            def domain_names(library):
+                return {domain.id: domain.name for domain in library.domains}
+
+            def root_attrs():
+                return {"domain_mode": "assembly"}
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            recipe_path = Path(tmpdir) / "recipe.py"
+            recipe_path.write_text(textwrap.dedent(recipe), encoding="utf-8")
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = export_cli_main(["--recipe", str(recipe_path), "--dry-run"])
+
+        output = stream.getvalue()
+        self.assertEqual(rc, 0)
+        self.assertIn("recipe dry-run OK", output)
+        self.assertIn("statepoint: none", output)
+        self.assertIn("output: dry run; no HDF5 written", output)
+        self.assertIn("energy_groups: 2", output)
+        self.assertIn("legendre_order: 1", output)
+        self.assertIn("domain_type: cell", output)
+        self.assertIn("mixtures: 2", output)
+        self.assertIn("ASM_1", output)
+        self.assertIn("duplicate name 'ASM_1' written as 'ASM_1_2'", output)
+
     def test_exports_explicit_subdomain_specs(self) -> None:
         library = SubdomainFakeLibrary()
 

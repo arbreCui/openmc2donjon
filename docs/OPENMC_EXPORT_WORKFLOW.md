@@ -23,6 +23,16 @@ For a ready-to-edit starting point, copy
 [`examples/openmc_recipe_template/`](../examples/openmc_recipe_template/) into a
 case directory and edit `export_recipe.py`.
 
+Before running a long OpenMC job, dry-run the recipe:
+
+```sh
+openmc2donjon-export --recipe export_recipe.py --no-load-statepoint --dry-run
+```
+
+The dry-run builds the recipe library, reports the group count, Legendre order,
+domain type, MGXS types, root attributes, and the first mixture names. It does
+not read MGXS values or write an HDF5 file.
+
 To export and immediately write DONJON ASCII in one command:
 
 ```sh

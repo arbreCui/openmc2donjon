@@ -35,6 +35,13 @@ echo "python: $PYTHON_BIN"
 printf 'recipe smoke statepoint marker\n' > "$STATEPOINT"
 
 echo
+echo "== Recipe dry-run =="
+"$PYTHON_BIN" -m openmc2donjon.export_cli \
+  --recipe "$RECIPE" \
+  --no-load-statepoint \
+  --dry-run
+
+echo
 echo "== Recipe export =="
 "$PYTHON_BIN" -m openmc2donjon.export_cli \
   --recipe "$RECIPE" \
