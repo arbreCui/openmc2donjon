@@ -187,6 +187,38 @@ class MultiCompoSmokeTests(unittest.TestCase):
         self.assertEqual(by_name["pval00000001"].data, (0.0, 5.0))
         self.assertEqual([block.data for block in ntot_blocks], [(0.5,), (0.6,)])
 
+    def test_rejects_unsupported_multistate_axis(self) -> None:
+        import h5py
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "multi.h5"
+            output_path = Path(tmpdir) / "multi.mcompo.txt"
+            with h5py.File(input_path, "w") as h5:
+                h5.attrs["energy_groups"] = 1
+                h5.attrs["legendre_order"] = 0
+                h5.create_dataset("energy_bounds", data=[1.0e-5, 1.0e7])
+                state_points = h5.create_group("state_points")
+                state_points.create_dataset("BURN", data=[0.0, 5.0])
+                state_points.create_dataset("BORON", data=[500.0, 600.0])
+                mixtures = h5.create_group("mixtures")
+                fuel = mixtures.create_group("fuel")
+                fuel.attrs["fissionable"] = True
+                fuel.attrs["scatter_axes"] = "moment,from,to"
+                states = fuel.create_group("states")
+                for idx, total in enumerate((0.5, 0.6), start=1):
+                    state = states.create_group(f"{idx:08d}")
+                    state.create_dataset("total", data=[total])
+                    state.create_dataset("absorption", data=[0.05])
+                    state.create_dataset("fission", data=[0.01])
+                    state.create_dataset("nu_fission", data=[0.025])
+                    state.create_dataset("chi", data=[1.0])
+                    state.create_dataset("scatter_matrix", data=[[[0.1]]])
+
+            from openmc2donjon.multicompo import convert_mgxs_hdf5
+
+            with self.assertRaisesRegex(ValueError, "only BURN is supported"):
+                convert_mgxs_hdf5(input_path, output_path)
+
     def test_select_mixtures_by_name(self) -> None:
         mixtures = [
             MixtureXS(

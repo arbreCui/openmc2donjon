@@ -246,27 +246,47 @@ def validate_open_h5(
 
 
 def burnup_axis_from_hdf5(h5: h5py.File, report: InputReport) -> np.ndarray | None:
-    for path in (
-        "state_points/BURN",
-        "state_points/burnup",
-        "burnup_values",
-        "burnup",
-    ):
-        if path not in h5:
-            continue
-        obj = h5[path]
+    paths: list[str] = []
+    if "state_points" in h5:
+        state_points = h5["state_points"]
+        if not isinstance(state_points, h5py.Group):
+            report.fail("/state_points must be an HDF5 group")
+            return None
+        unsupported = [
+            str(name)
+            for name in state_points
+            if str(name).lower() not in {"burn", "burnup"}
+        ]
+        if unsupported:
+            report.fail(
+                "unsupported /state_points axis/axes: "
+                f"{', '.join(unsupported)}; only BURN is supported"
+            )
+        paths.extend(
+            f"state_points/{name}"
+            for name in state_points
+            if str(name).lower() in {"burn", "burnup"}
+        )
+    paths.extend(path for path in ("burnup_values", "burnup") if path in h5)
+    attrs = [attr for attr in ("burnup_values", "burnup") if attr in h5.attrs]
+
+    if len(paths) + len(attrs) > 1:
+        labels = [f"/{path}" for path in paths] + [f"/attrs/{attr}" for attr in attrs]
+        report.fail(f"multiple BURN axis definitions found: {', '.join(labels)}")
+        return None
+
+    if paths:
+        obj = h5[paths[0]]
         if not isinstance(obj, h5py.Dataset):
-            report.fail(f"/{path} must be a dataset")
+            report.fail(f"/{paths[0]} must be a dataset")
             return None
         values = np.asarray(obj[:], dtype=float).reshape(-1)
-        validate_burnup_axis(values, report, f"/{path}")
+        validate_burnup_axis(values, report, f"/{paths[0]}")
         return values
 
-    for attr in ("burnup_values", "burnup"):
-        if attr not in h5.attrs:
-            continue
-        values = np.asarray(h5.attrs[attr], dtype=float).reshape(-1)
-        validate_burnup_axis(values, report, f"/attrs/{attr}")
+    if attrs:
+        values = np.asarray(h5.attrs[attrs[0]], dtype=float).reshape(-1)
+        validate_burnup_axis(values, report, f"/attrs/{attrs[0]}")
         return values
     return None
 

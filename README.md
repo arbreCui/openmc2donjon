@@ -205,6 +205,9 @@ The HDF5 handoff schema is documented in
 - Experimental `BURN`-axis multi-state HDF5 input can be serialized to
   `L_MULTICOMPO`, with a tiny DONJON `NCR:` consumer smoke. The accepted
   validation line remains one-state C5G7.
+- Multi-state support is currently one-dimensional `BURN` only; extra
+  `/state_points/*` axes such as boron, temperature, or control state are
+  rejected rather than ignored.
 - One DONJON mixture per OpenMC MGXS domain, preserving the spatial domain map.
 - OpenMC group order is preserved; `ENERGY` is written as reversed energy
   bounds for DRAGON/DONJON.

@@ -635,17 +635,36 @@ def _attr_with_parent(attrs, parent_attrs, name: str, default):
 
 
 def _burnup_values_from_hdf5(h5) -> np.ndarray | None:
-    for path in (
-        "state_points/BURN",
-        "state_points/burnup",
-        "burnup_values",
-        "burnup",
-    ):
-        if path in h5:
-            return np.asarray(h5[path][:], dtype=float).reshape(-1)
-    for attr in ("burnup_values", "burnup"):
-        if attr in h5.attrs:
-            return np.asarray(h5.attrs[attr], dtype=float).reshape(-1)
+    paths: list[str] = []
+    if "state_points" in h5:
+        state_points = h5["state_points"]
+        if not hasattr(state_points, "keys"):
+            raise ValueError("/state_points must be an HDF5 group")
+        unsupported = [
+            str(name)
+            for name in state_points
+            if str(name).lower() not in {"burn", "burnup"}
+        ]
+        if unsupported:
+            raise ValueError(
+                "unsupported state_points axis/axes: "
+                f"{', '.join(unsupported)}; only BURN is supported"
+            )
+        paths.extend(
+            f"state_points/{name}"
+            for name in state_points
+            if str(name).lower() in {"burn", "burnup"}
+        )
+    paths.extend(path for path in ("burnup_values", "burnup") if path in h5)
+
+    attrs = [attr for attr in ("burnup_values", "burnup") if attr in h5.attrs]
+    if len(paths) + len(attrs) > 1:
+        labels = [f"/{path}" for path in paths] + [f"/attrs/{attr}" for attr in attrs]
+        raise ValueError(f"multiple BURN axis definitions found: {', '.join(labels)}")
+    if paths:
+        return np.asarray(h5[paths[0]][:], dtype=float).reshape(-1)
+    if attrs:
+        return np.asarray(h5.attrs[attrs[0]], dtype=float).reshape(-1)
     return None
 
 

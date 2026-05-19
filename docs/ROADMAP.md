@@ -42,6 +42,8 @@
 ## Later Work
 
 - Additional branch-parameter axes beyond the experimental `BURN` path.
+  - This requires extending preflight, HDF5 schema, `PARKEY/PARTYP/PARFMT`,
+    per-mixture `TREE`, and DONJON consumer smoke together.
 - More complete discontinuity-factor workflows.
 - Additional validation cases beyond C5G7.
 - Packaging polish for external installation and CI.

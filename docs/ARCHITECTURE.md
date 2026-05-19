@@ -73,6 +73,10 @@ one CALCULATIONS item per burnup state
 That path is covered by unit tests and by a tiny DONJON `NCR:` consumer smoke,
 but it is not part of the accepted physics validation.
 
+The history path is intentionally one-dimensional for now. Inputs with
+additional `/state_points/*` branch axes are rejected so boron, temperature,
+control, or other branch coordinates cannot be silently dropped.
+
 ## Important Conventions
 
 - OpenMC group-index order is preserved for cross-section arrays.

@@ -151,6 +151,12 @@ layout:
 Root datasets named `/burnup_values` or `/burnup`, or matching root
 attributes, are also accepted as the burnup axis. All mixtures must contain the
 same number of states, and the burnup axis length must match that state count.
+Only one burnup-axis definition may be present.
+
+This is a one-parameter history path, not a general branch-library schema.
+Additional `/state_points/*` axes such as `BORON`, `TEMP`, `COOLANT`, or control
+state are rejected by both preflight and converter code. Add those only after the
+MULTICOMPO `PARKEY/PARTYP/PARFMT/TREE` mapping has been extended and validated.
 
 Mixture-level attributes such as `fissionable`, `scatter_axes`, and `volume`
 are inherited by each state group unless overridden. State datasets use the
@@ -163,7 +169,8 @@ serialization, but it is not part of the accepted C5G7 physics validation yet.
 
 The preflight validator checks this layout before conversion: all mixtures must
 use the same state count, the `BURN` axis must exist for multi-state inputs, and
-its length must match the state count.
+its length must match the state count. It also rejects unsupported branch axes
+instead of silently ignoring them.
 
 ## Optional ADF Payload
 

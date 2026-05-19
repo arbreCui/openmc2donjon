@@ -104,6 +104,48 @@ class MgxsInputContractTests(unittest.TestCase):
             report.issues,
         )
 
+    def test_rejects_unsupported_state_point_axis(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "unsupported_axis.h5"
+            write_multistate_fixture(path)
+            with h5py.File(path, "a") as h5:
+                h5["state_points"].create_dataset("BORON", data=np.array([500.0, 600.0]))
+
+            report = validator.validate_input(
+                path,
+                require_adf=False,
+                require_transport_dataset=False,
+                require_volume=False,
+                expected_adf_faces=None,
+            )
+
+        self.assertFalse(report.ok)
+        self.assertIn(
+            "unsupported /state_points axis/axes: BORON; only BURN is supported",
+            report.issues,
+        )
+
+    def test_rejects_multiple_burnup_axis_definitions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "duplicate_burn.h5"
+            write_multistate_fixture(path)
+            with h5py.File(path, "a") as h5:
+                h5.create_dataset("burnup_values", data=np.array([0.0, 10.0]))
+
+            report = validator.validate_input(
+                path,
+                require_adf=False,
+                require_transport_dataset=False,
+                require_volume=False,
+                expected_adf_faces=None,
+            )
+
+        self.assertFalse(report.ok)
+        self.assertIn(
+            "multiple BURN axis definitions found: /state_points/BURN, /burnup_values",
+            report.issues,
+        )
+
 
 def write_multistate_fixture(
     path: Path,
