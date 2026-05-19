@@ -144,6 +144,16 @@ the workflow mechanics:
 bash scripts/run_recipe_export_smoke.sh
 ```
 
+For a one-command export plus conversion:
+
+```sh
+openmc2donjon-from-openmc \
+  --recipe export_recipe.py \
+  --statepoint statepoint.120.h5 \
+  --keep-hdf5 mgxs_library.h5 \
+  -o out.mcompo.txt
+```
+
 If you already have an OpenMC `mgxs.Library` object in Python, export the
 converter-facing HDF5 directly:
 

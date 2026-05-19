@@ -23,6 +23,8 @@ STATEPOINT="$RUN_DIR/statepoint.fake.h5"
 MGXS="$RUN_DIR/minimal_recipe_mgxs.h5"
 MCO="$RUN_DIR/minimal_recipe.mcompo.txt"
 MAC="$RUN_DIR/minimal_recipe.macrolib.txt"
+ONE_STEP_H5="$RUN_DIR/one_step_mgxs.h5"
+ONE_STEP_MCO="$RUN_DIR/one_step.mcompo.txt"
 
 echo "== openmc2donjon recipe export smoke =="
 echo "repo: $REPO_ROOT"
@@ -53,7 +55,15 @@ echo "== Converter readback =="
 "$PYTHON_BIN" -m openmc2donjon.cli "$MGXS" -o "$MCO"
 "$PYTHON_BIN" -m openmc2donjon.cli --format macrolib "$MGXS" -o "$MAC"
 
-"$PYTHON_BIN" - "$MGXS" "$MCO" "$MAC" "$STATEPOINT" <<'PY'
+echo
+echo "== One-step from OpenMC recipe =="
+"$PYTHON_BIN" -m openmc2donjon.from_openmc_cli \
+  --recipe "$RECIPE" \
+  --statepoint "$STATEPOINT" \
+  --keep-hdf5 "$ONE_STEP_H5" \
+  -o "$ONE_STEP_MCO"
+
+"$PYTHON_BIN" - "$MGXS" "$MCO" "$MAC" "$STATEPOINT" "$ONE_STEP_H5" "$ONE_STEP_MCO" <<'PY'
 from pathlib import Path
 import sys
 
@@ -64,17 +74,20 @@ mgxs = Path(sys.argv[1])
 mco = Path(sys.argv[2])
 mac = Path(sys.argv[3])
 statepoint = str(Path(sys.argv[4]))
+one_step_h5 = Path(sys.argv[5])
+one_step_mco = Path(sys.argv[6])
 
-with h5py.File(mgxs, "r") as h5:
-    names = sorted(h5["mixtures"])
-    if names != ["FUEL_A", "MOD_A"]:
-        raise SystemExit(f"unexpected mixtures: {names}")
-    if h5.attrs["domain_mode"] != "recipe_smoke":
-        raise SystemExit("missing recipe_smoke domain_mode")
-    if h5.attrs["statepoint_marker"] != statepoint:
-        raise SystemExit("recipe did not receive the statepoint path")
+for path in (mgxs, one_step_h5):
+    with h5py.File(path, "r") as h5:
+        names = sorted(h5["mixtures"])
+        if names != ["FUEL_A", "MOD_A"]:
+            raise SystemExit(f"unexpected mixtures: {names}")
+        if h5.attrs["domain_mode"] != "recipe_smoke":
+            raise SystemExit("missing recipe_smoke domain_mode")
+        if h5.attrs["statepoint_marker"] != statepoint:
+            raise SystemExit("recipe did not receive the statepoint path")
 
-for path in (mco, mac):
+for path in (mco, mac, one_step_mco):
     blocks = lcm_ascii.read_lcm_ascii(path)
     names = [block.name for block in blocks if block.name]
     if names[:1] != ["SIGNATURE"]:

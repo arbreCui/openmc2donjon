@@ -125,6 +125,8 @@ echo "== CLI smoke =="
 "$PYTHON_BIN" -m openmc2donjon.cli --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.export_cli --version
 "$PYTHON_BIN" -m openmc2donjon.export_cli --help >/dev/null
+"$PYTHON_BIN" -m openmc2donjon.from_openmc_cli --version
+"$PYTHON_BIN" -m openmc2donjon.from_openmc_cli --help >/dev/null
 
 echo
 echo "== Recipe export smoke =="

@@ -9,6 +9,8 @@
   wired into `scripts/release_check.sh`.
 - Added a tiny recipe export smoke that exercises the user entry point without
   requiring C5G7 setup or real OpenMC output.
+- Added `openmc2donjon-from-openmc`, a one-command recipe/statepoint export plus
+  DONJON ASCII conversion entry point.
 
 ## v0.1.1-c5g7-handoff - 2026-05-19
 

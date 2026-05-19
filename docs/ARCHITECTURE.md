@@ -31,6 +31,7 @@ one OpenMC MGXS domain -> one cross-section set -> one DONJON mixture
 | `openmc2donjon.macrolib` | root `L_MACROLIB` writer for direct DONJON ingestion. |
 | `openmc2donjon.cli` | HDF5 reader, preflight options, and command-line output selection. |
 | `openmc2donjon.export_cli` | Export CLI for recipe/statepoint workflows and pickled MGXS library fixtures. |
+| `openmc2donjon.from_openmc_cli` | One-step recipe/statepoint export plus DONJON ASCII conversion. |
 
 ## Example And Validation Layer
 

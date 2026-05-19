@@ -8,6 +8,8 @@
   including explicit mesh/cell subdomain exports.
 - Recipe-based OpenMC statepoint export is available as the production-facing
   user entry point.
+- One-step recipe/statepoint export plus DONJON ASCII conversion is available
+  for users who do not need to manage the intermediate HDF5 explicitly.
 - A tiny recipe export smoke is available so the entry point can be tested
   without C5G7-specific setup.
 - Portable C5G7 converter demo is available.

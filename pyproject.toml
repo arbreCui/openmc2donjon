@@ -15,6 +15,7 @@ dependencies = [
 [project.scripts]
 openmc2donjon = "openmc2donjon.cli:main"
 openmc2donjon-export = "openmc2donjon.export_cli:main"
+openmc2donjon-from-openmc = "openmc2donjon.from_openmc_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

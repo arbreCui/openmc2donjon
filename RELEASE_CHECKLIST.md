@@ -49,6 +49,8 @@ PYTHONPATH=src python -m openmc2donjon.cli --help
 PYTHONPATH=src python -m openmc2donjon.cli --version
 PYTHONPATH=src python -m openmc2donjon.export_cli --help
 PYTHONPATH=src python -m openmc2donjon.export_cli --version
+PYTHONPATH=src python -m openmc2donjon.from_openmc_cli --help
+PYTHONPATH=src python -m openmc2donjon.from_openmc_cli --version
 ```
 
 Run the recipe/statepoint export smoke:

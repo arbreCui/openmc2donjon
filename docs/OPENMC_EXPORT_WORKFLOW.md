@@ -19,6 +19,19 @@ structure, MGXS domain type, spatial domain partition, and stable mixture names.
 The CLI owns the package handoff: loading the statepoint into the recipe's
 library and writing the documented HDF5 contract.
 
+To export and immediately write DONJON ASCII in one command:
+
+```sh
+openmc2donjon-from-openmc \
+  --recipe export_recipe.py \
+  --statepoint statepoint.120.h5 \
+  --keep-hdf5 mgxs_library.h5 \
+  -o out.mcompo.txt
+```
+
+Omit `--keep-hdf5` to use a temporary HDF5 handoff file. Keep it during
+debugging or for reproducible handoff records.
+
 For a small workflow check before using a real OpenMC model:
 
 ```sh
