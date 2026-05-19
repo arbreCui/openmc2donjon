@@ -143,7 +143,9 @@ openmc2donjon-export \
 
 The recipe builds the OpenMC `mgxs.Library` for the case and can provide stable
 domain names or explicit `DomainExportSpec` objects. See
-[`docs/OPENMC_EXPORT_WORKFLOW.md`](docs/OPENMC_EXPORT_WORKFLOW.md).
+[`docs/OPENMC_EXPORT_WORKFLOW.md`](docs/OPENMC_EXPORT_WORKFLOW.md). A
+ready-to-edit recipe skeleton is available in
+[`examples/openmc_recipe_template/`](examples/openmc_recipe_template/).
 
 A tiny recipe smoke that does not require OpenMC data is available for checking
 the workflow mechanics:

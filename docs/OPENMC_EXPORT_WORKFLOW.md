@@ -19,6 +19,10 @@ structure, MGXS domain type, spatial domain partition, and stable mixture names.
 The CLI owns the package handoff: loading the statepoint into the recipe's
 library and writing the documented HDF5 contract.
 
+For a ready-to-edit starting point, copy
+[`examples/openmc_recipe_template/`](../examples/openmc_recipe_template/) into a
+case directory and edit `export_recipe.py`.
+
 To export and immediately write DONJON ASCII in one command:
 
 ```sh

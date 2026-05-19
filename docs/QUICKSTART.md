@@ -36,7 +36,8 @@ This checks:
 ## One-Step OpenMC To DONJON
 
 For a real OpenMC case, write a small recipe that builds the case's
-`openmc.mgxs.Library`. Then run:
+`openmc.mgxs.Library`. You can start from
+[`examples/openmc_recipe_template/`](../examples/openmc_recipe_template/). Then run:
 
 ```sh
 openmc2donjon-from-openmc \
