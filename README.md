@@ -7,7 +7,55 @@ The package writes:
 - `L_MULTICOMPO` for homogenized assembly-wise or domain-wise data.
 - root `L_MACROLIB` for direct DONJON consumption in large one-state cases.
 
-Data flow:
+## Quick Start
+
+```sh
+python -m pip install -e .
+bash scripts/run_recipe_export_smoke.sh
+openmc2donjon-from-openmc \
+  --recipe export_recipe.py \
+  --statepoint statepoint.120.h5 \
+  -o out.mcompo.txt
+```
+
+For a first pass through the workflow, start with
+[docs/QUICKSTART.md](docs/QUICKSTART.md).
+
+## For Reviewers
+
+Start here:
+
+- [Quickstart](docs/QUICKSTART.md)
+- [OpenMC export workflow](docs/OPENMC_EXPORT_WORKFLOW.md)
+- [HDF5 input contract](docs/HDF5_INPUT_CONTRACT.md)
+- [Validation summary](docs/VALIDATION.md)
+- [Handoff note](docs/HANDOFF_NOTE.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Roadmap](docs/ROADMAP.md)
+- [Release notes](RELEASE_NOTES.md)
+
+Useful checks:
+
+```sh
+bash scripts/run_recipe_export_smoke.sh
+bash scripts/run_c5g7_demo.sh
+bash scripts/release_check.sh
+```
+
+Full local acceptance with DONJON decks:
+
+```sh
+bash scripts/release_check.sh --run-donjon
+```
+
+HDF5 input preflight:
+
+```sh
+PYTHONPATH=src python examples/donjon_openmc2donjon/validate_mgxs_input_contract.py \
+  mgxs_library.h5 --check
+```
+
+## Data Flow
 
 ```text
 OpenMC MGXS domains
@@ -16,6 +64,8 @@ OpenMC MGXS domains
   -> L_MULTICOMPO or L_MACROLIB
   -> DONJON mixture map
 ```
+
+## Project Status
 
 Current validation status:
 
@@ -34,54 +84,10 @@ Supported input scope:
 | Multi-axis branch library | Not supported | Extra `/state_points/*` axes are rejected instead of ignored. |
 | Hex spatial domains | Converter/modeling capability | Awaiting a suitable accepted hex benchmark. |
 
-## For Reviewers
-
-Start here:
-
-- [Quickstart](docs/QUICKSTART.md)
-- [HDF5 input contract](docs/HDF5_INPUT_CONTRACT.md)
-- [OpenMC export workflow](docs/OPENMC_EXPORT_WORKFLOW.md)
-- [Handoff note](docs/HANDOFF_NOTE.md)
-- [Validation summary](docs/VALIDATION.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Roadmap](docs/ROADMAP.md)
-- [Release notes](RELEASE_NOTES.md)
-
-Fast smoke:
-
-```sh
-bash scripts/run_c5g7_demo.sh
-```
-
-Recipe/statepoint export smoke:
-
-```sh
-bash scripts/run_recipe_export_smoke.sh
-```
-
-Release/handoff check:
-
-```sh
-bash scripts/release_check.sh
-```
-
-Full local acceptance with DONJON decks:
-
-```sh
-bash scripts/release_check.sh --run-donjon
-```
-
 Experimental BURN-axis DONJON consumer smoke:
 
 ```sh
 bash examples/donjon_openmc2donjon/run_burnup_axis_smoke.sh
-```
-
-HDF5 input preflight:
-
-```sh
-PYTHONPATH=src python examples/donjon_openmc2donjon/validate_mgxs_input_contract.py \
-  mgxs_library.h5 --check
 ```
 
 ## Spatial Domain Mapping

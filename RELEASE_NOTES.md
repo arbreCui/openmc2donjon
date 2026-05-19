@@ -4,6 +4,8 @@
 
 - Added a concise quickstart for the installed CLI and recipe/statepoint
   workflows.
+- Reorganized the README first screen around install, smoke, and one-step
+  conversion commands.
 
 ## v0.1.2-openmc-workflow - 2026-05-19
 
