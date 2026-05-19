@@ -21,7 +21,8 @@ The converter path is in place:
 - MULTICOMPO writer.
 - MACROLIB writer.
 - dense Legendre scatter to DRAGON sparse scatter conversion.
-- CLI preflight checks for required transport, volume, and ADF payload fields.
+- CLI preflight checks for required transport, volume, ADF payload fields, and
+  experimental `BURN`-axis state consistency.
 - manifest-driven handoff runner for DONJON deck replacement and k-effective checks.
 - experimental two-state `BURN`-axis serializer smoke through DONJON `NCR:`.
 

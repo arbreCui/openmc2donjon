@@ -59,6 +59,13 @@ Experimental BURN-axis DONJON consumer smoke:
 bash examples/donjon_openmc2donjon/run_burnup_axis_smoke.sh
 ```
 
+HDF5 input preflight:
+
+```sh
+PYTHONPATH=src python examples/donjon_openmc2donjon/validate_mgxs_input_contract.py \
+  mgxs_library.h5 --check
+```
+
 ## Spatial Domain Mapping
 
 The production mapping is spatial, not material-collapsed:
@@ -208,6 +215,8 @@ The HDF5 handoff schema is documented in
   scattering when possible.
 - Optional `OVERV`, `H-FACTOR`, ADF/HADF, single-mixture filtering, and
   single-point `BURN` helper metadata are supported.
+- The preflight validator checks both one-state and experimental `BURN`-axis
+  multi-state HDF5 layouts.
 
 ## Tests
 

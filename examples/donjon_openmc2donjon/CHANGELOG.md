@@ -7,3 +7,5 @@
 - Updated the top-level scripts so acceptance and handoff smoke are C5G7-only.
 - Rewrote status, baseline, artifact, and runbook documents to match the current scope.
 - Added a separate experimental `BURN`-axis DONJON `NCR:` consumer smoke.
+- Extended MGXS input preflight to validate experimental `BURN`-axis HDF5 state
+  layouts.

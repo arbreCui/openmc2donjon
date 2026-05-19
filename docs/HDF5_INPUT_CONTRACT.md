@@ -161,6 +161,10 @@ When this layout is present, `openmc2donjon` writes `NPAR=1`, `PARKEY=BURN`,
 calculation indexes to the burnup values. This path is unit-tested for
 serialization, but it is not part of the accepted C5G7 physics validation yet.
 
+The preflight validator checks this layout before conversion: all mixtures must
+use the same state count, the `BURN` axis must exist for multi-state inputs, and
+its length must match the state count.
+
 ## Optional ADF Payload
 
 Assembly discontinuity factors are stored under each mixture:
@@ -251,4 +255,13 @@ PYTHONPATH=src python examples/donjon_openmc2donjon/convert_mgxs_with_preflight.
   --require-adf \
   --expected-adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
   -o /private/tmp/c5g7pa.mco
+```
+
+For experimental multi-state files, the same preflight path reports the detected
+state count and `BURN` axis:
+
+```sh
+PYTHONPATH=src python examples/donjon_openmc2donjon/validate_mgxs_input_contract.py \
+  /path/to/multistate_mgxs.h5 \
+  --check
 ```

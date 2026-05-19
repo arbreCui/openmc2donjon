@@ -172,22 +172,28 @@ def output_path_for(args: argparse.Namespace) -> Path:
 
 def print_preflight(report, name_issue: str | None) -> None:
     status = "PASS" if report.ok else "FAIL"
+    calculation_count = report.calculations or report.mixtures
     print("Preflight")
     print(f"  {status}  input contract")
     print(
         "        "
         f"energy_groups={report.energy_groups} legendre_order={report.legendre_order} "
-        f"mixtures={report.mixtures}"
+        f"mixtures={report.mixtures} calculations={calculation_count}"
     )
     print(
         "        "
-        f"transport_total={report.transport_total_datasets}/{report.mixtures} "
-        f"strd_ready={report.transport_total_derivable}/{report.mixtures}"
+        f"state_points={report.state_points} "
+        f"burnup_axis={report.burnup_axis_path or 'none'}"
+    )
+    print(
+        "        "
+        f"transport_total={report.transport_total_datasets}/{calculation_count} "
+        f"strd_ready={report.transport_total_derivable}/{calculation_count}"
     )
     if report.adf_mixtures:
         print(
             "        "
-            f"adf={report.adf_mixtures}/{report.mixtures} "
+            f"adf={report.adf_mixtures}/{calculation_count} "
             f"faces={','.join(report.adf_faces)}"
         )
     else:
@@ -273,6 +279,11 @@ def write_summary_if_requested(
             "energy_groups": report.energy_groups,
             "legendre_order": report.legendre_order,
             "mixtures": report.mixtures,
+            "stateful_mixtures": report.stateful_mixtures,
+            "state_points": report.state_points,
+            "calculations": report.calculations,
+            "burnup_axis_path": report.burnup_axis_path,
+            "burnup_axis_values": report.burnup_axis_values,
             "fissionable_mixtures": report.fissionable_mixtures,
             "transport_total_datasets": report.transport_total_datasets,
             "transport_total_derivable": report.transport_total_derivable,

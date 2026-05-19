@@ -38,6 +38,11 @@ class InputReport:
     energy_groups: int | None = None
     legendre_order: int | None = None
     mixtures: int = 0
+    stateful_mixtures: int = 0
+    state_points: int = 1
+    calculations: int = 0
+    burnup_axis_path: str | None = None
+    burnup_axis_values: int | None = None
     fissionable_mixtures: int = 0
     scatter_axes: list[str] = field(default_factory=list)
     transport_total_datasets: int = 0
@@ -214,24 +219,107 @@ def validate_open_h5(
         report.fail("/mixtures group contains no mixtures")
         return
 
+    burnup_axis = burnup_axis_from_hdf5(h5, report)
     adf_names_by_mix: list[tuple[str, ...]] = []
+    state_counts: list[int] = []
     for name, group in mixtures.items():
         if not isinstance(group, h5py.Group):
             report.fail(f"/mixtures/{name} must be an HDF5 group")
             continue
-        validate_mixture(
-            h5,
-            group,
-            str(name),
-            ngroups,
-            legendre_order,
-            report,
-            adf_names_by_mix,
-            require_transport_dataset=require_transport_dataset,
-            require_volume=require_volume,
+        state_counts.append(
+            validate_mixture(
+                h5,
+                group,
+                str(name),
+                ngroups,
+                legendre_order,
+                report,
+                adf_names_by_mix,
+                require_transport_dataset=require_transport_dataset,
+                require_volume=require_volume,
+            )
         )
 
+    validate_state_layout(report, state_counts, burnup_axis)
+
     validate_adf_layout(report, adf_names_by_mix, require_adf, expected_adf_faces)
+
+
+def burnup_axis_from_hdf5(h5: h5py.File, report: InputReport) -> np.ndarray | None:
+    for path in (
+        "state_points/BURN",
+        "state_points/burnup",
+        "burnup_values",
+        "burnup",
+    ):
+        if path not in h5:
+            continue
+        obj = h5[path]
+        if not isinstance(obj, h5py.Dataset):
+            report.fail(f"/{path} must be a dataset")
+            return None
+        values = np.asarray(obj[:], dtype=float).reshape(-1)
+        validate_burnup_axis(values, report, f"/{path}")
+        return values
+
+    for attr in ("burnup_values", "burnup"):
+        if attr not in h5.attrs:
+            continue
+        values = np.asarray(h5.attrs[attr], dtype=float).reshape(-1)
+        validate_burnup_axis(values, report, f"/attrs/{attr}")
+        return values
+    return None
+
+
+def validate_burnup_axis(
+    values: np.ndarray,
+    report: InputReport,
+    label: str,
+) -> None:
+    report.burnup_axis_path = label
+    report.burnup_axis_values = int(values.size)
+    if values.size == 0:
+        report.fail(f"{label} BURN axis must contain at least one value")
+        return
+    if not np.all(np.isfinite(values)):
+        report.fail(f"{label} BURN axis contains non-finite values")
+    if values.size > 1 and not np.all(np.diff(values) > 0.0):
+        report.fail(f"{label} BURN axis must be strictly increasing")
+
+
+def validate_state_layout(
+    report: InputReport,
+    state_counts: list[int],
+    burnup_axis: np.ndarray | None,
+) -> None:
+    positive_counts = [count for count in state_counts if count > 0]
+    if not positive_counts:
+        return
+
+    first = positive_counts[0]
+    report.state_points = first
+    if any(count != first for count in positive_counts):
+        report.fail(
+            "all mixtures must contain the same number of state points; got "
+            f"{state_counts}"
+        )
+        return
+
+    if first > 1:
+        if burnup_axis is None:
+            report.fail("multi-state HDF5 requires a BURN axis")
+        elif burnup_axis.size != first:
+            report.fail(
+                f"BURN axis length must match number of states: "
+                f"{burnup_axis.size} != {first}"
+            )
+    elif burnup_axis is not None:
+        report.warn(
+            "BURN axis is present on a one-state input; pass --burnup during "
+            "conversion if single-point BURN metadata is desired"
+        )
+    if report.stateful_mixtures and first == 1:
+        report.warn("states/ layout contains a single point and will convert as one-state")
 
 
 def validate_mixture(
@@ -245,20 +333,115 @@ def validate_mixture(
     *,
     require_transport_dataset: bool,
     require_volume: bool,
+) -> int:
+    if "states" in group:
+        return validate_mixture_states(
+            h5,
+            group,
+            name,
+            ngroups,
+            legendre_order,
+            report,
+            adf_names_by_mix,
+            require_transport_dataset=require_transport_dataset,
+            require_volume=require_volume,
+        )
+
+    validate_calculation(
+        h5,
+        group,
+        name,
+        ngroups,
+        legendre_order,
+        report,
+        adf_names_by_mix,
+        parent_group=None,
+        count_fissionable=True,
+        require_transport_dataset=require_transport_dataset,
+        require_volume=require_volume,
+    )
+    report.calculations += 1
+    return 1
+
+
+def validate_mixture_states(
+    h5: h5py.File,
+    mixture_group: h5py.Group,
+    name: str,
+    ngroups: int,
+    legendre_order: int,
+    report: InputReport,
+    adf_names_by_mix: list[tuple[str, ...]],
+    *,
+    require_transport_dataset: bool,
+    require_volume: bool,
+) -> int:
+    states = mixture_group["states"]
+    if not isinstance(states, h5py.Group):
+        report.fail(f"mixture {name}: states must be an HDF5 group")
+        return 0
+    state_names = sorted_state_names(states)
+    if not state_names:
+        report.fail(f"mixture {name}: states group contains no state points")
+        return 0
+
+    report.stateful_mixtures += 1
+    report.calculations += len(state_names)
+    if any(field in mixture_group for field in REQUIRED_DATASETS):
+        report.warn(
+            f"mixture {name}: direct XS datasets are ignored because states/ is present"
+        )
+
+    for index, state_name in enumerate(state_names):
+        state_group = states[state_name]
+        label = f"{name}/states/{state_name}"
+        if not isinstance(state_group, h5py.Group):
+            report.fail(f"mixture {label}: state point must be an HDF5 group")
+            continue
+        validate_calculation(
+            h5,
+            state_group,
+            label,
+            ngroups,
+            legendre_order,
+            report,
+            adf_names_by_mix,
+            parent_group=mixture_group,
+            count_fissionable=index == 0,
+            require_transport_dataset=require_transport_dataset,
+            require_volume=require_volume,
+        )
+    return len(state_names)
+
+
+def validate_calculation(
+    h5: h5py.File,
+    group: h5py.Group,
+    name: str,
+    ngroups: int,
+    legendre_order: int,
+    report: InputReport,
+    adf_names_by_mix: list[tuple[str, ...]],
+    *,
+    parent_group: h5py.Group | None,
+    count_fissionable: bool,
+    require_transport_dataset: bool,
+    require_volume: bool,
 ) -> None:
     missing = [field for field in REQUIRED_DATASETS if field not in group]
     if missing:
         report.fail(f"mixture {name}: missing dataset(s): {', '.join(missing)}")
         return
 
-    if "fissionable" not in group.attrs:
+    if attr_with_parent(group, parent_group, "fissionable") is None:
         report.fail(f"mixture {name}: fissionable attribute is missing")
-    elif bool(group.attrs["fissionable"]):
+    elif count_fissionable and bool(attr_with_parent(group, parent_group, "fissionable")):
         report.fissionable_mixtures += 1
 
-    if require_volume and "volume" not in group.attrs:
+    volume = attr_with_parent(group, parent_group, "volume")
+    if require_volume and volume is None:
         report.fail(f"mixture {name}: volume attribute is missing")
-    if "volume" in group.attrs and float(group.attrs["volume"]) <= 0.0:
+    if volume is not None and float(volume) <= 0.0:
         report.fail(f"mixture {name}: volume attribute must be positive")
 
     for field in REQUIRED_DATASETS[:-1]:
@@ -269,7 +452,7 @@ def validate_mixture(
         scatter,
         ngroups,
         legendre_order,
-        scatter_axes(group, h5),
+        scatter_axes(group, h5, parent_group),
         report,
         name,
     )
@@ -520,12 +703,42 @@ def adf_names_from_attrs(dataset: h5py.Dataset, values: np.ndarray) -> list[str]
     return [f"FD_{index + 1:05d}" for index in range(values.shape[0])]
 
 
-def scatter_axes(group: h5py.Group, h5: h5py.File) -> str | None:
-    for source in (group.attrs, h5.attrs):
+def scatter_axes(
+    group: h5py.Group,
+    h5: h5py.File,
+    parent_group: h5py.Group | None = None,
+) -> str | None:
+    sources = [group.attrs]
+    if parent_group is not None:
+        sources.append(parent_group.attrs)
+    sources.append(h5.attrs)
+    for source in sources:
         for key in ("scatter_axes", "axes"):
             if key in source:
                 return attr_text(source[key])
     return None
+
+
+def attr_with_parent(
+    group: h5py.Group,
+    parent_group: h5py.Group | None,
+    name: str,
+) -> Any | None:
+    if name in group.attrs:
+        return group.attrs[name]
+    if parent_group is not None and name in parent_group.attrs:
+        return parent_group.attrs[name]
+    return None
+
+
+def sorted_state_names(states: h5py.Group) -> list[str]:
+    def key(name: str) -> tuple[int, int | str]:
+        try:
+            return (0, int(name))
+        except ValueError:
+            return (1, name)
+
+    return sorted(states.keys(), key=key)
 
 
 def normalize_axes(value: str | None) -> str | None:
@@ -574,21 +787,33 @@ def output_name_issue(path: Path | None, output_format: str) -> str | None:
 
 def print_report(report: InputReport) -> None:
     status = "PASS" if report.ok else "FAIL"
+    calculation_count = report.calculations or report.mixtures
     print(f"== {Path(report.path).name} ==")
     print(f"  {status}  path: {report.path}")
     print(f"        energy_groups={report.energy_groups} legendre_order={report.legendre_order}")
     print(
         "        mixtures="
         f"{report.mixtures} fissionable={report.fissionable_mixtures} "
-        f"transport_total={report.transport_total_datasets}/{report.mixtures} "
-        f"strd_ready={report.transport_total_derivable}/{report.mixtures}"
+        f"calculations={calculation_count} state_points={report.state_points}"
+    )
+    if report.burnup_axis_path:
+        print(
+            "        burnup_axis="
+            f"{report.burnup_axis_path} values={report.burnup_axis_values}"
+        )
+    else:
+        print("        burnup_axis=none")
+    print(
+        "        "
+        f"transport_total={report.transport_total_datasets}/{calculation_count} "
+        f"strd_ready={report.transport_total_derivable}/{calculation_count}"
     )
     axes = ",".join(report.scatter_axes) if report.scatter_axes else "<inferred>"
     print(f"        scatter_axes={axes}")
     if report.adf_mixtures:
         print(
             "        adf="
-            f"{report.adf_mixtures}/{report.mixtures} faces={','.join(report.adf_faces)}"
+            f"{report.adf_mixtures}/{calculation_count} faces={','.join(report.adf_faces)}"
         )
     else:
         print("        adf=none")
@@ -620,6 +845,11 @@ def write_summary(
                 "energy_groups": report.energy_groups,
                 "legendre_order": report.legendre_order,
                 "mixtures": report.mixtures,
+                "stateful_mixtures": report.stateful_mixtures,
+                "state_points": report.state_points,
+                "calculations": report.calculations,
+                "burnup_axis_path": report.burnup_axis_path,
+                "burnup_axis_values": report.burnup_axis_values,
                 "fissionable_mixtures": report.fissionable_mixtures,
                 "scatter_axes": report.scatter_axes,
                 "transport_total_datasets": report.transport_total_datasets,
