@@ -23,6 +23,7 @@ The converter path is in place:
 - dense Legendre scatter to DRAGON sparse scatter conversion.
 - CLI preflight checks for required transport, volume, and ADF payload fields.
 - manifest-driven handoff runner for DONJON deck replacement and k-effective checks.
+- experimental two-state `BURN`-axis serializer smoke through DONJON `NCR:`.
 
 ## Hex
 
@@ -37,5 +38,6 @@ The main line should stay on C5G7 until it is boring and reproducible:
 
 1. Keep the C5G7 acceptance runner green.
 2. Keep the manifest handoff smoke green.
-3. Add the next benchmark only when its source cards and reference solution are
+3. Keep the experimental `BURN`-axis smoke separate from accepted validation.
+4. Add the next benchmark only when its source cards and reference solution are
    complete enough to be a real physics comparison.

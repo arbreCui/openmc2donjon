@@ -14,6 +14,7 @@
 - `run_acceptance.sh`
 - `run_handoff_smoke.sh`
 - `run_production_pipeline_smoke.sh`
+- `run_burnup_axis_smoke.sh`
 
 ## Handoff
 
@@ -26,4 +27,5 @@
 ## Status Boundary
 
 C5G7 is accepted. Hex support exists, but no accepted hex benchmark is present
-in this workspace.
+in this workspace. The BURN-axis smoke is a serializer/consumer check, not an
+accepted physics benchmark.

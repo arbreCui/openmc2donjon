@@ -87,6 +87,19 @@ The DONJON smoke runs:
 - MULTICOMPO carry-through through `NCR:`;
 - 2-group NSSF ADF-vs-NODF comparison.
 
+## Experimental BURN-Axis Smoke
+
+The experimental multi-state serializer has a separate DONJON consumer smoke:
+
+```sh
+bash examples/donjon_openmc2donjon/run_burnup_axis_smoke.sh
+```
+
+It generates a tiny two-state HDF5 fixture, converts it to `L_MULTICOMPO`, runs
+`NCR:` at `BURN=0` and `BURN=10`, and checks that the recovered `NTOT0` values
+come from different calculations. This verifies the `PARKEY=BURN` + `TREE` +
+`CALCULATIONS` selection path, but it is not an accepted physics benchmark.
+
 ## Hex Status
 
 Hex support is implemented as converter/modeling capability, but this repository

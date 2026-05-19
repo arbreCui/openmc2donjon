@@ -9,8 +9,8 @@
 - Portable C5G7 converter demo is available.
 - Optional DONJON handoff smoke is available for machines with a local
   DRAGON/DONJON checkout.
-- Experimental one-parameter `BURN` multi-state serialization is available at
-  the converter level.
+- Experimental one-parameter `BURN` multi-state serialization is available and
+  has a tiny DONJON `NCR:` consumer smoke.
 - Hex support exists as capability work, but no accepted hex benchmark is
   included yet.
 
@@ -30,9 +30,9 @@
    - Keep the accepted snapshot for C5G7.
    - Add smaller synthetic fixtures for unit-level examples when helpful.
 
-4. Add a small DONJON consumer smoke for the experimental `BURN` axis.
-   - Keep this separate from the accepted C5G7 physics baseline until it is
-     reproducible on the DONJON side.
+4. Keep the experimental `BURN`-axis consumer smoke green.
+   - Keep it separate from the accepted C5G7 physics baseline.
+   - Promote only after it is backed by a real depletion or branch case.
 
 5. Select a proper hex benchmark.
    - Require complete geometry, material/profile/control inputs.
@@ -51,7 +51,7 @@
 - Reconstructing missing benchmark material definitions from partial local
   artifacts.
 - Treating exploratory hex results as accepted validation.
-- Treating the experimental multi-state serializer as an accepted physics
-  benchmark before a DONJON consumer check exists.
+- Treating the experimental multi-state serializer smoke as an accepted physics
+  benchmark.
 - Replacing OpenMC homogenization; OpenMC remains the source of spatially
   homogenized MGXS data.

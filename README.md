@@ -53,6 +53,12 @@ Full local acceptance with DONJON decks:
 bash scripts/release_check.sh --run-donjon
 ```
 
+Experimental BURN-axis DONJON consumer smoke:
+
+```sh
+bash examples/donjon_openmc2donjon/run_burnup_axis_smoke.sh
+```
+
 ## Spatial Domain Mapping
 
 The production mapping is spatial, not material-collapsed:
@@ -190,7 +196,8 @@ The HDF5 handoff schema is documented in
 
 - One state point by default.
 - Experimental `BURN`-axis multi-state HDF5 input can be serialized to
-  `L_MULTICOMPO`, but the accepted validation line remains one-state C5G7.
+  `L_MULTICOMPO`, with a tiny DONJON `NCR:` consumer smoke. The accepted
+  validation line remains one-state C5G7.
 - One DONJON mixture per OpenMC MGXS domain, preserving the spatial domain map.
 - OpenMC group order is preserved; `ENERGY` is written as reversed energy
   bounds for DRAGON/DONJON.

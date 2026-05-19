@@ -6,3 +6,4 @@
 - Removed obsolete exploratory hex validation artifacts from this workspace.
 - Updated the top-level scripts so acceptance and handoff smoke are C5G7-only.
 - Rewrote status, baseline, artifact, and runbook documents to match the current scope.
+- Added a separate experimental `BURN`-axis DONJON `NCR:` consumer smoke.

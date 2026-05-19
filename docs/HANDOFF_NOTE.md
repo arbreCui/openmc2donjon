@@ -72,7 +72,8 @@ locked decks.
 
 - One state point by default.
 - Experimental `BURN` history serialization exists, but no burnup/history/branch
-  parameter axis is accepted as a physics validation line yet.
+  parameter axis is accepted as a physics validation line yet. A tiny DONJON
+  `NCR:` smoke verifies the serializer's `BURN` selection plumbing.
 - Spatial mapping is one OpenMC MGXS domain or subdomain to one DONJON mixture.
 - Hex-domain conversion/modeling support exists, but no accepted hex benchmark
   is included in this release.

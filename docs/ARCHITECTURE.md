@@ -70,8 +70,8 @@ PARKEY = BURN
 one CALCULATIONS item per burnup state
 ```
 
-That path is covered by unit tests, but it is not part of the accepted physics
-validation until a DONJON consumer check is added.
+That path is covered by unit tests and by a tiny DONJON `NCR:` consumer smoke,
+but it is not part of the accepted physics validation.
 
 ## Important Conventions
 
