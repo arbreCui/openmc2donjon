@@ -6,7 +6,8 @@ from collections.abc import Mapping
 from typing import Any
 
 
-FROM_OPENMC_SUMMARY_SCHEMA = "openmc2donjon.from-openmc-summary.v1"
+FROM_OPENMC_SUMMARY_SCHEMA_V1 = "openmc2donjon.from-openmc-summary.v1"
+FROM_OPENMC_SUMMARY_SCHEMA = "openmc2donjon.from-openmc-summary.v2"
 
 FROM_OPENMC_SUMMARY_V1_KEYS = frozenset(
     {
@@ -32,20 +33,65 @@ FROM_OPENMC_SUMMARY_V1_KEYS = frozenset(
     }
 )
 
+FROM_OPENMC_SUMMARY_V2_KEYS = FROM_OPENMC_SUMMARY_V1_KEYS | frozenset(
+    {
+        "check_passed",
+        "check_summary_json",
+        "checked",
+    }
+)
+
+
+def validate_from_openmc_summary(payload: Mapping[str, Any]) -> list[str]:
+    """Return schema validation errors for any supported from-OpenMC summary."""
+
+    schema = payload.get("schema")
+    if schema == FROM_OPENMC_SUMMARY_SCHEMA_V1:
+        return validate_from_openmc_summary_v1(payload)
+    return validate_from_openmc_summary_v2(payload)
+
 
 def validate_from_openmc_summary_v1(payload: Mapping[str, Any]) -> list[str]:
     """Return schema validation errors for a from-OpenMC summary payload."""
 
+    return _validate_from_openmc_summary(
+        payload,
+        schema=FROM_OPENMC_SUMMARY_SCHEMA_V1,
+        keys=FROM_OPENMC_SUMMARY_V1_KEYS,
+        validate_check_fields=False,
+    )
+
+
+def validate_from_openmc_summary_v2(payload: Mapping[str, Any]) -> list[str]:
+    """Return schema validation errors for a v2 from-OpenMC summary payload."""
+
+    return _validate_from_openmc_summary(
+        payload,
+        schema=FROM_OPENMC_SUMMARY_SCHEMA,
+        keys=FROM_OPENMC_SUMMARY_V2_KEYS,
+        validate_check_fields=True,
+    )
+
+
+def _validate_from_openmc_summary(
+    payload: Mapping[str, Any],
+    *,
+    schema: str,
+    keys: frozenset[str],
+    validate_check_fields: bool,
+) -> list[str]:
+    """Return schema validation errors for a from-OpenMC summary payload."""
+
     errors: list[str] = []
-    keys = set(payload)
-    missing = sorted(FROM_OPENMC_SUMMARY_V1_KEYS - keys)
-    extra = sorted(keys - FROM_OPENMC_SUMMARY_V1_KEYS)
+    payload_keys = set(payload)
+    missing = sorted(keys - payload_keys)
+    extra = sorted(payload_keys - keys)
     if missing:
         errors.append(f"missing keys: {', '.join(missing)}")
     if extra:
         errors.append(f"unexpected keys: {', '.join(extra)}")
 
-    _require_literal(errors, payload, "schema", FROM_OPENMC_SUMMARY_SCHEMA)
+    _require_literal(errors, payload, "schema", schema)
     _require_nonempty_string(errors, payload, "package_version")
     _require_nonempty_string(errors, payload, "recipe")
     _require_optional_string(errors, payload, "statepoint")
@@ -66,6 +112,11 @@ def validate_from_openmc_summary_v1(payload: Mapping[str, Any]) -> list[str]:
     _validate_statepoint_link(errors, payload)
     _validate_mixture_count(errors, payload)
     _validate_burnup_axis(errors, payload.get("burnup_axis"))
+    if validate_check_fields:
+        _require_bool(errors, payload, "checked")
+        _require_optional_bool(errors, payload, "check_passed")
+        _require_optional_string(errors, payload, "check_summary_json")
+        _validate_check_fields(errors, payload)
     return errors
 
 
@@ -102,6 +153,13 @@ def _require_bool(errors: list[str], payload: Mapping[str, Any], key: str) -> No
         return
     if not isinstance(payload[key], bool):
         errors.append(f"{key}: expected boolean")
+
+
+def _require_optional_bool(errors: list[str], payload: Mapping[str, Any], key: str) -> None:
+    if key not in payload:
+        return
+    if payload[key] is not None and not isinstance(payload[key], bool):
+        errors.append(f"{key}: expected boolean or null")
 
 
 def _require_choice(
@@ -177,6 +235,20 @@ def _validate_root_name(errors: list[str], payload: Mapping[str, Any]) -> None:
 def _validate_statepoint_link(errors: list[str], payload: Mapping[str, Any]) -> None:
     if payload.get("loaded_statepoint") is True and payload.get("statepoint") is None:
         errors.append("statepoint: expected path when loaded_statepoint is true")
+
+
+def _validate_check_fields(errors: list[str], payload: Mapping[str, Any]) -> None:
+    checked = payload.get("checked")
+    check_passed = payload.get("check_passed")
+    check_summary_json = payload.get("check_summary_json")
+    if checked is True:
+        if check_passed is not True:
+            errors.append("check_passed: expected true when checked is true")
+    elif checked is False:
+        if check_passed is not None:
+            errors.append("check_passed: expected null when checked is false")
+        if check_summary_json is not None:
+            errors.append("check_summary_json: expected null when checked is false")
 
 
 def _validate_mixture_count(errors: list[str], payload: Mapping[str, Any]) -> None:

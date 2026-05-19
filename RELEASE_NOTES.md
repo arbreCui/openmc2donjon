@@ -8,7 +8,7 @@
   conversion commands.
 - Added `--summary-json` to `openmc2donjon-from-openmc` for conversion
   provenance manifests.
-- Documented the `openmc2donjon.from-openmc-summary.v1` JSON schema for
+- Documented the `openmc2donjon.from-openmc-summary.v2` JSON schema for
   automation and handoff checks.
 - Added shared summary schema validation for unittest and smoke-script checks.
 - Added an editable OpenMC recipe template for user production cases.
@@ -19,6 +19,7 @@
   writing DONJON ASCII.
 - Added checked conversion support to `openmc2donjon-from-openmc` so the
   recipe/statepoint one-step path can fail before writing DONJON ASCII.
+- Bumped the from-OpenMC summary schema to v2 with checked preflight provenance.
 - Extended release check so the C5G7 statepoint parity path exercises
   `openmc2donjon-from-openmc`, reads back the generated MCO, and validates the
   summary manifest.

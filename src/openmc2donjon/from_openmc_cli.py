@@ -290,6 +290,13 @@ def _summary_payload(
         "mixture_names": mixture_names,
         "state_points": nstates,
         "burnup_axis": burnup_summary,
+        "checked": bool(args.check),
+        "check_passed": True if args.check else None,
+        "check_summary_json": (
+            str(args.check_summary_json)
+            if args.check and args.check_summary_json is not None
+            else None
+        ),
         "selected_mixtures": args.mixture or None,
         "root_name": args.root_name if args.format == "multicompo" else None,
         "single_point_burnup": args.burnup,

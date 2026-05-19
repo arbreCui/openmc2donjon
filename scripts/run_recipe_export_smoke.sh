@@ -90,7 +90,7 @@ import sys
 
 import h5py
 from openmc2donjon import lcm_ascii
-from openmc2donjon.from_openmc_summary import validate_from_openmc_summary_v1
+from openmc2donjon.from_openmc_summary import validate_from_openmc_summary
 
 mgxs = Path(sys.argv[1])
 mco = Path(sys.argv[2])
@@ -119,12 +119,16 @@ for path in (mco, mac, one_step_mco):
     print(f"readback {path.name}: blocks={len(blocks)} first={names[:6]}")
 
 payload = json.loads(summary.read_text(encoding="utf-8"))
-summary_errors = validate_from_openmc_summary_v1(payload)
+summary_errors = validate_from_openmc_summary(payload)
 if summary_errors:
     raise SystemExit("invalid summary schema: " + "; ".join(summary_errors))
 check_payload = json.loads(check_summary.read_text(encoding="utf-8"))
 if check_payload["decision"] != "mgxs_input_contract_passed":
     raise SystemExit("one-step checked conversion preflight did not pass")
+if payload["checked"] is not True or payload["check_passed"] is not True:
+    raise SystemExit("one-step summary did not record checked preflight success")
+if payload["check_summary_json"] != str(check_summary):
+    raise SystemExit("one-step summary check_summary_json path mismatch")
 if payload["mixture_names"] != ["FUEL_A", "MOD_A"]:
     raise SystemExit("unexpected summary mixture names")
 if payload["hdf5"] != str(one_step_h5) or payload["output"] != str(one_step_mco):

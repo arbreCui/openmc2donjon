@@ -173,7 +173,7 @@ import numpy as np
 from openmc2donjon import lcm_ascii
 from openmc2donjon.from_openmc_summary import (
     FROM_OPENMC_SUMMARY_SCHEMA,
-    validate_from_openmc_summary_v1,
+    validate_from_openmc_summary,
 )
 
 reference = Path(sys.argv[1])
@@ -227,7 +227,7 @@ summary = json.loads(summary_path.read_text(encoding="utf-8"))
 check_summary = json.loads(check_summary_path.read_text(encoding="utf-8"))
 if check_summary.get("decision") != "mgxs_input_contract_passed":
     raise SystemExit(f"statepoint exporter checked conversion failed: {check_summary}")
-schema_errors = validate_from_openmc_summary_v1(summary)
+schema_errors = validate_from_openmc_summary(summary)
 if schema_errors:
     raise SystemExit("statepoint exporter summary schema failed: " + "; ".join(schema_errors))
 checks = {
@@ -240,6 +240,9 @@ checks = {
     "legendre_order": summary.get("legendre_order") == 1,
     "mixture_count": summary.get("mixture_count") == 9,
     "state_points": summary.get("state_points") == 1,
+    "checked": summary.get("checked") is True,
+    "check_passed": summary.get("check_passed") is True,
+    "check_summary_json": Path(summary.get("check_summary_json", "")) == check_summary_path,
 }
 failed = [name for name, passed in checks.items() if not passed]
 if failed:

@@ -11,7 +11,7 @@ written, and the compact physics-shape metadata needed for quick checks.
 ## Schema Id
 
 ```text
-openmc2donjon.from-openmc-summary.v1
+openmc2donjon.from-openmc-summary.v2
 ```
 
 The schema id is stored in the top-level `schema` field.
@@ -23,6 +23,9 @@ The schema id is stored in the top-level `schema` field.
   "burnup_axis": {
     "present": false
   },
+  "check_passed": true,
+  "check_summary_json": "check_summary.json",
+  "checked": true,
   "energy_groups": 7,
   "format": "multicompo",
   "h_factor_default": null,
@@ -39,7 +42,7 @@ The schema id is stored in the top-level `schema` field.
   "package_version": "0.1.2",
   "recipe": "/case/export_recipe.py",
   "root_name": "CPO",
-  "schema": "openmc2donjon.from-openmc-summary.v1",
+  "schema": "openmc2donjon.from-openmc-summary.v2",
   "selected_mixtures": null,
   "single_point_burnup": null,
   "state_points": 1,
@@ -66,6 +69,9 @@ The schema id is stored in the top-level `schema` field.
 | `mixture_names` | array of strings | Mixture names in HDF5 order. |
 | `state_points` | integer | Number of calculation states per mixture. One for the default production path. |
 | `burnup_axis` | object | Burnup-axis summary. See below. |
+| `checked` | boolean | True when `--check` ran before conversion. |
+| `check_passed` | boolean or null | True when a requested preflight check passed. Null when `checked` is false. |
+| `check_summary_json` | string or null | Path passed with `--check-summary-json`, when `--check` was used. Null when `checked` is false or no check summary was requested. |
 | `selected_mixtures` | array of strings or null | Values passed with `--mixture`, or null when all mixtures were requested. |
 | `root_name` | string or null | Root `L_MULTICOMPO` directory name, or null for root `L_MACROLIB` output. |
 | `single_point_burnup` | number or null | Value passed with `--burnup`, when present. |
@@ -108,9 +114,11 @@ import json
 from pathlib import Path
 
 summary = json.loads(Path("run_summary.json").read_text())
-assert summary["schema"] == "openmc2donjon.from-openmc-summary.v1"
+assert summary["schema"] == "openmc2donjon.from-openmc-summary.v2"
 assert summary["format"] in {"multicompo", "macrolib"}
 assert summary["mixture_count"] == len(summary["mixture_names"])
 assert summary["energy_groups"] > 0
 assert summary["state_points"] > 0
+if summary["checked"]:
+    assert summary["check_passed"] is True
 ```

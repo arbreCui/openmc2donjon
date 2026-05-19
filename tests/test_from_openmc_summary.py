@@ -4,13 +4,17 @@ import unittest
 
 from openmc2donjon.from_openmc_summary import (
     FROM_OPENMC_SUMMARY_SCHEMA,
-    validate_from_openmc_summary_v1,
+    FROM_OPENMC_SUMMARY_SCHEMA_V1,
+    validate_from_openmc_summary,
 )
 
 
 def valid_summary() -> dict[str, object]:
     return {
         "burnup_axis": {"present": False},
+        "check_passed": True,
+        "check_summary_json": "check_summary.json",
+        "checked": True,
         "energy_groups": 7,
         "format": "multicompo",
         "h_factor_default": None,
@@ -34,7 +38,16 @@ def valid_summary() -> dict[str, object]:
 
 class FromOpenMCSummaryTests(unittest.TestCase):
     def test_valid_summary(self) -> None:
-        self.assertEqual(validate_from_openmc_summary_v1(valid_summary()), [])
+        self.assertEqual(validate_from_openmc_summary(valid_summary()), [])
+
+    def test_accepts_legacy_v1_summary(self) -> None:
+        payload = valid_summary()
+        payload["schema"] = FROM_OPENMC_SUMMARY_SCHEMA_V1
+        payload.pop("checked")
+        payload.pop("check_passed")
+        payload.pop("check_summary_json")
+
+        self.assertEqual(validate_from_openmc_summary(payload), [])
 
     def test_rejects_missing_extra_and_inconsistent_count(self) -> None:
         payload = valid_summary()
@@ -42,7 +55,7 @@ class FromOpenMCSummaryTests(unittest.TestCase):
         payload["unexpected"] = "value"
         payload["mixture_count"] = 3
 
-        errors = validate_from_openmc_summary_v1(payload)
+        errors = validate_from_openmc_summary(payload)
 
         self.assertIn("missing keys: output", errors)
         self.assertIn("unexpected keys: unexpected", errors)
@@ -54,8 +67,19 @@ class FromOpenMCSummaryTests(unittest.TestCase):
 
         self.assertIn(
             "burnup_axis.count: expected len(values)",
-            validate_from_openmc_summary_v1(payload),
+            validate_from_openmc_summary(payload),
         )
+
+    def test_rejects_inconsistent_check_fields(self) -> None:
+        payload = valid_summary()
+        payload["checked"] = False
+        payload["check_passed"] = True
+        payload["check_summary_json"] = "check_summary.json"
+
+        errors = validate_from_openmc_summary(payload)
+
+        self.assertIn("check_passed: expected null when checked is false", errors)
+        self.assertIn("check_summary_json: expected null when checked is false", errors)
 
 
 if __name__ == "__main__":

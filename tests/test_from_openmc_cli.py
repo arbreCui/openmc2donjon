@@ -13,15 +13,15 @@ from openmc2donjon import lcm_ascii
 from openmc2donjon.from_openmc_cli import build_parser, main as from_openmc_main
 from openmc2donjon.from_openmc_summary import (
     FROM_OPENMC_SUMMARY_SCHEMA,
-    validate_from_openmc_summary_v1,
+    validate_from_openmc_summary,
 )
 
 
-def assert_from_openmc_summary_v1(
+def assert_from_openmc_summary(
     case: unittest.TestCase,
     payload: dict[str, object],
 ) -> None:
-    case.assertEqual(validate_from_openmc_summary_v1(payload), [])
+    case.assertEqual(validate_from_openmc_summary(payload), [])
 
 
 class FromOpenMCCliTests(unittest.TestCase):
@@ -77,7 +77,7 @@ class FromOpenMCCliTests(unittest.TestCase):
             self.assertEqual(names[0], "SIGNATURE")
 
             payload = json.loads(summary.read_text(encoding="utf-8"))
-            assert_from_openmc_summary_v1(self, payload)
+            assert_from_openmc_summary(self, payload)
             self.assertEqual(payload["schema"], FROM_OPENMC_SUMMARY_SCHEMA)
             self.assertEqual(payload["package_version"], "0.1.2")
             self.assertEqual(payload["recipe"], str(recipe.resolve()))
@@ -97,6 +97,9 @@ class FromOpenMCCliTests(unittest.TestCase):
             self.assertEqual(payload["root_name"], "CPO")
             self.assertIsNone(payload["single_point_burnup"])
             self.assertIsNone(payload["h_factor_default"])
+            self.assertFalse(payload["checked"])
+            self.assertIsNone(payload["check_passed"])
+            self.assertIsNone(payload["check_summary_json"])
 
     def test_recipe_to_multicompo_with_checked_hdf5(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
@@ -107,6 +110,7 @@ class FromOpenMCCliTests(unittest.TestCase):
             statepoint = tmp / "statepoint.fake.h5"
             hdf5 = tmp / "mgxs.h5"
             output = tmp / "out.mcompo.txt"
+            summary = tmp / "summary.json"
             check_summary = tmp / "check_summary.json"
             statepoint.write_text("fake statepoint\n", encoding="utf-8")
 
@@ -122,6 +126,8 @@ class FromOpenMCCliTests(unittest.TestCase):
                         str(hdf5),
                         "-o",
                         str(output),
+                        "--summary-json",
+                        str(summary),
                         "--check",
                         "--require-volume",
                         "--require-transport-dataset",
@@ -131,11 +137,16 @@ class FromOpenMCCliTests(unittest.TestCase):
                 )
 
             payload = json.loads(check_summary.read_text(encoding="utf-8"))
+            conversion_payload = json.loads(summary.read_text(encoding="utf-8"))
             output_exists = output.exists()
 
         self.assertEqual(rc, 0)
         self.assertTrue(output_exists)
         self.assertEqual(payload["decision"], "mgxs_input_contract_passed")
+        assert_from_openmc_summary(self, conversion_payload)
+        self.assertTrue(conversion_payload["checked"])
+        self.assertTrue(conversion_payload["check_passed"])
+        self.assertEqual(conversion_payload["check_summary_json"], str(check_summary))
         self.assertIn("mgxs_input_contract_passed", stream.getvalue())
 
     def test_recipe_check_failure_does_not_write_output(self) -> None:
