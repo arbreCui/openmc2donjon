@@ -42,6 +42,16 @@ class MixtureXS:
         return int(self.scatter_matrix.shape[0])
 
 
+@dataclass
+class MixtureHistory:
+    name: str
+    calculations: list[MixtureXS]
+
+    @property
+    def nstates(self) -> int:
+        return len(self.calculations)
+
+
 def convert_mgxs_hdf5(
     input_h5: str | Path,
     output_path: str | Path,
@@ -54,21 +64,33 @@ def convert_mgxs_hdf5(
 ) -> None:
     """Read an OpenMC MGXS HDF5 dump and write a L_MULTICOMPO ASCII file."""
 
-    mixtures, energy_bounds = read_mgxs_hdf5(
+    histories, energy_bounds, burnup_values = read_mgxs_hdf5_histories(
         input_h5,
         h_factor_default=h_factor_default,
     )
-    mixtures = _select_mixtures(mixtures, mixture_names)
+    histories = _select_mixture_histories(histories, mixture_names)
     if comment is None:
         comment = f"OpenMC MGXS conversion from {Path(input_h5).name}"
-    write_multicompo(
-        mixtures,
-        energy_bounds,
-        output_path,
-        root_name=root_name,
-        comment=comment,
-        burnup=burnup,
-    )
+    if any(history.nstates > 1 for history in histories):
+        if burnup is not None:
+            raise ValueError("--burnup cannot override a multi-state HDF5 burnup axis")
+        write_multicompo_histories(
+            histories,
+            energy_bounds,
+            output_path,
+            root_name=root_name,
+            comment=comment,
+            burnup_values=burnup_values,
+        )
+    else:
+        write_multicompo(
+            [history.calculations[0] for history in histories],
+            energy_bounds,
+            output_path,
+            root_name=root_name,
+            comment=comment,
+            burnup=burnup,
+        )
 
 
 def _select_mixtures(
@@ -87,12 +109,44 @@ def _select_mixtures(
     return [by_name[name] for name in names]
 
 
+def _select_mixture_histories(
+    histories: list[MixtureHistory],
+    names: Sequence[str] | None,
+) -> list[MixtureHistory]:
+    if not names:
+        return histories
+    by_name = {history.name: history for history in histories}
+    missing = [name for name in names if name not in by_name]
+    if missing:
+        available = ", ".join(history.name for history in histories)
+        raise ValueError(
+            f"unknown mixture name(s): {', '.join(missing)}; available: {available}"
+        )
+    return [by_name[name] for name in names]
+
+
 def read_mgxs_hdf5(
     input_h5: str | Path,
     *,
     h_factor_default: float | None = None,
 ) -> tuple[list[MixtureXS], np.ndarray]:
     """Read the converter-facing OpenMC MGXS HDF5 schema."""
+
+    histories, energy_bounds, _burnup_values = read_mgxs_hdf5_histories(
+        input_h5,
+        h_factor_default=h_factor_default,
+    )
+    if any(history.nstates != 1 for history in histories):
+        raise ValueError("MGXS HDF5 contains multiple state points")
+    return [history.calculations[0] for history in histories], energy_bounds
+
+
+def read_mgxs_hdf5_histories(
+    input_h5: str | Path,
+    *,
+    h_factor_default: float | None = None,
+) -> tuple[list[MixtureHistory], np.ndarray, np.ndarray | None]:
+    """Read one-state or burnup-axis MGXS HDF5 data."""
 
     import h5py
 
@@ -104,60 +158,41 @@ def read_mgxs_hdf5(
         if len(energy_bounds) != ngroups + 1:
             raise ValueError("energy_bounds length must be energy_groups + 1")
 
-        mixtures: list[MixtureXS] = []
+        burnup_values = _burnup_values_from_hdf5(h5)
+        histories: list[MixtureHistory] = []
         mix_group = h5["mixtures"]
         for name in mix_group:
             g = mix_group[name]
-            scatter = _scatter_matrix_from_hdf5(
-                g,
-                ngroups,
-                str(name),
-                expected_moments=expected_moments,
-            )
-
-            total = _vector(g["total"][:], ngroups, name, "total")
-            transport_total = _transport_total_from_hdf5(g, scatter, total, ngroups, str(name))
-            absorption = _optional_vector(g, "absorption", ngroups)
-            fission = _optional_vector(g, "fission", ngroups)
-            nu_fission = _optional_vector(g, "nu_fission", ngroups)
-            chi = _optional_vector(g, "chi", ngroups)
-            inverse_velocity = _inverse_velocity_from_hdf5(g, ngroups, str(name))
-            fission_attr = bool(g.attrs.get("fissionable", True))
-            has_fission_source = (
-                np.sum(np.abs(nu_fission)) > 1e-12 and np.sum(np.abs(chi)) > 1e-12
-            )
-            fissionable = fission_attr and has_fission_source
-            if not fissionable:
-                fission = np.zeros(ngroups, dtype=float)
-                nu_fission = np.zeros(ngroups, dtype=float)
-                chi = np.zeros(ngroups, dtype=float)
-
-            mixtures.append(
-                MixtureXS(
-                    name=str(name),
-                    total=total,
-                    absorption=absorption,
-                    fission=fission,
-                    nu_fission=nu_fission,
-                    chi=chi,
-                    scatter_matrix=scatter,
-                    fissionable=fissionable,
-                    volume=float(g.attrs.get("volume", 1.0)),
-                    inverse_velocity=inverse_velocity,
-                    transport_total=transport_total,
-                    h_factor=_h_factor_from_hdf5(
+            if "states" in g:
+                states_group = g["states"]
+                states = [
+                    _mixture_from_hdf5_group(
+                        states_group[state_name],
+                        ngroups,
+                        str(name),
+                        expected_moments=expected_moments,
+                        h_factor_default=h_factor_default,
+                        parent_attrs=g.attrs,
+                    )
+                    for state_name in _sorted_state_names(states_group)
+                ]
+            else:
+                states = [
+                    _mixture_from_hdf5_group(
                         g,
                         ngroups,
                         str(name),
-                        default=h_factor_default,
-                    ),
-                    adf=_adf_from_hdf5(g, ngroups, str(name)),
-                )
-            )
+                        expected_moments=expected_moments,
+                        h_factor_default=h_factor_default,
+                        parent_attrs=None,
+                    )
+                ]
+            histories.append(MixtureHistory(name=str(name), calculations=states))
 
-    if not mixtures:
+    if not histories:
         raise ValueError("MGXS HDF5 contains no mixtures")
-    return mixtures, energy_bounds
+    _validate_histories(histories, burnup_values)
+    return histories, energy_bounds, burnup_values
 
 
 def write_multicompo(
@@ -192,6 +227,37 @@ def write_multicompo(
     lcm.write_lcm_ascii(blocks, output_path)
 
 
+def write_multicompo_histories(
+    histories: Iterable[MixtureHistory],
+    energy_bounds: np.ndarray | list[float],
+    output_path: str | Path,
+    *,
+    root_name: str = DEFAULT_ROOT_NAME,
+    comment: str = "OpenMC MGXS conversion",
+    burnup_values: Sequence[float] | np.ndarray | None = None,
+) -> None:
+    """Write a MULTICOMPO object with multiple calculations per mixture."""
+
+    history_list = list(histories)
+    if not history_list:
+        raise ValueError("at least one mixture history is required")
+    burnup_axis = None if burnup_values is None else np.asarray(burnup_values, dtype=float)
+    _validate_histories(history_list, burnup_axis)
+    energy = np.asarray(energy_bounds, dtype=float)
+    ngroups = history_list[0].calculations[0].ngroups
+    if energy.shape != (ngroups + 1,):
+        raise ValueError("energy_bounds length must be ngroups + 1")
+
+    blocks = build_multicompo_history_blocks(
+        history_list,
+        energy,
+        root_name=root_name,
+        comment=comment,
+        burnup_values=burnup_values,
+    )
+    lcm.write_lcm_ascii(blocks, output_path)
+
+
 def build_multicompo_blocks(
     mixtures: list[MixtureXS],
     energy_bounds: np.ndarray,
@@ -200,50 +266,92 @@ def build_multicompo_blocks(
     comment: str,
     burnup: float | None = None,
 ) -> list[lcm.LcmBlock]:
+    histories = [MixtureHistory(name=mix.name, calculations=[mix]) for mix in mixtures]
+    burnup_values = None if burnup is None else [float(burnup)]
+    return build_multicompo_history_blocks(
+        histories,
+        energy_bounds,
+        root_name=root_name,
+        comment=comment,
+        burnup_values=burnup_values,
+    )
+
+
+def build_multicompo_history_blocks(
+    histories: list[MixtureHistory],
+    energy_bounds: np.ndarray,
+    *,
+    root_name: str,
+    comment: str,
+    burnup_values: Sequence[float] | np.ndarray | None = None,
+) -> list[lcm.LcmBlock]:
+    if not histories:
+        raise ValueError("at least one mixture history is required")
+    if not histories[0].calculations:
+        raise ValueError("mixture histories must contain at least one calculation")
+    mixtures = [history.calculations[0] for history in histories]
     ngroups = mixtures[0].ngroups
-    for mix in mixtures:
+    all_calculations = [
+        mix for history in histories for mix in history.calculations
+    ]
+    for mix in all_calculations:
         _validate_mixture(mix, ngroups)
-    _validate_adf_layout(mixtures)
-    maxcal = 1
+    _validate_adf_layout(all_calculations)
+    _validate_histories(histories, None if burnup_values is None else np.asarray(burnup_values))
+    nstates = histories[0].nstates
+    maxcal = nstates
     energy_desc = np.asarray(energy_bounds, dtype=float)[::-1]
 
-    npar = 1 if burnup is not None else 0
+    burnup_axis = None if burnup_values is None else np.asarray(burnup_values, dtype=float)
+    npar = 1 if burnup_axis is not None else 0
     blocks: list[lcm.LcmBlock] = [
         lcm.string_block(1, "SIGNATURE", "L_MULTICOMPO", width=12),
         lcm.block(1, root_name[:72], 0, count=-1),
         lcm.string_block(2, "COMMENT", comment, width=80),
         lcm.block(2, "GLOBAL", 0, count=-1),
-        *_global_parameter_blocks(3, burnup),
+        *_global_parameter_blocks(3, burnup_axis),
         lcm.control(-3),
         lcm.block(
             2,
             "STATE-VECTOR",
             1,
             _multicompo_state_vector(
-                len(mixtures),
+                len(histories),
                 ngroups,
                 maxcal,
-                _multicompo_adf_type(mixtures),
+                _multicompo_adf_type(all_calculations),
                 npar=npar,
             ),
         ),
-        lcm.block(2, "MIXTURES", 10, count=len(mixtures)),
+        lcm.block(2, "MIXTURES", 10, count=len(histories)),
     ]
 
-    for mix_index, mix in enumerate(mixtures, start=1):
-        blocks.extend(_mixture_blocks(mix_index, mix, energy_desc, maxcal))
+    for mix_index, history in enumerate(histories, start=1):
+        blocks.extend(
+            _mixture_blocks(
+                mix_index,
+                history.calculations,
+                energy_desc,
+                maxcal,
+                burnup_axis=burnup_axis,
+            )
+        )
 
     blocks.extend([lcm.control(-2), lcm.control(-1)])
     return blocks
 
 
-def _global_parameter_blocks(level: int, burnup: float | None) -> list[lcm.LcmBlock]:
-    if burnup is None:
+def _global_parameter_blocks(
+    level: int,
+    burnup_values: np.ndarray | None,
+) -> list[lcm.LcmBlock]:
+    if burnup_values is None:
         return [
             lcm.block(level, "PARCAD", 1, [1]),
             lcm.block(level, "PARPAD", 1, [1]),
         ]
 
+    values = np.asarray(burnup_values, dtype=float).reshape(-1)
     parkey, parkey_count = lcm.pack_fixed_strings(["BURN"], width=12)
     partyp, partyp_count = lcm.pack_fixed_strings(["VALU"], width=4)
     parfmt, parfmt_count = lcm.pack_fixed_strings(["REAL"], width=8)
@@ -253,39 +361,77 @@ def _global_parameter_blocks(level: int, burnup: float | None) -> list[lcm.LcmBl
         lcm.block(level, "PARFMT", 3, parfmt, count=parfmt_count),
         lcm.block(level, "PARCAD", 1, [1, 1]),
         lcm.block(level, "PARPAD", 1, [1, 1]),
-        lcm.block(level, "pval00000001", 2, [float(burnup)]),
-        lcm.block(level, "NVALUE", 1, [1]),
+        lcm.block(level, "pval00000001", 2, values),
+        lcm.block(level, "NVALUE", 1, [len(values)]),
     ]
 
 
 def _mixture_blocks(
-    mix_index: int, mix: MixtureXS, energy_desc: np.ndarray, maxcal: int
+    mix_index: int,
+    calculations: list[MixtureXS],
+    energy_desc: np.ndarray,
+    maxcal: int,
+    *,
+    burnup_axis: np.ndarray | None,
 ) -> list[lcm.LcmBlock]:
     blocks: list[lcm.LcmBlock] = [
         lcm.list_item(3, mix_index),
         lcm.block(4, "CALCULATIONS", 10, count=maxcal),
-        lcm.list_item(5, 1),
-        lcm.block(6, "ISOTOPESLIST", 10, count=1),
-        lcm.list_item(7, 1),
     ]
-    blocks.extend(_isotope_blocks(8, mix))
-    blocks.extend(
-        [
-            lcm.control(-8),
-            *_macrolib_blocks(6, mix),
-            *_library_blocks(6, mix, energy_desc),
-            lcm.control(-6),
-            lcm.block(4, "TREE", 0, count=-1),
-            lcm.block(5, "NVP", 1, [1, 20]),
-            lcm.block(5, "NCALS", 1, [1]),
-            lcm.block(5, "DEBARB", 1, [2, 1]),
-            lcm.block(5, "ARBVAL", 1, [0]),
-            lcm.block(5, "ORIGIN", 1, [0]),
-            lcm.control(-5),
-            lcm.control(-4),
-        ]
-    )
+    for calc_index, mix in enumerate(calculations, start=1):
+        blocks.extend(
+            [
+                lcm.list_item(5, calc_index),
+                lcm.block(6, "ISOTOPESLIST", 10, count=1),
+                lcm.list_item(7, 1),
+            ]
+        )
+        blocks.extend(_isotope_blocks(8, mix))
+        blocks.extend(
+            [
+                lcm.control(-8),
+                *_macrolib_blocks(6, mix),
+                *_library_blocks(6, mix, energy_desc),
+                lcm.control(-6),
+            ]
+        )
+
+    tree = _parameter_tree_blocks(4, len(calculations), burnup_axis=burnup_axis)
+    blocks.extend([*tree, lcm.control(-4)])
     return blocks
+
+
+def _parameter_tree_blocks(
+    level: int,
+    ncal: int,
+    *,
+    burnup_axis: np.ndarray | None,
+) -> list[lcm.LcmBlock]:
+    if burnup_axis is None:
+        return [
+            lcm.block(level, "TREE", 0, count=-1),
+            lcm.block(level + 1, "NVP", 1, [1, 20]),
+            lcm.block(level + 1, "NCALS", 1, [ncal]),
+            lcm.block(level + 1, "DEBARB", 1, [2, 1]),
+            lcm.block(level + 1, "ARBVAL", 1, [0]),
+            lcm.block(level + 1, "ORIGIN", 1, [0] * ncal),
+            lcm.control(-(level + 1)),
+        ]
+
+    if len(burnup_axis) != ncal:
+        raise ValueError("burnup_values length must match number of calculations")
+    nvp = ncal + 1
+    debarb = [2, ncal + 2, *range(1, ncal + 1)]
+    arbval = [0, *range(1, ncal + 1)]
+    return [
+        lcm.block(level, "TREE", 0, count=-1),
+        lcm.block(level + 1, "NVP", 1, [nvp, max(20, nvp)]),
+        lcm.block(level + 1, "NCALS", 1, [ncal]),
+        lcm.block(level + 1, "DEBARB", 1, debarb),
+        lcm.block(level + 1, "ARBVAL", 1, arbval),
+        lcm.block(level + 1, "ORIGIN", 1, [0] * ncal),
+        lcm.control(-(level + 1)),
+    ]
 
 
 def _isotope_blocks(level: int, mix: MixtureXS) -> list[lcm.LcmBlock]:
@@ -396,7 +542,7 @@ def _multicompo_state_vector(
     state = [0] * 40
     state[0] = int(nmix)
     state[1] = int(ngroups)
-    state[2] = 1
+    state[2] = int(maxcal)
     state[3] = int(maxcal)
     state[4] = int(npar)
     state[9] = 1
@@ -422,6 +568,116 @@ def _multicompo_adf_type(mixtures: list[MixtureXS]) -> int:
 
 def _mixture_adf_type(mix: MixtureXS) -> int:
     return 3 if mix.adf else 0
+
+
+def _mixture_from_hdf5_group(
+    group,
+    ngroups: int,
+    mix_name: str,
+    *,
+    expected_moments: int | None,
+    h_factor_default: float | None,
+    parent_attrs,
+) -> MixtureXS:
+    scatter = _scatter_matrix_from_hdf5(
+        group,
+        ngroups,
+        mix_name,
+        expected_moments=expected_moments,
+        parent_attrs=parent_attrs,
+    )
+
+    total = _vector(group["total"][:], ngroups, mix_name, "total")
+    transport_total = _transport_total_from_hdf5(group, scatter, total, ngroups, mix_name)
+    absorption = _optional_vector(group, "absorption", ngroups)
+    fission = _optional_vector(group, "fission", ngroups)
+    nu_fission = _optional_vector(group, "nu_fission", ngroups)
+    chi = _optional_vector(group, "chi", ngroups)
+    inverse_velocity = _inverse_velocity_from_hdf5(group, ngroups, mix_name)
+    fission_attr = bool(_attr_with_parent(group.attrs, parent_attrs, "fissionable", True))
+    has_fission_source = (
+        np.sum(np.abs(nu_fission)) > 1e-12 and np.sum(np.abs(chi)) > 1e-12
+    )
+    fissionable = fission_attr and has_fission_source
+    if not fissionable:
+        fission = np.zeros(ngroups, dtype=float)
+        nu_fission = np.zeros(ngroups, dtype=float)
+        chi = np.zeros(ngroups, dtype=float)
+
+    return MixtureXS(
+        name=mix_name,
+        total=total,
+        absorption=absorption,
+        fission=fission,
+        nu_fission=nu_fission,
+        chi=chi,
+        scatter_matrix=scatter,
+        fissionable=fissionable,
+        volume=float(_attr_with_parent(group.attrs, parent_attrs, "volume", 1.0)),
+        inverse_velocity=inverse_velocity,
+        transport_total=transport_total,
+        h_factor=_h_factor_from_hdf5(
+            group,
+            ngroups,
+            mix_name,
+            default=h_factor_default,
+        ),
+        adf=_adf_from_hdf5(group, ngroups, mix_name),
+    )
+
+
+def _attr_with_parent(attrs, parent_attrs, name: str, default):
+    if name in attrs:
+        return attrs[name]
+    if parent_attrs is not None and name in parent_attrs:
+        return parent_attrs[name]
+    return default
+
+
+def _burnup_values_from_hdf5(h5) -> np.ndarray | None:
+    for path in (
+        "state_points/BURN",
+        "state_points/burnup",
+        "burnup_values",
+        "burnup",
+    ):
+        if path in h5:
+            return np.asarray(h5[path][:], dtype=float).reshape(-1)
+    for attr in ("burnup_values", "burnup"):
+        if attr in h5.attrs:
+            return np.asarray(h5.attrs[attr], dtype=float).reshape(-1)
+    return None
+
+
+def _sorted_state_names(states_group) -> list[str]:
+    def key(name: str) -> tuple[int, int | str]:
+        try:
+            return (0, int(name))
+        except ValueError:
+            return (1, name)
+
+    return sorted(states_group.keys(), key=key)
+
+
+def _validate_histories(
+    histories: list[MixtureHistory],
+    burnup_values: np.ndarray | None,
+) -> None:
+    if not histories:
+        raise ValueError("at least one mixture history is required")
+    nstates = histories[0].nstates
+    if nstates <= 0:
+        raise ValueError("mixture histories must contain at least one calculation")
+    for history in histories:
+        if history.nstates != nstates:
+            raise ValueError("all mixture histories must contain the same number of states")
+        if not history.name:
+            raise ValueError("mixture history name must not be empty")
+    if nstates > 1:
+        if burnup_values is None:
+            raise ValueError("multi-state HDF5 requires a BURN axis")
+        if len(burnup_values) != nstates:
+            raise ValueError("BURN axis length must match number of states")
 
 
 def _optional_vector(group, name: str, ngroups: int) -> np.ndarray:
@@ -562,6 +818,7 @@ def _scatter_matrix_from_hdf5(
     mix_name: str,
     *,
     expected_moments: int | None,
+    parent_attrs=None,
 ) -> np.ndarray:
     raw = np.asarray(group["scatter_matrix"][:], dtype=float)
     if raw.ndim == 2:
@@ -572,8 +829,10 @@ def _scatter_matrix_from_hdf5(
             ngroups,
             mix_name,
             expected_moments=expected_moments,
-            axes=_attr_text(group.attrs.get("scatter_axes"))
-            or _attr_text(group.attrs.get("axes")),
+            axes=_attr_text(
+                _attr_with_parent(group.attrs, parent_attrs, "scatter_axes", None)
+            )
+            or _attr_text(_attr_with_parent(group.attrs, parent_attrs, "axes", None)),
         )
     else:
         raise ValueError(f"mixture {mix_name}: scatter_matrix must be 2D or 3D")

@@ -26,7 +26,7 @@ one OpenMC MGXS domain -> one cross-section set -> one DONJON mixture
 | `openmc2donjon.lcm_ascii` | Ordered LCM ASCII reader/writer for block-level serialization. |
 | `openmc2donjon.scatter` | Dense Legendre scattering arrays to DRAGON sparse `NJJS/IJJS/SCAT` triplets, and reverse conversion for tests. |
 | `openmc2donjon.export_openmc_mgxs` | Duck-typed OpenMC `mgxs.Library` exporter for whole domains and explicit mesh/cell subdomains. |
-| `openmc2donjon.multicompo` | `L_MULTICOMPO` container writer for one-state spatial-domain MGXS data. |
+| `openmc2donjon.multicompo` | `L_MULTICOMPO` container writer for one-state spatial-domain MGXS data, with experimental `BURN`-axis histories. |
 | `openmc2donjon.macrolib` | root `L_MACROLIB` writer for direct DONJON ingestion. |
 | `openmc2donjon.cli` | HDF5 reader, preflight options, and command-line output selection. |
 | `openmc2donjon.export_cli` | Helper CLI for pickled OpenMC MGXS library exports. |
@@ -61,7 +61,17 @@ single calculation per spatial domain
 ```
 
 Single-point helper metadata such as `BURN` can be written for compatibility
-checks, but multi-state branch libraries are not part of the accepted scope yet.
+checks. The converter can also serialize an experimental one-parameter burnup
+history:
+
+```text
+NPAR = 1
+PARKEY = BURN
+one CALCULATIONS item per burnup state
+```
+
+That path is covered by unit tests, but it is not part of the accepted physics
+validation until a DONJON consumer check is added.
 
 ## Important Conventions
 

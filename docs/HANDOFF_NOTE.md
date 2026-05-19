@@ -71,7 +71,8 @@ locked decks.
 ## Scope
 
 - One state point by default.
-- No burnup, history, or branch parameter axis is accepted yet.
+- Experimental `BURN` history serialization exists, but no burnup/history/branch
+  parameter axis is accepted as a physics validation line yet.
 - Spatial mapping is one OpenMC MGXS domain or subdomain to one DONJON mixture.
 - Hex-domain conversion/modeling support exists, but no accepted hex benchmark
   is included in this release.

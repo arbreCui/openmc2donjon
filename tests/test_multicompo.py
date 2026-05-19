@@ -8,8 +8,10 @@ import numpy as np
 
 from openmc2donjon import lcm_ascii as lcm
 from openmc2donjon.multicompo import (
+    MixtureHistory,
     MixtureXS,
     _select_mixtures,
+    build_multicompo_history_blocks,
     build_multicompo_blocks,
     read_mgxs_hdf5,
     write_multicompo,
@@ -93,6 +95,97 @@ class MultiCompoSmokeTests(unittest.TestCase):
         self.assertEqual(by_name["PARPAD"].data, (1, 1))
         self.assertEqual(by_name["pval00000001"].data, (0.0,))
         self.assertEqual(by_name["NVALUE"].data, (1,))
+
+    def test_writes_burnup_axis_with_multiple_calculations(self) -> None:
+        calc0 = MixtureXS(
+            name="fuel",
+            total=np.array([0.5, 1.0]),
+            absorption=np.array([0.05, 0.1]),
+            fission=np.array([0.01, 0.02]),
+            nu_fission=np.array([0.025, 0.05]),
+            chi=np.array([1.0, 0.0]),
+            scatter_matrix=np.array([[[0.1, 0.2], [0.0, 0.7]]]),
+            fissionable=True,
+        )
+        calc1 = MixtureXS(
+            name="fuel",
+            total=np.array([0.55, 1.05]),
+            absorption=np.array([0.055, 0.105]),
+            fission=np.array([0.011, 0.021]),
+            nu_fission=np.array([0.026, 0.051]),
+            chi=np.array([0.98, 0.02]),
+            scatter_matrix=np.array([[[0.11, 0.21], [0.01, 0.71]]]),
+            fissionable=True,
+        )
+
+        blocks = build_multicompo_history_blocks(
+            [MixtureHistory(name="fuel", calculations=[calc0, calc1])],
+            np.array([1.0e-5, 1.0, 1.0e7]),
+            root_name="CPO",
+            comment="multi burnup smoke",
+            burnup_values=[0.0, 10.0],
+        )
+        by_name = {block.name: block for block in blocks if block.name}
+        cpo_state = [
+            block for block in blocks if block.name == "STATE-VECTOR" and block.level == 2
+        ][0]
+        ntot_blocks = [block for block in blocks if block.name == "NTOT0"]
+        tree_nvp = [block for block in blocks if block.name == "NVP" and block.level == 5][0]
+        tree_ncals = [block for block in blocks if block.name == "NCALS" and block.level == 5][0]
+        tree_debarb = [block for block in blocks if block.name == "DEBARB" and block.level == 5][0]
+        tree_arbval = [block for block in blocks if block.name == "ARBVAL" and block.level == 5][0]
+
+        self.assertEqual(cpo_state.data[:5], (1, 2, 2, 2, 1))
+        self.assertEqual(by_name["NVALUE"].data, (2,))
+        self.assertEqual(by_name["pval00000001"].data, (0.0, 10.0))
+        self.assertEqual(tree_nvp.data, (3, 20))
+        self.assertEqual(tree_ncals.data, (2,))
+        self.assertEqual(tree_debarb.data, (2, 4, 1, 2))
+        self.assertEqual(tree_arbval.data, (0, 1, 2))
+        self.assertEqual(len(ntot_blocks), 2)
+        self.assertEqual(ntot_blocks[0].data, (0.5, 1.0))
+        self.assertEqual(ntot_blocks[1].data, (0.55, 1.05))
+
+    def test_converts_multistate_hdf5_burnup_axis(self) -> None:
+        import h5py
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "multi.h5"
+            output_path = Path(tmpdir) / "multi.mcompo.txt"
+            with h5py.File(input_path, "w") as h5:
+                h5.attrs["energy_groups"] = 1
+                h5.attrs["legendre_order"] = 0
+                h5.create_dataset("energy_bounds", data=[1.0e-5, 1.0e7])
+                state_points = h5.create_group("state_points")
+                state_points.create_dataset("BURN", data=[0.0, 5.0])
+                mixtures = h5.create_group("mixtures")
+                fuel = mixtures.create_group("fuel")
+                fuel.attrs["fissionable"] = True
+                fuel.attrs["scatter_axes"] = "moment,from,to"
+                states = fuel.create_group("states")
+                for idx, total in enumerate((0.5, 0.6), start=1):
+                    state = states.create_group(f"{idx:08d}")
+                    state.create_dataset("total", data=[total])
+                    state.create_dataset("absorption", data=[0.05])
+                    state.create_dataset("fission", data=[0.01])
+                    state.create_dataset("nu_fission", data=[0.025])
+                    state.create_dataset("chi", data=[1.0])
+                    state.create_dataset("scatter_matrix", data=[[[0.1]]])
+
+            from openmc2donjon.multicompo import convert_mgxs_hdf5
+
+            convert_mgxs_hdf5(input_path, output_path)
+            blocks = lcm.read_lcm_ascii(output_path)
+
+        by_name = {block.name: block for block in blocks if block.name}
+        ntot_blocks = [block for block in blocks if block.name == "NTOT0"]
+        cpo_state = [
+            block for block in blocks if block.name == "STATE-VECTOR" and block.level == 2
+        ][0]
+
+        self.assertEqual(cpo_state.data[:5], (1, 1, 2, 2, 1))
+        self.assertEqual(by_name["pval00000001"].data, (0.0, 5.0))
+        self.assertEqual([block.data for block in ntot_blocks], [(0.5,), (0.6,)])
 
     def test_select_mixtures_by_name(self) -> None:
         mixtures = [

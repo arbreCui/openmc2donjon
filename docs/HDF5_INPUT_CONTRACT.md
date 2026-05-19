@@ -130,6 +130,37 @@ STRD = NTOT0 - sum_out(SCAT01)
 
 If neither is available, `STRD` falls back to `NTOT0`.
 
+## Experimental Multi-State Burnup Axis
+
+The production validation line is still one state point by default. The
+converter also has experimental plumbing for one global `BURN` axis, using this
+layout:
+
+```text
+/state_points/BURN                       shape=(S,)
+/mixtures/<domain_name>/states/00000001/
+    total
+    absorption
+    nu_fission
+    chi
+    scatter_matrix
+/mixtures/<domain_name>/states/00000002/
+    ...
+```
+
+Root datasets named `/burnup_values` or `/burnup`, or matching root
+attributes, are also accepted as the burnup axis. All mixtures must contain the
+same number of states, and the burnup axis length must match that state count.
+
+Mixture-level attributes such as `fissionable`, `scatter_axes`, and `volume`
+are inherited by each state group unless overridden. State datasets use the
+same required and optional fields as the one-state mixture schema.
+
+When this layout is present, `openmc2donjon` writes `NPAR=1`, `PARKEY=BURN`,
+`NVALUE=S`, one `CALCULATIONS` item per state, and a per-mixture `TREE` linking
+calculation indexes to the burnup values. This path is unit-tested for
+serialization, but it is not part of the accepted C5G7 physics validation yet.
+
 ## Optional ADF Payload
 
 Assembly discontinuity factors are stored under each mixture:
@@ -186,6 +217,26 @@ incoming-group order.
     /adf/FD_YMAX             optional
 /mixtures/ASM_Y01_X02/
     ...
+```
+
+Experimental burnup-axis variant:
+
+```text
+/attrs:
+    energy_groups = G
+    legendre_order = L
+/energy_bounds
+/state_points/BURN
+/mixtures/ASM_Y01_X01/
+    attrs: fissionable, scatter_axes, volume
+    /states/00000001/
+        total
+        absorption
+        nu_fission
+        chi
+        scatter_matrix
+    /states/00000002/
+        ...
 ```
 
 ## Preflight Checks

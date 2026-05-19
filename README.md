@@ -21,6 +21,8 @@ Current validation status:
 
 - C5G7 assembly-wise is the accepted validation line.
 - Hex-domain support exists as converter/modeling capability.
+- Experimental `BURN`-axis multi-state serialization exists, but is not part of
+  the accepted physics validation yet.
 - A suitable accepted hex benchmark is still future work.
 
 ## For Reviewers
@@ -186,8 +188,9 @@ The HDF5 handoff schema is documented in
 
 ## Current Scope
 
-- One state point by default; no burnup/history/branch parameter axis is
-  written unless explicitly requested.
+- One state point by default.
+- Experimental `BURN`-axis multi-state HDF5 input can be serialized to
+  `L_MULTICOMPO`, but the accepted validation line remains one-state C5G7.
 - One DONJON mixture per OpenMC MGXS domain, preserving the spatial domain map.
 - OpenMC group order is preserved; `ENERGY` is written as reversed energy
   bounds for DRAGON/DONJON.
