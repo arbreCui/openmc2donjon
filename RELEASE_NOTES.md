@@ -28,6 +28,8 @@
   comparisons.
 - Added `openmc2donjon doctor` for local runtime, dependency, entrypoint, and
   optional recipe dry-run diagnostics.
+- Added `openmc2donjon bundle` to collect production handoff artifacts into a
+  manifest-backed directory.
 - Extended release check so the C5G7 statepoint parity path exercises
   `openmc2donjon-from-openmc`, reads back the generated MCO, and validates the
   summary manifest.

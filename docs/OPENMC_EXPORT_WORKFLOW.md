@@ -70,6 +70,16 @@ manifest with recipe, statepoint, HDF5, output, group count, Legendre order, and
 mixture names. The manifest schema is documented in
 [From-OpenMC summary JSON](FROM_OPENMC_SUMMARY_SCHEMA.md).
 
+Bundle the key handoff files after a run:
+
+```sh
+openmc2donjon bundle \
+  --output-dir handoff_bundle \
+  --mgxs mgxs_library.h5 \
+  --mcompo out.mcompo.txt \
+  --run-summary run_summary.json
+```
+
 For a small workflow check before using a real OpenMC model:
 
 ```sh

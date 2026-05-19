@@ -191,6 +191,16 @@ openmc2donjon-from-openmc \
   --summary-json run_summary.json
 ```
 
+Collect a run for handoff/archive:
+
+```sh
+openmc2donjon bundle \
+  --output-dir handoff_bundle \
+  --mgxs mgxs_library.h5 \
+  --mcompo out.mcompo.txt \
+  --run-summary run_summary.json
+```
+
 The summary manifest schema is documented in
 [`docs/FROM_OPENMC_SUMMARY_SCHEMA.md`](docs/FROM_OPENMC_SUMMARY_SCHEMA.md).
 

@@ -30,6 +30,8 @@ ONE_STEP_MCO="$RUN_DIR/one_step.mcompo.txt"
 ONE_STEP_SUMMARY="$RUN_DIR/one_step_summary.json"
 ONE_STEP_CHECK_SUMMARY="$RUN_DIR/one_step_check_summary.json"
 ONE_STEP_DIFF_SUMMARY="$RUN_DIR/one_step_diff_summary.json"
+BUNDLE_DIR="$RUN_DIR/delivery_bundle"
+BUNDLE_MANIFEST="$BUNDLE_DIR/manifest.json"
 ONE_STEP_DRY_H5="$RUN_DIR/one_step_dry_run_$$.h5"
 ONE_STEP_DRY_MCO="$RUN_DIR/one_step_dry_run_$$.mcompo.txt"
 ONE_STEP_DRY_SUMMARY="$RUN_DIR/one_step_dry_run_$$.summary.json"
@@ -148,6 +150,55 @@ echo
 echo "== HDF5 diff =="
 "$PYTHON_BIN" -m openmc2donjon.cli diff "$MGXS" "$ONE_STEP_H5" \
   --summary-json "$ONE_STEP_DIFF_SUMMARY"
+
+echo
+echo "== Bundle =="
+"$PYTHON_BIN" -m openmc2donjon.cli bundle \
+  --output-dir "$BUNDLE_DIR" \
+  --mgxs "$ONE_STEP_H5" \
+  --mcompo "$ONE_STEP_MCO" \
+  --macrolib "$MAC" \
+  --run-summary "$ONE_STEP_SUMMARY" \
+  --check-summary "$ONE_STEP_CHECK_SUMMARY" \
+  --inspect-summary "$INSPECT_SUMMARY" \
+  --doctor-summary "$DOCTOR_SUMMARY" \
+  --diff-summary "$ONE_STEP_DIFF_SUMMARY" \
+  --extra "recipe=$RECIPE" \
+  --force
+
+"$PYTHON_BIN" - "$BUNDLE_MANIFEST" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+manifest_path = Path(sys.argv[1])
+payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+if payload["schema"] != "openmc2donjon.bundle.v1":
+    raise SystemExit("unexpected bundle manifest schema")
+labels = {artifact["label"]: artifact for artifact in payload["artifacts"]}
+required = {
+    "mgxs",
+    "mcompo",
+    "macrolib",
+    "run-summary",
+    "check-summary",
+    "inspect-summary",
+    "doctor-summary",
+    "diff-summary",
+    "recipe",
+}
+missing = sorted(required - set(labels))
+if missing:
+    raise SystemExit(f"bundle manifest missing labels: {missing}")
+for label, artifact in labels.items():
+    if len(artifact["sha256"]) != 64:
+        raise SystemExit(f"{label}: invalid sha256")
+    if not Path(artifact["path"]).exists():
+        raise SystemExit(f"{label}: bundled path is missing")
+if labels["diff-summary"].get("summary_decision") != "mgxs_hdf5_diff_passed":
+    raise SystemExit("bundle did not record diff decision")
+print(f"bundle {manifest_path.parent.name}: artifacts={payload['artifact_count']}")
+PY
 
 "$PYTHON_BIN" - "$MGXS" "$MCO" "$MAC" "$STATEPOINT" "$ONE_STEP_H5" "$ONE_STEP_MCO" "$ONE_STEP_SUMMARY" "$ONE_STEP_CHECK_SUMMARY" "$ONE_STEP_DIFF_SUMMARY" <<'PY'
 import json

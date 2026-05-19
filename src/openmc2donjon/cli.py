@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 
 from . import __version__
+from .bundle import ArtifactSpec, bundle_artifacts, parse_extra_artifact
 from .doctor import run_doctor
 from .macrolib import convert_mgxs_hdf5_to_macrolib
 from .mgxs_diff import diff_hdf5_files
@@ -22,7 +23,8 @@ def build_parser() -> argparse.ArgumentParser:
             "Convert an OpenMC MGXS HDF5 dump to DONJON ASCII LCM objects. "
             "Use 'openmc2donjon inspect <input_h5>' to inspect an HDF5 handoff, "
             "'openmc2donjon diff <reference_h5> <candidate_h5>' to compare two "
-            "handoffs, 'openmc2donjon doctor' for environment checks, or "
+            "handoffs, 'openmc2donjon bundle --output-dir DIR ...' to collect "
+            "production artifacts, 'openmc2donjon doctor' for environment checks, or "
             "'openmc2donjon check <input_h5>' for input-contract preflight."
         ),
     )
@@ -288,8 +290,89 @@ def build_doctor_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_bundle_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="openmc2donjon bundle",
+        description="Collect production handoff artifacts into a manifest-backed directory.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        required=True,
+        help="directory that will receive copied artifacts and manifest.json",
+    )
+    parser.add_argument(
+        "--mgxs",
+        type=Path,
+        default=None,
+        help="MGXS HDF5 handoff to include",
+    )
+    parser.add_argument(
+        "--mcompo",
+        type=Path,
+        default=None,
+        help="L_MULTICOMPO ASCII output to include",
+    )
+    parser.add_argument(
+        "--macrolib",
+        type=Path,
+        default=None,
+        help="L_MACROLIB ASCII output to include",
+    )
+    parser.add_argument(
+        "--run-summary",
+        type=Path,
+        default=None,
+        help="one-step conversion summary JSON to include",
+    )
+    parser.add_argument(
+        "--check-summary",
+        type=Path,
+        default=None,
+        help="input-contract preflight summary JSON to include",
+    )
+    parser.add_argument(
+        "--inspect-summary",
+        type=Path,
+        default=None,
+        help="MGXS inspect summary JSON to include",
+    )
+    parser.add_argument(
+        "--doctor-summary",
+        type=Path,
+        default=None,
+        help="doctor summary JSON to include",
+    )
+    parser.add_argument(
+        "--diff-summary",
+        type=Path,
+        default=None,
+        help="HDF5 diff summary JSON to include",
+    )
+    parser.add_argument(
+        "--extra",
+        action="append",
+        default=[],
+        metavar="LABEL=PATH",
+        help="additional artifact to include; repeat as needed",
+    )
+    parser.add_argument(
+        "--manifest-name",
+        default="manifest.json",
+        help="manifest filename inside --output-dir (default: manifest.json)",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="overwrite existing bundled files and manifest",
+    )
+    return parser
+
+
 def main(argv: list[str] | None = None) -> int:
     raw_argv = sys.argv[1:] if argv is None else list(argv)
+    if raw_argv and raw_argv[0] == "bundle":
+        return _bundle_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "doctor":
         return _doctor_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "diff":
@@ -399,6 +482,48 @@ def _doctor_main(argv: list[str]) -> int:
         summary_json=args.summary_json,
     )
     return 0 if report.ok or args.no_fail else 1
+
+
+def _bundle_main(argv: list[str]) -> int:
+    parser = build_bundle_parser()
+    args = parser.parse_args(argv)
+    artifacts = _bundle_artifacts_from_args(args, parser)
+    try:
+        bundle_artifacts(
+            output_dir=args.output_dir,
+            artifacts=artifacts,
+            manifest_name=args.manifest_name,
+            force=args.force,
+        )
+    except Exception as exc:
+        parser.exit(1, f"openmc2donjon bundle: error: {exc}\n")
+    return 0
+
+
+def _bundle_artifacts_from_args(
+    args: argparse.Namespace, parser: argparse.ArgumentParser
+) -> list[ArtifactSpec]:
+    artifacts: list[ArtifactSpec] = []
+    for label, path in (
+        ("mgxs", args.mgxs),
+        ("mcompo", args.mcompo),
+        ("macrolib", args.macrolib),
+        ("run-summary", args.run_summary),
+        ("check-summary", args.check_summary),
+        ("inspect-summary", args.inspect_summary),
+        ("doctor-summary", args.doctor_summary),
+        ("diff-summary", args.diff_summary),
+    ):
+        if path is not None:
+            artifacts.append(ArtifactSpec(label=label, source=path))
+    for raw in args.extra:
+        try:
+            artifacts.append(parse_extra_artifact(raw))
+        except ValueError as exc:
+            parser.error(f"--extra {raw!r}: {exc}")
+    if not artifacts:
+        parser.error("at least one artifact option is required")
+    return artifacts
 
 
 if __name__ == "__main__":

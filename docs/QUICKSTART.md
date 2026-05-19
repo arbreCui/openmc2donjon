@@ -77,6 +77,16 @@ openmc2donjon-from-openmc \
   --summary-json run_summary.json
 ```
 
+To package a run directory for sharing or archive:
+
+```sh
+openmc2donjon bundle \
+  --output-dir handoff_bundle \
+  --mgxs mgxs_library.h5 \
+  --mcompo out.mcompo.txt \
+  --run-summary run_summary.json
+```
+
 For root `L_MACROLIB` output:
 
 ```sh

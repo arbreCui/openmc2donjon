@@ -182,6 +182,71 @@ class CliTests(unittest.TestCase):
         self.assertEqual(passed_rc, 0)
         self.assertIn("mgxs_hdf5_diff_passed", passed_stream.getvalue())
 
+    def test_bundle_command_copies_artifacts_and_writes_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            mgxs = tmp / "mgxs_library.h5"
+            mcompo = tmp / "out.mcompo.txt"
+            summary = tmp / "run_summary.json"
+            extra = tmp / "notes.txt"
+            bundle_dir = tmp / "bundle"
+            write_valid_mgxs(mgxs)
+            mcompo.write_text("mcompo payload\n", encoding="utf-8")
+            summary.write_text(
+                json.dumps(
+                    {
+                        "schema": "openmc2donjon.from-openmc-summary.v2",
+                        "decision": "example_passed",
+                        "ok": True,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            extra.write_text("notes\n", encoding="utf-8")
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = cli_main(
+                    [
+                        "bundle",
+                        "--output-dir",
+                        str(bundle_dir),
+                        "--mgxs",
+                        str(mgxs),
+                        "--mcompo",
+                        str(mcompo),
+                        "--run-summary",
+                        str(summary),
+                        "--extra",
+                        f"notes={extra}",
+                    ]
+                )
+
+            manifest = json.loads(
+                (bundle_dir / "manifest.json").read_text(encoding="utf-8")
+            )
+            bundled_paths_exist = [
+                (bundle_dir / artifact["bundled_path"]).exists()
+                for artifact in manifest["artifacts"]
+            ]
+
+        self.assertEqual(rc, 0)
+        self.assertIn("OpenMC-to-DONJON bundle", stream.getvalue())
+        self.assertEqual(manifest["schema"], "openmc2donjon.bundle.v1")
+        self.assertEqual(manifest["artifact_count"], 4)
+        labels = {artifact["label"]: artifact for artifact in manifest["artifacts"]}
+        self.assertEqual(set(labels), {"mgxs", "mcompo", "run-summary", "notes"})
+        self.assertEqual(labels["mgxs"]["bundled_path"], "mgxs_library.h5")
+        self.assertEqual(
+            labels["run-summary"]["summary_schema"],
+            "openmc2donjon.from-openmc-summary.v2",
+        )
+        self.assertEqual(labels["run-summary"]["summary_decision"], "example_passed")
+        self.assertTrue(labels["run-summary"]["summary_ok"])
+        for artifact in labels.values():
+            self.assertEqual(len(artifact["sha256"]), 64)
+        self.assertTrue(all(bundled_paths_exist))
+
     def test_convert_check_writes_output_for_valid_hdf5(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
