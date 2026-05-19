@@ -9,6 +9,7 @@ RUN_DIR="${RUN_DIR:-$DATA_DIR/burn}"
 PYTHON_BIN="${PYTHON_BIN:-}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HELPER="${OPENMC2DONJON_BURNUP_HELPER:-$SCRIPT_DIR/burnup_axis_smoke.py}"
+PREFLIGHT="${OPENMC2DONJON_PREFLIGHT:-$SCRIPT_DIR/validate_mgxs_input_contract.py}"
 
 if [[ -z "$PYTHON_BIN" ]]; then
   if [[ -x /Users/wen/miniforge3/envs/openmc-dev/bin/python ]]; then
@@ -107,12 +108,29 @@ require_path "$PYTHON_BIN"
 require_path "$PACKAGE_SRC/openmc2donjon/cli.py"
 require_path "$DATA_DIR"
 require_path "$HELPER"
+require_path "$PREFLIGHT"
 
 mkdir -p "$RUN_DIR"
 export PYTHONDONTWRITEBYTECODE=1
 export PYTHONPATH="$PACKAGE_SRC${PYTHONPATH:+:$PYTHONPATH}"
 
-"$PYTHON_BIN" "$HELPER" prepare \
+"$PYTHON_BIN" "$HELPER" fixture \
+  --run-dir "$RUN_DIR" \
+  --package-src "$PACKAGE_SRC"
+
+h5_path="$RUN_DIR/xs.h5"
+mco_path="$RUN_DIR/xs.mco"
+
+echo
+echo "== BURN-axis HDF5 preflight =="
+"$PYTHON_BIN" "$PREFLIGHT" "$h5_path" \
+  --format multicompo \
+  --output "$mco_path" \
+  --require-transport-dataset \
+  --require-volume \
+  --check
+
+"$PYTHON_BIN" "$HELPER" convert \
   --run-dir "$RUN_DIR" \
   --package-src "$PACKAGE_SRC"
 

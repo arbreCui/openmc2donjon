@@ -9,3 +9,4 @@
 - Added a separate experimental `BURN`-axis DONJON `NCR:` consumer smoke.
 - Extended MGXS input preflight to validate experimental `BURN`-axis HDF5 state
   layouts.
+- Wired the `BURN`-axis DONJON smoke to run HDF5 preflight before conversion.

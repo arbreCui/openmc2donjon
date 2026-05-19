@@ -23,7 +23,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Prepare or validate a tiny DONJON BURN-axis consumer smoke."
     )
-    parser.add_argument("command", choices=("prepare", "validate"))
+    parser.add_argument("command", choices=("prepare", "fixture", "convert", "validate"))
     parser.add_argument("--run-dir", type=Path, required=True)
     parser.add_argument("--package-src", type=Path, required=True)
     parser.add_argument(
@@ -37,18 +37,35 @@ def main() -> int:
     sys.path.insert(0, str(args.package_src))
     if args.command == "prepare":
         prepare(args.run_dir)
+    elif args.command == "fixture":
+        write_fixture(args.run_dir)
+    elif args.command == "convert":
+        convert_fixture(args.run_dir)
     else:
         validate(args.run_dir, [Path(path) for path in args.result])
     return 0
 
 
 def prepare(run_dir: Path) -> None:
+    write_fixture(run_dir)
+    convert_fixture(run_dir)
+
+
+def write_fixture(run_dir: Path) -> None:
     run_dir.mkdir(parents=True, exist_ok=True)
+    h5_path = run_dir / "xs.h5"
+    write_hdf5_fixture(h5_path)
+    print(f"wrote burnup-axis HDF5 fixture: {h5_path}")
+
+
+def convert_fixture(run_dir: Path) -> None:
     h5_path = run_dir / "xs.h5"
     mco_path = run_dir / "xs.mco"
     manifest_path = run_dir / "burnup_axis_smoke_manifest.json"
 
-    write_hdf5_fixture(h5_path)
+    if not h5_path.is_file():
+        raise SystemExit(f"missing HDF5 fixture: {h5_path}")
+
     from openmc2donjon.multicompo import convert_mgxs_hdf5
 
     convert_mgxs_hdf5(
