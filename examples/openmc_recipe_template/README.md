@@ -43,6 +43,17 @@ openmc2donjon-export --recipe export_recipe.py --no-load-statepoint --dry-run
 Check that the reported mixture count and names match the intended spatial
 homogenization map.
 
+Dry-run the full one-step conversion plan before writing artifacts:
+
+```sh
+openmc2donjon-from-openmc \
+  --recipe export_recipe.py \
+  --dry-run \
+  --keep-hdf5 mgxs_library.h5 \
+  -o out.mcompo.txt \
+  --check
+```
+
 Use the same recipe to add MGXS tallies before running OpenMC:
 
 ```sh

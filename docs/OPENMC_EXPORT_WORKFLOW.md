@@ -38,6 +38,19 @@ To export and immediately write DONJON ASCII in one command:
 ```sh
 openmc2donjon-from-openmc \
   --recipe export_recipe.py \
+  --dry-run \
+  --keep-hdf5 mgxs_library.h5 \
+  -o out.mcompo.txt \
+  --check
+```
+
+The one-step dry-run reports the same recipe/domain metadata plus the planned
+DONJON format, ASCII output, HDF5 handoff path, summary paths, and preflight
+requirements. It does not write HDF5, summary JSON, or DONJON ASCII files.
+
+```sh
+openmc2donjon-from-openmc \
+  --recipe export_recipe.py \
   --statepoint statepoint.120.h5 \
   --keep-hdf5 mgxs_library.h5 \
   -o out.mcompo.txt \

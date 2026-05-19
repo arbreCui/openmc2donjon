@@ -12,7 +12,8 @@ from .from_openmc_summary import FROM_OPENMC_SUMMARY_SCHEMA
 from .macrolib import convert_mgxs_hdf5_to_macrolib
 from .mgxs_input_contract import run_preflight
 from .multicompo import DEFAULT_ROOT_NAME, convert_mgxs_hdf5, read_mgxs_hdf5_histories
-from .openmc_statepoint import export_openmc_statepoint_recipe
+from .openmc_statepoint import dry_run_openmc_statepoint_recipe, export_openmc_statepoint_recipe
+from .recipe_dry_run_report import print_recipe_dry_run_summary
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -44,6 +45,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-load-statepoint",
         action="store_true",
         help="export the recipe library without loading a statepoint first",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="inspect the recipe and one-step conversion plan without writing files",
     )
     parser.add_argument(
         "--format",
@@ -143,6 +149,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.dry_run:
+        _run_dry_run(args)
+        return 0
     if args.statepoint is None and not args.no_load_statepoint:
         parser.error("--statepoint is required unless --no-load-statepoint is set")
 
@@ -153,6 +162,48 @@ def main(argv: list[str] | None = None) -> int:
         with tempfile.TemporaryDirectory(prefix="openmc2donjon_") as tmpdir:
             ok = _run_pipeline(args, Path(tmpdir) / "mgxs_library.h5", output_path, hdf5_kept=False)
             return 0 if ok else 1
+
+
+def _run_dry_run(args: argparse.Namespace) -> None:
+    output_path = _output_path(args.output, args.format)
+    hdf5_path = args.keep_hdf5
+    summary = dry_run_openmc_statepoint_recipe(
+        args.recipe,
+        statepoint_path=args.statepoint,
+        load_statepoint=args.statepoint is not None and not args.no_load_statepoint,
+        output_path=hdf5_path,
+    )
+    print_recipe_dry_run_summary(summary)
+    print("one-step conversion dry-run OK")
+    print(f"  format: {args.format}")
+    print(f"  ascii_output: {output_path} (not written)")
+    if hdf5_path is None:
+        print("  hdf5: temporary handoff (not written)")
+    else:
+        print(f"  hdf5: {hdf5_path} (not written)")
+    if args.format == "multicompo":
+        print(f"  root_name: {args.root_name}")
+    else:
+        print("  root_name: n/a")
+    print(f"  selected_mixtures: {_render_optional_list(args.mixture)}")
+    print(f"  single_point_burnup: {_render_optional_value(args.burnup)}")
+    print(f"  h_factor_default: {_render_optional_value(args.h_factor_default)}")
+    if args.summary_json is None:
+        print("  summary_json: none")
+    else:
+        print(f"  summary_json: {args.summary_json} (not written)")
+    if args.check:
+        print("  check: enabled after HDF5 export")
+        print(f"    require_volume: {_yes_no(args.require_volume)}")
+        print(f"    require_transport_dataset: {_yes_no(args.require_transport_dataset)}")
+        print(f"    require_adf: {_yes_no(args.require_adf)}")
+        print(f"    expected_adf_faces: {_render_optional_value(args.expected_adf_faces)}")
+        if args.check_summary_json is None:
+            print("    check_summary_json: none")
+        else:
+            print(f"    check_summary_json: {args.check_summary_json} (not written)")
+    else:
+        print("  check: disabled")
 
 
 def _run_pipeline(
@@ -248,6 +299,22 @@ def _output_path(raw_output: str | None, output_format: str) -> Path:
     if output_format == "macrolib":
         return Path("out.macrolib.txt")
     return Path("out.mcompo.txt")
+
+
+def _render_optional_list(values: list[str] | None) -> str:
+    if not values:
+        return "all"
+    return ", ".join(values)
+
+
+def _render_optional_value(value: object) -> str:
+    if value is None:
+        return "none"
+    return str(value)
+
+
+def _yes_no(value: bool) -> str:
+    return "yes" if value else "no"
 
 
 def _summary_payload(

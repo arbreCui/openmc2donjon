@@ -27,6 +27,10 @@ ONE_STEP_H5="$RUN_DIR/one_step_mgxs.h5"
 ONE_STEP_MCO="$RUN_DIR/one_step.mcompo.txt"
 ONE_STEP_SUMMARY="$RUN_DIR/one_step_summary.json"
 ONE_STEP_CHECK_SUMMARY="$RUN_DIR/one_step_check_summary.json"
+ONE_STEP_DRY_H5="$RUN_DIR/one_step_dry_run_$$.h5"
+ONE_STEP_DRY_MCO="$RUN_DIR/one_step_dry_run_$$.mcompo.txt"
+ONE_STEP_DRY_SUMMARY="$RUN_DIR/one_step_dry_run_$$.summary.json"
+ONE_STEP_DRY_CHECK_SUMMARY="$RUN_DIR/one_step_dry_run_$$.check_summary.json"
 
 echo "== openmc2donjon recipe export smoke =="
 echo "repo: $REPO_ROOT"
@@ -69,6 +73,25 @@ echo "== Converter readback =="
   --check \
   --require-volume \
   --require-transport-dataset
+
+echo
+echo "== One-step dry-run =="
+"$PYTHON_BIN" -m openmc2donjon.from_openmc_cli \
+  --recipe "$RECIPE" \
+  --dry-run \
+  --keep-hdf5 "$ONE_STEP_DRY_H5" \
+  -o "$ONE_STEP_DRY_MCO" \
+  --summary-json "$ONE_STEP_DRY_SUMMARY" \
+  --check \
+  --require-volume \
+  --require-transport-dataset \
+  --check-summary-json "$ONE_STEP_DRY_CHECK_SUMMARY"
+for path in "$ONE_STEP_DRY_H5" "$ONE_STEP_DRY_MCO" "$ONE_STEP_DRY_SUMMARY" "$ONE_STEP_DRY_CHECK_SUMMARY"; do
+  if [[ -e "$path" ]]; then
+    echo "dry-run unexpectedly wrote $path" >&2
+    exit 1
+  fi
+done
 
 echo
 echo "== One-step from OpenMC recipe =="

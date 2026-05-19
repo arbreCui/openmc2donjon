@@ -101,6 +101,59 @@ class FromOpenMCCliTests(unittest.TestCase):
             self.assertIsNone(payload["check_passed"])
             self.assertIsNone(payload["check_summary_json"])
 
+    def test_dry_run_reports_conversion_plan_without_writing_files(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        recipe = repo_root / "examples/recipe_export_smoke/minimal_recipe.py"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            hdf5 = tmp / "mgxs.h5"
+            output = tmp / "out.mcompo.txt"
+            summary = tmp / "summary.json"
+            check_summary = tmp / "check_summary.json"
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = from_openmc_main(
+                    [
+                        "--recipe",
+                        str(recipe),
+                        "--dry-run",
+                        "--keep-hdf5",
+                        str(hdf5),
+                        "-o",
+                        str(output),
+                        "--summary-json",
+                        str(summary),
+                        "--check",
+                        "--require-volume",
+                        "--require-transport-dataset",
+                        "--check-summary-json",
+                        str(check_summary),
+                    ]
+                )
+
+            rendered = stream.getvalue()
+            hdf5_exists = hdf5.exists()
+            output_exists = output.exists()
+            summary_exists = summary.exists()
+            check_summary_exists = check_summary.exists()
+
+        self.assertEqual(rc, 0)
+        self.assertIn("recipe dry-run OK", rendered)
+        self.assertIn("statepoint: none", rendered)
+        self.assertIn("output: " + str(hdf5.resolve()) + " (not written)", rendered)
+        self.assertIn("one-step conversion dry-run OK", rendered)
+        self.assertIn("format: multicompo", rendered)
+        self.assertIn("ascii_output: " + str(output) + " (not written)", rendered)
+        self.assertIn("check: enabled after HDF5 export", rendered)
+        self.assertIn("require_volume: yes", rendered)
+        self.assertIn("require_transport_dataset: yes", rendered)
+        self.assertFalse(hdf5_exists)
+        self.assertFalse(output_exists)
+        self.assertFalse(summary_exists)
+        self.assertFalse(check_summary_exists)
+
     def test_recipe_to_multicompo_with_checked_hdf5(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         recipe = repo_root / "examples/recipe_export_smoke/minimal_recipe.py"

@@ -8,8 +8,9 @@ from pathlib import Path
 
 from . import __version__
 from .export_openmc_mgxs import export_openmc_mgxs_library
-from .openmc_statepoint import RecipeDryRunSummary, export_openmc_statepoint_recipe
+from .openmc_statepoint import export_openmc_statepoint_recipe
 from .openmc_statepoint import dry_run_openmc_statepoint_recipe
+from .recipe_dry_run_report import print_recipe_dry_run_summary
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -82,7 +83,7 @@ def main(argv: list[str] | None = None) -> int:
                 load_statepoint=args.statepoint is not None and not args.no_load_statepoint,
                 output_path=args.output,
             )
-            _print_dry_run_summary(summary)
+            print_recipe_dry_run_summary(summary)
             return 0
         if args.statepoint is None and not args.no_load_statepoint:
             parser.error("--recipe requires --statepoint unless --no-load-statepoint is set")
@@ -114,51 +115,6 @@ def main(argv: list[str] | None = None) -> int:
         f"to {summary.output_path}"
     )
     return 0
-
-
-def _print_dry_run_summary(summary: RecipeDryRunSummary) -> None:
-    print("recipe dry-run OK")
-    print(f"  recipe: {summary.recipe_path}")
-    if summary.statepoint_path is None:
-        print("  statepoint: none")
-    else:
-        loaded = "loaded" if summary.statepoint_loaded else "not loaded"
-        print(f"  statepoint: {summary.statepoint_path} ({loaded})")
-    if summary.output_path is None:
-        print("  output: dry run; no HDF5 written")
-    else:
-        print(f"  output: {summary.output_path} (not written)")
-    print(f"  energy_groups: {summary.energy_groups}")
-    print(f"  legendre_order: {summary.legendre_order}")
-    print(f"  domain_type: {summary.domain_type or 'unknown'}")
-    print(f"  mgxs_types: {_render_list(summary.mgxs_types)}")
-    print(f"  mixtures: {len(summary.domains)}")
-    print(f"  root_attrs: {_render_list(summary.root_attr_keys)}")
-    if summary.warnings:
-        print("  warnings:")
-        for warning in summary.warnings:
-            print(f"    - {warning}")
-    print("  first_mixtures:")
-    for index, domain in enumerate(summary.domains[:20], start=1):
-        details = [
-            f"source={domain.source_label}",
-            f"type={domain.source_type}",
-            f"volume={domain.volume:g}",
-        ]
-        if domain.xs_kwargs:
-            details.append(f"xs_kwargs={dict(domain.xs_kwargs)}")
-        if domain.attr_keys:
-            details.append(f"attrs={list(domain.attr_keys)}")
-        print(f"    {index:4d} {domain.name} ({', '.join(details)})")
-    remaining = len(summary.domains) - 20
-    if remaining > 0:
-        print(f"    ... {remaining} more mixtures")
-
-
-def _render_list(values: tuple[str, ...]) -> str:
-    if not values:
-        return "none"
-    return ", ".join(values)
 
 
 if __name__ == "__main__":

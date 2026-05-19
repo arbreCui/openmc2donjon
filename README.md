@@ -160,6 +160,12 @@ Check a recipe before writing an HDF5 handoff:
 openmc2donjon-export --recipe export_recipe.py --no-load-statepoint --dry-run
 ```
 
+Check the one-command conversion plan before writing any artifacts:
+
+```sh
+openmc2donjon-from-openmc --recipe export_recipe.py --dry-run -o out.mcompo.txt --check
+```
+
 Convert with input-contract preflight:
 
 ```sh
