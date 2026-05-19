@@ -137,9 +137,10 @@ echo
 echo "== C5G7 statepoint exporter parity =="
 if [[ -e "$C5G7_STATEPOINT" ]]; then
   exported_h5="$RUN_DIR/c5g7_exporter_statepoint.h5"
-  "$PYTHON_BIN" "$REPO_ROOT/scripts/export_c5g7_statepoint.py" \
+  C5G7_ADF_SOURCE="$C5G7_ACCEPTED_H5" \
+  "$PYTHON_BIN" -m openmc2donjon.export_cli \
+    --recipe "$REPO_ROOT/scripts/c5g7_export_recipe.py" \
     --statepoint "$C5G7_STATEPOINT" \
-    --adf-source "$C5G7_ACCEPTED_H5" \
     -o "$exported_h5"
   "$PYTHON_BIN" - "$C5G7_ACCEPTED_H5" "$exported_h5" <<'PY'
 import sys

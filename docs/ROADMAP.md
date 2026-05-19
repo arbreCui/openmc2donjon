@@ -6,6 +6,8 @@
 - HDF5 input contract is documented.
 - OpenMC `mgxs.Library` exporter is available for the documented HDF5 contract,
   including explicit mesh/cell subdomain exports.
+- Recipe-based OpenMC statepoint export is available as the production-facing
+  user entry point.
 - Portable C5G7 converter demo is available.
 - Optional DONJON handoff smoke is available for machines with a local
   DRAGON/DONJON checkout.
@@ -22,6 +24,7 @@
    - Avoid adding new benchmark claims without a reproducible source path.
 
 2. Harden the OpenMC exporter path with real cases.
+   - Prefer recipe/statepoint exports over hand-maintained HDF5 snapshots.
    - Keep the exporter-to-C5G7 statepoint smoke reproducible.
    - Keep the spatial domain naming stable enough to map back to DONJON
      mixtures.

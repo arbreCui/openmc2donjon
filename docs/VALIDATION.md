@@ -50,9 +50,11 @@ max_abs_diff vs previous custom HDF5 dump = 0.0
 Local reproduction command:
 
 ```sh
-PYTHONPATH=src python scripts/export_c5g7_statepoint.py \
+PYTHONPATH=src \
+C5G7_ADF_SOURCE=examples/donjon_openmc2donjon/c5g7_assembly_p1_adf_production.h5 \
+  python -m openmc2donjon.export_cli \
+  --recipe scripts/c5g7_export_recipe.py \
   --statepoint /Users/wen/openmc-workspace/c5g7_converter_test/runs/assembly_p1/statepoint.120.h5 \
-  --adf-source examples/donjon_openmc2donjon/c5g7_assembly_p1_adf_production.h5 \
   -o /private/tmp/openmc2donjon_c5g7_exporter_assembly_p1.h5
 ```
 

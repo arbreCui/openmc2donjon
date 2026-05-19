@@ -39,6 +39,7 @@ Supported input scope:
 Start here:
 
 - [HDF5 input contract](docs/HDF5_INPUT_CONTRACT.md)
+- [OpenMC export workflow](docs/OPENMC_EXPORT_WORKFLOW.md)
 - [Handoff note](docs/HANDOFF_NOTE.md)
 - [Validation summary](docs/VALIDATION.md)
 - [Architecture](docs/ARCHITECTURE.md)
@@ -117,6 +118,19 @@ openmc2donjon --format macrolib mgxs_library.h5 -o out.macrolib.txt
 
 ## OpenMC MGXS Export
 
+For a real OpenMC statepoint, use a small case-specific recipe:
+
+```sh
+openmc2donjon-export \
+  --recipe export_recipe.py \
+  --statepoint statepoint.120.h5 \
+  -o mgxs_library.h5
+```
+
+The recipe builds the OpenMC `mgxs.Library` for the case and can provide stable
+domain names or explicit `DomainExportSpec` objects. See
+[`docs/OPENMC_EXPORT_WORKFLOW.md`](docs/OPENMC_EXPORT_WORKFLOW.md).
+
 If you already have an OpenMC `mgxs.Library` object in Python, export the
 converter-facing HDF5 directly:
 
@@ -184,12 +198,14 @@ OPENMC2DONJON_DATA_DIR=/path/to/dragon-5.1/Donjon/data/openmc2donjon \
 ```
 
 To regenerate a C5G7 HDF5 handoff from an existing OpenMC statepoint through
-the package exporter:
+the production recipe exporter:
 
 ```sh
-PYTHONPATH=src python scripts/export_c5g7_statepoint.py \
+PYTHONPATH=src \
+C5G7_ADF_SOURCE=examples/donjon_openmc2donjon/c5g7_assembly_p1_adf_production.h5 \
+  python -m openmc2donjon.export_cli \
+  --recipe scripts/c5g7_export_recipe.py \
   --statepoint /Users/wen/openmc-workspace/c5g7_converter_test/runs/assembly_p1/statepoint.120.h5 \
-  --adf-source examples/donjon_openmc2donjon/c5g7_assembly_p1_adf_production.h5 \
   -o /private/tmp/openmc2donjon_c5g7_exporter_assembly_p1.h5
 ```
 

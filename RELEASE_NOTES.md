@@ -1,5 +1,13 @@
 # Release Notes
 
+## Unreleased
+
+- Added a production-facing `openmc2donjon-export --recipe ... --statepoint ...`
+  workflow for exporting real OpenMC MGXS statepoints to the HDF5 handoff
+  contract.
+- Added a documented OpenMC export recipe interface and a C5G7 recipe smoke
+  wired into `scripts/release_check.sh`.
+
 ## v0.1.1-c5g7-handoff - 2026-05-19
 
 This is the current internal handoff release for `openmc2donjon`.

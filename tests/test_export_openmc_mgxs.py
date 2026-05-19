@@ -6,6 +6,7 @@ import contextlib
 import io
 import pickle
 import tempfile
+import textwrap
 import unittest
 
 import h5py
@@ -181,6 +182,98 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
             self.assertEqual(rc, 0)
             self.assertTrue(output_path.exists())
             self.assertIn("exported 2 domains, 3 groups, P1", stream.getvalue())
+
+    def test_export_cli_reads_recipe_and_statepoint(self) -> None:
+        recipe = """
+            import numpy as np
+            from openmc2donjon import DomainExportSpec
+
+            class EnergyGroups:
+                group_edges = np.array([1.0e-5, 1.0, 1.0e7])
+
+            class Domain:
+                name = "mesh"
+                id = 9001
+                volume = 1.0
+
+            class MGXS:
+                def __init__(self, values):
+                    self.values = np.asarray(values, dtype=float)
+
+                def get_xs(self, **_kwargs):
+                    return self.values
+
+            class Library:
+                def __init__(self):
+                    self.energy_groups = EnergyGroups()
+                    self.domain = Domain()
+                    self.domains = [self.domain]
+                    self.loaded_from = None
+                    self.data = {
+                        "total": np.array([0.5, 0.6]),
+                        "absorption": np.array([0.05, 0.06]),
+                        "scatter matrix": np.eye(2),
+                    }
+
+                def get_mgxs(self, domain, mgxs_type):
+                    if domain is not self.domain or mgxs_type not in self.data:
+                        raise KeyError((domain, mgxs_type))
+                    return MGXS(self.data[mgxs_type])
+
+            def build_library():
+                return Library()
+
+            def load_statepoint(library, statepoint_path):
+                library.loaded_from = str(statepoint_path)
+
+            def domain_specs(library):
+                return [
+                    DomainExportSpec(
+                        domain=library.domain,
+                        name="ASM_Y01_X01",
+                        volume=12.5,
+                        attrs={"mesh_index": [1, 1, 1]},
+                    )
+                ]
+
+            def root_attrs(library):
+                return {
+                    "workflow": "recipe",
+                    "loaded_from": library.loaded_from,
+                }
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            recipe_path = Path(tmpdir) / "recipe.py"
+            statepoint_path = Path(tmpdir) / "statepoint.10.h5"
+            output_path = Path(tmpdir) / "mgxs.h5"
+            recipe_path.write_text(textwrap.dedent(recipe), encoding="utf-8")
+            statepoint_path.write_text("fake statepoint marker", encoding="utf-8")
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = export_cli_main(
+                    [
+                        "--recipe",
+                        str(recipe_path),
+                        "--statepoint",
+                        str(statepoint_path),
+                        "-o",
+                        str(output_path),
+                    ]
+                )
+
+            self.assertEqual(rc, 0)
+            self.assertIn("from recipe", stream.getvalue())
+            mixtures, _energy_bounds = read_mgxs_hdf5(output_path)
+
+            with h5py.File(output_path, "r") as h5:
+                self.assertEqual(h5.attrs["workflow"], "recipe")
+                self.assertEqual(h5.attrs["loaded_from"], str(statepoint_path.resolve()))
+                mesh_index = h5["mixtures"]["ASM_Y01_X01"].attrs["mesh_index"]
+
+        self.assertEqual([mixture.name for mixture in mixtures], ["ASM_Y01_X01"])
+        self.assertEqual(mixtures[0].volume, 12.5)
+        np.testing.assert_array_equal(mesh_index, [1, 1, 1])
 
     def test_exports_explicit_subdomain_specs(self) -> None:
         library = SubdomainFakeLibrary()

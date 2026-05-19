@@ -26,18 +26,21 @@ one OpenMC MGXS domain -> one cross-section set -> one DONJON mixture
 | `openmc2donjon.lcm_ascii` | Ordered LCM ASCII reader/writer for block-level serialization. |
 | `openmc2donjon.scatter` | Dense Legendre scattering arrays to DRAGON sparse `NJJS/IJJS/SCAT` triplets, and reverse conversion for tests. |
 | `openmc2donjon.export_openmc_mgxs` | Duck-typed OpenMC `mgxs.Library` exporter for whole domains and explicit mesh/cell subdomains. |
+| `openmc2donjon.openmc_statepoint` | Recipe runner that builds a user OpenMC MGXS library, loads a statepoint, and exports the HDF5 handoff. |
 | `openmc2donjon.multicompo` | `L_MULTICOMPO` container writer for one-state spatial-domain MGXS data, with experimental `BURN`-axis histories. |
 | `openmc2donjon.macrolib` | root `L_MACROLIB` writer for direct DONJON ingestion. |
 | `openmc2donjon.cli` | HDF5 reader, preflight options, and command-line output selection. |
-| `openmc2donjon.export_cli` | Helper CLI for pickled OpenMC MGXS library exports. |
+| `openmc2donjon.export_cli` | Export CLI for recipe/statepoint workflows and pickled MGXS library fixtures. |
 
 ## Example And Validation Layer
 
 | Path | Role |
 | --- | --- |
 | `docs/HDF5_INPUT_CONTRACT.md` | HDF5 schema expected by the converter. |
+| `docs/OPENMC_EXPORT_WORKFLOW.md` | User-facing OpenMC recipe/statepoint export workflow. |
 | `scripts/run_c5g7_demo.sh` | portable C5G7 converter demo and optional DONJON smoke entry point. |
-| `scripts/export_c5g7_statepoint.py` | rebuilds the C5G7 OpenMC MGXS library from a saved statepoint and exports the HDF5 contract. |
+| `scripts/c5g7_export_recipe.py` | C5G7 recipe for the production OpenMC statepoint export CLI. |
+| `scripts/export_c5g7_statepoint.py` | legacy C5G7-specific statepoint export helper retained for comparison. |
 | `examples/donjon_openmc2donjon/` | DONJON-side C5G7 validation snapshot. |
 | `examples/donjon_openmc2donjon/run_handoff_case.py` | manifest-driven conversion and DONJON deck replacement helper. |
 | `examples/donjon_openmc2donjon/c5g7_validation/` | accepted C5G7 validation decks and summaries. |
