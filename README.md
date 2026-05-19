@@ -67,7 +67,8 @@ Useful entry points:
 
 ## Current Scope
 
-- One calculation per mixture by default.
+- One state point by default; no burnup/history/branch parameter axis is
+  written unless explicitly requested.
 - One DONJON mixture per OpenMC MGXS domain, preserving the spatial domain map.
 - OpenMC group order is preserved; `ENERGY` is written as reversed energy
   bounds for DRAGON/DONJON.
