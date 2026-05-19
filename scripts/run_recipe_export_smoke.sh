@@ -20,6 +20,7 @@ export PYTHONPATH="$PACKAGE_SRC${PYTHONPATH:+:$PYTHONPATH}"
 
 RECIPE="$REPO_ROOT/examples/recipe_export_smoke/minimal_recipe.py"
 STATEPOINT="$RUN_DIR/statepoint.fake.h5"
+DOCTOR_SUMMARY="$RUN_DIR/doctor_summary.json"
 MGXS="$RUN_DIR/minimal_recipe_mgxs.h5"
 MCO="$RUN_DIR/minimal_recipe.mcompo.txt"
 MAC="$RUN_DIR/minimal_recipe.macrolib.txt"
@@ -40,6 +41,23 @@ echo "run_dir: $RUN_DIR"
 echo "python: $PYTHON_BIN"
 
 printf 'recipe smoke statepoint marker\n' > "$STATEPOINT"
+
+echo
+echo "== Doctor =="
+"$PYTHON_BIN" -m openmc2donjon.cli doctor \
+  --recipe "$RECIPE" \
+  --summary-json "$DOCTOR_SUMMARY"
+"$PYTHON_BIN" - "$DOCTOR_SUMMARY" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+if payload["schema"] != "openmc2donjon.doctor.v1":
+    raise SystemExit("unexpected doctor summary schema")
+if payload["decision"] != "openmc2donjon_doctor_passed":
+    raise SystemExit(f"doctor did not pass: {payload}")
+PY
 
 echo
 echo "== Recipe dry-run =="

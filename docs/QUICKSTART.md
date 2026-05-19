@@ -19,6 +19,12 @@ export PYTHONPATH=src
 
 ## Check The User Entry Point
 
+Check the local Python/package environment:
+
+```sh
+openmc2donjon doctor
+```
+
 Run the tiny recipe/statepoint smoke:
 
 ```sh
@@ -27,6 +33,7 @@ bash scripts/run_recipe_export_smoke.sh
 
 This checks:
 
+- environment doctor;
 - recipe dry-run metadata preflight;
 - one-step dry-run conversion-plan preflight;
 - recipe/statepoint export to the HDF5 handoff contract;

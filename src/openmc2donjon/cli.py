@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 
 from . import __version__
+from .doctor import run_doctor
 from .macrolib import convert_mgxs_hdf5_to_macrolib
 from .mgxs_diff import diff_hdf5_files
 from .mgxs_inspect import inspect_files
@@ -19,9 +20,10 @@ def build_parser() -> argparse.ArgumentParser:
         prog="openmc2donjon",
         description=(
             "Convert an OpenMC MGXS HDF5 dump to DONJON ASCII LCM objects. "
-            "Use 'openmc2donjon inspect <input_h5>' to inspect an HDF5 handoff "
+            "Use 'openmc2donjon inspect <input_h5>' to inspect an HDF5 handoff, "
             "'openmc2donjon diff <reference_h5> <candidate_h5>' to compare two "
-            "handoffs, or 'openmc2donjon check <input_h5>' for input-contract preflight."
+            "handoffs, 'openmc2donjon doctor' for environment checks, or "
+            "'openmc2donjon check <input_h5>' for input-contract preflight."
         ),
     )
     parser.add_argument(
@@ -250,8 +252,46 @@ def build_diff_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_doctor_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="openmc2donjon doctor",
+        description="Check the local openmc2donjon runtime environment.",
+    )
+    parser.add_argument(
+        "--recipe",
+        type=Path,
+        default=None,
+        help="optional OpenMC export recipe to dry-run as part of the check",
+    )
+    parser.add_argument(
+        "--statepoint",
+        type=Path,
+        default=None,
+        help="optional statepoint path passed to the recipe dry-run",
+    )
+    parser.add_argument(
+        "--load-statepoint",
+        action="store_true",
+        help="with --recipe and --statepoint, load the statepoint during recipe dry-run",
+    )
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        default=None,
+        help="write a machine-readable doctor JSON",
+    )
+    parser.add_argument(
+        "--no-fail",
+        action="store_true",
+        help="always return zero after printing the doctor report",
+    )
+    return parser
+
+
 def main(argv: list[str] | None = None) -> int:
     raw_argv = sys.argv[1:] if argv is None else list(argv)
+    if raw_argv and raw_argv[0] == "doctor":
+        return _doctor_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "diff":
         return _diff_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "inspect":
@@ -339,6 +379,24 @@ def _diff_main(argv: list[str]) -> int:
         ignored_attrs=tuple(args.ignore_attr),
         summary_json=args.summary_json,
         max_diffs=args.max_diffs,
+    )
+    return 0 if report.ok or args.no_fail else 1
+
+
+def _doctor_main(argv: list[str]) -> int:
+    parser = build_doctor_parser()
+    args = parser.parse_args(argv)
+    if args.statepoint is not None and args.recipe is None:
+        parser.error("--statepoint can only be used with --recipe")
+    if args.load_statepoint and args.recipe is None:
+        parser.error("--load-statepoint can only be used with --recipe")
+    if args.load_statepoint and args.statepoint is None:
+        parser.error("--load-statepoint requires --statepoint")
+    report = run_doctor(
+        recipe=args.recipe,
+        statepoint=args.statepoint,
+        load_statepoint=args.load_statepoint,
+        summary_json=args.summary_json,
     )
     return 0 if report.ok or args.no_fail else 1
 

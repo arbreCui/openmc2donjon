@@ -23,6 +23,12 @@ For a ready-to-edit starting point, copy
 [`examples/openmc_recipe_template/`](../examples/openmc_recipe_template/) into a
 case directory and edit `export_recipe.py`.
 
+Check the runtime environment and recipe import path:
+
+```sh
+openmc2donjon doctor --recipe export_recipe.py
+```
+
 Before running a long OpenMC job, dry-run the recipe:
 
 ```sh

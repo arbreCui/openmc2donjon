@@ -151,6 +151,7 @@ A tiny recipe smoke that does not require OpenMC data is available for checking
 the workflow mechanics:
 
 ```sh
+openmc2donjon doctor
 bash scripts/run_recipe_export_smoke.sh
 ```
 

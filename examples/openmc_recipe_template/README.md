@@ -34,6 +34,12 @@ assembly or one assembly subdomain before tallying MGXS.
 
 ## Prepare OpenMC Tallies
 
+Check the local environment and recipe import path:
+
+```sh
+openmc2donjon doctor --recipe export_recipe.py
+```
+
 Dry-run the recipe before generating tallies:
 
 ```sh

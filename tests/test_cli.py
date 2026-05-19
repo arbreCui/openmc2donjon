@@ -50,6 +50,39 @@ class CliTests(unittest.TestCase):
         self.assertIn("mgxs_input_contract_failed", stream.getvalue())
         self.assertIn("/energy_bounds dataset is missing", stream.getvalue())
 
+    def test_doctor_command_reports_environment_and_recipe(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        recipe = repo_root / "examples/recipe_export_smoke/minimal_recipe.py"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            summary_path = Path(tmpdir) / "doctor_summary.json"
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = cli_main(
+                    [
+                        "doctor",
+                        "--recipe",
+                        str(recipe),
+                        "--summary-json",
+                        str(summary_path),
+                    ]
+                )
+
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+
+        output = stream.getvalue()
+        self.assertEqual(rc, 0)
+        self.assertIn("OpenMC-to-DONJON doctor", output)
+        self.assertIn("OK   python:", output)
+        self.assertIn("OK   numpy:", output)
+        self.assertIn("OK   h5py:", output)
+        self.assertIn("OK   recipe:", output)
+        self.assertIn("mixtures=2 groups=2 P0", output)
+        self.assertEqual(payload["schema"], "openmc2donjon.doctor.v1")
+        self.assertEqual(payload["decision"], "openmc2donjon_doctor_passed")
+        self.assertTrue(payload["ok"])
+
     def test_inspect_command_reports_hdf5_contents(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
