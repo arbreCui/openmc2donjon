@@ -60,8 +60,14 @@ echo "== HDF5 preflight =="
 
 echo
 echo "== Converter readback =="
-"$PYTHON_BIN" -m openmc2donjon.cli "$MGXS" -o "$MCO"
-"$PYTHON_BIN" -m openmc2donjon.cli --format macrolib "$MGXS" -o "$MAC"
+"$PYTHON_BIN" -m openmc2donjon.cli "$MGXS" -o "$MCO" \
+  --check \
+  --require-volume \
+  --require-transport-dataset
+"$PYTHON_BIN" -m openmc2donjon.cli --format macrolib "$MGXS" -o "$MAC" \
+  --check \
+  --require-volume \
+  --require-transport-dataset
 
 echo
 echo "== One-step from OpenMC recipe =="

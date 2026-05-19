@@ -83,7 +83,7 @@ openmc2donjon-export \
   --statepoint statepoint.120.h5 \
   -o mgxs_library.h5
 
-openmc2donjon mgxs_library.h5 -o out.mcompo.txt
+openmc2donjon mgxs_library.h5 -o out.mcompo.txt --check
 ```
 
 Run preflight on the HDF5:

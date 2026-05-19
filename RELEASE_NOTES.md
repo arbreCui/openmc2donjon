@@ -15,6 +15,8 @@
 - Added `openmc2donjon-export --dry-run` for recipe/domain preflight checks.
 - Added `openmc2donjon check` as the packaged MGXS HDF5 input-contract
   preflight entry point.
+- Added `openmc2donjon ... --check` to run input-contract preflight before
+  writing DONJON ASCII.
 - Extended release check so the C5G7 statepoint parity path exercises
   `openmc2donjon-from-openmc`, reads back the generated MCO, and validates the
   summary manifest.

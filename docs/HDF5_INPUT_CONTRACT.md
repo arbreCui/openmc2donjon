@@ -270,6 +270,12 @@ The packaged CLI can enforce the contract before writing:
 openmc2donjon check mgxs_library.h5
 ```
 
+The same preflight can be attached to conversion:
+
+```sh
+openmc2donjon mgxs_library.h5 -o out.mcompo.txt --check
+```
+
 The legacy helper wrapper still combines preflight and conversion for the
 accepted C5G7 handoff checks:
 

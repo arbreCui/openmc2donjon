@@ -88,6 +88,37 @@ def build_parser() -> argparse.ArgumentParser:
             "D2P/PMAXS fuel smokes typically require a single-mixture MCO"
         ),
     )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="run HDF5 input-contract preflight before conversion",
+    )
+    parser.add_argument(
+        "--require-adf",
+        action="store_true",
+        help="with --check, require ADF data for every mixture",
+    )
+    parser.add_argument(
+        "--expected-adf-faces",
+        default=None,
+        help="with --check, comma-separated ADF face names expected on every ADF-bearing mixture",
+    )
+    parser.add_argument(
+        "--require-transport-dataset",
+        action="store_true",
+        help="with --check, require explicit transport_total datasets",
+    )
+    parser.add_argument(
+        "--require-volume",
+        action="store_true",
+        help="with --check, require positive volume attributes",
+    )
+    parser.add_argument(
+        "--check-summary-json",
+        type=Path,
+        default=None,
+        help="with --check, write a machine-readable preflight summary JSON",
+    )
     return parser
 
 
@@ -162,6 +193,20 @@ def main(argv: list[str] | None = None) -> int:
     else:
         output_path = Path("out.mcompo.txt")
 
+    if args.check:
+        ok = _run_preflight(
+            [input_path],
+            output_format=args.format,
+            output_path=output_path,
+            require_adf=args.require_adf,
+            expected_adf_faces=args.expected_adf_faces,
+            require_transport_dataset=args.require_transport_dataset,
+            require_volume=args.require_volume,
+            summary_json=args.check_summary_json,
+        )
+        if not ok:
+            return 1
+
     if args.format == "macrolib":
         convert_mgxs_hdf5_to_macrolib(
             input_path,
@@ -184,18 +229,42 @@ def main(argv: list[str] | None = None) -> int:
 
 def _check_main(argv: list[str]) -> int:
     args = build_check_parser().parse_args(argv)
-    expected_faces = split_csv(args.expected_adf_faces)
+    ok = _run_preflight(
+        args.input_h5,
+        output_format=args.format,
+        output_path=args.output,
+        require_adf=args.require_adf,
+        expected_adf_faces=args.expected_adf_faces,
+        require_transport_dataset=args.require_transport_dataset,
+        require_volume=args.require_volume,
+        summary_json=args.summary_json,
+    )
+    return 0 if ok or args.no_fail else 1
+
+
+def _run_preflight(
+    input_paths: list[Path],
+    *,
+    output_format: str,
+    output_path: Path | None,
+    require_adf: bool,
+    expected_adf_faces: str | None,
+    require_transport_dataset: bool,
+    require_volume: bool,
+    summary_json: Path | None,
+) -> bool:
+    expected_faces = split_csv(expected_adf_faces)
     reports = [
         validate_input(
             path,
-            require_adf=args.require_adf,
-            require_transport_dataset=args.require_transport_dataset,
-            require_volume=args.require_volume,
+            require_adf=require_adf,
+            require_transport_dataset=require_transport_dataset,
+            require_volume=require_volume,
             expected_adf_faces=expected_faces,
         )
-        for path in args.input_h5
+        for path in input_paths
     ]
-    output_issue = output_name_issue(args.output, args.format)
+    output_issue = output_name_issue(output_path, output_format)
     ok = all(report.ok for report in reports) and output_issue is None
     decision = PASS_DECISION if ok else FAIL_DECISION
 
@@ -204,19 +273,19 @@ def _check_main(argv: list[str]) -> int:
     print()
     for report in reports:
         print_report(report)
-    if args.output:
+    if output_path:
         status = "PASS" if output_issue is None else "FAIL"
-        print(f"  {status}  output name: {args.output}")
+        print(f"  {status}  output name: {output_path}")
         if output_issue:
             print(f"        {output_issue}")
         print()
     print("MGXS input contract decision")
     print(f"  {decision}")
 
-    if args.summary_json:
-        write_summary(args.summary_json, reports, decision, output_issue)
+    if summary_json:
+        write_summary(summary_json, reports, decision, output_issue)
 
-    return 0 if ok or args.no_fail else 1
+    return ok
 
 
 if __name__ == "__main__":

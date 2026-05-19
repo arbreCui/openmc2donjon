@@ -159,6 +159,12 @@ Check a recipe before writing an HDF5 handoff:
 openmc2donjon-export --recipe export_recipe.py --no-load-statepoint --dry-run
 ```
 
+Convert with input-contract preflight:
+
+```sh
+openmc2donjon mgxs_library.h5 -o out.mcompo.txt --check
+```
+
 For a one-command export plus conversion:
 
 ```sh

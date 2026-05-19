@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -47,6 +48,53 @@ class CliTests(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn("mgxs_input_contract_failed", stream.getvalue())
         self.assertIn("/energy_bounds dataset is missing", stream.getvalue())
+
+    def test_convert_check_writes_output_for_valid_hdf5(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            input_path = tmp / "mgxs.h5"
+            output_path = tmp / "out.mcompo.txt"
+            summary_path = tmp / "check_summary.json"
+            write_valid_mgxs(input_path)
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = cli_main(
+                    [
+                        str(input_path),
+                        "-o",
+                        str(output_path),
+                        "--check",
+                        "--require-volume",
+                        "--check-summary-json",
+                        str(summary_path),
+                    ]
+                )
+
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            output_exists = output_path.exists()
+
+        self.assertEqual(rc, 0)
+        self.assertTrue(output_exists)
+        self.assertEqual(summary["decision"], "mgxs_input_contract_passed")
+        self.assertIn("mgxs_input_contract_passed", stream.getvalue())
+
+    def test_convert_check_rejects_invalid_hdf5_without_writing_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            input_path = tmp / "bad.h5"
+            output_path = tmp / "out.mcompo.txt"
+            with h5py.File(input_path, "w") as h5:
+                h5.attrs["energy_groups"] = 2
+                h5.attrs["legendre_order"] = 0
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = cli_main([str(input_path), "-o", str(output_path), "--check"])
+
+        self.assertEqual(rc, 1)
+        self.assertFalse(output_path.exists())
+        self.assertIn("mgxs_input_contract_failed", stream.getvalue())
 
 
 def write_valid_mgxs(path: Path) -> None:
