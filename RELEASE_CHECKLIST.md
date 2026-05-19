@@ -48,6 +48,12 @@ bash examples/donjon_openmc2donjon/run_acceptance.sh
 
 - [x] C5G7 accepted validation:
   `examples/donjon_openmc2donjon/c5g7_validation/C5G7_VALIDATION_CHARTER.md`
+- [x] Reviewer validation summary:
+  `docs/VALIDATION.md`
+- [x] Architecture summary:
+  `docs/ARCHITECTURE.md`
+- [x] Roadmap:
+  `docs/ROADMAP.md`
 - [x] Accepted artifact manifest:
   `examples/donjon_openmc2donjon/ACCEPTED_ARTIFACTS.md`
 - [x] Accepted baseline manifest:

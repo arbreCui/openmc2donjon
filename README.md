@@ -23,6 +23,21 @@ Current validation status:
 - Hex-domain support exists as converter/modeling capability.
 - A suitable accepted hex benchmark is still future work.
 
+## For Reviewers
+
+Start here:
+
+- [HDF5 input contract](docs/HDF5_INPUT_CONTRACT.md)
+- [Validation summary](docs/VALIDATION.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Roadmap](docs/ROADMAP.md)
+
+Fast smoke:
+
+```sh
+bash scripts/run_c5g7_demo.sh
+```
+
 ## Spatial Domain Mapping
 
 The production mapping is spatial, not material-collapsed:
