@@ -19,7 +19,7 @@ class FromOpenMCCliTests(unittest.TestCase):
             build_parser().parse_args(["--version"])
 
         self.assertEqual(cm.exception.code, 0)
-        self.assertEqual(stream.getvalue().strip(), "openmc2donjon-from-openmc 0.1.1")
+        self.assertEqual(stream.getvalue().strip(), "openmc2donjon-from-openmc 0.1.2")
 
     def test_recipe_to_multicompo_with_kept_hdf5(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]

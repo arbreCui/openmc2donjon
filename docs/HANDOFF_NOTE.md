@@ -3,7 +3,7 @@
 ## Stable Tag
 
 ```text
-v0.1.1-c5g7-handoff
+v0.1.2-openmc-workflow
 ```
 
 This tag is the current internal handoff point for `openmc2donjon`.

@@ -1,6 +1,6 @@
 # openmc2donjon Release Checklist
 
-This checklist covers the current `0.1.1` internal handoff state.
+This checklist covers the current `0.1.2` internal handoff state.
 
 ## Package Scope
 
@@ -124,5 +124,5 @@ C5G7 DONJON-side acceptance remains green.
 Accepted release tag:
 
 ```text
-v0.1.1-c5g7-handoff
+v0.1.2-openmc-workflow
 ```

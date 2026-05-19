@@ -13,3 +13,5 @@
 - Rejected unsupported multi-parameter branch axes instead of silently ignoring
   them.
 - Prepared the `v0.1.1-c5g7-handoff` package release notes and handoff tag.
+- Prepared the `v0.1.2-openmc-workflow` package release with recipe/statepoint
+  export and one-step OpenMC conversion CLIs.

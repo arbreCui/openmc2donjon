@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.1.2-openmc-workflow - 2026-05-19
+
 - Added a production-facing `openmc2donjon-export --recipe ... --statepoint ...`
   workflow for exporting real OpenMC MGXS statepoints to the HDF5 handoff
   contract.
@@ -11,6 +13,8 @@
   requiring C5G7 setup or real OpenMC output.
 - Added `openmc2donjon-from-openmc`, a one-command recipe/statepoint export plus
   DONJON ASCII conversion entry point.
+- Verified the installed console scripts from a fresh GitHub checkout in a
+  temporary virtual environment.
 
 ## v0.1.1-c5g7-handoff - 2026-05-19
 
