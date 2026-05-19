@@ -25,6 +25,15 @@ Current validation status:
   the accepted physics validation yet.
 - A suitable accepted hex benchmark is still future work.
 
+Supported input scope:
+
+| Input layout | Status | Notes |
+| --- | --- | --- |
+| One-state MGXS HDF5 | Production path | C5G7 assembly-wise acceptance uses this path. |
+| One-dimensional `BURN` multi-state HDF5 | Experimental serialization | Unit-tested and DONJON-smoked, not yet a physics validation line. |
+| Multi-axis branch library | Not supported | Extra `/state_points/*` axes are rejected instead of ignored. |
+| Hex spatial domains | Converter/modeling capability | Awaiting a suitable accepted hex benchmark. |
+
 ## For Reviewers
 
 Start here:

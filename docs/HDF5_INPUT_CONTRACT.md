@@ -53,6 +53,18 @@ For 3D cases, choose the spatial partition explicitly. A common choice is:
 assembly position + axial layer -> one MGXS domain -> one DONJON mixture
 ```
 
+## Supported Schema Variants
+
+| HDF5 layout | Status | Required state metadata | Converter behavior |
+| --- | --- | --- | --- |
+| One-state `/mixtures/<domain_name>/...` | Production path | None | Writes one calculation per mixture. |
+| One-dimensional burnup history | Experimental | Exactly one `BURN` axis from `/state_points/BURN`, `/burnup_values`, `/burnup`, or matching root attrs | Writes `NPAR=1`, `PARKEY=BURN`, one calculation per burnup value, and per-mixture `TREE`. |
+| Multi-axis branch library | Not supported | More than one branch axis, such as `BORON`, `TEMP`, `COOLANT`, or control state | Preflight and converter fail explicitly. |
+
+The one-state schema is the accepted C5G7 validation path. The `BURN` schema is
+intended for a single depletion/history axis only; it is not a general
+temperature/boron/control branch-library format.
+
 ## Required Root Items
 
 Required attributes:
