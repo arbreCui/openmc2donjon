@@ -8,6 +8,9 @@
   conversion commands.
 - Added `--summary-json` to `openmc2donjon-from-openmc` for conversion
   provenance manifests.
+- Extended release check so the C5G7 statepoint parity path exercises
+  `openmc2donjon-from-openmc`, reads back the generated MCO, and validates the
+  summary manifest.
 
 ## v0.1.2-openmc-workflow - 2026-05-19
 

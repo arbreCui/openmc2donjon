@@ -146,20 +146,28 @@ echo
 echo "== C5G7 statepoint exporter parity =="
 if [[ -e "$C5G7_STATEPOINT" ]]; then
   exported_h5="$RUN_DIR/c5g7_exporter_statepoint.h5"
+  exported_mco="$RUN_DIR/c5g7_exporter_statepoint.mcompo.txt"
+  exported_summary="$RUN_DIR/c5g7_exporter_statepoint.summary.json"
   C5G7_ADF_SOURCE="$C5G7_ACCEPTED_H5" \
-  "$PYTHON_BIN" -m openmc2donjon.export_cli \
+  "$PYTHON_BIN" -m openmc2donjon.from_openmc_cli \
     --recipe "$REPO_ROOT/scripts/c5g7_export_recipe.py" \
     --statepoint "$C5G7_STATEPOINT" \
-    -o "$exported_h5"
-  "$PYTHON_BIN" - "$C5G7_ACCEPTED_H5" "$exported_h5" <<'PY'
+    --keep-hdf5 "$exported_h5" \
+    --summary-json "$exported_summary" \
+    -o "$exported_mco"
+  "$PYTHON_BIN" - "$C5G7_ACCEPTED_H5" "$exported_h5" "$exported_mco" "$exported_summary" <<'PY'
+import json
 import sys
 from pathlib import Path
 
 import h5py
 import numpy as np
+from openmc2donjon import lcm_ascii
 
 reference = Path(sys.argv[1])
 candidate = Path(sys.argv[2])
+candidate_mco = Path(sys.argv[3])
+summary_path = Path(sys.argv[4])
 fields = (
     "total",
     "absorption",
@@ -195,6 +203,33 @@ with h5py.File(reference, "r") as ref, h5py.File(candidate, "r") as cand:
     if max_abs != 0.0:
         raise SystemExit(f"statepoint exporter parity failed: max_abs_diff={max_abs}")
     print(f"statepoint exporter parity OK: max_abs_diff={max_abs}")
+
+blocks = lcm_ascii.read_lcm_ascii(candidate_mco)
+names = [block.name for block in blocks if block.name]
+if names[:1] != ["SIGNATURE"]:
+    raise SystemExit(f"{candidate_mco}: invalid LCM ASCII output")
+print(f"statepoint exporter MCO readback OK: blocks={len(blocks)} first={names[:6]}")
+
+summary = json.loads(summary_path.read_text(encoding="utf-8"))
+checks = {
+    "schema": summary.get("schema") == "openmc2donjon.from-openmc-summary.v1",
+    "format": summary.get("format") == "multicompo",
+    "hdf5": Path(summary.get("hdf5", "")) == candidate,
+    "output": Path(summary.get("output", "")) == candidate_mco,
+    "hdf5_kept": summary.get("hdf5_kept") is True,
+    "energy_groups": summary.get("energy_groups") == 7,
+    "legendre_order": summary.get("legendre_order") == 1,
+    "mixture_count": summary.get("mixture_count") == 9,
+    "state_points": summary.get("state_points") == 1,
+}
+failed = [name for name, passed in checks.items() if not passed]
+if failed:
+    raise SystemExit(f"statepoint exporter summary failed checks: {failed}; {summary}")
+print(
+    "statepoint exporter summary OK: "
+    f"mixtures={summary['mixture_count']} groups={summary['energy_groups']} "
+    f"P{summary['legendre_order']}"
+)
 PY
 else
   if [[ "$REQUIRE_STATEPOINT_EXPORT" -eq 1 ]]; then
