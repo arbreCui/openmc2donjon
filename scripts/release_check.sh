@@ -163,6 +163,10 @@ from pathlib import Path
 import h5py
 import numpy as np
 from openmc2donjon import lcm_ascii
+from openmc2donjon.from_openmc_summary import (
+    FROM_OPENMC_SUMMARY_SCHEMA,
+    validate_from_openmc_summary_v1,
+)
 
 reference = Path(sys.argv[1])
 candidate = Path(sys.argv[2])
@@ -211,8 +215,11 @@ if names[:1] != ["SIGNATURE"]:
 print(f"statepoint exporter MCO readback OK: blocks={len(blocks)} first={names[:6]}")
 
 summary = json.loads(summary_path.read_text(encoding="utf-8"))
+schema_errors = validate_from_openmc_summary_v1(summary)
+if schema_errors:
+    raise SystemExit("statepoint exporter summary schema failed: " + "; ".join(schema_errors))
 checks = {
-    "schema": summary.get("schema") == "openmc2donjon.from-openmc-summary.v1",
+    "schema": summary.get("schema") == FROM_OPENMC_SUMMARY_SCHEMA,
     "format": summary.get("format") == "multicompo",
     "hdf5": Path(summary.get("hdf5", "")) == candidate,
     "output": Path(summary.get("output", "")) == candidate_mco,

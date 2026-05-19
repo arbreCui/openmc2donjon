@@ -72,6 +72,7 @@ import sys
 
 import h5py
 from openmc2donjon import lcm_ascii
+from openmc2donjon.from_openmc_summary import validate_from_openmc_summary_v1
 
 mgxs = Path(sys.argv[1])
 mco = Path(sys.argv[2])
@@ -99,6 +100,9 @@ for path in (mco, mac, one_step_mco):
     print(f"readback {path.name}: blocks={len(blocks)} first={names[:6]}")
 
 payload = json.loads(summary.read_text(encoding="utf-8"))
+summary_errors = validate_from_openmc_summary_v1(payload)
+if summary_errors:
+    raise SystemExit("invalid summary schema: " + "; ".join(summary_errors))
 if payload["mixture_names"] != ["FUEL_A", "MOD_A"]:
     raise SystemExit("unexpected summary mixture names")
 if payload["hdf5"] != str(one_step_h5) or payload["output"] != str(one_step_mco):

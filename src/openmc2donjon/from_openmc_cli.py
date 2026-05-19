@@ -8,6 +8,7 @@ import tempfile
 from pathlib import Path
 
 from . import __version__
+from .from_openmc_summary import FROM_OPENMC_SUMMARY_SCHEMA
 from .macrolib import convert_mgxs_hdf5_to_macrolib
 from .multicompo import DEFAULT_ROOT_NAME, convert_mgxs_hdf5, read_mgxs_hdf5_histories
 from .openmc_statepoint import export_openmc_statepoint_recipe
@@ -225,7 +226,7 @@ def _summary_payload(
         )
 
     return {
-        "schema": "openmc2donjon.from-openmc-summary.v1",
+        "schema": FROM_OPENMC_SUMMARY_SCHEMA,
         "package_version": __version__,
         "recipe": str(recipe_path),
         "statepoint": None if statepoint_path is None else str(statepoint_path),
