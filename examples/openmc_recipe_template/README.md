@@ -104,5 +104,11 @@ openmc2donjon inspect mgxs_library.h5
 openmc2donjon check mgxs_library.h5
 ```
 
+If you keep an accepted handoff, compare regenerated output with:
+
+```sh
+openmc2donjon diff accepted_mgxs.h5 mgxs_library.h5
+```
+
 Keep `mgxs_library.h5`, `out.mcompo.txt`, and `run_summary.json` together when
 sharing a conversion run.

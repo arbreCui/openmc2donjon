@@ -8,6 +8,7 @@ import sys
 
 from . import __version__
 from .macrolib import convert_mgxs_hdf5_to_macrolib
+from .mgxs_diff import diff_hdf5_files
 from .mgxs_inspect import inspect_files
 from .mgxs_input_contract import run_preflight
 from .multicompo import DEFAULT_ROOT_NAME, convert_mgxs_hdf5
@@ -19,7 +20,8 @@ def build_parser() -> argparse.ArgumentParser:
         description=(
             "Convert an OpenMC MGXS HDF5 dump to DONJON ASCII LCM objects. "
             "Use 'openmc2donjon inspect <input_h5>' to inspect an HDF5 handoff "
-            "or 'openmc2donjon check <input_h5>' for input-contract preflight."
+            "'openmc2donjon diff <reference_h5> <candidate_h5>' to compare two "
+            "handoffs, or 'openmc2donjon check <input_h5>' for input-contract preflight."
         ),
     )
     parser.add_argument(
@@ -198,8 +200,60 @@ def build_inspect_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_diff_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="openmc2donjon diff",
+        description="Compare two OpenMC MGXS HDF5 handoff files.",
+    )
+    parser.add_argument("reference_h5", type=Path, help="reference MGXS HDF5 file")
+    parser.add_argument("candidate_h5", type=Path, help="candidate MGXS HDF5 file")
+    parser.add_argument(
+        "--rtol",
+        type=float,
+        default=0.0,
+        help="relative tolerance for numeric datasets and numeric attributes (default: 0)",
+    )
+    parser.add_argument(
+        "--atol",
+        type=float,
+        default=0.0,
+        help="absolute tolerance for numeric datasets and numeric attributes (default: 0)",
+    )
+    parser.add_argument(
+        "--ignore-attrs",
+        action="store_true",
+        help="compare HDF5 object tree and datasets only, ignoring all attributes",
+    )
+    parser.add_argument(
+        "--ignore-attr",
+        action="append",
+        default=[],
+        help="ignore an attribute name wherever it appears; repeat as needed",
+    )
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        default=None,
+        help="write a machine-readable diff JSON",
+    )
+    parser.add_argument(
+        "--max-diffs",
+        type=int,
+        default=20,
+        help="maximum number of differences to print (default: 20)",
+    )
+    parser.add_argument(
+        "--no-fail",
+        action="store_true",
+        help="always return zero after printing the diff report",
+    )
+    return parser
+
+
 def main(argv: list[str] | None = None) -> int:
     raw_argv = sys.argv[1:] if argv is None else list(argv)
+    if raw_argv and raw_argv[0] == "diff":
+        return _diff_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "inspect":
         return _inspect_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "check":
@@ -272,6 +326,21 @@ def _inspect_main(argv: list[str]) -> int:
         summary_json=args.summary_json,
     )
     return 0 if all(report.ok for report in reports) else 1
+
+
+def _diff_main(argv: list[str]) -> int:
+    args = build_diff_parser().parse_args(argv)
+    report = diff_hdf5_files(
+        args.reference_h5,
+        args.candidate_h5,
+        rtol=args.rtol,
+        atol=args.atol,
+        compare_attrs=not args.ignore_attrs,
+        ignored_attrs=tuple(args.ignore_attr),
+        summary_json=args.summary_json,
+        max_diffs=args.max_diffs,
+    )
+    return 0 if report.ok or args.no_fail else 1
 
 
 if __name__ == "__main__":

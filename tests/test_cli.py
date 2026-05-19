@@ -4,6 +4,7 @@ import contextlib
 import io
 import json
 from pathlib import Path
+import shutil
 import tempfile
 import unittest
 
@@ -90,6 +91,63 @@ class CliTests(unittest.TestCase):
             set(payload["inputs"][0]["mixtures"][0]["adf_faces"]),
             {"FD_XMIN", "FD_XMAX"},
         )
+
+    def test_diff_command_accepts_identical_hdf5(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            reference = tmp / "reference.h5"
+            candidate = tmp / "candidate.h5"
+            summary_path = tmp / "diff_summary.json"
+            write_valid_mgxs(reference)
+            shutil.copyfile(reference, candidate)
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = cli_main(
+                    [
+                        "diff",
+                        str(reference),
+                        str(candidate),
+                        "--summary-json",
+                        str(summary_path),
+                    ]
+                )
+
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(rc, 0)
+        self.assertIn("mgxs_hdf5_diff_passed", stream.getvalue())
+        self.assertEqual(payload["schema"], "openmc2donjon.mgxs-diff.v1")
+        self.assertEqual(payload["decision"], "mgxs_hdf5_diff_passed")
+        self.assertGreater(payload["compared_datasets"], 0)
+        self.assertEqual(payload["max_abs"], 0.0)
+
+    def test_diff_command_reports_numeric_difference_and_tolerance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            reference = tmp / "reference.h5"
+            candidate = tmp / "candidate.h5"
+            write_valid_mgxs(reference)
+            shutil.copyfile(reference, candidate)
+            with h5py.File(candidate, "a") as h5:
+                h5["mixtures/fuel/total"][0] = 0.501
+
+            failed_stream = io.StringIO()
+            with contextlib.redirect_stdout(failed_stream):
+                failed_rc = cli_main(["diff", str(reference), str(candidate)])
+
+            passed_stream = io.StringIO()
+            with contextlib.redirect_stdout(passed_stream):
+                passed_rc = cli_main(
+                    ["diff", str(reference), str(candidate), "--atol", "0.01"]
+                )
+
+        self.assertEqual(failed_rc, 1)
+        self.assertIn("mgxs_hdf5_diff_failed", failed_stream.getvalue())
+        self.assertIn("/mixtures/fuel/total", failed_stream.getvalue())
+        self.assertIn("numeric values differ", failed_stream.getvalue())
+        self.assertEqual(passed_rc, 0)
+        self.assertIn("mgxs_hdf5_diff_passed", passed_stream.getvalue())
 
     def test_convert_check_writes_output_for_valid_hdf5(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

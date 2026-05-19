@@ -274,6 +274,17 @@ openmc2donjon inspect mgxs_library.h5
 optional dataset coverage, scatter-axis metadata, ADF faces, and can write
 `--summary-json` for automation.
 
+To compare a regenerated handoff with a locked baseline:
+
+```sh
+openmc2donjon diff accepted_mgxs.h5 candidate_mgxs.h5
+```
+
+`diff` compares the HDF5 object tree, dataset shapes/dtypes/values, and
+attributes. Numeric comparison is exact by default; pass `--rtol` and `--atol`
+when a tolerance is intended. Use `--ignore-attrs` or repeated `--ignore-attr`
+for provenance metadata that is expected to differ.
+
 The packaged CLI can also enforce the contract before writing:
 
 ```sh

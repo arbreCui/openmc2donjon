@@ -150,6 +150,7 @@ if [[ -e "$C5G7_STATEPOINT" ]]; then
   exported_mco="$RUN_DIR/c5g7_exporter_statepoint.mcompo.txt"
   exported_summary="$RUN_DIR/c5g7_exporter_statepoint.summary.json"
   exported_check_summary="$RUN_DIR/c5g7_exporter_statepoint.check_summary.json"
+  exported_diff_summary="$RUN_DIR/c5g7_exporter_statepoint.diff_summary.json"
   C5G7_ADF_SOURCE="$C5G7_ACCEPTED_H5" \
   "$PYTHON_BIN" -m openmc2donjon.from_openmc_cli \
     --recipe "$REPO_ROOT/scripts/c5g7_export_recipe.py" \
@@ -163,59 +164,32 @@ if [[ -e "$C5G7_STATEPOINT" ]]; then
     --expected-adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
     --check-summary-json "$exported_check_summary" \
     -o "$exported_mco"
-  "$PYTHON_BIN" - "$C5G7_ACCEPTED_H5" "$exported_h5" "$exported_mco" "$exported_summary" "$exported_check_summary" <<'PY'
+  "$PYTHON_BIN" -m openmc2donjon.cli diff "$C5G7_ACCEPTED_H5" "$exported_h5" \
+    --summary-json "$exported_diff_summary"
+  "$PYTHON_BIN" - "$exported_h5" "$exported_mco" "$exported_summary" "$exported_check_summary" "$exported_diff_summary" <<'PY'
 import json
 import sys
 from pathlib import Path
 
-import h5py
-import numpy as np
 from openmc2donjon import lcm_ascii
 from openmc2donjon.from_openmc_summary import (
     FROM_OPENMC_SUMMARY_SCHEMA,
     validate_from_openmc_summary,
 )
 
-reference = Path(sys.argv[1])
-candidate = Path(sys.argv[2])
-candidate_mco = Path(sys.argv[3])
-summary_path = Path(sys.argv[4])
-check_summary_path = Path(sys.argv[5])
-fields = (
-    "total",
-    "absorption",
-    "fission",
-    "nu_fission",
-    "chi",
-    "scatter_matrix",
-    "transport_total",
-    "adf",
-)
+candidate = Path(sys.argv[1])
+candidate_mco = Path(sys.argv[2])
+summary_path = Path(sys.argv[3])
+check_summary_path = Path(sys.argv[4])
+diff_summary_path = Path(sys.argv[5])
 
-with h5py.File(reference, "r") as ref, h5py.File(candidate, "r") as cand:
-    ref_names = set(ref["mixtures"])
-    cand_names = set(cand["mixtures"])
-    if ref_names != cand_names:
-        raise SystemExit(f"mixture names differ: {ref_names ^ cand_names}")
-    max_abs = 0.0
-    missing = []
-    for name in sorted(ref_names):
-        ref_group = ref["mixtures"][name]
-        cand_group = cand["mixtures"][name]
-        for field in fields:
-            ref_has = field in ref_group
-            cand_has = field in cand_group
-            if ref_has != cand_has:
-                missing.append((name, field))
-                continue
-            if ref_has:
-                diff = np.max(np.abs(ref_group[field][:] - cand_group[field][:]))
-                max_abs = max(max_abs, float(diff))
-    if missing:
-        raise SystemExit(f"missing fields differ: {missing}")
-    if max_abs != 0.0:
-        raise SystemExit(f"statepoint exporter parity failed: max_abs_diff={max_abs}")
-    print(f"statepoint exporter parity OK: max_abs_diff={max_abs}")
+diff_summary = json.loads(diff_summary_path.read_text(encoding="utf-8"))
+if diff_summary.get("decision") != "mgxs_hdf5_diff_passed":
+    raise SystemExit(f"statepoint exporter HDF5 diff failed: {diff_summary}")
+print(
+    "statepoint exporter HDF5 diff OK: "
+    f"datasets={diff_summary['compared_datasets']} max_abs={diff_summary['max_abs']}"
+)
 
 blocks = lcm_ascii.read_lcm_ascii(candidate_mco)
 names = [block.name for block in blocks if block.name]

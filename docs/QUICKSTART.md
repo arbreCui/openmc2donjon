@@ -32,6 +32,7 @@ This checks:
 - recipe/statepoint export to the HDF5 handoff contract;
 - HDF5 inventory inspect;
 - HDF5 preflight;
+- HDF5 baseline diff;
 - `L_MULTICOMPO` write/readback;
 - root `L_MACROLIB` write/readback;
 - one-command `openmc2donjon-from-openmc` conversion.
@@ -92,6 +93,12 @@ openmc2donjon-export \
 
 openmc2donjon inspect mgxs_library.h5
 openmc2donjon mgxs_library.h5 -o out.mcompo.txt --check
+```
+
+To confirm a regenerated handoff matches a baseline:
+
+```sh
+openmc2donjon diff accepted_mgxs.h5 mgxs_library.h5
 ```
 
 Run preflight on the HDF5:

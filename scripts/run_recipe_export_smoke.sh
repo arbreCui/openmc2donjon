@@ -28,6 +28,7 @@ ONE_STEP_H5="$RUN_DIR/one_step_mgxs.h5"
 ONE_STEP_MCO="$RUN_DIR/one_step.mcompo.txt"
 ONE_STEP_SUMMARY="$RUN_DIR/one_step_summary.json"
 ONE_STEP_CHECK_SUMMARY="$RUN_DIR/one_step_check_summary.json"
+ONE_STEP_DIFF_SUMMARY="$RUN_DIR/one_step_diff_summary.json"
 ONE_STEP_DRY_H5="$RUN_DIR/one_step_dry_run_$$.h5"
 ONE_STEP_DRY_MCO="$RUN_DIR/one_step_dry_run_$$.mcompo.txt"
 ONE_STEP_DRY_SUMMARY="$RUN_DIR/one_step_dry_run_$$.summary.json"
@@ -125,7 +126,12 @@ echo "== One-step from OpenMC recipe =="
   --require-transport-dataset \
   --check-summary-json "$ONE_STEP_CHECK_SUMMARY"
 
-"$PYTHON_BIN" - "$MGXS" "$MCO" "$MAC" "$STATEPOINT" "$ONE_STEP_H5" "$ONE_STEP_MCO" "$ONE_STEP_SUMMARY" "$ONE_STEP_CHECK_SUMMARY" <<'PY'
+echo
+echo "== HDF5 diff =="
+"$PYTHON_BIN" -m openmc2donjon.cli diff "$MGXS" "$ONE_STEP_H5" \
+  --summary-json "$ONE_STEP_DIFF_SUMMARY"
+
+"$PYTHON_BIN" - "$MGXS" "$MCO" "$MAC" "$STATEPOINT" "$ONE_STEP_H5" "$ONE_STEP_MCO" "$ONE_STEP_SUMMARY" "$ONE_STEP_CHECK_SUMMARY" "$ONE_STEP_DIFF_SUMMARY" <<'PY'
 import json
 from pathlib import Path
 import sys
@@ -142,6 +148,7 @@ one_step_h5 = Path(sys.argv[5])
 one_step_mco = Path(sys.argv[6])
 summary = Path(sys.argv[7])
 check_summary = Path(sys.argv[8])
+diff_summary = Path(sys.argv[9])
 
 for path in (mgxs, one_step_h5):
     with h5py.File(path, "r") as h5:
@@ -167,6 +174,9 @@ if summary_errors:
 check_payload = json.loads(check_summary.read_text(encoding="utf-8"))
 if check_payload["decision"] != "mgxs_input_contract_passed":
     raise SystemExit("one-step checked conversion preflight did not pass")
+diff_payload = json.loads(diff_summary.read_text(encoding="utf-8"))
+if diff_payload["decision"] != "mgxs_hdf5_diff_passed":
+    raise SystemExit("one-step HDF5 diff did not pass")
 if payload["checked"] is not True or payload["check_passed"] is not True:
     raise SystemExit("one-step summary did not record checked preflight success")
 if payload["check_summary_json"] != str(check_summary):

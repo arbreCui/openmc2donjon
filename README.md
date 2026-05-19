@@ -173,6 +173,12 @@ openmc2donjon inspect mgxs_library.h5
 openmc2donjon mgxs_library.h5 -o out.mcompo.txt --check
 ```
 
+Compare a regenerated HDF5 handoff against a locked baseline:
+
+```sh
+openmc2donjon diff accepted_mgxs.h5 candidate_mgxs.h5 --summary-json diff.json
+```
+
 For a one-command export plus conversion:
 
 ```sh
