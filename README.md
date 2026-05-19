@@ -38,6 +38,7 @@ Supported input scope:
 
 Start here:
 
+- [Quickstart](docs/QUICKSTART.md)
 - [HDF5 input contract](docs/HDF5_INPUT_CONTRACT.md)
 - [OpenMC export workflow](docs/OPENMC_EXPORT_WORKFLOW.md)
 - [Handoff note](docs/HANDOFF_NOTE.md)

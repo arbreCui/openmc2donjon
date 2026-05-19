@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a concise quickstart for the installed CLI and recipe/statepoint
+  workflows.
+
 ## v0.1.2-openmc-workflow - 2026-05-19
 
 - Added a production-facing `openmc2donjon-export --recipe ... --statepoint ...`
