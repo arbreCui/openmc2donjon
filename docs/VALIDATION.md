@@ -52,8 +52,13 @@ Local reproduction command:
 ```sh
 PYTHONPATH=src python scripts/export_c5g7_statepoint.py \
   --statepoint /Users/wen/openmc-workspace/c5g7_converter_test/runs/assembly_p1/statepoint.120.h5 \
+  --adf-source examples/donjon_openmc2donjon/c5g7_assembly_p1_adf_production.h5 \
   -o /private/tmp/openmc2donjon_c5g7_exporter_assembly_p1.h5
 ```
+
+The accepted production HDF5 snapshot has been regenerated through this exporter
+path, with the existing production ADF payload copied forward. The top-level
+acceptance run remains green.
 
 ## Reproduce Converter-Side Smoke
 

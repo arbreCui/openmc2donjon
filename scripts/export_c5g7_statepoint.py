@@ -61,6 +61,8 @@ def main() -> int:
             domain_mode=args.domain_mode,
             assembly_mesh=args.assembly_mesh,
         )
+        if args.adf_source is not None:
+            _copy_adf_payload(args.adf_source, args.output)
     finally:
         os.chdir(previous_cwd)
 
@@ -74,6 +76,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--statepoint", type=Path, required=True)
     parser.add_argument("-o", "--output", type=Path, required=True)
     parser.add_argument(
+        "--adf-source",
+        type=Path,
+        help="optional HDF5 file whose production ADF payload is copied into the output",
+    )
+    parser.add_argument(
         "--domain-mode",
         choices=("material", "assembly"),
         default="assembly",
@@ -84,6 +91,8 @@ def _parse_args() -> argparse.Namespace:
     args.c5g7_dir = args.c5g7_dir.resolve()
     args.statepoint = args.statepoint.resolve()
     args.output = args.output.resolve()
+    if args.adf_source is not None:
+        args.adf_source = args.adf_source.resolve()
     if args.assembly_mesh <= 0:
         parser.error("--assembly-mesh must be positive")
     if args.legendre_order < 0:
@@ -197,6 +206,29 @@ def _add_p1_transport_total(output: Path) -> None:
                     f"non-positive transport total in domain {name}: {transport_total}"
                 )
             group.create_dataset("transport_total", data=transport_total)
+
+
+def _copy_adf_payload(source: Path, output: Path) -> None:
+    import h5py
+
+    with h5py.File(source, "r") as src, h5py.File(output, "r+") as dst:
+        for key, value in src.attrs.items():
+            if str(key).startswith("adf"):
+                dst.attrs[key] = value
+
+        src_mixtures = src["mixtures"]
+        dst_mixtures = dst["mixtures"]
+        for name, src_group in src_mixtures.items():
+            if name not in dst_mixtures:
+                raise ValueError(f"ADF source mixture {name!r} is missing in output")
+            if "adf" not in src_group:
+                continue
+            dst_group = dst_mixtures[name]
+            if "adf" in dst_group:
+                del dst_group["adf"]
+            dataset = dst_group.create_dataset("adf", data=src_group["adf"][:])
+            for attr_key, attr_value in src_group["adf"].attrs.items():
+                dataset.attrs[attr_key] = attr_value
 
 
 if __name__ == "__main__":

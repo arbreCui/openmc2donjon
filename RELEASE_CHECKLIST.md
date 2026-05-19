@@ -47,6 +47,7 @@ Optionally regenerate the C5G7 HDF5 handoff from a saved OpenMC statepoint:
 ```sh
 PYTHONPATH=src python scripts/export_c5g7_statepoint.py \
   --statepoint /Users/wen/openmc-workspace/c5g7_converter_test/runs/assembly_p1/statepoint.120.h5 \
+  --adf-source examples/donjon_openmc2donjon/c5g7_assembly_p1_adf_production.h5 \
   -o /private/tmp/openmc2donjon_c5g7_exporter_assembly_p1.h5
 ```
 

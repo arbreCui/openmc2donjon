@@ -128,8 +128,13 @@ c5g7_args=()
 if [[ "$C5G7_DONJON" -eq 0 ]]; then
   c5g7_args+=(--skip-donjon)
 fi
-OPENMC2DONJON_CAPTURE_LOG=0 RUN_DIR="$RUN_DIR/c5g7" \
-  bash "$DATA_DIR/c5g7_validation/run_acceptance.sh" "${c5g7_args[@]}"
+if [[ "${#c5g7_args[@]}" -gt 0 ]]; then
+  OPENMC2DONJON_CAPTURE_LOG=0 RUN_DIR="$RUN_DIR/c5g7" \
+    bash "$DATA_DIR/c5g7_validation/run_acceptance.sh" "${c5g7_args[@]}"
+else
+  OPENMC2DONJON_CAPTURE_LOG=0 RUN_DIR="$RUN_DIR/c5g7" \
+    bash "$DATA_DIR/c5g7_validation/run_acceptance.sh"
+fi
 
 echo
 echo "OpenMC-to-DONJON top-level acceptance: PASS"
