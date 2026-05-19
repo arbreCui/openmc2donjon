@@ -26,11 +26,14 @@ openmc2donjon-from-openmc \
   --recipe export_recipe.py \
   --statepoint statepoint.120.h5 \
   --keep-hdf5 mgxs_library.h5 \
-  -o out.mcompo.txt
+  -o out.mcompo.txt \
+  --summary-json run_summary.json
 ```
 
 Omit `--keep-hdf5` to use a temporary HDF5 handoff file. Keep it during
-debugging or for reproducible handoff records.
+debugging or for reproducible handoff records. `--summary-json` writes a small
+manifest with recipe, statepoint, HDF5, output, group count, Legendre order, and
+mixture names.
 
 For a small workflow check before using a real OpenMC model:
 

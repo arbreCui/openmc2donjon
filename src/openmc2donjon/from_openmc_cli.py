@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import tempfile
 from pathlib import Path
 
@@ -97,6 +98,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="fail if --keep-hdf5 already exists",
     )
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        default=None,
+        help="write a machine-readable conversion summary JSON",
+    )
     return parser
 
 
@@ -108,14 +115,20 @@ def main(argv: list[str] | None = None) -> int:
 
     output_path = _output_path(args.output, args.format)
     if args.keep_hdf5 is not None:
-        _run_pipeline(args, args.keep_hdf5, output_path)
+        _run_pipeline(args, args.keep_hdf5, output_path, hdf5_kept=True)
     else:
         with tempfile.TemporaryDirectory(prefix="openmc2donjon_") as tmpdir:
-            _run_pipeline(args, Path(tmpdir) / "mgxs_library.h5", output_path)
+            _run_pipeline(args, Path(tmpdir) / "mgxs_library.h5", output_path, hdf5_kept=False)
     return 0
 
 
-def _run_pipeline(args: argparse.Namespace, hdf5_path: Path, output_path: Path) -> None:
+def _run_pipeline(
+    args: argparse.Namespace,
+    hdf5_path: Path,
+    output_path: Path,
+    *,
+    hdf5_kept: bool,
+) -> None:
     recipe_summary = export_openmc_statepoint_recipe(
         args.recipe,
         hdf5_path,
@@ -161,6 +174,22 @@ def _run_pipeline(args: argparse.Namespace, hdf5_path: Path, output_path: Path) 
     if args.keep_hdf5 is not None:
         print(f"kept HDF5: {hdf5_path}")
     print(f"wrote {args.format}: {output_path}")
+    if args.summary_json is not None:
+        summary = _summary_payload(
+            args,
+            recipe_path=recipe_summary.recipe_path,
+            statepoint_path=recipe_summary.statepoint_path,
+            hdf5_path=hdf5_path,
+            hdf5_kept=hdf5_kept,
+            output_path=output_path,
+            mixture_names=[history.name for history in histories],
+            nstates=nstates,
+            burnup_values=burnup_values,
+            energy_groups=export_summary.energy_groups,
+            legendre_order=export_summary.legendre_order,
+        )
+        _write_json(args.summary_json, summary)
+        print(f"wrote summary: {args.summary_json}")
 
 
 def _output_path(raw_output: str | None, output_format: str) -> Path:
@@ -169,6 +198,58 @@ def _output_path(raw_output: str | None, output_format: str) -> Path:
     if output_format == "macrolib":
         return Path("out.macrolib.txt")
     return Path("out.mcompo.txt")
+
+
+def _summary_payload(
+    args: argparse.Namespace,
+    *,
+    recipe_path: Path,
+    statepoint_path: Path | None,
+    hdf5_path: Path,
+    hdf5_kept: bool,
+    output_path: Path,
+    mixture_names: list[str],
+    nstates: int,
+    burnup_values,
+    energy_groups: int,
+    legendre_order: int,
+) -> dict[str, object]:
+    burnup_summary: dict[str, object] = {"present": burnup_values is not None}
+    if burnup_values is not None:
+        values = [float(value) for value in burnup_values]
+        burnup_summary.update(
+            {
+                "count": len(values),
+                "values": values,
+            }
+        )
+
+    return {
+        "schema": "openmc2donjon.from-openmc-summary.v1",
+        "package_version": __version__,
+        "recipe": str(recipe_path),
+        "statepoint": None if statepoint_path is None else str(statepoint_path),
+        "loaded_statepoint": not args.no_load_statepoint,
+        "hdf5": str(hdf5_path),
+        "hdf5_kept": hdf5_kept,
+        "output": str(output_path),
+        "format": args.format,
+        "energy_groups": energy_groups,
+        "legendre_order": legendre_order,
+        "mixture_count": len(mixture_names),
+        "mixture_names": mixture_names,
+        "state_points": nstates,
+        "burnup_axis": burnup_summary,
+        "selected_mixtures": args.mixture or None,
+        "root_name": args.root_name if args.format == "multicompo" else None,
+        "single_point_burnup": args.burnup,
+        "h_factor_default": args.h_factor_default,
+    }
+
+
+def _write_json(path: Path, payload: dict[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

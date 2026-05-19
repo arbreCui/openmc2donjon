@@ -25,6 +25,7 @@ MCO="$RUN_DIR/minimal_recipe.mcompo.txt"
 MAC="$RUN_DIR/minimal_recipe.macrolib.txt"
 ONE_STEP_H5="$RUN_DIR/one_step_mgxs.h5"
 ONE_STEP_MCO="$RUN_DIR/one_step.mcompo.txt"
+ONE_STEP_SUMMARY="$RUN_DIR/one_step_summary.json"
 
 echo "== openmc2donjon recipe export smoke =="
 echo "repo: $REPO_ROOT"
@@ -61,9 +62,11 @@ echo "== One-step from OpenMC recipe =="
   --recipe "$RECIPE" \
   --statepoint "$STATEPOINT" \
   --keep-hdf5 "$ONE_STEP_H5" \
-  -o "$ONE_STEP_MCO"
+  -o "$ONE_STEP_MCO" \
+  --summary-json "$ONE_STEP_SUMMARY"
 
-"$PYTHON_BIN" - "$MGXS" "$MCO" "$MAC" "$STATEPOINT" "$ONE_STEP_H5" "$ONE_STEP_MCO" <<'PY'
+"$PYTHON_BIN" - "$MGXS" "$MCO" "$MAC" "$STATEPOINT" "$ONE_STEP_H5" "$ONE_STEP_MCO" "$ONE_STEP_SUMMARY" <<'PY'
+import json
 from pathlib import Path
 import sys
 
@@ -76,6 +79,7 @@ mac = Path(sys.argv[3])
 statepoint = str(Path(sys.argv[4]))
 one_step_h5 = Path(sys.argv[5])
 one_step_mco = Path(sys.argv[6])
+summary = Path(sys.argv[7])
 
 for path in (mgxs, one_step_h5):
     with h5py.File(path, "r") as h5:
@@ -93,6 +97,13 @@ for path in (mco, mac, one_step_mco):
     if names[:1] != ["SIGNATURE"]:
         raise SystemExit(f"{path}: invalid LCM ASCII output")
     print(f"readback {path.name}: blocks={len(blocks)} first={names[:6]}")
+
+payload = json.loads(summary.read_text(encoding="utf-8"))
+if payload["mixture_names"] != ["FUEL_A", "MOD_A"]:
+    raise SystemExit("unexpected summary mixture names")
+if payload["hdf5"] != str(one_step_h5) or payload["output"] != str(one_step_mco):
+    raise SystemExit("summary paths do not match one-step outputs")
+print(f"summary {summary.name}: schema={payload['schema']} mixtures={payload['mixture_count']}")
 PY
 
 echo

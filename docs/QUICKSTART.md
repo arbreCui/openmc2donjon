@@ -52,7 +52,8 @@ openmc2donjon-from-openmc \
   --recipe export_recipe.py \
   --statepoint statepoint.120.h5 \
   --keep-hdf5 mgxs_library.h5 \
-  -o out.mcompo.txt
+  -o out.mcompo.txt \
+  --summary-json run_summary.json
 ```
 
 For root `L_MACROLIB` output:
@@ -62,7 +63,8 @@ openmc2donjon-from-openmc \
   --recipe export_recipe.py \
   --statepoint statepoint.120.h5 \
   --format macrolib \
-  -o out.macrolib.txt
+  -o out.macrolib.txt \
+  --summary-json run_summary.json
 ```
 
 ## Two-Step Workflow

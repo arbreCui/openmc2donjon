@@ -158,7 +158,8 @@ openmc2donjon-from-openmc \
   --recipe export_recipe.py \
   --statepoint statepoint.120.h5 \
   --keep-hdf5 mgxs_library.h5 \
-  -o out.mcompo.txt
+  -o out.mcompo.txt \
+  --summary-json run_summary.json
 ```
 
 If you already have an OpenMC `mgxs.Library` object in Python, export the
