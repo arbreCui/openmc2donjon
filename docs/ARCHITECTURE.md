@@ -7,7 +7,7 @@ handoff file into DRAGON/DONJON LCM ASCII without linking against DRAGON/PyGan.
 
 ```text
 OpenMC MGXS domains
-  -> HDF5 input contract
+  -> exporter or user-written HDF5 input contract
   -> openmc2donjon CLI
   -> L_MULTICOMPO or L_MACROLIB
   -> DONJON geometry mixture map
@@ -25,9 +25,11 @@ one OpenMC MGXS domain -> one cross-section set -> one DONJON mixture
 | --- | --- |
 | `openmc2donjon.lcm_ascii` | Ordered LCM ASCII reader/writer for block-level serialization. |
 | `openmc2donjon.scatter` | Dense Legendre scattering arrays to DRAGON sparse `NJJS/IJJS/SCAT` triplets, and reverse conversion for tests. |
+| `openmc2donjon.export_openmc_mgxs` | Duck-typed OpenMC `mgxs.Library` exporter for the HDF5 input contract. |
 | `openmc2donjon.multicompo` | `L_MULTICOMPO` container writer for one-state spatial-domain MGXS data. |
 | `openmc2donjon.macrolib` | root `L_MACROLIB` writer for direct DONJON ingestion. |
 | `openmc2donjon.cli` | HDF5 reader, preflight options, and command-line output selection. |
+| `openmc2donjon.export_cli` | Helper CLI for pickled OpenMC MGXS library exports. |
 
 ## Example And Validation Layer
 

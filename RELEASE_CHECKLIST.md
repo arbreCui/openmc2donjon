@@ -6,6 +6,8 @@ This checklist covers the current `0.1.0` internal handoff state.
 
 - [x] `L_MULTICOMPO` ASCII writer for one-state OpenMC MGXS libraries.
 - [x] Root `L_MACROLIB` ASCII writer for direct DONJON solves.
+- [x] Duck-typed OpenMC `mgxs.Library` exporter for the documented HDF5 input
+  contract.
 - [x] DRAGON/DONJON scatter triplet conversion with contiguous descending
   incoming-group spans.
 - [x] Multiple Legendre moments from `[moment, G_in, G_out]` or OpenMC-style
@@ -30,6 +32,8 @@ Run CLI help and version:
 ```sh
 PYTHONPATH=src python -m openmc2donjon.cli --help
 PYTHONPATH=src python -m openmc2donjon.cli --version
+PYTHONPATH=src python -m openmc2donjon.export_cli --help
+PYTHONPATH=src python -m openmc2donjon.export_cli --version
 ```
 
 Run the portable C5G7 demo:

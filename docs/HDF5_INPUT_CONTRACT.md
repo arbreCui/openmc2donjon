@@ -4,6 +4,18 @@
 not required to be an OpenMC statepoint; it is a deliberately small handoff
 format with one group structure and one or more spatial MGXS domains.
 
+The package includes a duck-typed OpenMC exporter for this contract:
+
+```python
+from openmc2donjon import export_openmc_mgxs_library
+
+export_openmc_mgxs_library(library, "mgxs_library.h5")
+```
+
+It expects an OpenMC `mgxs.Library`-like object with `energy_groups`, `domains`,
+and `get_mgxs(domain, mgxs_type)`. It writes one HDF5 mixture group per OpenMC
+MGXS domain.
+
 ## Domain Rule
 
 The mapping is spatial:
@@ -79,6 +91,8 @@ Recommended mixture attributes:
 | --- | --- | --- |
 | `fissionable` | bool | source-domain hint |
 | `scatter_format` | string | normally `legendre` |
+| `scatter_axes` | string | normally `moment,from,to` |
+| `volume` | float | spatial-domain volume |
 
 ## Optional Mixture Items
 

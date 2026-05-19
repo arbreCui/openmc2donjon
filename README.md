@@ -77,6 +77,35 @@ openmc2donjon mgxs_library.h5 -o out.mcompo.txt
 openmc2donjon --format macrolib mgxs_library.h5 -o out.macrolib.txt
 ```
 
+## OpenMC MGXS Export
+
+If you already have an OpenMC `mgxs.Library` object in Python, export the
+converter-facing HDF5 directly:
+
+```python
+from openmc2donjon import export_openmc_mgxs_library
+
+export_openmc_mgxs_library(library, "mgxs_library.h5")
+```
+
+The exporter keeps the spatial domain map intact: each OpenMC MGXS domain is
+written as one `/mixtures/<domain_name>` group. Stable names can be supplied
+with domain objects, ids, or names:
+
+```python
+export_openmc_mgxs_library(
+    library,
+    "mgxs_library.h5",
+    domain_names={101: "ASM_Y01_X01"},
+)
+```
+
+For a pickled library object, the helper CLI is:
+
+```sh
+openmc2donjon-export library.pkl -o mgxs_library.h5
+```
+
 ## C5G7 Demo
 
 Run the portable converter-side C5G7 demo from the repository snapshot:
