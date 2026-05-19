@@ -13,6 +13,24 @@ Current validation status:
 - Hex-domain support exists as converter/modeling capability.
 - A suitable accepted hex benchmark is still future work.
 
+## Spatial Domain Mapping
+
+The production mapping is spatial, not material-collapsed:
+
+- one OpenMC MGXS domain produces one homogenized cross-section set;
+- one homogenized cross-section set is written as one DONJON mixture;
+- the DONJON geometry places that mixture back at the same spatial position.
+
+For assembly-wise work, this means each assembly or component position has its
+own OpenMC-derived cross sections. Two components with the same material type
+are still kept as separate mixtures if they occupy different positions, because
+their spectra, leakage, and neighbor effects can differ.
+
+For 3D work, the same rule applies to the chosen spatial partition. For example,
+`assembly position + axial layer` becomes one OpenMC MGXS domain and therefore
+one DONJON mixture. If an assembly is split into ten axial layers, it produces
+ten cross-section sets.
+
 ## Install
 
 From a source checkout:
@@ -50,7 +68,7 @@ Useful entry points:
 ## Current Scope
 
 - One calculation per mixture by default.
-- One DONJON mixture per OpenMC MGXS domain.
+- One DONJON mixture per OpenMC MGXS domain, preserving the spatial domain map.
 - OpenMC group order is preserved; `ENERGY` is written as reversed energy
   bounds for DRAGON/DONJON.
 - Scattering is written as DRAGON `NJJS/IJJS/SCAT` triplets with contiguous

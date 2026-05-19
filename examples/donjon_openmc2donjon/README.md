@@ -9,6 +9,17 @@ Current validation scope:
 - Hex support has been implemented at the capability/prototype level.
 - No suitable accepted hex benchmark is kept in this workspace yet.
 
+Spatial mapping:
+
+- one OpenMC MGXS domain produces one homogenized cross-section set;
+- one cross-section set is written as one DONJON mixture;
+- the DONJON input places that mixture back at the corresponding component or
+  assembly position.
+
+The accepted C5G7 path is assembly-wise. Components are not merged just because
+they share a material label; different positions keep different mixtures so the
+OpenMC spatial and environment effects are retained.
+
 Main entries:
 
 - `c5g7_validation/` - C5G7 validation decks, summary script, and acceptance runner.
