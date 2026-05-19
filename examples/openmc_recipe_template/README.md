@@ -88,8 +88,7 @@ openmc2donjon-from-openmc \
 ## Check The HDF5 Handoff
 
 ```sh
-python /path/to/openmc2donjon/examples/donjon_openmc2donjon/validate_mgxs_input_contract.py \
-  mgxs_library.h5 --check
+openmc2donjon check mgxs_library.h5
 ```
 
 Keep `mgxs_library.h5`, `out.mcompo.txt`, and `run_summary.json` together when

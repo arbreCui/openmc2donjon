@@ -50,7 +50,7 @@ echo "== Recipe export =="
 
 echo
 echo "== HDF5 preflight =="
-"$PYTHON_BIN" "$REPO_ROOT/examples/donjon_openmc2donjon/validate_mgxs_input_contract.py" \
+"$PYTHON_BIN" -m openmc2donjon.cli check \
   "$MGXS" \
   --require-volume \
   --require-transport-dataset \

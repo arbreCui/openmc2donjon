@@ -29,6 +29,7 @@ one OpenMC MGXS domain -> one cross-section set -> one DONJON mixture
 | `openmc2donjon.openmc_statepoint` | Recipe runner that builds a user OpenMC MGXS library, loads a statepoint, and exports the HDF5 handoff. |
 | `openmc2donjon.multicompo` | `L_MULTICOMPO` container writer for one-state spatial-domain MGXS data, with experimental `BURN`-axis histories. |
 | `openmc2donjon.macrolib` | root `L_MACROLIB` writer for direct DONJON ingestion. |
+| `openmc2donjon.mgxs_input_contract` | Packaged HDF5 input-contract preflight used by `openmc2donjon check`. |
 | `openmc2donjon.cli` | HDF5 reader, preflight options, and command-line output selection. |
 | `openmc2donjon.export_cli` | Export CLI for recipe/statepoint workflows and pickled MGXS library fixtures. |
 | `openmc2donjon.from_openmc_cli` | One-step recipe/statepoint export plus DONJON ASCII conversion. |

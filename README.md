@@ -52,8 +52,7 @@ bash scripts/release_check.sh --run-donjon
 HDF5 input preflight:
 
 ```sh
-PYTHONPATH=src python examples/donjon_openmc2donjon/validate_mgxs_input_contract.py \
-  mgxs_library.h5 --check
+openmc2donjon check mgxs_library.h5
 ```
 
 ## Data Flow

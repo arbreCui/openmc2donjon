@@ -1,27 +1,13 @@
 from __future__ import annotations
 
-import importlib.util
 from pathlib import Path
-import sys
 import tempfile
 import unittest
 
 import h5py
 import numpy as np
 
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-VALIDATOR_PATH = (
-    REPO_ROOT
-    / "examples"
-    / "donjon_openmc2donjon"
-    / "validate_mgxs_input_contract.py"
-)
-spec = importlib.util.spec_from_file_location("validate_mgxs_input_contract", VALIDATOR_PATH)
-assert spec is not None and spec.loader is not None
-validator = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = validator
-spec.loader.exec_module(validator)
+from openmc2donjon import mgxs_input_contract as validator
 
 
 class MgxsInputContractTests(unittest.TestCase):

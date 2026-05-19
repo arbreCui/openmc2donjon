@@ -264,7 +264,14 @@ Experimental burnup-axis variant:
 
 ## Preflight Checks
 
-The helper wrapper can enforce the contract before writing:
+The packaged CLI can enforce the contract before writing:
+
+```sh
+openmc2donjon check mgxs_library.h5
+```
+
+The legacy helper wrapper still combines preflight and conversion for the
+accepted C5G7 handoff checks:
 
 ```sh
 PYTHONPATH=src python examples/donjon_openmc2donjon/convert_mgxs_with_preflight.py \
@@ -280,7 +287,5 @@ For experimental multi-state files, the same preflight path reports the detected
 state count and `BURN` axis:
 
 ```sh
-PYTHONPATH=src python examples/donjon_openmc2donjon/validate_mgxs_input_contract.py \
-  /path/to/multistate_mgxs.h5 \
-  --check
+openmc2donjon check /path/to/multistate_mgxs.h5
 ```

@@ -89,8 +89,7 @@ openmc2donjon mgxs_library.h5 -o out.mcompo.txt
 Run preflight on the HDF5:
 
 ```sh
-python examples/donjon_openmc2donjon/validate_mgxs_input_contract.py \
-  mgxs_library.h5 --check
+openmc2donjon check mgxs_library.h5
 ```
 
 ## C5G7 Accepted Check
