@@ -1,0 +1,62 @@
+*----
+*  End-to-end D2P smoke:
+*  OpenMC single-mixture MULTICOMPO with BURN + ADF + H-FACTOR -> NCR -> D2P PHASE 2/3.
+*  The H-FACTOR values in m1hf.mco are constant placeholders.
+*----
+
+MODULE UTL: D2P: NCR: DELETE: END: ;
+LINKED_LIST INFO XSL Micro ;
+
+SEQ_ASCII XSL_ASC :: FILE '/Users/wen/dragon-5.1/Donjon/data/openmc2donjon/m1hf.mco' ;
+SEQ_ASCII D2PPROC :: FILE '/Users/wen/dragon-5.1/Donjon/data/openmc2donjon/d2pafp.x2m' ;
+SEQ_ASCII GENPMAXS :: FILE '/Users/wen/dragon-5.1/Donjon/data/openmc2donjon/d2paf.inp' ;
+SEQ_ASCII HELIOS :: FILE '/Users/wen/dragon-5.1/Donjon/data/openmc2donjon/d2paf.dra' ;
+
+INFO := UTL: :: CREA SIGNATURE 3 = 'L_IN' 'FO  ' ' ' ;
+XSL := XSL_ASC ;
+
+D2PPROC INFO := D2P: INFO XSL ::
+  PHASE 1 EDIT 3
+  NAMDIR CPO
+  MIX 1
+  TEMP K
+  ADF DRA 1 'FD_YMAX'
+  FUEL
+    BARR USER 1 ENDBARR
+    GRID SAP
+  HELIOS
+    FILE_CONT_1 3 3 1 1.0 0.0
+    FILE_CONT_4 21.42 0.0 0.0
+    XS_CONT 1 0 4.58816406E+02
+  GENPMAXS
+    JOB_OPT T F F F F F F F F F F F F F
+    DERIVATIVE F
+    COMMENT 'C5G7 OPENMC2DONJON HFACTOR ADF SMOKE'
+    IUPS 0
+  PROC
+    MEMO
+  ;
+
+Micro := NCR: XSL ::
+  EDIT 3
+  MICRO LINEAR NMIX 1
+  COMPO XSL CPO
+  MIX 1
+    SET LINEAR 'BURN' 0.0
+  ENDMIX
+  ;
+
+HELIOS GENPMAXS INFO Micro := D2P:
+  Micro INFO XSL ::
+  PHASE 2 EDIT 3
+  ;
+
+Micro := DELETE: Micro ;
+
+HELIOS GENPMAXS INFO := D2P:
+  INFO GENPMAXS HELIOS ::
+  PHASE 3 EDIT 3
+  ;
+
+ECHO "c5g7_d2p_adf_hfac_smoke_phase123 completed" ;
+END: ;

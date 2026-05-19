@@ -1,0 +1,24 @@
+*----
+*  Smoke test for NCR consumption of OpenMC -> DONJON L_MULTICOMPO.
+*----
+MODULE NCR: UTL: END: ABORT: ;
+LINKED_LIST CPO MACRO1 ;
+SEQ_ASCII CPO_ASC :: FILE '/Users/wen/dragon-5.1/Donjon/data/openmc2donjon/c5g7_ingest.mcompo.txt' ;
+
+CPO := CPO_ASC ;
+
+MACRO1 := NCR: CPO :: EDIT 1 MACRO NMIX 7
+  COMPO CPO CPO
+  MIX 1 USE ENDMIX
+  MIX 2 USE ENDMIX
+  MIX 3 USE ENDMIX
+  MIX 4 USE ENDMIX
+  MIX 5 USE ENDMIX
+  MIX 6 USE ENDMIX
+  MIX 7 USE ENDMIX
+;
+
+UTL: MACRO1 :: IMPR STATE-VECTOR * DUMP ;
+
+ECHO "openmc2donjon_ncr_smoke completed" ;
+END: ;

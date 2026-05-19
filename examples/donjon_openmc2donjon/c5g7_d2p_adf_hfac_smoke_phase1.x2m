@@ -1,0 +1,38 @@
+*----
+*  Smoke test for D2P ADF recovery setup with explicit H-FACTOR fallback:
+*  OpenMC MULTICOMPO with MACROLIB/ADF + H-FACTOR -> D2P PHASE 1.
+*----
+
+MODULE UTL: D2P: END: ;
+LINKED_LIST INFO XSL ;
+
+SEQ_ASCII XSL_ASC :: FILE '/Users/wen/dragon-5.1/Donjon/data/openmc2donjon/m1hf.mco' ;
+SEQ_ASCII D2PPROC :: FILE '/Users/wen/dragon-5.1/Donjon/data/openmc2donjon/d2pafp.x2m' ;
+
+INFO := UTL: :: CREA SIGNATURE 3 = 'L_IN' 'FO  ' ' ' ;
+XSL := XSL_ASC ;
+
+D2PPROC INFO := D2P: INFO XSL ::
+  PHASE 1 EDIT 3
+  NAMDIR CPO
+  MIX 1
+  TEMP K
+  ADF DRA 1 'FD_YMAX'
+  FUEL
+    BARR USER 1 ENDBARR
+    GRID SAP
+  HELIOS
+    FILE_CONT_1 3 3 1 1.0 0.0
+    FILE_CONT_4 21.42 0.0 0.0
+    XS_CONT 1 0 4.58816406E+02
+  GENPMAXS
+    JOB_OPT T F F F F F F F F F F F F F
+    DERIVATIVE F
+    COMMENT 'C5G7 OPENMC2DONJON HFACTOR ADF SMOKE'
+    IUPS 0
+  PROC
+    MEMO
+  ;
+
+ECHO "c5g7_d2p_adf_hfac_smoke_phase1 completed" ;
+END: ;

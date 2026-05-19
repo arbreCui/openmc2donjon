@@ -1,0 +1,61 @@
+# openmc2donjon Release Checklist
+
+This checklist covers the current `0.1.0` internal handoff state.
+
+## Package Scope
+
+- [x] `L_MULTICOMPO` ASCII writer for one-state OpenMC MGXS libraries.
+- [x] Root `L_MACROLIB` ASCII writer for direct DONJON solves.
+- [x] DRAGON/DONJON scatter triplet conversion with contiguous descending
+  incoming-group spans.
+- [x] Multiple Legendre moments from `[moment, G_in, G_out]` or OpenMC-style
+  `[G_in, G_out, moment]` input.
+- [x] Transport correction fields through `transport_total` or P1-derived
+  `STRD`.
+- [x] Optional `H-FACTOR`, `OVERV`, ADF/HADF, single-mixture filtering, and
+  single-point `BURN` axis helpers.
+
+## Required Smoke Commands
+
+Run unit tests:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 \
+PYTHONPATH=src \
+  python -m pytest -q -o cache_dir=/private/tmp/openmc2donjon_pytest_cache tests
+```
+
+Run CLI help and version:
+
+```sh
+PYTHONPATH=src python -m openmc2donjon.cli --help
+PYTHONPATH=src python -m openmc2donjon.cli --version
+```
+
+Run the DONJON-side C5G7 acceptance from a full local DRAGON/DONJON checkout:
+
+```sh
+bash examples/donjon_openmc2donjon/run_acceptance.sh
+```
+
+## Validation Records
+
+- [x] C5G7 accepted validation:
+  `examples/donjon_openmc2donjon/c5g7_validation/C5G7_VALIDATION_CHARTER.md`
+- [x] Accepted artifact manifest:
+  `examples/donjon_openmc2donjon/ACCEPTED_ARTIFACTS.md`
+- [x] Accepted baseline manifest:
+  `examples/donjon_openmc2donjon/accepted_baseline_manifest.json`
+
+## Known Limits
+
+- [ ] Multiple state points are not implemented.
+- [ ] Hex support is implemented as capability work, but no accepted hex
+  benchmark is included yet.
+- [ ] Full-core production use should keep validating against the local
+  DONJON-side handoff workspace before promotion.
+
+## Release Decision
+
+The package is ready for internal handoff when the package tests pass and the
+C5G7 DONJON-side acceptance remains green.

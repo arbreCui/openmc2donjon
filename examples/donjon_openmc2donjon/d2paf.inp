@@ -1,0 +1,28 @@
+ %JOB_TIT
+"D2P.PMAXS       " F 3.0 "C5G7 OPENMC2DONJON HFACTOR ADF SMOKE    "
+ %JOB_OPT
+T       F       F       F   0 3 
+!ad,xe,de,j1,ch,Xd,iv,dt,yl,cd,gf,be,lb,dc,ups
+ %DAT_SRC
+ 2  1  1 1.0 1.0
+ %STA_VAR
+ 1
+CR  
+ %HISTORY
+1 1
+HIST01     0.00000
+ %BRANCH
+   1 1
+HISTBA0001       0.00000
+%BURNUP
+1
+set1    1
+      0.000
+HIST01    1*1
+%HEL_FMT
+1
+1 24 12 8
+%FIL_CNT
+1   HELIOS.dra        1   1
+   1 1    1 1  1
+%JOB_END

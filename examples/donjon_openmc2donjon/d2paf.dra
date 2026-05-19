@@ -1,0 +1,246 @@
+ <<< DRAGON >>> Version: 5.0.0 <<< DRAGON >>>
+ Pre-processing for PMAXS Generation
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ <<< DRAGON >>> Version: 5.0.0 <<< DRAGON >>>
+ DRAGON CALCULATION BY J.TAFOREAU
+ HELIOS Cases Used:
+
+         1) IMP-operator name : kkk
+         DRAGON case       : kkk
+         Title(s)      1   : kkk
+
+ List name       : PMAX_FILE_DATA
+ Labels Array    : KINF
+ List Title(s)  1) ===========================
+                2) %FILE_CONT 1
+                3) ===========================
+                4) Meaning : NGROUP, NCOLS, NROWS, PART,
+                   HM Density, Bypass Density 
+
+ (R) Area/Face names     :   unlabeled
+ (I) Isotope Identifiers :   unlabeled
+ (E) Path (STATE) idents : *            
+ (G) Group name          :   unlabeled
+ (O) Originating Group   :   unlabeled
+
+                           NGROUP         NCOLS         NROWS          PART         DenHM        DenByp
+      Label E            .-.-E-.-.   .-.-E-.-.   .-.-E-.-.   .-.-E-.-.   1-.-E-.-.   .-.-E-.-.
+   1 HST  1 HST :      0           7           3           3           1     1.00000     0.00000
+
+
+ List name       : PMAX_FILE_DATA
+ Labels Array    : KINF
+ List Title(s)  1) ===========================
+                2) %FILE_CONT 3
+                3) ===========================
+                4)Meaning : Regions Volume
+
+ (R) Area/Face names     :   unlabeled
+ (I) Isotope Identifiers :   unlabeled
+ (E) Path (STATE) idents : *            
+ (G) Group name          :   unlabeled
+ (O) Originating Group   :   unlabeled
+
+                           VCool  VWatR         VModr         VCnRd         VFuel         VClad         VChan
+      Label E            1-.-E-.-.   .-.-E-.-.   1-.-E-.-.   1-.-E-.-.   1-.-E-.-.   1-.-E-.-.   1-.-E-.-.
+   1 HST  1 HST :      0 2.49210E+02 2.49210E+02 2.49210E+02 2.30200E+01 1.44070E+02 4.50990E+01 4.50990E+01
+
+ List name       : PMAX_FILE_DATA
+ Labels Array    : KINF
+ List Title(s)  1) ===========================
+                2) %FILE_CONT 4
+                3) ===========================
+                4) Cell Pitch and X,Y Pos of First Cell
+
+ (R) Area/Face names     :   unlabeled
+ (I) Isotope Identifiers :   unlabeled
+ (E) Path (STATE) idents : *            
+ (G) Group name          :   unlabeled
+ (O) Originating Group   :   unlabeled
+
+                        PITCH           XBE           YBE
+      Label E            .-.-E-.-.     .-.-E-.-.     .-.-E-.-.
+   1 HST  1 HST :      0 2.14200E+01 0.00000E+00 0.00000E+00
+
+ List name       : PMAX_FILE_DATA
+ Labels Array    : KINF
+ List Title(s)  1) ===========================
+                2) %STAT_xxxx
+                3) ===========================
+                4)%XS_CONT
+                5)Meaning : NBN,NSIDE,NCORNER,VFCM
+
+ (R) Area/Face names     :   unlabeled
+ (I) Isotope Identifiers :   unlabeled
+ (E) Path (STATE) idents : *            
+ (G) Group name          :   unlabeled
+ (O) Originating Group   :   unlabeled
+
+                                    NBN         NSIDE       NCORNER          VFCM
+      Label E            .-.-E-.-.   .-.-E-.-.   .-.-E-.-.   1-.-E-.-.
+   1 BA   1 BA   1:    0           1           1           0 4.58816E+02
+ <<< DRAGON >>> Version: 5.0.0 <<< DRAGON >>>
+
+ List name       : PMAX_FILE_DATA
+ Labels Array    : KINF
+ List Title(s)  1) ===========================
+                2) %XS_STAT
+                3) ===========================
+                4)Meaning : Bunrup
+
+ (R) Area/Face names     :   unlabeled
+ (I) Isotope Identifiers :   unlabeled
+ (E) Path (STATE) idents : *            
+ (G) Group name          :   unlabeled
+ (O) Originating Group   :   unlabeled
+
+                              BURNUP
+      Label E            .-.-E-.-.
+   1 BA   1 BA   1:    0       0.000
+ <<< DRAGON >>> Version: 5.0.0 <<< DRAGON >>>
+
+ List name       : PMAX_FILE_DATA
+ Labels Array    : PrintVector
+ List Title(s)  1) %XS_PRIN %STR 
+ Meaning : (.-.-E-G-.) G-th Group STR  cross sections
+
+ (R) Area/Face names     :   unlabeled
+ (I) Isotope Identifiers :   unlabeled
+ (E) Path (STATE) idents : *            
+ (G) Group name          :   unlabeled
+ (O) Originating Group   :   unlabeled
+
+                           STR Xs     STR Xs     STR Xs     STR Xs     STR Xs     STR Xs     STR Xs
+      Label E            .-.-E-1-.   .-.-E-2-.   .-.-E-3-.   .-.-E-4-.   .-.-E-5-.   .-.-E-6-.   .-.-E-7-.
+   1 BA   1 BA   1:    0 1.67670E-01 3.62634E-01 5.17045E-01 5.53143E-01 4.86402E-01 7.79686E-01 1.55783E+00
+ <<< DRAGON >>> Version: 5.0.0 <<< DRAGON >>>
+
+ List name       : PMAX_FILE_DATA
+ Labels Array    : PrintVector
+ List Title(s)  1) %XS_PRIN %SAB 
+ Meaning : (.-.-E-G-.) G-th Group SAB  cross sections
+
+ (R) Area/Face names     :   unlabeled
+ (I) Isotope Identifiers :   unlabeled
+ (E) Path (STATE) idents : *            
+ (G) Group name          :   unlabeled
+ (O) Originating Group   :   unlabeled
+
+                           SAB Xs     SAB Xs     SAB Xs     SAB Xs     SAB Xs     SAB Xs     SAB Xs
+      Label E            .-.-E-1-.   .-.-E-2-.   .-.-E-3-.   .-.-E-4-.   .-.-E-5-.   .-.-E-6-.   .-.-E-7-.
+   1 BA   1 BA   1:    0 4.61188E-03 2.00438E-03 1.41420E-02 5.01865E-02 1.82735E-02 6.34747E-02 1.52833E-01
+ <<< DRAGON >>> Version: 5.0.0 <<< DRAGON >>>
+
+ List name       : PMAX_FILE_DATA
+ Labels Array    : PrintVector
+ List Title(s)  1) %XS_PRIN %SNF 
+ Meaning : (.-.-E-G-.) G-th Group SNF  cross sections
+
+ (R) Area/Face names     :   unlabeled
+ (I) Isotope Identifiers :   unlabeled
+ (E) Path (STATE) idents : *            
+ (G) Group name          :   unlabeled
+ (O) Originating Group   :   unlabeled
+
+                           SNF Xs     SNF Xs     SNF Xs     SNF Xs     SNF Xs     SNF Xs     SNF Xs
+      Label E            .-.-E-1-.   .-.-E-2-.   .-.-E-3-.   .-.-E-4-.   .-.-E-5-.   .-.-E-6-.   .-.-E-7-.
+   1 BA   1 BA   1:    0 1.08498E-02 1.08739E-03 8.20368E-03 2.31363E-02 2.25914E-02 1.02459E-01 2.49572E-01
+ <<< DRAGON >>> Version: 5.0.0 <<< DRAGON >>>
+
+ List name       : PMAX_FILE_DATA
+ Labels Array    : PrintVector
+ List Title(s)  1) %XS_PRIN %SKF 
+ Meaning : (.-.-E-G-.) G-th Group SKF  cross sections
+
+ (R) Area/Face names     :   unlabeled
+ (I) Isotope Identifiers :   unlabeled
+ (E) Path (STATE) idents : *            
+ (G) Group name          :   unlabeled
+ (O) Originating Group   :   unlabeled
+
+                           SKF Xs     SKF Xs     SKF Xs     SKF Xs     SKF Xs     SKF Xs     SKF Xs
+      Label E            .-.-E-1-.   .-.-E-2-.   .-.-E-3-.   .-.-E-4-.   .-.-E-5-.   .-.-E-6-.   .-.-E-7-.
+   1 BA   1 BA   1:    0 1.00000E+00 1.00000E+00 1.00000E+00 1.00000E+00 1.00000E+00 1.00000E+00 1.00000E+00
+ <<< DRAGON >>> Version: 5.0.0 <<< DRAGON >>>
+
+ List name       : PMAX_FILE_DATA
+ Labels Array    : PrintVector
+ List Title(s)  1) %XS_SCT  %SCT
+ Meaning : (.-.-E-G-O) From O to G-th Group scat
+
+ (R) Area/Face names     :   unlabeled
+ (I) Isotope Identifiers :   unlabeled
+ (E) Path (STATE) idents : *            
+ (G) Group name          :   unlabeled
+ (O) Originating Group   :   unlabeled
+
+                         ScattMatrix ScattMatrix ScattMatrix ScattMatrix ScattMatrix ScattMatrix ScattMatrix ScattMatrix                                                                                          
+      Label E            1-.-E-1-1   1-.-E-1-2   1-.-E-1-3   1-.-E-1-4   1-.-E-1-5   1-.-E-1-6   1-.-E-1-7   1-.-E-2-1                                                                                            
+   1 BA   1 BA   1:    0 9.05345E-02 0.00000E+00 0.00000E+00 0.00000E+00 0.00000E+00 0.00000E+00 0.00000E+00 7.23151E-02
+
+                         ScattMatrix ScattMatrix ScattMatrix ScattMatrix ScattMatrix ScattMatrix ScattMatrix ScattMatrix                                                                                          
+      Label E            1-.-E-2-2   1-.-E-2-3   1-.-E-2-4   1-.-E-2-5   1-.-E-2-6   1-.-E-2-7   1-.-E-3-1   1-.-E-3-2                                                                                            
+   1 BA   1 BA   1:    0 3.02737E-01 0.00000E+00 0.00000E+00 0.00000E+00 0.00000E+00 0.00000E+00 2.99020E-04 5.75126E-02
+
+                         ScattMatrix ScattMatrix ScattMatrix ScattMatrix ScattMatrix ScattMatrix ScattMatrix ScattMatrix                                                                                          
+      Label E            1-.-E-3-3   1-.-E-3-4   1-.-E-3-5   1-.-E-3-6   1-.-E-3-7   1-.-E-4-1   1-.-E-4-2   1-.-E-4-3                                                                                            
+   1 BA   1 BA   1:    0 3.91981E-01 0.00000E+00 0.00000E+00 0.00000E+00 0.00000E+00 3.90875E-07 2.72981E-04 1.02008E-01
+
+                         ScattMatrix ScattMatrix ScattMatrix ScattMatrix ScattMatrix ScattMatrix ScattMatrix ScattMatrix                                                                                          
+      Label E            1-.-E-4-4   1-.-E-4-5   1-.-E-4-6   1-.-E-4-7   1-.-E-5-1   1-.-E-5-2   1-.-E-5-3   1-.-E-5-4                                                                                            
+   1 BA   1 BA   1:    0 2.75360E-01 1.02115E-04 0.00000E+00 0.00000E+00 0.00000E+00 2.22346E-05 7.66444E-03 1.92413E-01
+
+                         ScattMatrix ScattMatrix ScattMatrix ScattMatrix ScattMatrix ScattMatrix ScattMatrix ScattMatrix                                                                                          
+      Label E            1-.-E-5-5   1-.-E-5-6   1-.-E-5-7   1-.-E-6-1   1-.-E-6-2   1-.-E-6-3   1-.-E-6-4   1-.-E-6-5                                                                                            
+   1 BA   1 BA   1:    0 2.06143E-01 1.68795E-03 0.00000E+00 0.00000E+00 2.80268E-06 1.17968E-03 2.91771E-02 2.34643E-01
+
+                         ScattMatrix ScattMatrix ScattMatrix ScattMatrix ScattMatrix ScattMatrix ScattMatrix ScattMatrix                                                                                          
+      Label E            1-.-E-6-6   1-.-E-6-7   1-.-E-7-1   1-.-E-7-2   1-.-E-7-3   1-.-E-7-4   1-.-E-7-5   1-.-E-7-6                                                                                            
+   1 BA   1 BA   1:    0 4.58702E-01 6.83030E-02 0.00000E+00 1.86845E-07 2.15309E-04 5.51697E-03 2.70443E-02 2.55890E-01
+
+                         ScattMatrix                                                                                                                                                                              
+      Label E            1-.-E-7-7                                                                                                                                                                                
+   1 BA   1 BA   1:    0 1.33628E+00
+
+ <<< DRAGON >>> Version: 5.0.0 <<< DRAGON >>>
+
+ List name       : PMAX_FILE_DATA
+ Labels Array    : PrintVector
+ List Title(s)  1) %XS_PRIN %SDF 2
+ 2) Meaning : (F-.-E-G-.) F-Face, G-Group
+ 3)          F=1 denotes average ADF
+
+ (R) Area/Face names     :   unlabeled
+ (I) Isotope Identifiers :   unlabeled
+ (E) Path (STATE) idents : *            
+ (G) Group name          :   unlabeled
+ (O) Originating Group   :   unlabeled
+
+                              SideDF      SideDF      SideDF      SideDF      SideDF      SideDF      SideDF
+      Label E              1-.-E-1-.   1-.-E-2-.   1-.-E-3-.   1-.-E-4-.   1-.-E-5-.   1-.-E-6-.   1-.-E-7-.
+   1 BA   1 BA   1:    0     1.00280     1.03113     1.12963     1.32040     2.58179     0.20000     0.20000
+
+ <<< DRAGON >>> Version: 5.0.0 <<< DRAGON >>>
+
+                         *********************************************
+                         * Normal End,    No warning messages issued *
+                         *                                           *
+                         *   Total CPU time used =                   *
+                         *********************************************

@@ -1,0 +1,12 @@
+*----
+*  Smoke test for OpenMC -> DONJON L_MULTICOMPO ASCII ingest.
+*----
+MODULE UTL: END: ABORT: ;
+LINKED_LIST CPO ;
+SEQ_ASCII CPO_ASC :: FILE '/Users/wen/dragon-5.1/Donjon/data/openmc2donjon/c5g7_ingest.mcompo.txt' ;
+
+CPO := CPO_ASC ;
+UTL: CPO :: DUMP ;
+
+ECHO "openmc2donjon_ingest completed" ;
+END: ;

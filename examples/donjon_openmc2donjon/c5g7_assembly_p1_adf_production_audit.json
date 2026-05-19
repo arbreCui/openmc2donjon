@@ -1,0 +1,44 @@
+{
+  "bad_group_entry_count": 0,
+  "by_code": {
+    "": {
+      "bad_group_entries": 0,
+      "count": 9,
+      "negative_removal_entries": 0,
+      "zero_total_mixtures": 0
+    }
+  },
+  "by_compo": {
+    "": {
+      "bad_group_entries": 0,
+      "count": 9,
+      "negative_removal_entries": 0,
+      "zero_total_mixtures": 0
+    }
+  },
+  "by_layer": {
+    "0": {
+      "bad_group_entries": 0,
+      "count": 9,
+      "negative_removal_entries": 0,
+      "zero_total_mixtures": 0
+    }
+  },
+  "energy_groups": 7,
+  "first_bad_entries": [],
+  "first_row_balance_bad_entries": [],
+  "floor": 1e-10,
+  "input_h5": "/Users/wen/dragon-5.1/Donjon/data/openmc2donjon/c5g7_assembly_p1_adf_production.h5",
+  "mixture_count": 9,
+  "model": "mgxs-health-audit",
+  "negative_removal_entry_count": 0,
+  "nonfinite_entry_count": 0,
+  "note": "Bad group entries include non-finite totals/scatter, total below the requested floor, or total minus P0 self-scatter below the requested floor. Row-balance entries separately test total - absorption - sum(P0 scatter row), which controls whether DONJON removal is consistent with independently tallied absorption.",
+  "removal_max": 0.5838887972914173,
+  "removal_min": 0.059772594988592165,
+  "row_balance_bad_entry_count": 0,
+  "row_balance_residual_max_abs": 2.6645352591003757e-15,
+  "total_max": 2.650380000000006,
+  "total_min": 0.15920599999999988,
+  "zero_total_mixture_count": 0
+}

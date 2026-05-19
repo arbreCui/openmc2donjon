@@ -1,0 +1,43 @@
+{
+  "schema": "openmc2donjon.accepted-baseline.v2",
+  "version": "0.1.0",
+  "decision": "c5g7_assembly_wise_baseline_locked",
+  "lines": {
+    "c5g7": {
+      "status": "accepted",
+      "domain_mode": "assembly",
+      "energy_groups": 7,
+      "legendre_order": 1,
+      "adf_kind": "production",
+      "openmc_reference_keff": 1.18798,
+      "production_mgxs": "c5g7_assembly_p1_adf_production.h5",
+      "production_mco": "c5g7pa.mco",
+      "results": {
+        "diffusion": {
+          "path": "/Users/wen/dragon-5.1/Donjon/Darwin_arm64/c5g7pa_diffusion_keff.result",
+          "keff": 1.189619422
+        },
+        "spn3": {
+          "path": "/Users/wen/dragon-5.1/Donjon/Darwin_arm64/c5g7pa_spn3_keff.result",
+          "keff": 1.1912802458
+        },
+        "spn3_scat1": {
+          "path": "/Users/wen/dragon-5.1/Donjon/Darwin_arm64/c5g7pa_spn3_scat1_keff.result",
+          "keff": 1.1912822723
+        },
+        "nssf_2g_adf": {
+          "path": "/Users/wen/dragon-5.1/Donjon/Darwin_arm64/c5g7pa_2g_nssf_adf_effect.result",
+          "keff": 1.18533289
+        },
+        "nssf_2g_nodf": {
+          "path": "/Users/wen/dragon-5.1/Donjon/Darwin_arm64/c5g7pa_2g_nssf_adf_effect.result",
+          "keff": 1.20179343
+        }
+      }
+    }
+  },
+  "hex": {
+    "status": "capability_done_no_accepted_benchmark",
+    "note": "Hex-domain conversion/modeling support exists, but this workspace does not keep an accepted hex benchmark validation line yet."
+  }
+}

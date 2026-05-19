@@ -1,0 +1,55 @@
+*----
+*  C5G7 2-group assembly-wise NSSF/ANM ADF-effect smoke.
+*
+*  This deck is intentionally not the production 7-group keff target.  It uses
+*  a flux-weighted 2-group derivative of c5g7pa.mco because the current DONJON
+*  NSSF/ANM 7-group nodal relation aborts on two assembly-wise mixtures with
+*  complex local eigenmodes.  The purpose here is only to prove that the real
+*  ADF payload is active in the NSSF solve by comparing ADF vs NODF.
+*----
+MODULE GEO: NCR: NSST: NSSF: GREP: END: ABORT: ;
+LINKED_LIST CPO MACRO GEOM TRACK FLUX_ADF FLUX_NODF ;
+REAL keff_adf keff_nodf ;
+SEQ_ASCII CPO_ASC :: FILE '/private/tmp/o2dpps_20260519T120040Z/c5g7p2_fresh.mco' ;
+
+CPO := CPO_ASC ;
+MACRO := NCR: CPO :: EDIT 1 MACRO NMIX 9
+  COMPO CPO CPO
+  MIX 1 USE ENDMIX (* ASM_Y01_X01 *)
+  MIX 2 USE ENDMIX (* ASM_Y01_X02 *)
+  MIX 3 USE ENDMIX (* ASM_Y01_X03 *)
+  MIX 4 USE ENDMIX (* ASM_Y02_X01 *)
+  MIX 5 USE ENDMIX (* ASM_Y02_X02 *)
+  MIX 6 USE ENDMIX (* ASM_Y02_X03 *)
+  MIX 7 USE ENDMIX (* ASM_Y03_X01 *)
+  MIX 8 USE ENDMIX (* ASM_Y03_X02 *)
+  MIX 9 USE ENDMIX (* ASM_Y03_X03 *)
+;
+
+GEOM := GEO: :: CAR2D 3 3
+  EDIT 0
+  X- REFL X+ VOID
+  Y- REFL Y+ VOID
+  MIX
+  1 2 3
+  4 5 6
+  7 8 9
+  MESHX
+  0.00000000 21.42000000 42.84000000 64.26000000
+  MESHY
+  0.00000000 21.42000000 42.84000000 64.26000000
+;
+
+TRACK := NSST: GEOM ::
+  TITLE 'C5G7 2g OpenMC production ADF NSSF smoke'
+  EDIT 2 MAXR 109 ANM ;
+
+FLUX_ADF := NSSF: TRACK MACRO :: EDIT 1 NUPD 100 1.E-6 EXTE 700 1.E-6 LEAK quadratic ;
+GREP: FLUX_ADF :: GETVAL 'K-EFFECTIVE ' 1 >>keff_adf<< ;
+
+FLUX_NODF := NSSF: TRACK MACRO :: EDIT 1 NODF NUPD 100 1.E-6 EXTE 700 1.E-6 LEAK quadratic ;
+GREP: FLUX_NODF :: GETVAL 'K-EFFECTIVE ' 1 >>keff_nodf<< ;
+
+ECHO 'OPENMC2DONJON C5G7 2G NSSF ADF K-EFFECTIVE' keff_adf ;
+ECHO 'OPENMC2DONJON C5G7 2G NSSF NODF K-EFFECTIVE' keff_nodf ;
+END: ;

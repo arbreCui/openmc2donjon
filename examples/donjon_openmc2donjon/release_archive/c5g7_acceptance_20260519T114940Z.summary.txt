@@ -1,0 +1,13 @@
+name=c5g7_acceptance
+timestamp_utc=20260519T114940Z
+status=0
+log=/Users/wen/dragon-5.1/Donjon/data/openmc2donjon/release_archive/c5g7_acceptance_20260519T114940Z.log
+command=Donjon/data/openmc2donjon/c5g7_validation/run_acceptance.sh --skip-donjon
+run_converter=1
+run_donjon=0
+
+key_lines:
+  OpenMC reference k=1.18798
+  NODF k=1.20179343
+  ADF-NODF delta_k=-0.01646054 (-1646.1 pcm)
+C5G7 acceptance: PASS

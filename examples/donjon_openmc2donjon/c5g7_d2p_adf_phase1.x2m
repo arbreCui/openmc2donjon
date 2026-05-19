@@ -1,0 +1,38 @@
+*----
+*  Smoke test for D2P ADF recovery setup:
+*  OpenMC MULTICOMPO with MACROLIB/ADF -> D2P PHASE 1.
+*----
+
+MODULE UTL: D2P: END: ;
+LINKED_LIST INFO XSL ;
+
+SEQ_ASCII XSL_ASC :: FILE '/Users/wen/dragon-5.1/Donjon/data/openmc2donjon/c5g7b0.mco' ;
+SEQ_ASCII D2PPROC :: FILE '/Users/wen/dragon-5.1/Donjon/data/openmc2donjon/c5g7d2p_p1b.x2m' ;
+
+INFO := UTL: :: CREA SIGNATURE 3 = 'L_IN' 'FO  ' ' ' ;
+XSL := XSL_ASC ;
+
+D2PPROC INFO := D2P: INFO XSL ::
+  PHASE 1 EDIT 3
+  NAMDIR CPO
+  MIX 1
+  TEMP K
+  ADF DRA 4 'FD_YMAX' 'FD_XMAX' 'FD_YMIN' 'FD_XMIN'
+  FUEL
+    BARR USER 1 ENDBARR
+    GRID SAP
+  HELIOS
+    FILE_CONT_1 3 3 1 1.0 0.0
+    FILE_CONT_4 21.42 0.0 0.0
+    XS_CONT 4 0 4.58816406E+02
+  GENPMAXS
+    JOB_OPT T F F F F F F F F F F F F F
+    DERIVATIVE F
+    COMMENT 'C5G7 OPENMC2DONJON ADF SMOKE'
+    IUPS 0
+  PROC
+    MEMO
+  ;
+
+ECHO "c5g7_d2p_adf_phase1 completed" ;
+END: ;

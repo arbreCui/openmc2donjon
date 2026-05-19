@@ -1,0 +1,27 @@
+{
+  "schema": "openmc2donjon.handoff-case.v1",
+  "case_name": "c5g7_production_diffusion",
+  "input_h5": "c5g7_assembly_p1_adf_production.h5",
+  "format": "multicompo",
+  "output": "$RUN_DIR/outputs/c5g7pa.mco",
+  "preflight": {
+    "require_adf": true,
+    "expected_adf_faces": [
+      "FD_XMIN",
+      "FD_XMAX",
+      "FD_YMIN",
+      "FD_YMAX"
+    ],
+    "require_transport_dataset": true,
+    "require_volume": true
+  },
+  "conversion": {
+    "comment": "C5G7 production assembly-wise case runner output"
+  },
+  "donjon": {
+    "deck_template": "c5g7_validation/c5g7pa_diffusion_keff.x2m",
+    "replace_path": "c5g7pa.mco",
+    "expected_keff": 1.1896194220,
+    "keff_tolerance": 5.0e-8
+  }
+}

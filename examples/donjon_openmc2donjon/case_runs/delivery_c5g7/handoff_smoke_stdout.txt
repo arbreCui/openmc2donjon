@@ -1,0 +1,46 @@
+[0;32m[OK][0m
+OpenMC-to-DONJON handoff case
+  schema: openmc2donjon.handoff-case.v1
+  manifest: /Users/wen/dragon-5.1/Donjon/data/openmc2donjon/case_manifests/c5g7_production_diffusion.json
+  case: c5g7_production_diffusion
+  run_dir: /Users/wen/dragon-5.1/Donjon/data/openmc2donjon/case_runs/delivery_c5g7
+  run_donjon: True
+
+== Convert ==
+OpenMC-to-DONJON convert with preflight
+  schema: openmc2donjon.convert-with-preflight.v1
+  package_src: /Users/wen/openmc-workspace/openmc2donjon/src
+  input: /Users/wen/dragon-5.1/Donjon/data/openmc2donjon/c5g7_assembly_p1_adf_production.h5
+  output: /Users/wen/dragon-5.1/Donjon/data/openmc2donjon/case_runs/delivery_c5g7/outputs/c5g7pa.mco
+  format: multicompo
+
+Preflight
+  PASS  input contract
+        energy_groups=7 legendre_order=1 mixtures=9
+        transport_total=9/9 strd_ready=9/9
+        adf=9/9 faces=FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX
+
+Convert
+  PASS  wrote /Users/wen/dragon-5.1/Donjon/data/openmc2donjon/case_runs/delivery_c5g7/outputs/c5g7pa.mco
+
+Readback
+  PASS  blocks=509 first=SIGNATURE
+        signature=L_MULTICOMPO
+
+Conversion decision
+  convert_mgxs_with_preflight_passed
+output already under run archive: /Users/wen/dragon-5.1/Donjon/data/openmc2donjon/case_runs/delivery_c5g7/outputs/c5g7pa.mco
+
+== DONJON deck ==
+  template: /Users/wen/dragon-5.1/Donjon/data/openmc2donjon/c5g7_validation/c5g7pa_diffusion_keff.x2m
+  generated: /Users/wen/dragon-5.1/Donjon/data/openmc2donjon/case_runs/delivery_c5g7/decks/delivery_c5g7_c5g7pa_diffusion_keff.x2m
+  deck input: /tmp/openmc2donjon_io/cpd_e949abe4/c5g7pa.mco
+
+== DONJON ==
+  ./rdonjon -q openmc2donjon/case_runs/delivery_c5g7/decks/delivery_c5g7_c5g7pa_diffusion_keff.x2m
+  PASS  k-effective 1.189619422
+  result: /Users/wen/dragon-5.1/Donjon/Darwin_arm64/delivery_c5g7_c5g7pa_diffusion_keff.result
+
+Handoff case decision
+  handoff_case_passed
+summary: /Users/wen/dragon-5.1/Donjon/data/openmc2donjon/case_runs/delivery_c5g7/handoff_case_summary.json

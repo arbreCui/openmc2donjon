@@ -1,0 +1,37 @@
+{
+  "case_name": "c5g7_production_diffusion",
+  "decision": "handoff_case_passed",
+  "manifest": "/Users/wen/dragon-5.1/Donjon/data/openmc2donjon/case_manifests/c5g7_production_diffusion.json",
+  "run_dir": "/Users/wen/dragon-5.1/Donjon/data/openmc2donjon/case_runs/delivery_c5g7",
+  "run_donjon": true,
+  "schema": "openmc2donjon.handoff-case.v1",
+  "steps": [
+    {
+      "archive_output": "/Users/wen/dragon-5.1/Donjon/data/openmc2donjon/case_runs/delivery_c5g7/outputs/c5g7pa.mco",
+      "archived_copy": false,
+      "name": "convert",
+      "output": "/Users/wen/dragon-5.1/Donjon/data/openmc2donjon/case_runs/delivery_c5g7/outputs/c5g7pa.mco",
+      "status": "PASS"
+    },
+    {
+      "deck_input": {
+        "alias": "/tmp/openmc2donjon_io/cpd_e949abe4/c5g7pa.mco",
+        "file_literal": "/tmp/openmc2donjon_io/cpd_e949abe4/c5g7pa.mco",
+        "line_length": 75,
+        "source": "/Users/wen/dragon-5.1/Donjon/data/openmc2donjon/case_runs/delivery_c5g7/outputs/c5g7pa.mco"
+      },
+      "deck_template": "/Users/wen/dragon-5.1/Donjon/data/openmc2donjon/c5g7_validation/c5g7pa_diffusion_keff.x2m",
+      "generated_deck": "/Users/wen/dragon-5.1/Donjon/data/openmc2donjon/case_runs/delivery_c5g7/decks/delivery_c5g7_c5g7pa_diffusion_keff.x2m",
+      "name": "deck",
+      "replace_path": "/Users/wen/dragon-5.1/Donjon/data/openmc2donjon/c5g7pa.mco",
+      "status": "PASS"
+    },
+    {
+      "deck_arg": "openmc2donjon/case_runs/delivery_c5g7/decks/delivery_c5g7_c5g7pa_diffusion_keff.x2m",
+      "keff": 1.189619422,
+      "name": "donjon",
+      "result": "/Users/wen/dragon-5.1/Donjon/Darwin_arm64/delivery_c5g7_c5g7pa_diffusion_keff.result",
+      "status": "PASS"
+    }
+  ]
+}

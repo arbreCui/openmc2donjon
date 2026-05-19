@@ -1,0 +1,20 @@
+*----
+*  Smoke test for NCR carry-through with explicit H-FACTOR fallback.
+*----
+MODULE NCR: UTL: END: ;
+LINKED_LIST CPO MICRO ;
+SEQ_ASCII CPO_ASC :: FILE '/Users/wen/dragon-5.1/Donjon/data/openmc2donjon/c5g7b0_hfac1_smoke.mco' ;
+
+CPO := CPO_ASC ;
+
+MICRO := NCR: CPO :: EDIT 1 MICRO LINEAR NMIX 1
+  COMPO CPO CPO
+  MIX 1
+    SET LINEAR 'BURN' 0.0
+  ENDMIX
+  ;
+
+UTL: MICRO :: IMPR STATE-VECTOR * DUMP ;
+
+ECHO "c5g7_ncr_hfac_carrythrough completed" ;
+END: ;
