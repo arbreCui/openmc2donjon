@@ -55,8 +55,7 @@ Dry-run the full one-step conversion plan before writing artifacts:
 openmc2donjon-from-openmc \
   --recipe export_recipe.py \
   --dry-run \
-  --keep-hdf5 mgxs_library.h5 \
-  -o out.mcompo.txt \
+  --run-dir runs/case1 \
   --check
 ```
 
@@ -86,11 +85,13 @@ Then run OpenMC normally to produce a statepoint containing those MGXS tallies.
 openmc2donjon-from-openmc \
   --recipe export_recipe.py \
   --statepoint statepoint.120.h5 \
-  --keep-hdf5 mgxs_library.h5 \
-  -o out.mcompo.txt \
-  --summary-json run_summary.json \
+  --run-dir runs/case1 \
   --check
 ```
+
+The managed run directory contains `mgxs_library.h5`, `out.mcompo.txt`,
+`run_summary.json`, optional `check_summary.json`, a recipe copy, and
+`manifest.json`.
 
 For direct root `L_MACROLIB` output:
 

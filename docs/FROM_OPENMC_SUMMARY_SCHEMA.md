@@ -60,7 +60,7 @@ The schema id is stored in the top-level `schema` field.
 | `statepoint` | string or null | OpenMC statepoint path, or null when no statepoint was provided. |
 | `loaded_statepoint` | boolean | False only when `--no-load-statepoint` was used. |
 | `hdf5` | string | Intermediate MGXS HDF5 handoff path used by the conversion. |
-| `hdf5_kept` | boolean | True when `--keep-hdf5` was used. |
+| `hdf5_kept` | boolean | True when the HDF5 handoff was kept with `--keep-hdf5` or `--run-dir`. |
 | `output` | string | DONJON ASCII output path. |
 | `format` | string | `multicompo` or `macrolib`. |
 | `energy_groups` | integer | Number of energy groups exported to HDF5. |
@@ -105,7 +105,9 @@ one-step CLI.
 
 If `hdf5_kept` is false, the `hdf5` value points to a temporary handoff file
 that is deleted when `openmc2donjon-from-openmc` exits. Use `--keep-hdf5` when a
-reproducible handoff artifact is required.
+reproducible handoff artifact is required. Use `--run-dir` for the standard
+production layout; it sets `hdf5`, `output`, and summary paths inside the run
+directory and writes a separate `manifest.json`.
 
 ## Minimal Consumer Check
 

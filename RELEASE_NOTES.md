@@ -30,6 +30,8 @@
   optional recipe dry-run diagnostics.
 - Added `openmc2donjon bundle` to collect production handoff artifacts into a
   manifest-backed directory.
+- Added `openmc2donjon-from-openmc --run-dir` for standard production run
+  directories with managed outputs and a bundle manifest.
 - Extended release check so the C5G7 statepoint parity path exercises
   `openmc2donjon-from-openmc`, reads back the generated MCO, and validates the
   summary manifest.

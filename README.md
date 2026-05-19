@@ -15,7 +15,7 @@ bash scripts/run_recipe_export_smoke.sh
 openmc2donjon-from-openmc \
   --recipe export_recipe.py \
   --statepoint statepoint.120.h5 \
-  -o out.mcompo.txt \
+  --run-dir runs/case1 \
   --check
 ```
 
@@ -164,7 +164,7 @@ openmc2donjon-export --recipe export_recipe.py --no-load-statepoint --dry-run
 Check the one-command conversion plan before writing any artifacts:
 
 ```sh
-openmc2donjon-from-openmc --recipe export_recipe.py --dry-run -o out.mcompo.txt --check
+openmc2donjon-from-openmc --recipe export_recipe.py --dry-run --run-dir runs/case1 --check
 ```
 
 Convert with input-contract preflight:
@@ -186,19 +186,23 @@ For a one-command export plus conversion:
 openmc2donjon-from-openmc \
   --recipe export_recipe.py \
   --statepoint statepoint.120.h5 \
-  --keep-hdf5 mgxs_library.h5 \
-  -o out.mcompo.txt \
-  --summary-json run_summary.json
+  --run-dir runs/case1 \
+  --check
 ```
 
-Collect a run for handoff/archive:
+This writes `mgxs_library.h5`, `out.mcompo.txt`, `run_summary.json`, optional
+`check_summary.json`, and `manifest.json` in the run directory. Existing managed
+files are refused unless `--force-run-dir` is set. To add extra artifacts to a
+handoff manifest later:
 
 ```sh
 openmc2donjon bundle \
-  --output-dir handoff_bundle \
-  --mgxs mgxs_library.h5 \
-  --mcompo out.mcompo.txt \
-  --run-summary run_summary.json
+  --output-dir runs/case1 \
+  --mgxs runs/case1/mgxs_library.h5 \
+  --mcompo runs/case1/out.mcompo.txt \
+  --run-summary runs/case1/run_summary.json \
+  --extra notes=notes.txt \
+  --force
 ```
 
 The summary manifest schema is documented in

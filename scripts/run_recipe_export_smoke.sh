@@ -25,17 +25,14 @@ MGXS="$RUN_DIR/minimal_recipe_mgxs.h5"
 MCO="$RUN_DIR/minimal_recipe.mcompo.txt"
 MAC="$RUN_DIR/minimal_recipe.macrolib.txt"
 INSPECT_SUMMARY="$RUN_DIR/minimal_recipe_inspect_summary.json"
-ONE_STEP_H5="$RUN_DIR/one_step_mgxs.h5"
-ONE_STEP_MCO="$RUN_DIR/one_step.mcompo.txt"
-ONE_STEP_SUMMARY="$RUN_DIR/one_step_summary.json"
-ONE_STEP_CHECK_SUMMARY="$RUN_DIR/one_step_check_summary.json"
-ONE_STEP_DIFF_SUMMARY="$RUN_DIR/one_step_diff_summary.json"
-BUNDLE_DIR="$RUN_DIR/delivery_bundle"
-BUNDLE_MANIFEST="$BUNDLE_DIR/manifest.json"
-ONE_STEP_DRY_H5="$RUN_DIR/one_step_dry_run_$$.h5"
-ONE_STEP_DRY_MCO="$RUN_DIR/one_step_dry_run_$$.mcompo.txt"
-ONE_STEP_DRY_SUMMARY="$RUN_DIR/one_step_dry_run_$$.summary.json"
-ONE_STEP_DRY_CHECK_SUMMARY="$RUN_DIR/one_step_dry_run_$$.check_summary.json"
+ONE_STEP_RUN_DIR="$RUN_DIR/one_step_run"
+ONE_STEP_H5="$ONE_STEP_RUN_DIR/mgxs_library.h5"
+ONE_STEP_MCO="$ONE_STEP_RUN_DIR/out.mcompo.txt"
+ONE_STEP_SUMMARY="$ONE_STEP_RUN_DIR/run_summary.json"
+ONE_STEP_CHECK_SUMMARY="$ONE_STEP_RUN_DIR/check_summary.json"
+ONE_STEP_DIFF_SUMMARY="$ONE_STEP_RUN_DIR/diff_summary.json"
+BUNDLE_MANIFEST="$ONE_STEP_RUN_DIR/manifest.json"
+ONE_STEP_DRY_RUN_DIR="$RUN_DIR/one_step_dry_run_$$"
 
 echo "== openmc2donjon recipe export smoke =="
 echo "repo: $REPO_ROOT"
@@ -119,32 +116,24 @@ echo "== One-step dry-run =="
 "$PYTHON_BIN" -m openmc2donjon.from_openmc_cli \
   --recipe "$RECIPE" \
   --dry-run \
-  --keep-hdf5 "$ONE_STEP_DRY_H5" \
-  -o "$ONE_STEP_DRY_MCO" \
-  --summary-json "$ONE_STEP_DRY_SUMMARY" \
+  --run-dir "$ONE_STEP_DRY_RUN_DIR" \
   --check \
   --require-volume \
-  --require-transport-dataset \
-  --check-summary-json "$ONE_STEP_DRY_CHECK_SUMMARY"
-for path in "$ONE_STEP_DRY_H5" "$ONE_STEP_DRY_MCO" "$ONE_STEP_DRY_SUMMARY" "$ONE_STEP_DRY_CHECK_SUMMARY"; do
-  if [[ -e "$path" ]]; then
-    echo "dry-run unexpectedly wrote $path" >&2
-    exit 1
-  fi
-done
+  --require-transport-dataset
+if [[ -e "$ONE_STEP_DRY_RUN_DIR" ]]; then
+  echo "dry-run unexpectedly wrote $ONE_STEP_DRY_RUN_DIR" >&2
+  exit 1
+fi
 
 echo
-echo "== One-step from OpenMC recipe =="
+echo "== One-step managed run directory =="
 "$PYTHON_BIN" -m openmc2donjon.from_openmc_cli \
   --recipe "$RECIPE" \
   --statepoint "$STATEPOINT" \
-  --keep-hdf5 "$ONE_STEP_H5" \
-  -o "$ONE_STEP_MCO" \
-  --summary-json "$ONE_STEP_SUMMARY" \
+  --run-dir "$ONE_STEP_RUN_DIR" \
   --check \
   --require-volume \
-  --require-transport-dataset \
-  --check-summary-json "$ONE_STEP_CHECK_SUMMARY"
+  --require-transport-dataset
 
 echo
 echo "== HDF5 diff =="
@@ -152,20 +141,7 @@ echo "== HDF5 diff =="
   --summary-json "$ONE_STEP_DIFF_SUMMARY"
 
 echo
-echo "== Bundle =="
-"$PYTHON_BIN" -m openmc2donjon.cli bundle \
-  --output-dir "$BUNDLE_DIR" \
-  --mgxs "$ONE_STEP_H5" \
-  --mcompo "$ONE_STEP_MCO" \
-  --macrolib "$MAC" \
-  --run-summary "$ONE_STEP_SUMMARY" \
-  --check-summary "$ONE_STEP_CHECK_SUMMARY" \
-  --inspect-summary "$INSPECT_SUMMARY" \
-  --doctor-summary "$DOCTOR_SUMMARY" \
-  --diff-summary "$ONE_STEP_DIFF_SUMMARY" \
-  --extra "recipe=$RECIPE" \
-  --force
-
+echo "== Managed run-dir manifest =="
 "$PYTHON_BIN" - "$BUNDLE_MANIFEST" <<'PY'
 import json
 from pathlib import Path
@@ -179,12 +155,8 @@ labels = {artifact["label"]: artifact for artifact in payload["artifacts"]}
 required = {
     "mgxs",
     "mcompo",
-    "macrolib",
     "run-summary",
     "check-summary",
-    "inspect-summary",
-    "doctor-summary",
-    "diff-summary",
     "recipe",
 }
 missing = sorted(required - set(labels))
@@ -195,8 +167,8 @@ for label, artifact in labels.items():
         raise SystemExit(f"{label}: invalid sha256")
     if not Path(artifact["path"]).exists():
         raise SystemExit(f"{label}: bundled path is missing")
-if labels["diff-summary"].get("summary_decision") != "mgxs_hdf5_diff_passed":
-    raise SystemExit("bundle did not record diff decision")
+if labels["check-summary"].get("summary_decision") != "mgxs_input_contract_passed":
+    raise SystemExit("bundle did not record check decision")
 print(f"bundle {manifest_path.parent.name}: artifacts={payload['artifact_count']}")
 PY
 

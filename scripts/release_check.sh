@@ -146,27 +146,26 @@ echo "== Accepted baseline manifest =="
 echo
 echo "== C5G7 statepoint exporter parity =="
 if [[ -e "$C5G7_STATEPOINT" ]]; then
-  exported_h5="$RUN_DIR/c5g7_exporter_statepoint.h5"
-  exported_mco="$RUN_DIR/c5g7_exporter_statepoint.mcompo.txt"
-  exported_summary="$RUN_DIR/c5g7_exporter_statepoint.summary.json"
-  exported_check_summary="$RUN_DIR/c5g7_exporter_statepoint.check_summary.json"
-  exported_diff_summary="$RUN_DIR/c5g7_exporter_statepoint.diff_summary.json"
+  exported_run_dir="$RUN_DIR/c5g7_exporter_statepoint"
+  exported_h5="$exported_run_dir/mgxs_library.h5"
+  exported_mco="$exported_run_dir/out.mcompo.txt"
+  exported_summary="$exported_run_dir/run_summary.json"
+  exported_check_summary="$exported_run_dir/check_summary.json"
+  exported_diff_summary="$exported_run_dir/diff_summary.json"
+  exported_manifest="$exported_run_dir/manifest.json"
   C5G7_ADF_SOURCE="$C5G7_ACCEPTED_H5" \
   "$PYTHON_BIN" -m openmc2donjon.from_openmc_cli \
     --recipe "$REPO_ROOT/scripts/c5g7_export_recipe.py" \
     --statepoint "$C5G7_STATEPOINT" \
-    --keep-hdf5 "$exported_h5" \
-    --summary-json "$exported_summary" \
+    --run-dir "$exported_run_dir" \
     --check \
     --require-volume \
     --require-transport-dataset \
     --require-adf \
-    --expected-adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
-    --check-summary-json "$exported_check_summary" \
-    -o "$exported_mco"
+    --expected-adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX
   "$PYTHON_BIN" -m openmc2donjon.cli diff "$C5G7_ACCEPTED_H5" "$exported_h5" \
     --summary-json "$exported_diff_summary"
-  "$PYTHON_BIN" - "$exported_h5" "$exported_mco" "$exported_summary" "$exported_check_summary" "$exported_diff_summary" <<'PY'
+  "$PYTHON_BIN" - "$exported_h5" "$exported_mco" "$exported_summary" "$exported_check_summary" "$exported_diff_summary" "$exported_manifest" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -182,6 +181,7 @@ candidate_mco = Path(sys.argv[2])
 summary_path = Path(sys.argv[3])
 check_summary_path = Path(sys.argv[4])
 diff_summary_path = Path(sys.argv[5])
+manifest_path = Path(sys.argv[6])
 
 diff_summary = json.loads(diff_summary_path.read_text(encoding="utf-8"))
 if diff_summary.get("decision") != "mgxs_hdf5_diff_passed":
@@ -199,8 +199,17 @@ print(f"statepoint exporter MCO readback OK: blocks={len(blocks)} first={names[:
 
 summary = json.loads(summary_path.read_text(encoding="utf-8"))
 check_summary = json.loads(check_summary_path.read_text(encoding="utf-8"))
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 if check_summary.get("decision") != "mgxs_input_contract_passed":
     raise SystemExit(f"statepoint exporter checked conversion failed: {check_summary}")
+if manifest.get("schema") != "openmc2donjon.bundle.v1":
+    raise SystemExit(f"statepoint exporter bundle schema failed: {manifest}")
+labels = {artifact["label"]: artifact for artifact in manifest["artifacts"]}
+required_labels = {"mgxs", "mcompo", "run-summary", "check-summary", "recipe"}
+if set(labels) != required_labels:
+    raise SystemExit(f"statepoint exporter bundle labels failed: {labels}")
+if labels["check-summary"].get("summary_decision") != "mgxs_input_contract_passed":
+    raise SystemExit(f"statepoint exporter bundle check decision failed: {labels}")
 schema_errors = validate_from_openmc_summary(summary)
 if schema_errors:
     raise SystemExit("statepoint exporter summary schema failed: " + "; ".join(schema_errors))

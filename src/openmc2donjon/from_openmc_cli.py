@@ -8,6 +8,7 @@ import tempfile
 from pathlib import Path
 
 from . import __version__
+from .bundle import ArtifactSpec, bundle_artifacts
 from .from_openmc_summary import FROM_OPENMC_SUMMARY_SCHEMA
 from .macrolib import convert_mgxs_hdf5_to_macrolib
 from .mgxs_input_contract import run_preflight
@@ -74,6 +75,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="write the intermediate MGXS HDF5 to PATH instead of a temporary file",
     )
     parser.add_argument(
+        "--run-dir",
+        type=Path,
+        default=None,
+        help=(
+            "write a standard production run directory with mgxs_library.h5, "
+            "DONJON ASCII output, summary JSON, and manifest.json"
+        ),
+    )
+    parser.add_argument(
         "--root-name",
         default=DEFAULT_ROOT_NAME,
         help=f"top-level LCM directory name for MULTICOMPO output (default: {DEFAULT_ROOT_NAME})",
@@ -105,6 +115,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-overwrite-hdf5",
         action="store_true",
         help="fail if --keep-hdf5 already exists",
+    )
+    parser.add_argument(
+        "--force-run-dir",
+        action="store_true",
+        help="with --run-dir, overwrite existing managed run-directory artifacts",
     )
     parser.add_argument(
         "--summary-json",
@@ -149,6 +164,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    _apply_run_dir_defaults(args)
     if args.dry_run:
         _run_dry_run(args)
         return 0
@@ -156,6 +172,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--statepoint is required unless --no-load-statepoint is set")
 
     output_path = _output_path(args.output, args.format)
+    _prepare_run_dir(args, output_path, parser)
     if args.keep_hdf5 is not None:
         return 0 if _run_pipeline(args, args.keep_hdf5, output_path, hdf5_kept=True) else 1
     else:
@@ -290,15 +307,91 @@ def _run_pipeline(
         )
         _write_json(args.summary_json, summary)
         print(f"wrote summary: {args.summary_json}")
+    if args.run_dir is not None:
+        _write_run_dir_manifest(args, hdf5_path, output_path, recipe_summary.recipe_path)
     return True
+
+
+def _apply_run_dir_defaults(args: argparse.Namespace) -> None:
+    if args.run_dir is None:
+        return
+    run_dir = args.run_dir
+    if args.keep_hdf5 is None:
+        args.keep_hdf5 = run_dir / "mgxs_library.h5"
+    if args.output is None:
+        args.output = str(run_dir / _default_output_name(args.format))
+    if args.summary_json is None:
+        args.summary_json = run_dir / "run_summary.json"
+    if args.check and args.check_summary_json is None:
+        args.check_summary_json = run_dir / "check_summary.json"
+
+
+def _prepare_run_dir(
+    args: argparse.Namespace,
+    output_path: Path,
+    parser: argparse.ArgumentParser,
+) -> None:
+    if args.run_dir is None:
+        return
+    run_dir = args.run_dir
+    managed_paths = [
+        args.keep_hdf5,
+        output_path,
+        args.summary_json,
+        run_dir / "manifest.json",
+    ]
+    recipe_destination = run_dir / args.recipe.name
+    if not _same_path(args.recipe, recipe_destination):
+        managed_paths.append(recipe_destination)
+    if args.check:
+        managed_paths.append(args.check_summary_json)
+    existing = [path for path in managed_paths if path is not None and path.exists()]
+    if existing and not args.force_run_dir:
+        rendered = ", ".join(str(path) for path in existing)
+        parser.error(f"--run-dir managed artifacts already exist; use --force-run-dir: {rendered}")
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+
+def _same_path(left: Path, right: Path) -> bool:
+    try:
+        return left.resolve() == right.resolve()
+    except OSError:
+        return left.absolute() == right.absolute()
+
+
+def _default_output_name(output_format: str) -> str:
+    if output_format == "macrolib":
+        return "out.macrolib.txt"
+    return "out.mcompo.txt"
 
 
 def _output_path(raw_output: str | None, output_format: str) -> Path:
     if raw_output:
         return Path(raw_output)
-    if output_format == "macrolib":
-        return Path("out.macrolib.txt")
-    return Path("out.mcompo.txt")
+    return Path(_default_output_name(output_format))
+
+
+def _write_run_dir_manifest(
+    args: argparse.Namespace,
+    hdf5_path: Path,
+    output_path: Path,
+    recipe_path: Path,
+) -> None:
+    artifacts = [ArtifactSpec(label="mgxs", source=hdf5_path)]
+    if args.format == "macrolib":
+        artifacts.append(ArtifactSpec(label="macrolib", source=output_path))
+    else:
+        artifacts.append(ArtifactSpec(label="mcompo", source=output_path))
+    if args.summary_json is not None:
+        artifacts.append(ArtifactSpec(label="run-summary", source=args.summary_json))
+    if args.check and args.check_summary_json is not None:
+        artifacts.append(ArtifactSpec(label="check-summary", source=args.check_summary_json))
+    artifacts.append(ArtifactSpec(label="recipe", source=recipe_path))
+    bundle_artifacts(
+        output_dir=args.run_dir,
+        artifacts=artifacts,
+        force=True,
+    )
 
 
 def _render_optional_list(values: list[str] | None) -> str:

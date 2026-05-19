@@ -154,6 +154,127 @@ class FromOpenMCCliTests(unittest.TestCase):
         self.assertFalse(summary_exists)
         self.assertFalse(check_summary_exists)
 
+    def test_run_dir_writes_standard_artifacts_and_manifest(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        recipe = repo_root / "examples/recipe_export_smoke/minimal_recipe.py"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            statepoint = tmp / "statepoint.fake.h5"
+            run_dir = tmp / "production_run"
+            statepoint.write_text("fake statepoint\n", encoding="utf-8")
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = from_openmc_main(
+                    [
+                        "--recipe",
+                        str(recipe),
+                        "--statepoint",
+                        str(statepoint),
+                        "--run-dir",
+                        str(run_dir),
+                        "--check",
+                        "--require-volume",
+                        "--require-transport-dataset",
+                    ]
+                )
+
+            hdf5 = run_dir / "mgxs_library.h5"
+            output = run_dir / "out.mcompo.txt"
+            summary = run_dir / "run_summary.json"
+            check_summary = run_dir / "check_summary.json"
+            manifest = run_dir / "manifest.json"
+            recipe_copy = run_dir / recipe.name
+            conversion_payload = json.loads(summary.read_text(encoding="utf-8"))
+            check_payload = json.loads(check_summary.read_text(encoding="utf-8"))
+            manifest_payload = json.loads(manifest.read_text(encoding="utf-8"))
+            standard_paths_exist = [
+                path.exists()
+                for path in (hdf5, output, summary, check_summary, manifest, recipe_copy)
+            ]
+
+        self.assertEqual(rc, 0)
+        self.assertIn("OpenMC-to-DONJON bundle", stream.getvalue())
+        self.assertTrue(all(standard_paths_exist))
+        assert_from_openmc_summary(self, conversion_payload)
+        self.assertEqual(conversion_payload["hdf5"], str(hdf5))
+        self.assertTrue(conversion_payload["hdf5_kept"])
+        self.assertEqual(conversion_payload["output"], str(output))
+        self.assertTrue(conversion_payload["checked"])
+        self.assertEqual(conversion_payload["check_summary_json"], str(check_summary))
+        self.assertEqual(check_payload["decision"], "mgxs_input_contract_passed")
+        self.assertEqual(manifest_payload["schema"], "openmc2donjon.bundle.v1")
+        labels = {artifact["label"]: artifact for artifact in manifest_payload["artifacts"]}
+        self.assertEqual(set(labels), {"mgxs", "mcompo", "run-summary", "check-summary", "recipe"})
+        self.assertEqual(labels["run-summary"]["summary_schema"], FROM_OPENMC_SUMMARY_SCHEMA)
+        self.assertEqual(
+            labels["check-summary"]["summary_decision"],
+            "mgxs_input_contract_passed",
+        )
+
+    def test_run_dir_dry_run_uses_standard_paths_without_writing(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        recipe = repo_root / "examples/recipe_export_smoke/minimal_recipe.py"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            run_dir = tmp / "dry_run_dir"
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = from_openmc_main(
+                    [
+                        "--recipe",
+                        str(recipe),
+                        "--dry-run",
+                        "--run-dir",
+                        str(run_dir),
+                        "--check",
+                    ]
+                )
+
+            rendered = stream.getvalue()
+            run_dir_exists = run_dir.exists()
+
+        self.assertEqual(rc, 0)
+        self.assertIn(f"hdf5: {run_dir / 'mgxs_library.h5'} (not written)", rendered)
+        self.assertIn(f"ascii_output: {run_dir / 'out.mcompo.txt'} (not written)", rendered)
+        self.assertIn(f"summary_json: {run_dir / 'run_summary.json'} (not written)", rendered)
+        self.assertIn(
+            f"check_summary_json: {run_dir / 'check_summary.json'} (not written)",
+            rendered,
+        )
+        self.assertFalse(run_dir_exists)
+
+    def test_run_dir_refuses_existing_managed_artifacts_without_force(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        recipe = repo_root / "examples/recipe_export_smoke/minimal_recipe.py"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            statepoint = tmp / "statepoint.fake.h5"
+            run_dir = tmp / "production_run"
+            run_dir.mkdir()
+            statepoint.write_text("fake statepoint\n", encoding="utf-8")
+            (run_dir / "mgxs_library.h5").write_text("existing\n", encoding="utf-8")
+
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as cm:
+                from_openmc_main(
+                    [
+                        "--recipe",
+                        str(recipe),
+                        "--statepoint",
+                        str(statepoint),
+                        "--run-dir",
+                        str(run_dir),
+                    ]
+                )
+
+        self.assertEqual(cm.exception.code, 2)
+        self.assertIn("--force-run-dir", err.getvalue())
+
     def test_recipe_to_multicompo_with_checked_hdf5(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         recipe = repo_root / "examples/recipe_export_smoke/minimal_recipe.py"

@@ -45,8 +45,7 @@ To export and immediately write DONJON ASCII in one command:
 openmc2donjon-from-openmc \
   --recipe export_recipe.py \
   --dry-run \
-  --keep-hdf5 mgxs_library.h5 \
-  -o out.mcompo.txt \
+  --run-dir runs/case1 \
   --check
 ```
 
@@ -58,26 +57,27 @@ requirements. It does not write HDF5, summary JSON, or DONJON ASCII files.
 openmc2donjon-from-openmc \
   --recipe export_recipe.py \
   --statepoint statepoint.120.h5 \
-  --keep-hdf5 mgxs_library.h5 \
-  -o out.mcompo.txt \
-  --summary-json run_summary.json \
+  --run-dir runs/case1 \
   --check
 ```
 
-Omit `--keep-hdf5` to use a temporary HDF5 handoff file. Keep it during
-debugging or for reproducible handoff records. `--summary-json` writes a small
-manifest with recipe, statepoint, HDF5, output, group count, Legendre order, and
-mixture names. The manifest schema is documented in
-[From-OpenMC summary JSON](FROM_OPENMC_SUMMARY_SCHEMA.md).
+With `--run-dir`, the command writes `mgxs_library.h5`, `out.mcompo.txt`,
+`run_summary.json`, optional `check_summary.json`, a recipe copy, and
+`manifest.json`. The summary JSON records recipe, statepoint, HDF5, output,
+group count, Legendre order, and mixture names. The summary schema is documented
+in [From-OpenMC summary JSON](FROM_OPENMC_SUMMARY_SCHEMA.md). Existing managed
+run-directory files are refused unless `--force-run-dir` is set.
 
-Bundle the key handoff files after a run:
+To add extra files to an existing handoff manifest:
 
 ```sh
 openmc2donjon bundle \
-  --output-dir handoff_bundle \
-  --mgxs mgxs_library.h5 \
-  --mcompo out.mcompo.txt \
-  --run-summary run_summary.json
+  --output-dir runs/case1 \
+  --mgxs runs/case1/mgxs_library.h5 \
+  --mcompo runs/case1/out.mcompo.txt \
+  --run-summary runs/case1/run_summary.json \
+  --extra notes=notes.txt \
+  --force
 ```
 
 For a small workflow check before using a real OpenMC model:

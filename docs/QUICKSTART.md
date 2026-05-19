@@ -40,6 +40,7 @@ This checks:
 - HDF5 inventory inspect;
 - HDF5 preflight;
 - HDF5 baseline diff;
+- managed run directory and bundle manifest;
 - `L_MULTICOMPO` write/readback;
 - root `L_MACROLIB` write/readback;
 - one-command `openmc2donjon-from-openmc` conversion.
@@ -54,7 +55,7 @@ For a real OpenMC case, write a small recipe that builds the case's
 openmc2donjon-from-openmc \
   --recipe export_recipe.py \
   --dry-run \
-  -o out.mcompo.txt \
+  --run-dir runs/case1 \
   --check
 ```
 
@@ -62,11 +63,15 @@ openmc2donjon-from-openmc \
 openmc2donjon-from-openmc \
   --recipe export_recipe.py \
   --statepoint statepoint.120.h5 \
-  -o out.mcompo.txt \
+  --run-dir runs/case1 \
   --check
 ```
 
-To keep the intermediate HDF5 handoff for audit/debugging:
+The run directory contains the HDF5 handoff, DONJON ASCII output, summary JSON,
+check summary when `--check` is enabled, and `manifest.json`. Existing managed
+files are refused unless `--force-run-dir` is set.
+
+To keep explicit paths instead of using a managed run directory:
 
 ```sh
 openmc2donjon-from-openmc \
@@ -77,14 +82,16 @@ openmc2donjon-from-openmc \
   --summary-json run_summary.json
 ```
 
-To package a run directory for sharing or archive:
+To add extra files to an existing handoff manifest:
 
 ```sh
 openmc2donjon bundle \
-  --output-dir handoff_bundle \
-  --mgxs mgxs_library.h5 \
-  --mcompo out.mcompo.txt \
-  --run-summary run_summary.json
+  --output-dir runs/case1 \
+  --mgxs runs/case1/mgxs_library.h5 \
+  --mcompo runs/case1/out.mcompo.txt \
+  --run-summary runs/case1/run_summary.json \
+  --extra notes=notes.txt \
+  --force
 ```
 
 For root `L_MACROLIB` output:
