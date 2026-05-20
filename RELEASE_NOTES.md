@@ -47,6 +47,9 @@
   surface-flux HDF5 layout.
 - Added `openmc2donjon make-low-order-driver` for canonicalizing external
   low-order volume flux and outward net-current handoffs.
+- Extended low-order driver canonicalization to honor declared raw
+  `face_names`, reordering net-current faces into the requested canonical
+  order.
 - Added `openmc2donjon check-low-order-driver` for strict low-order handoff
   preflight, including current sign convention and optional face-width
   homogeneous-flux positivity checks.

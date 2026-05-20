@@ -178,6 +178,45 @@ class LowOrderDriverTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertIn("sign_convention", payload["errors"][0])
 
+    def test_make_low_order_driver_reorders_declared_face_names(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            mgxs = tmp / "mgxs.h5"
+            raw = tmp / "raw_driver.h5"
+            driver = tmp / "low_order_driver.h5"
+            _write_mgxs(mgxs)
+            _write_raw_driver_reversed_faces(raw)
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                rc = cli_main(
+                    [
+                        "make-low-order-driver",
+                        str(mgxs),
+                        "-o",
+                        str(driver),
+                        "--volume-flux",
+                        str(raw),
+                        "--net-current",
+                        str(raw),
+                        "--faces",
+                        "FD_XMIN,FD_XMAX",
+                    ]
+                )
+
+            with h5py.File(driver, "r") as h5:
+                net_current = h5["net_current_density"][:]
+                face_names = tuple(_decode(value) for value in h5["face_names"][:])
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(face_names, ("FD_XMIN", "FD_XMAX"))
+        np.testing.assert_allclose(
+            net_current,
+            [
+                [[1.0, -2.0], [0.0, 1.0]],
+                [[0.0, 0.0], [2.0, -4.0]],
+            ],
+        )
+
 
 def _write_mgxs(path: Path) -> None:
     with h5py.File(path, "w") as h5:
@@ -208,6 +247,25 @@ def _write_raw_driver(path: Path) -> None:
         names = np.asarray(["mod", "fuel"], dtype="S")
         volume.attrs["mixture_names"] = names
         current.attrs["mixture_names"] = names
+
+
+def _write_raw_driver_reversed_faces(path: Path) -> None:
+    with h5py.File(path, "w") as h5:
+        volume = h5.create_dataset("volume_flux", data=np.array([[10.0, 20.0], [30.0, 40.0]]))
+        current = h5.create_dataset(
+            "net_current_density",
+            data=np.array(
+                [
+                    [[0.0, 1.0], [1.0, -2.0]],
+                    [[2.0, -4.0], [0.0, 0.0]],
+                ]
+            ),
+        )
+        names = np.asarray(["fuel", "mod"], dtype="S")
+        faces = np.asarray(["FD_XMAX", "FD_XMIN"], dtype="S")
+        volume.attrs["mixture_names"] = names
+        current.attrs["mixture_names"] = names
+        current.attrs["face_names"] = faces
 
 
 def _decode(value: object) -> str:

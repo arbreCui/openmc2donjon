@@ -182,7 +182,7 @@ def load_volume_flux(
     mixture_names: tuple[str, ...],
     energy_groups: int,
 ) -> LoadedArray:
-    values, path, dataset_path, declared_mixtures = _load_dataset(
+    values, path, dataset_path, declared_mixtures, _declared_faces = _load_dataset(
         reference,
         candidates=VOLUME_FLUX_DATASETS,
         label="volume flux",
@@ -204,7 +204,7 @@ def load_net_current(
     energy_groups: int,
     face_names: tuple[str, ...],
 ) -> LoadedArray:
-    values, path, dataset_path, declared_mixtures = _load_dataset(
+    values, path, dataset_path, declared_mixtures, declared_faces = _load_dataset(
         reference,
         candidates=NET_CURRENT_DATASETS,
         label="net current",
@@ -215,6 +215,7 @@ def load_net_current(
         energy_groups=energy_groups,
         face_names=face_names,
         declared_mixtures=declared_mixtures,
+        declared_faces=declared_faces,
         label=f"net current {path}:{dataset_path}",
     )
     return LoadedArray(values=normalized, path=path, dataset_path=dataset_path)
@@ -339,7 +340,7 @@ def _load_dataset(
     *,
     candidates: tuple[str, ...],
     label: str,
-) -> tuple[np.ndarray, Path, str, Any]:
+) -> tuple[np.ndarray, Path, str, Any, Any]:
     import h5py
 
     path, requested = _split_dataset_reference(reference)
@@ -362,7 +363,8 @@ def _load_dataset(
             raise ValueError(f"{label} path is a group, not a dataset: /{dataset_path}")
         values = np.asarray(obj[:], dtype=float)
         declared_mixtures = _names_from_hdf5(obj, h5, ("mixture_names", "mixtures", "domain_names"))
-    return values, path, dataset_path, declared_mixtures
+        declared_faces = _names_from_hdf5(obj, h5, ("face_names", "faces", "boundary_names"))
+    return values, path, dataset_path, declared_mixtures, declared_faces
 
 
 def _normalize_volume_flux(
@@ -404,13 +406,16 @@ def _normalize_net_current(
     energy_groups: int,
     face_names: tuple[str, ...],
     declared_mixtures: Any,
+    declared_faces: Any,
     label: str,
 ) -> np.ndarray:
     values = np.asarray(values, dtype=float)
+    declared_face_names = None if declared_faces is None else tuple(_flatten_names(declared_faces))
     if values.ndim == 3:
-        if values.shape == (len(mixture_names), len(face_names), energy_groups):
+        face_count = len(declared_face_names or face_names)
+        if values.shape == (len(mixture_names), face_count, energy_groups):
             normalized = values
-        elif values.shape == (len(mixture_names), energy_groups, len(face_names)):
+        elif values.shape == (len(mixture_names), energy_groups, face_count):
             normalized = np.transpose(values, (0, 2, 1))
         else:
             raise ValueError(
@@ -418,11 +423,18 @@ def _normalize_net_current(
                 f"{len(mixture_names)} mixtures, {len(face_names)} faces, {energy_groups} groups"
             )
         declared_names = None if declared_mixtures is None else tuple(_flatten_names(declared_mixtures))
-        return _reorder_by_declared_mixtures(normalized, declared_names, mixture_names, label)
+        normalized = _reorder_by_declared_mixtures(
+            normalized,
+            declared_names,
+            mixture_names,
+            label,
+        )
+        return _reorder_by_declared_faces(normalized, declared_face_names, face_names, label)
     if values.ndim == 4:
-        if values.shape[-2:] == (len(face_names), energy_groups):
+        face_count = len(declared_face_names or face_names)
+        if values.shape[-2:] == (face_count, energy_groups):
             grid_values = values
-        elif values.shape[-2:] == (energy_groups, len(face_names)):
+        elif values.shape[-2:] == (energy_groups, face_count):
             grid_values = np.moveaxis(values, -1, -2)
         else:
             raise ValueError(
@@ -437,7 +449,8 @@ def _normalize_net_current(
                 f"{label}: mixture_names shape {names.shape} does not match "
                 f"current mesh shape {grid_values.shape[:2]}"
             )
-        return _mesh_values_to_mixture_order(grid_values, names, mixture_names, label)
+        normalized = _mesh_values_to_mixture_order(grid_values, names, mixture_names, label)
+        return _reorder_by_declared_faces(normalized, declared_face_names, face_names, label)
     raise ValueError(f"{label}: expected 3D or 4D dataset")
 
 
@@ -475,6 +488,25 @@ def _reorder_by_declared_mixtures(
         )
     index_by_name = {name: index for index, name in enumerate(declared_names)}
     return np.stack([values[index_by_name[name]] for name in mixture_names])
+
+
+def _reorder_by_declared_faces(
+    values: np.ndarray,
+    declared_names: tuple[str, ...] | None,
+    face_names: tuple[str, ...],
+    label: str,
+) -> np.ndarray:
+    if declared_names is None or declared_names == face_names:
+        return values
+    if set(declared_names) != set(face_names):
+        raise ValueError(
+            f"{label}: declared faces {declared_names!r} do not match "
+            f"expected faces {face_names!r}"
+        )
+    if len(set(declared_names)) != len(declared_names):
+        raise ValueError(f"{label}: duplicate face names in declared faces")
+    index_by_name = {name: index for index, name in enumerate(declared_names)}
+    return values[:, [index_by_name[name] for name in face_names], :]
 
 
 def _resolve_face_widths(

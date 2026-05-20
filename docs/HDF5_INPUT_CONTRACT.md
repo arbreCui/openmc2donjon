@@ -284,6 +284,12 @@ metadata and writes:
 /face_names
 ```
 
+Raw driver datasets may declare `mixture_names` and `face_names` attributes or
+root datasets. `make-low-order-driver` uses those names to reorder mixture and
+face axes into the requested canonical `--faces` order. If `face_names` are
+absent, the raw net-current face axis is interpreted as already matching
+`--faces`.
+
 Before using the driver as an ADF denominator source, run the strict contract
 check:
 
