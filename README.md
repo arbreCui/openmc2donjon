@@ -249,6 +249,30 @@ This writes `ADF = heterogeneous face flux / homogeneous face flux`. Inputs can
 be HDF5 files with known dataset names or explicit `FILE::/dataset/path`
 references.
 
+For a managed production run directory, `openmc2donjon-from-openmc` can build
+the same flux-ratio ADF sidecar, run the low-order contract check, inject ADF,
+and bundle the side artifacts:
+
+```sh
+openmc2donjon-from-openmc \
+  --recipe export_recipe.py \
+  --statepoint statepoint.120.h5 \
+  --run-dir runs/case1 \
+  --build-flux-ratio-adf \
+  --export-surface-flux \
+  --surface-flux-tally-name openmc2donjon_surface_current_mu \
+  --surface-flux-mesh-shape 1,2 \
+  --surface-flux-mu-edges 0.0,0.25,0.5,0.75,1.0 \
+  --surface-flux-face-area 4.0 \
+  --low-order-volume-flux raw_low_order_driver.h5 \
+  --low-order-net-current raw_low_order_driver.h5 \
+  --adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
+  --adf-face-widths 4.0 \
+  --adf-invalid-fill 1.0 \
+  --require-volume \
+  --require-transport-dataset
+```
+
 The one-step OpenMC entry point can inject the same sidecar before preflight:
 
 ```sh

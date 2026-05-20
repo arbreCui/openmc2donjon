@@ -50,6 +50,9 @@
 - Added `openmc2donjon check-low-order-driver` for strict low-order handoff
   preflight, including current sign convention and optional face-width
   homogeneous-flux positivity checks.
+- Added `openmc2donjon-from-openmc --build-flux-ratio-adf` to build, check,
+  inject, and bundle the surface-flux/low-order/homogeneous-flux/ADF side
+  artifacts inside a managed production run directory.
 - Added `openmc2donjon make-homogeneous-face-flux` for reconstructing the
   homogeneous denominator from volume flux, outward net current, and
   `transport_total`.

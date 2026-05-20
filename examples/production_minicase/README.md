@@ -50,59 +50,31 @@ manifest.json
 export_recipe.py
 ```
 
-To exercise the ADF/DF path, export the OpenMC surface-flux tally, canonicalize
-a low-order driver handoff, reconstruct the homogeneous face flux, build a
-flux-ratio sidecar, and rerun the one-step workflow with sidecar injection:
+To exercise the ADF/DF path, provide the low-order driver volume flux and
+outward net current density in an HDF5 fixture, then let the one-step workflow
+export the OpenMC surface-flux tally, canonicalize and check the low-order
+handoff, reconstruct homogeneous face flux, build the flux-ratio sidecar, and
+inject it before conversion:
 
 ```sh
-openmc2donjon export-surface-flux "$CASE_DIR/statepoint.12.h5" \
-  --mgxs "$RUN_DIR/mgxs_library.h5" \
-  -o /tmp/openmc2donjon_minicase/openmc_surface_flux.h5 \
-  --tally-name openmc2donjon_surface_current_mu \
-  --mesh-shape 1,2 \
-  --mu-edges 0.0,0.25,0.5,0.75,1.0 \
-  --face-area 4.0
-
-openmc2donjon make-low-order-driver "$RUN_DIR/mgxs_library.h5" \
-  -o /tmp/openmc2donjon_minicase/low_order_driver.h5 \
-  --volume-flux /tmp/openmc2donjon_minicase/raw_low_order_driver.h5 \
-  --net-current /tmp/openmc2donjon_minicase/raw_low_order_driver.h5 \
-  --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX
-
-openmc2donjon check-low-order-driver \
-  "$RUN_DIR/mgxs_library.h5" /tmp/openmc2donjon_minicase/low_order_driver.h5 \
-  --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
-  --face-widths 4.0
-
-openmc2donjon make-homogeneous-face-flux "$RUN_DIR/mgxs_library.h5" \
-  -o /tmp/openmc2donjon_minicase/homogeneous_face_flux.h5 \
-  --volume-flux /tmp/openmc2donjon_minicase/low_order_driver.h5 \
-  --net-current /tmp/openmc2donjon_minicase/low_order_driver.h5 \
-  --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
-  --face-widths 4.0
-
-openmc2donjon make-adf-sidecar "$RUN_DIR/mgxs_library.h5" \
-  -o /tmp/openmc2donjon_minicase/adf_sidecar.h5 \
-  --mode flux-ratio \
-  --surface-flux /tmp/openmc2donjon_minicase/openmc_surface_flux.h5 \
-  --homogeneous-face-flux /tmp/openmc2donjon_minicase/homogeneous_face_flux.h5 \
-  --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
-  --invalid-fill 1.0 \
-  --adf-kind flux-ratio-minicase \
-  --adf-real false
-
 OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
 openmc2donjon-from-openmc \
   --recipe examples/production_minicase/export_recipe.py \
   --statepoint "$CASE_DIR/statepoint.12.h5" \
   --run-dir /tmp/openmc2donjon_minicase/output_adf \
-  --adf-source /tmp/openmc2donjon_minicase/adf_sidecar.h5 \
+  --build-flux-ratio-adf \
+  --export-surface-flux \
+  --surface-flux-tally-name openmc2donjon_surface_current_mu \
+  --surface-flux-mesh-shape 1,2 \
+  --surface-flux-mu-edges 0.0,0.25,0.5,0.75,1.0 \
+  --surface-flux-face-area 4.0 \
+  --low-order-volume-flux /tmp/openmc2donjon_minicase/raw_low_order_driver.h5 \
+  --low-order-net-current /tmp/openmc2donjon_minicase/raw_low_order_driver.h5 \
   --adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
-  --extra-artifact surface-flux=/tmp/openmc2donjon_minicase/openmc_surface_flux.h5 \
-  --extra-artifact low-order-driver=/tmp/openmc2donjon_minicase/low_order_driver.h5 \
-  --extra-artifact homogeneous-face-flux=/tmp/openmc2donjon_minicase/homogeneous_face_flux.h5 \
-  --check \
-  --require-adf \
+  --adf-face-widths 4.0 \
+  --adf-invalid-fill 1.0 \
+  --adf-kind flux-ratio-minicase \
+  --adf-real false \
   --require-volume \
   --require-transport-dataset
 ```

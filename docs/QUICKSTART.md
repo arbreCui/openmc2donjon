@@ -94,6 +94,26 @@ openmc2donjon-from-openmc \
   --check
 ```
 
+For production ADF/DF handoff, the same entry point can build the flux-ratio
+ADF sidecar from OpenMC surface flux plus a low-order driver and inject it
+before conversion:
+
+```sh
+openmc2donjon-from-openmc \
+  --recipe export_recipe.py \
+  --statepoint statepoint.120.h5 \
+  --run-dir runs/case1 \
+  --build-flux-ratio-adf \
+  --export-surface-flux \
+  --surface-flux-mu-edges 0.0,0.25,0.5,0.75,1.0 \
+  --low-order-volume-flux raw_low_order_driver.h5 \
+  --low-order-net-current raw_low_order_driver.h5 \
+  --adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
+  --adf-face-widths 4.0 \
+  --require-volume \
+  --require-transport-dataset
+```
+
 To keep explicit paths instead of using a managed run directory:
 
 ```sh

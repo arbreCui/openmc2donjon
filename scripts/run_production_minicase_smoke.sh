@@ -40,17 +40,17 @@ MCO="$CONVERT_RUN_DIR/out.mcompo.txt"
 SUMMARY="$CONVERT_RUN_DIR/run_summary.json"
 CHECK_SUMMARY="$CONVERT_RUN_DIR/check_summary.json"
 MANIFEST="$CONVERT_RUN_DIR/manifest.json"
-SURFACE_FLUX="$RUN_DIR/openmc_surface_flux.h5"
-SURFACE_FLUX_SUMMARY="$RUN_DIR/openmc_surface_flux_summary.json"
 LOW_ORDER_RAW="$RUN_DIR/low_order_driver_raw.h5"
-LOW_ORDER_DRIVER="$RUN_DIR/low_order_driver.h5"
-LOW_ORDER_DRIVER_SUMMARY="$RUN_DIR/low_order_driver_summary.json"
-LOW_ORDER_DRIVER_CHECK_SUMMARY="$RUN_DIR/low_order_driver_check_summary.json"
-HOMOGENEOUS_FACE_FLUX="$RUN_DIR/homogeneous_face_flux.h5"
-HOMOGENEOUS_FACE_FLUX_SUMMARY="$RUN_DIR/homogeneous_face_flux_summary.json"
-ADF_SIDECAR="$RUN_DIR/adf_sidecar.h5"
-ADF_SIDECAR_SUMMARY="$RUN_DIR/adf_sidecar_summary.json"
 ADF_RUN_DIR="$RUN_DIR/openmc2donjon_adf_run"
+SURFACE_FLUX="$ADF_RUN_DIR/openmc_surface_flux.h5"
+SURFACE_FLUX_SUMMARY="$ADF_RUN_DIR/surface_flux_summary.json"
+LOW_ORDER_DRIVER="$ADF_RUN_DIR/low_order_driver.h5"
+LOW_ORDER_DRIVER_SUMMARY="$ADF_RUN_DIR/low_order_driver_summary.json"
+LOW_ORDER_DRIVER_CHECK_SUMMARY="$ADF_RUN_DIR/low_order_driver_check_summary.json"
+HOMOGENEOUS_FACE_FLUX="$ADF_RUN_DIR/homogeneous_face_flux.h5"
+HOMOGENEOUS_FACE_FLUX_SUMMARY="$ADF_RUN_DIR/homogeneous_face_flux_summary.json"
+ADF_SIDECAR="$ADF_RUN_DIR/adf_sidecar.h5"
+ADF_SIDECAR_SUMMARY="$ADF_RUN_DIR/adf_sidecar_summary.json"
 ADF_H5="$ADF_RUN_DIR/mgxs_library.h5"
 ADF_MCO="$ADF_RUN_DIR/out.mcompo.txt"
 ADF_RUN_SUMMARY="$ADF_RUN_DIR/run_summary.json"
@@ -192,19 +192,7 @@ print(
 PY
 
 echo
-echo "== Export OpenMC surface flux =="
-"$PYTHON_BIN" -m openmc2donjon.cli export-surface-flux "$STATEPOINT" \
-  --mgxs "$MGXS" \
-  -o "$SURFACE_FLUX" \
-  --tally-name openmc2donjon_surface_current_mu \
-  --mesh-shape 1,2 \
-  --mu-edges "$SURFACE_FLUX_MU_EDGES" \
-  --face-area 4.0 \
-  --faces "$ADF_FACES" \
-  --summary-json "$SURFACE_FLUX_SUMMARY"
-
-echo
-echo "== Build low-order driver handoff =="
+echo "== Build raw low-order driver fixture =="
 "$PYTHON_BIN" - "$MGXS" "$LOW_ORDER_RAW" "$ADF_FACES" <<'PY'
 from pathlib import Path
 import sys
@@ -239,67 +227,29 @@ with h5py.File(output_path, "w") as h5:
 print(f"wrote low-order driver raw fixture: {output_path}")
 PY
 
-"$PYTHON_BIN" -m openmc2donjon.cli make-low-order-driver "$MGXS" \
-  -o "$LOW_ORDER_DRIVER" \
-  --volume-flux "$LOW_ORDER_RAW" \
-  --net-current "$LOW_ORDER_RAW" \
-  --faces "$ADF_FACES" \
-  --source-label "production minicase external low-order driver fixture" \
-  --summary-json "$LOW_ORDER_DRIVER_SUMMARY"
-
 echo
-echo "== Check low-order driver handoff =="
-"$PYTHON_BIN" -m openmc2donjon.cli check-low-order-driver "$MGXS" "$LOW_ORDER_DRIVER" \
-  --faces "$ADF_FACES" \
-  --face-widths 4.0 \
-  --summary-json "$LOW_ORDER_DRIVER_CHECK_SUMMARY"
-
-echo
-echo "== Reconstruct homogeneous face flux =="
-"$PYTHON_BIN" -m openmc2donjon.cli make-homogeneous-face-flux "$MGXS" \
-  -o "$HOMOGENEOUS_FACE_FLUX" \
-  --volume-flux "$LOW_ORDER_DRIVER" \
-  --net-current "$LOW_ORDER_DRIVER" \
-  --faces "$ADF_FACES" \
-  --face-widths 4.0 \
-  --summary-json "$HOMOGENEOUS_FACE_FLUX_SUMMARY"
-
-echo
-echo "== Build flux-ratio ADF sidecar =="
-"$PYTHON_BIN" -m openmc2donjon.cli make-adf-sidecar "$MGXS" \
-  -o "$ADF_SIDECAR" \
-  --mode flux-ratio \
-  --surface-flux "$SURFACE_FLUX" \
-  --homogeneous-face-flux "$HOMOGENEOUS_FACE_FLUX" \
-  --faces "$ADF_FACES" \
-  --invalid-fill 1.0 \
-  --adf-kind flux-ratio-minicase \
-  --adf-real false \
-  --adf-source-label "production minicase OpenMC surface flux over low-order driver homogeneous flux" \
-  --summary-json "$ADF_SIDECAR_SUMMARY"
-
-echo
-echo "== Export and convert with ADF sidecar =="
+echo "== Export and convert with integrated flux-ratio ADF workflow =="
 OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
 "$PYTHON_BIN" -m openmc2donjon.from_openmc_cli \
   --recipe "$EXAMPLE_DIR/export_recipe.py" \
   --statepoint "$STATEPOINT" \
   --run-dir "$ADF_RUN_DIR" \
-  --adf-source "$ADF_SIDECAR" \
+  --build-flux-ratio-adf \
+  --export-surface-flux \
+  --surface-flux-tally-name openmc2donjon_surface_current_mu \
+  --surface-flux-mesh-shape 1,2 \
+  --surface-flux-mu-edges "$SURFACE_FLUX_MU_EDGES" \
+  --surface-flux-face-area 4.0 \
+  --low-order-volume-flux "$LOW_ORDER_RAW" \
+  --low-order-net-current "$LOW_ORDER_RAW" \
+  --low-order-source-label "production minicase external low-order driver fixture" \
   --adf-faces "$ADF_FACES" \
+  --adf-face-widths 4.0 \
+  --adf-invalid-fill 1.0 \
   --adf-kind flux-ratio-minicase \
   --adf-real false \
-  --extra-artifact "surface-flux=$SURFACE_FLUX" \
-  --extra-artifact "surface-flux-summary=$SURFACE_FLUX_SUMMARY" \
   --extra-artifact "low-order-raw=$LOW_ORDER_RAW" \
-  --extra-artifact "low-order-driver=$LOW_ORDER_DRIVER" \
-  --extra-artifact "low-order-driver-summary=$LOW_ORDER_DRIVER_SUMMARY" \
-  --extra-artifact "low-order-driver-check-summary=$LOW_ORDER_DRIVER_CHECK_SUMMARY" \
-  --extra-artifact "homogeneous-face-flux=$HOMOGENEOUS_FACE_FLUX" \
-  --extra-artifact "homogeneous-face-flux-summary=$HOMOGENEOUS_FACE_FLUX_SUMMARY" \
-  --extra-artifact "adf-sidecar-summary=$ADF_SIDECAR_SUMMARY" \
   --check \
-  --require-adf \
   --require-volume \
   --require-transport-dataset
 

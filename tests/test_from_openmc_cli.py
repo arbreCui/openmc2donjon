@@ -326,6 +326,111 @@ class FromOpenMCCliTests(unittest.TestCase):
         self.assertIn("adf-summary", labels)
         self.assertEqual(labels["adf-summary"]["summary_schema"], "openmc2donjon.adf-augment.v1")
 
+    def test_run_dir_builds_flux_ratio_adf_workflow(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        recipe = repo_root / "examples/recipe_export_smoke/minimal_recipe.py"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            statepoint = tmp / "statepoint.fake.h5"
+            surface_flux = tmp / "surface_flux.h5"
+            raw_driver = tmp / "raw_driver.h5"
+            run_dir = tmp / "production_run"
+            statepoint.write_text("fake statepoint\n", encoding="utf-8")
+            _write_surface_flux(surface_flux)
+            _write_low_order_raw(raw_driver)
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = from_openmc_main(
+                    [
+                        "--recipe",
+                        str(recipe),
+                        "--statepoint",
+                        str(statepoint),
+                        "--run-dir",
+                        str(run_dir),
+                        "--build-flux-ratio-adf",
+                        "--adf-surface-flux",
+                        str(surface_flux),
+                        "--low-order-volume-flux",
+                        str(raw_driver),
+                        "--low-order-net-current",
+                        str(raw_driver),
+                        "--adf-faces",
+                        "FD_XMIN,FD_XMAX",
+                        "--adf-face-widths",
+                        "4.0",
+                        "--adf-kind",
+                        "flux-ratio-test",
+                        "--adf-real",
+                        "false",
+                        "--require-volume",
+                        "--require-transport-dataset",
+                    ]
+                )
+
+            hdf5 = run_dir / "mgxs_library.h5"
+            sidecar = run_dir / "adf_sidecar.h5"
+            sidecar_summary = run_dir / "adf_sidecar_summary.json"
+            low_order_check = run_dir / "low_order_driver_check_summary.json"
+            homogeneous = run_dir / "homogeneous_face_flux.h5"
+            check_summary = run_dir / "check_summary.json"
+            manifest = run_dir / "manifest.json"
+            with h5py.File(hdf5, "r") as h5:
+                fuel_xmin = h5["mixtures/FUEL_A/adf/FD_XMIN"][:]
+                mod_xmax = h5["mixtures/MOD_A/adf/FD_XMAX"][:]
+                attrs = dict(h5.attrs)
+            sidecar_payload = json.loads(sidecar_summary.read_text(encoding="utf-8"))
+            low_order_payload = json.loads(low_order_check.read_text(encoding="utf-8"))
+            check_payload = json.loads(check_summary.read_text(encoding="utf-8"))
+            manifest_payload = json.loads(manifest.read_text(encoding="utf-8"))
+            labels = {artifact["label"]: artifact for artifact in manifest_payload["artifacts"]}
+            sidecar_exists = sidecar.exists()
+            homogeneous_exists = homogeneous.exists()
+
+        self.assertEqual(rc, 0)
+        self.assertIn("openmc2donjon_low_order_driver_contract_passed", stream.getvalue())
+        self.assertIn("openmc2donjon_adf_sidecar_passed", stream.getvalue())
+        self.assertTrue(sidecar_exists)
+        self.assertTrue(homogeneous_exists)
+        np.testing.assert_allclose(fuel_xmin, [1.1, 1.1])
+        np.testing.assert_allclose(mod_xmax, [1.0, 0.9])
+        self.assertEqual(attrs["adf_kind"], "flux-ratio-test")
+        self.assertEqual(attrs["adf_real"], "false")
+        self.assertEqual(sidecar_payload["decision"], "openmc2donjon_adf_sidecar_passed")
+        self.assertFalse(sidecar_payload["adf_real"])
+        self.assertEqual(
+            low_order_payload["decision"],
+            "openmc2donjon_low_order_driver_contract_passed",
+        )
+        self.assertEqual(check_payload["decision"], "mgxs_input_contract_passed")
+        required_labels = {
+            "mgxs",
+            "mcompo",
+            "run-summary",
+            "check-summary",
+            "adf-source",
+            "adf-summary",
+            "surface-flux",
+            "low-order-driver",
+            "low-order-driver-summary",
+            "low-order-driver-check-summary",
+            "homogeneous-face-flux",
+            "homogeneous-face-flux-summary",
+            "adf-sidecar-summary",
+            "recipe",
+        }
+        self.assertEqual(set(labels), required_labels)
+        self.assertEqual(
+            labels["low-order-driver-check-summary"]["summary_decision"],
+            "openmc2donjon_low_order_driver_contract_passed",
+        )
+        self.assertEqual(
+            labels["adf-sidecar-summary"]["summary_decision"],
+            "openmc2donjon_adf_sidecar_passed",
+        )
+
     def test_run_dir_dry_run_uses_standard_paths_without_writing(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         recipe = repo_root / "examples/recipe_export_smoke/minimal_recipe.py"
@@ -523,6 +628,35 @@ def _write_adf_sidecar(path: Path) -> None:
         dataset = h5.create_dataset("adf", data=values)
         dataset.attrs["mixture_names"] = np.asarray(["FUEL_A", "MOD_A"], dtype="S")
         dataset.attrs["face_names"] = np.asarray(["FD_XMIN", "FD_XMAX"], dtype="S")
+
+
+def _write_surface_flux(path: Path) -> None:
+    values = np.array(
+        [
+            [[11.0, 22.0], [9.0, 18.0]],
+            [[33.0, 44.0], [30.0, 36.0]],
+        ],
+        dtype=float,
+    )
+    with h5py.File(path, "w") as h5:
+        dataset = h5.create_dataset("heterogeneous_face_flux", data=values)
+        dataset.attrs["mixture_names"] = np.asarray(["FUEL_A", "MOD_A"], dtype="S")
+        dataset.attrs["face_names"] = np.asarray(["FD_XMIN", "FD_XMAX"], dtype="S")
+
+
+def _write_low_order_raw(path: Path) -> None:
+    with h5py.File(path, "w") as h5:
+        volume = h5.create_dataset(
+            "volume_flux",
+            data=np.asarray([[10.0, 20.0], [30.0, 40.0]], dtype=float),
+        )
+        current = h5.create_dataset(
+            "net_current_density",
+            data=np.zeros((2, 2, 2), dtype=float),
+        )
+        names = np.asarray(["FUEL_A", "MOD_A"], dtype="S")
+        volume.attrs["mixture_names"] = names
+        current.attrs["mixture_names"] = names
 
 
 if __name__ == "__main__":

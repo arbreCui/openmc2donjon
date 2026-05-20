@@ -152,11 +152,36 @@ openmc2donjon make-adf-sidecar runs/case1/mgxs_library.h5 \
   --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX
 ```
 
-For the one-step production path, pass the sidecar directly:
+For the one-step production path, let `openmc2donjon-from-openmc` build and
+inject the sidecar inside the managed run directory. It also writes and bundles
+the surface-flux, low-order driver, low-order contract check, homogeneous
+face-flux, and ADF-sidecar summaries:
 
 ```sh
 openmc2donjon-from-openmc \
-  --recipe examples/export_recipe_template.py \
+  --recipe export_recipe.py \
+  --statepoint statepoint.120.h5 \
+  --run-dir runs/case1 \
+  --build-flux-ratio-adf \
+  --export-surface-flux \
+  --surface-flux-tally-name openmc2donjon_surface_current_mu \
+  --surface-flux-mesh-shape 1,2 \
+  --surface-flux-mu-edges 0.0,0.25,0.5,0.75,1.0 \
+  --surface-flux-face-area 4.0 \
+  --low-order-volume-flux raw_low_order_driver.h5 \
+  --low-order-net-current raw_low_order_driver.h5 \
+  --adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
+  --adf-face-widths 4.0 \
+  --adf-invalid-fill 1.0 \
+  --require-volume \
+  --require-transport-dataset
+```
+
+If the ADF sidecar was produced separately, pass it directly:
+
+```sh
+openmc2donjon-from-openmc \
+  --recipe export_recipe.py \
   --statepoint statepoint.120.h5 \
   --run-dir runs/case1 \
   --adf-source runs/case1/adf_sidecar.h5 \
