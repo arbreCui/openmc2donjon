@@ -31,6 +31,8 @@
    - Prefer recipe/statepoint exports over hand-maintained HDF5 snapshots.
    - Keep the tiny recipe export smoke green as the first user-entry check.
    - Keep the exporter-to-C5G7 statepoint smoke reproducible.
+   - Keep candidate non-C5G7 adapters, such as `examples/uox_5x5_tg6`, separate
+     from accepted validation claims until their reference path is reproducible.
    - Keep the spatial domain naming stable enough to map back to DONJON
      mixtures.
 

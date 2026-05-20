@@ -103,6 +103,21 @@ that the recovered `NTOT0` values come from different calculations. This verifie
 the `PARKEY=BURN` + `TREE` + `CALCULATIONS` selection path, but it is not an
 accepted physics benchmark.
 
+## Candidate Examples
+
+`examples/uox_5x5_tg6` adapts a local DRAGON/APEX UOX 5x5 TG6 HDF5 file into
+the openmc2donjon MGXS input contract, then runs checked `L_MULTICOMPO` and
+`L_MACROLIB` conversion/readback. It is useful because it exercises a second
+non-C5G7, multi-domain, 8-group, P1-scatter source path.
+
+```sh
+bash examples/uox_5x5_tg6/run_smoke.sh
+```
+
+This example is a candidate coverage case, not an accepted physics benchmark.
+The source is an APEX/APOLLO2-A HDF5 file rather than an OpenMC statepoint, and
+the adapter is intentionally kept in the example directory.
+
 ## Hex Status
 
 Hex support is implemented as converter/modeling capability, but this repository
