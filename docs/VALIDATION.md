@@ -13,6 +13,24 @@ OpenMC C5G7 MGXS/ADF HDF5
 The mapping is one spatial MGXS domain to one DONJON mixture. The accepted C5G7
 case uses nine assembly-wise mixtures.
 
+## Validation Contract
+
+Accepted physics validation cases must be OpenMC-sourced:
+
+```text
+OpenMC heterogeneous/reference calculation
+  -> OpenMC homogenized MGXS + transport correction + ADF/DF
+  -> openmc2donjon
+  -> DONJON k-effective
+```
+
+The DONJON comparison checks whether DONJON can consume OpenMC-derived
+homogenized data and reproduce the OpenMC reference at the intended
+homogenization level. It does not claim to reproduce another code's native
+equivalence treatment, such as DRAGON/APEX `SPH` factors or `LEAK B2`
+processing, unless those corrections are explicitly supplied as OpenMC-side
+handoff data.
+
 ## Reference Results
 
 | Case | k-effective | Note |
@@ -117,6 +135,12 @@ bash examples/uox_5x5_tg6/run_smoke.sh
 This example is a candidate coverage case, not an accepted physics benchmark.
 The source is an APEX/APOLLO2-A HDF5 file rather than an OpenMC statepoint, and
 the adapter is intentionally kept in the example directory.
+
+Its DRAGON/DONJON reference cards use APEX/DRAGON equivalence processing
+(`SPH` plus `LEAK B2`). Those corrections are not recoverable from a plain
+OpenMC-style MGXS handoff, so this example must not be promoted to an accepted
+k-effective benchmark unless a matching OpenMC-sourced reference and correction
+handoff are added.
 
 It can also be included in the release check on machines with the local source
 file:

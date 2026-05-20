@@ -14,6 +14,12 @@ adapter in this directory is therefore an example-side bridge into the
 `openmc2donjon` HDF5 input contract; it is not part of the accepted OpenMC
 validation line.
 
+This example checks converter coverage and DONJON consumption. It is not a
+physics k-effective benchmark for this project, because the local DRAGON/DONJON
+reference cards rely on APEX/DRAGON `SPH` plus `LEAK B2` equivalence processing.
+Those corrections are not recoverable from a plain OpenMC-style homogenized
+MGXS handoff.
+
 ## Source Facts
 
 - Geometry in the DRAGON card: 3 by 3 Cartesian eighth-assembly map with six
@@ -30,6 +36,9 @@ validation line.
 The current local DRAGON/DONJON executables fail while opening the APEX HDF5
 with `INVALID IPARAM (8)`, so this example is kept as a converter smoke and
 candidate dossier rather than a locked physics benchmark.
+
+The `0.9982139` target should not be used to judge the converter output unless a
+matching OpenMC-sourced leakage/equivalence correction handoff is provided.
 
 ## Smoke
 
