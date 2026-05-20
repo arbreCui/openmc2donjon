@@ -335,8 +335,63 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
         self.assertIn("legendre_order: 1", output)
         self.assertIn("domain_type: cell", output)
         self.assertIn("mixtures: 2", output)
+        self.assertIn("production_checklist:", output)
+        self.assertIn(
+            "PASS mgxs-required: total, absorption, and scatter matrix MGXS are declared",
+            output,
+        )
+        self.assertIn("PASS transport: transport MGXS declared", output)
+        self.assertIn("WARN fission-source: missing fission, nu-fission, chi", output)
+        self.assertIn(
+            "PASS domain-mapping: 2 cell domain(s) -> 2 DONJON mixture(s)",
+            output,
+        )
+        self.assertIn("PASS volumes: all selected domains have positive explicit volumes", output)
+        self.assertIn("PASS domain-mode: root_attrs include domain_mode", output)
         self.assertIn("ASM_1", output)
+        self.assertIn("volume_source=domain", output)
         self.assertIn("duplicate name 'ASM_1' written as 'ASM_1_2'", output)
+
+    def test_export_cli_recipe_dry_run_flags_missing_required_mgxs_types(self) -> None:
+        recipe = """
+            from dataclasses import dataclass
+
+            import numpy as np
+
+            class EnergyGroups:
+                group_edges = np.array([1.0e-5, 1.0, 1.0e7])
+
+            @dataclass(frozen=True)
+            class Domain:
+                name: str
+                id: int
+
+            class Library:
+                def __init__(self):
+                    self.energy_groups = EnergyGroups()
+                    self.domain_type = "cell"
+                    self.legendre_order = 0
+                    self.mgxs_types = ["total", "transport"]
+                    self.domains = [Domain("fuel", 1)]
+
+            def build_library():
+                return Library()
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            recipe_path = Path(tmpdir) / "recipe.py"
+            recipe_path.write_text(textwrap.dedent(recipe), encoding="utf-8")
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = export_cli_main(["--recipe", str(recipe_path), "--dry-run"])
+
+        output = stream.getvalue()
+        self.assertEqual(rc, 0)
+        self.assertIn("FAIL mgxs-required: missing required MGXS type(s): absorption", output)
+        self.assertIn("scatter matrix", output)
+        self.assertIn("WARN legendre-order: P0 only", output)
+        self.assertIn("WARN volumes: 1 domain(s) use default volume=1.0: fuel", output)
+        self.assertIn("WARN domain-mode: root_attrs should include domain_mode", output)
 
     def test_exports_explicit_subdomain_specs(self) -> None:
         library = SubdomainFakeLibrary()

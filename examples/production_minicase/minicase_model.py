@@ -31,6 +31,10 @@ DOMAIN_NAME_BY_ID = {
     FUEL_CELL_ID: "ASM_FUEL_LEFT",
     MODERATOR_CELL_ID: "ASM_MOD_RIGHT",
 }
+DOMAIN_VOLUME_BY_ID = {
+    FUEL_CELL_ID: 32.0,
+    MODERATOR_CELL_ID: 32.0,
+}
 ENERGY_BOUNDS_EV = [1.0e-5, 6.25e-1, 2.0e7]
 LEGENDRE_ORDER = 1
 MGXS_TYPES = [
@@ -92,6 +96,7 @@ def build_geometry(materials: openmc.Materials | None = None) -> openmc.Geometry
     fuel_cell = openmc.Cell(cell_id=FUEL_CELL_ID, name=DOMAIN_NAME_BY_ID[FUEL_CELL_ID])
     fuel_cell.fill = fuel
     fuel_cell.region = +x_min & -x_mid & +y_min & -y_max & +z_min & -z_max
+    fuel_cell.volume = DOMAIN_VOLUME_BY_ID[FUEL_CELL_ID]
 
     moderator_cell = openmc.Cell(
         cell_id=MODERATOR_CELL_ID,
@@ -99,6 +104,7 @@ def build_geometry(materials: openmc.Materials | None = None) -> openmc.Geometry
     )
     moderator_cell.fill = moderator
     moderator_cell.region = +x_mid & -x_max & +y_min & -y_max & +z_min & -z_max
+    moderator_cell.volume = DOMAIN_VOLUME_BY_ID[MODERATOR_CELL_ID]
 
     root = openmc.Universe(universe_id=1, name="production minicase root")
     root.add_cells([fuel_cell, moderator_cell])
@@ -124,7 +130,10 @@ def build_settings(run_settings: RunSettings | None = None) -> openmc.Settings:
 
 def selected_domains(geometry: openmc.Geometry) -> list[openmc.Cell]:
     cells = geometry.get_all_cells()
-    return [cells[FUEL_CELL_ID], cells[MODERATOR_CELL_ID]]
+    selected = [cells[FUEL_CELL_ID], cells[MODERATOR_CELL_ID]]
+    for cell in selected:
+        cell.volume = DOMAIN_VOLUME_BY_ID[cell.id]
+    return selected
 
 
 def build_library(

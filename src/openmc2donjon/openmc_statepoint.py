@@ -47,8 +47,18 @@ class RecipeDryRunDomain:
     source_id: Any
     source_type: str
     volume: float
+    volume_source: str
     xs_kwargs: Mapping[str, Any] | None
     attr_keys: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class RecipeProductionCheck:
+    """One production-readiness check for a recipe dry-run."""
+
+    name: str
+    status: str
+    detail: str
 
 
 @dataclass(frozen=True)
@@ -65,6 +75,7 @@ class RecipeDryRunSummary:
     mgxs_types: tuple[str, ...]
     domains: tuple[RecipeDryRunDomain, ...]
     root_attr_keys: tuple[str, ...]
+    production_checks: tuple[RecipeProductionCheck, ...]
     warnings: tuple[str, ...]
 
 
@@ -231,13 +242,15 @@ def dry_run_openmc_statepoint_recipe(
             warnings.append(f"domain {index}: duplicate name {safe_name!r} written as {name!r}")
         elif str(raw_name) != safe_name:
             warnings.append(f"domain {index}: name {raw_name!r} written as {safe_name!r}")
+        volume, volume_source = _dry_run_volume(spec.domain, spec.volume)
         domains.append(
             RecipeDryRunDomain(
                 name=name,
                 source_label=_source_label(spec.domain),
                 source_id=getattr(spec.domain, "id", None),
                 source_type=type(spec.domain).__name__,
-                volume=float(spec.volume if spec.volume is not None else _domain_volume(spec.domain)),
+                volume=volume,
+                volume_source=volume_source,
                 xs_kwargs=spec.xs_kwargs,
                 attr_keys=tuple(sorted((spec.attrs or {}).keys())),
             )
@@ -246,17 +259,28 @@ def dry_run_openmc_statepoint_recipe(
     mgxs_types = _library_mgxs_types(library)
     warnings.extend(_mgxs_type_warnings(mgxs_types))
     root_attr_keys = tuple(sorted((root_attrs or {}).keys()))
+    domain_type = _optional_string_attr(library, "domain_type")
+    legendre_order = _library_legendre_order(library)
+    production_checks = _production_checks(
+        energy_groups=len(energy_bounds) - 1,
+        legendre_order=legendre_order,
+        domain_type=domain_type,
+        mgxs_types=mgxs_types,
+        domains=tuple(domains),
+        root_attr_keys=root_attr_keys,
+    )
     return RecipeDryRunSummary(
         recipe_path=recipe_file,
         statepoint_path=statepoint_file,
         statepoint_loaded=statepoint_loaded,
         output_path=output_file,
         energy_groups=len(energy_bounds) - 1,
-        legendre_order=_library_legendre_order(library),
-        domain_type=_optional_string_attr(library, "domain_type"),
+        legendre_order=legendre_order,
+        domain_type=domain_type,
         mgxs_types=mgxs_types,
         domains=tuple(domains),
         root_attr_keys=root_attr_keys,
+        production_checks=production_checks,
         warnings=tuple(warnings),
     )
 
@@ -305,6 +329,181 @@ def _library_legendre_order(library: Any) -> int:
 def _library_mgxs_types(library: Any) -> tuple[str, ...]:
     values = getattr(library, "mgxs_types", ()) or ()
     return tuple(str(value) for value in values)
+
+
+def _production_checks(
+    *,
+    energy_groups: int,
+    legendre_order: int,
+    domain_type: str | None,
+    mgxs_types: tuple[str, ...],
+    domains: tuple[RecipeDryRunDomain, ...],
+    root_attr_keys: tuple[str, ...],
+) -> tuple[RecipeProductionCheck, ...]:
+    checks: list[RecipeProductionCheck] = []
+    checks.append(
+        RecipeProductionCheck(
+            "energy-groups",
+            "PASS" if energy_groups > 0 else "FAIL",
+            f"{energy_groups} group(s) from recipe energy bounds",
+        )
+    )
+    checks.append(_mgxs_required_check(mgxs_types))
+    checks.append(_mgxs_transport_check(mgxs_types))
+    checks.append(_fission_source_check(mgxs_types))
+    checks.append(
+        RecipeProductionCheck(
+            "legendre-order",
+            "PASS" if legendre_order >= 1 else "WARN",
+            (
+                f"P{legendre_order}; P1+ supports anisotropic scattering checks"
+                if legendre_order >= 1
+                else "P0 only; diffusion may work, but SPN/transport studies usually need P1+"
+            ),
+        )
+    )
+    mapping_status = "PASS" if domain_type else "WARN"
+    mapping_type = domain_type or "unknown"
+    checks.append(
+        RecipeProductionCheck(
+            "domain-mapping",
+            mapping_status,
+            f"{len(domains)} {mapping_type} domain(s) -> {len(domains)} DONJON mixture(s)",
+        )
+    )
+    checks.append(_volume_check(domains))
+    checks.append(
+        RecipeProductionCheck(
+            "domain-mode",
+            "PASS" if "domain_mode" in root_attr_keys else "WARN",
+            (
+                "root_attrs include domain_mode"
+                if "domain_mode" in root_attr_keys
+                else "root_attrs should include domain_mode, e.g. assembly/cell/material"
+            ),
+        )
+    )
+    return tuple(checks)
+
+
+def _mgxs_required_check(mgxs_types: tuple[str, ...]) -> RecipeProductionCheck:
+    if not mgxs_types:
+        return RecipeProductionCheck(
+            "mgxs-required",
+            "WARN",
+            "library has no mgxs_types list; required XS availability cannot be checked early",
+        )
+    missing: list[str] = []
+    for required in ("total", "absorption", "scatter_matrix"):
+        if not _has_mgxs_alias(mgxs_types, required):
+            missing.append("/".join(MGXS_TYPE_ALIASES[required]))
+    if missing:
+        return RecipeProductionCheck(
+            "mgxs-required",
+            "FAIL",
+            "missing required MGXS type(s): " + ", ".join(missing),
+        )
+    return RecipeProductionCheck(
+        "mgxs-required",
+        "PASS",
+        "total, absorption, and scatter matrix MGXS are declared",
+    )
+
+
+def _mgxs_transport_check(mgxs_types: tuple[str, ...]) -> RecipeProductionCheck:
+    if _has_mgxs_alias(mgxs_types, "transport_total"):
+        return RecipeProductionCheck(
+            "transport",
+            "PASS",
+            "transport MGXS declared; STRD can be written explicitly",
+        )
+    return RecipeProductionCheck(
+        "transport",
+        "WARN",
+        "transport MGXS not declared; STRD may fall back to total",
+    )
+
+
+def _fission_source_check(mgxs_types: tuple[str, ...]) -> RecipeProductionCheck:
+    if not mgxs_types:
+        return RecipeProductionCheck(
+            "fission-source",
+            "WARN",
+            "fission, nu-fission, and chi availability cannot be checked early",
+        )
+    missing = [
+        label
+        for label, key in (
+            ("fission", "fission"),
+            ("nu-fission", "nu_fission"),
+            ("chi", "chi"),
+        )
+        if not _has_mgxs_alias(mgxs_types, key)
+    ]
+    if not missing:
+        return RecipeProductionCheck(
+            "fission-source",
+            "PASS",
+            "fission, nu-fission, and chi MGXS are declared",
+        )
+    return RecipeProductionCheck(
+        "fission-source",
+        "WARN",
+        "missing " + ", ".join(missing) + "; acceptable only for non-fissile/fixed-source cases",
+    )
+
+
+def _volume_check(domains: tuple[RecipeDryRunDomain, ...]) -> RecipeProductionCheck:
+    non_positive = [domain.name for domain in domains if domain.volume <= 0.0]
+    if non_positive:
+        rendered = ", ".join(non_positive[:8])
+        if len(non_positive) > 8:
+            rendered += f", ... ({len(non_positive)} total)"
+        return RecipeProductionCheck(
+            "volumes",
+            "FAIL",
+            f"non-positive domain volume(s): {rendered}",
+        )
+    defaulted = [domain.name for domain in domains if domain.volume_source == "default"]
+    if defaulted:
+        rendered = ", ".join(defaulted[:8])
+        if len(defaulted) > 8:
+            rendered += f", ... ({len(defaulted)} total)"
+        return RecipeProductionCheck(
+            "volumes",
+            "WARN",
+            f"{len(defaulted)} domain(s) use default volume=1.0: {rendered}",
+        )
+    return RecipeProductionCheck(
+        "volumes",
+        "PASS",
+        "all selected domains have positive explicit volumes",
+    )
+
+
+def _has_mgxs_alias(mgxs_types: tuple[str, ...], key: str) -> bool:
+    normalized = {_normalize_mgxs_type(value) for value in mgxs_types}
+    aliases = {_normalize_mgxs_type(value) for value in MGXS_TYPE_ALIASES[key]}
+    return not normalized.isdisjoint(aliases)
+
+
+def _normalize_mgxs_type(value: str) -> str:
+    return str(value).lower().replace("_", "-")
+
+
+def _dry_run_volume(domain: Any, explicit_volume: float | None) -> tuple[float, str]:
+    if explicit_volume is not None:
+        return float(explicit_volume), "spec"
+    for attr in ("volume", "vol"):
+        if hasattr(domain, attr):
+            value = getattr(domain, attr)
+            if callable(value):
+                value = value()
+            try:
+                return float(value), "domain"
+            except (TypeError, ValueError):
+                continue
+    return _domain_volume(domain), "default"
 
 
 def _optional_string_attr(obj: Any, name: str) -> str | None:

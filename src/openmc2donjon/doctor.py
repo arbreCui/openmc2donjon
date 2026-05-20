@@ -172,6 +172,9 @@ def _check_recipe(
             f"statepoint={statepoint_detail}"
         ),
     )
+    for check in summary.production_checks:
+        status = "OK" if check.status == "PASS" else check.status
+        report.add("recipe-check", status, f"{check.name}: {check.detail}")
     for warning in summary.warnings:
         report.add("recipe-warning", "WARN", warning)
 

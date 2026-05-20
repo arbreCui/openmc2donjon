@@ -169,6 +169,9 @@ Check a recipe before writing an HDF5 handoff:
 openmc2donjon-export --recipe export_recipe.py --no-load-statepoint --dry-run
 ```
 
+Dry-run output includes a production checklist for MGXS coverage, transport
+readiness, domain mapping, volume provenance, and `domain_mode`.
+
 Check the one-command conversion plan before writing any artifacts:
 
 ```sh

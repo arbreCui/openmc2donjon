@@ -67,6 +67,9 @@ openmc2donjon-from-openmc \
   --check
 ```
 
+The dry-run output includes a production checklist for MGXS coverage,
+transport/STRD readiness, domain-to-mixture mapping, volumes, and `domain_mode`.
+
 ```sh
 openmc2donjon-from-openmc \
   --recipe export_recipe.py \

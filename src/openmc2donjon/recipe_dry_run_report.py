@@ -25,6 +25,9 @@ def print_recipe_dry_run_summary(summary: RecipeDryRunSummary) -> None:
     print(f"  mgxs_types: {_render_list(summary.mgxs_types)}")
     print(f"  mixtures: {len(summary.domains)}")
     print(f"  root_attrs: {_render_list(summary.root_attr_keys)}")
+    print("  production_checklist:")
+    for check in summary.production_checks:
+        print(f"    {check.status:<4} {check.name}: {check.detail}")
     if summary.warnings:
         print("  warnings:")
         for warning in summary.warnings:
@@ -35,6 +38,7 @@ def print_recipe_dry_run_summary(summary: RecipeDryRunSummary) -> None:
             f"source={domain.source_label}",
             f"type={domain.source_type}",
             f"volume={domain.volume:g}",
+            f"volume_source={domain.volume_source}",
         ]
         if domain.xs_kwargs:
             details.append(f"xs_kwargs={dict(domain.xs_kwargs)}")

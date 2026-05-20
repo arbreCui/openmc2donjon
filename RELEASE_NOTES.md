@@ -22,6 +22,8 @@
 - Bumped the from-OpenMC summary schema to v2 with checked preflight provenance.
 - Added `openmc2donjon-from-openmc --dry-run` for one-step conversion-plan
   checks that do not write HDF5, summary JSON, or DONJON ASCII files.
+- Added a recipe production checklist to dry-run/doctor output covering MGXS
+  coverage, transport readiness, domain mapping, volumes, and `domain_mode`.
 - Added `openmc2donjon inspect` for read-only MGXS HDF5 inventory reports with
   optional JSON output.
 - Added `openmc2donjon diff` for exact or tolerance-based MGXS HDF5 baseline

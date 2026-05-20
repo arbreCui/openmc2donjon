@@ -78,10 +78,18 @@ class CliTests(unittest.TestCase):
         self.assertIn("OK   numpy:", output)
         self.assertIn("OK   h5py:", output)
         self.assertIn("OK   recipe:", output)
+        self.assertIn("WARN recipe-check: mgxs-required:", output)
         self.assertIn("mixtures=2 groups=2 P0", output)
         self.assertEqual(payload["schema"], "openmc2donjon.doctor.v1")
         self.assertEqual(payload["decision"], "openmc2donjon_doctor_passed")
         self.assertTrue(payload["ok"])
+        self.assertTrue(
+            any(
+                check["name"] == "recipe-check"
+                and str(check["detail"]).startswith("mgxs-required:")
+                for check in payload["checks"]
+            )
+        )
 
     def test_inspect_command_reports_hdf5_contents(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
