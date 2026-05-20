@@ -45,6 +45,7 @@ SURFACE_FLUX_SUMMARY="$RUN_DIR/openmc_surface_flux_summary.json"
 LOW_ORDER_RAW="$RUN_DIR/low_order_driver_raw.h5"
 LOW_ORDER_DRIVER="$RUN_DIR/low_order_driver.h5"
 LOW_ORDER_DRIVER_SUMMARY="$RUN_DIR/low_order_driver_summary.json"
+LOW_ORDER_DRIVER_CHECK_SUMMARY="$RUN_DIR/low_order_driver_check_summary.json"
 HOMOGENEOUS_FACE_FLUX="$RUN_DIR/homogeneous_face_flux.h5"
 HOMOGENEOUS_FACE_FLUX_SUMMARY="$RUN_DIR/homogeneous_face_flux_summary.json"
 ADF_SIDECAR="$RUN_DIR/adf_sidecar.h5"
@@ -247,6 +248,13 @@ PY
   --summary-json "$LOW_ORDER_DRIVER_SUMMARY"
 
 echo
+echo "== Check low-order driver handoff =="
+"$PYTHON_BIN" -m openmc2donjon.cli check-low-order-driver "$MGXS" "$LOW_ORDER_DRIVER" \
+  --faces "$ADF_FACES" \
+  --face-widths 4.0 \
+  --summary-json "$LOW_ORDER_DRIVER_CHECK_SUMMARY"
+
+echo
 echo "== Reconstruct homogeneous face flux =="
 "$PYTHON_BIN" -m openmc2donjon.cli make-homogeneous-face-flux "$MGXS" \
   -o "$HOMOGENEOUS_FACE_FLUX" \
@@ -286,6 +294,7 @@ OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
   --extra-artifact "low-order-raw=$LOW_ORDER_RAW" \
   --extra-artifact "low-order-driver=$LOW_ORDER_DRIVER" \
   --extra-artifact "low-order-driver-summary=$LOW_ORDER_DRIVER_SUMMARY" \
+  --extra-artifact "low-order-driver-check-summary=$LOW_ORDER_DRIVER_CHECK_SUMMARY" \
   --extra-artifact "homogeneous-face-flux=$HOMOGENEOUS_FACE_FLUX" \
   --extra-artifact "homogeneous-face-flux-summary=$HOMOGENEOUS_FACE_FLUX_SUMMARY" \
   --extra-artifact "adf-sidecar-summary=$ADF_SIDECAR_SUMMARY" \
@@ -294,7 +303,7 @@ OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
   --require-volume \
   --require-transport-dataset
 
-"$PYTHON_BIN" - "$SURFACE_FLUX" "$SURFACE_FLUX_SUMMARY" "$LOW_ORDER_DRIVER" "$LOW_ORDER_DRIVER_SUMMARY" "$HOMOGENEOUS_FACE_FLUX" "$HOMOGENEOUS_FACE_FLUX_SUMMARY" "$ADF_SIDECAR" "$ADF_SIDECAR_SUMMARY" "$ADF_H5" "$ADF_MCO" "$ADF_RUN_SUMMARY" "$ADF_CHECK_SUMMARY" "$ADF_INJECT_SUMMARY" "$ADF_MANIFEST" <<'PY'
+"$PYTHON_BIN" - "$SURFACE_FLUX" "$SURFACE_FLUX_SUMMARY" "$LOW_ORDER_DRIVER" "$LOW_ORDER_DRIVER_SUMMARY" "$LOW_ORDER_DRIVER_CHECK_SUMMARY" "$HOMOGENEOUS_FACE_FLUX" "$HOMOGENEOUS_FACE_FLUX_SUMMARY" "$ADF_SIDECAR" "$ADF_SIDECAR_SUMMARY" "$ADF_H5" "$ADF_MCO" "$ADF_RUN_SUMMARY" "$ADF_CHECK_SUMMARY" "$ADF_INJECT_SUMMARY" "$ADF_MANIFEST" <<'PY'
 import json
 from pathlib import Path
 import sys
@@ -308,16 +317,17 @@ surface_flux = Path(sys.argv[1])
 surface_flux_summary_path = Path(sys.argv[2])
 low_order_driver = Path(sys.argv[3])
 low_order_driver_summary_path = Path(sys.argv[4])
-homogeneous_face_flux = Path(sys.argv[5])
-homogeneous_face_flux_summary_path = Path(sys.argv[6])
-sidecar = Path(sys.argv[7])
-sidecar_summary_path = Path(sys.argv[8])
-mgxs = Path(sys.argv[9])
-mco = Path(sys.argv[10])
-summary_path = Path(sys.argv[11])
-check_summary_path = Path(sys.argv[12])
-adf_summary_path = Path(sys.argv[13])
-manifest_path = Path(sys.argv[14])
+low_order_driver_check_summary_path = Path(sys.argv[5])
+homogeneous_face_flux = Path(sys.argv[6])
+homogeneous_face_flux_summary_path = Path(sys.argv[7])
+sidecar = Path(sys.argv[8])
+sidecar_summary_path = Path(sys.argv[9])
+mgxs = Path(sys.argv[10])
+mco = Path(sys.argv[11])
+summary_path = Path(sys.argv[12])
+check_summary_path = Path(sys.argv[13])
+adf_summary_path = Path(sys.argv[14])
+manifest_path = Path(sys.argv[15])
 faces = ("FD_XMIN", "FD_XMAX", "FD_YMIN", "FD_YMAX")
 
 surface_flux_summary = json.loads(surface_flux_summary_path.read_text(encoding="utf-8"))
@@ -344,6 +354,18 @@ if low_order_driver_summary["schema"] != "openmc2donjon.low-order-driver.v1":
     raise SystemExit("low-order driver summary schema mismatch")
 if tuple(low_order_driver_summary["face_names"]) != faces:
     raise SystemExit("low-order driver summary face names mismatch")
+
+low_order_driver_check_summary = json.loads(
+    low_order_driver_check_summary_path.read_text(encoding="utf-8")
+)
+if low_order_driver_check_summary["decision"] != "openmc2donjon_low_order_driver_contract_passed":
+    raise SystemExit("low-order driver contract summary did not pass")
+if low_order_driver_check_summary["schema"] != "openmc2donjon.low-order-driver-contract.v1":
+    raise SystemExit("low-order driver contract summary schema mismatch")
+if tuple(low_order_driver_check_summary["face_names"]) != faces:
+    raise SystemExit("low-order driver contract summary face names mismatch")
+if low_order_driver_check_summary["homogeneous_face_flux_min"] <= 0.0:
+    raise SystemExit("low-order driver contract did not verify positive homogeneous face flux")
 
 with h5py.File(low_order_driver, "r") as h5:
     if h5.attrs["schema"] != "openmc2donjon.low-order-driver.v1":
@@ -454,6 +476,7 @@ required = {
     "low-order-raw",
     "low-order-driver",
     "low-order-driver-summary",
+    "low-order-driver-check-summary",
     "homogeneous-face-flux",
     "homogeneous-face-flux-summary",
 }
@@ -466,6 +489,7 @@ if labels["adf-summary"].get("summary_decision") != "openmc2donjon_adf_augment_p
 expected_summary_decisions = {
     "surface-flux-summary": "openmc2donjon_surface_flux_export_passed",
     "low-order-driver-summary": "openmc2donjon_low_order_driver_passed",
+    "low-order-driver-check-summary": "openmc2donjon_low_order_driver_contract_passed",
     "homogeneous-face-flux-summary": "openmc2donjon_homogeneous_face_flux_passed",
     "adf-sidecar-summary": "openmc2donjon_adf_sidecar_passed",
 }

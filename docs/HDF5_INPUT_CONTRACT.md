@@ -284,6 +284,20 @@ metadata and writes:
 /face_names
 ```
 
+Before using the driver as an ADF denominator source, run the strict contract
+check:
+
+```sh
+openmc2donjon check-low-order-driver mgxs_library.h5 low_order_driver.h5 \
+  --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
+  --face-widths 4.0
+```
+
+The check requires the canonical schema, matching MGXS energy/group/mixture
+metadata, `net_current_density` sign convention `positive outward`, finite
+currents, positive volume flux, and, when `--face-widths` is supplied, positive
+reconstructed homogeneous face flux.
+
 For a diffusion-current homogeneous denominator, `make-homogeneous-face-flux`
 uses `D = 1/(3 * transport_total)` from the MGXS handoff and computes:
 

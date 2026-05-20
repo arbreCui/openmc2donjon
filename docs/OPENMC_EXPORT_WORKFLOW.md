@@ -132,6 +132,11 @@ openmc2donjon make-low-order-driver runs/case1/mgxs_library.h5 \
   --net-current runs/case1/raw_low_order_driver.h5 \
   --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX
 
+openmc2donjon check-low-order-driver \
+  runs/case1/mgxs_library.h5 runs/case1/low_order_driver.h5 \
+  --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
+  --face-widths 4.0
+
 openmc2donjon make-homogeneous-face-flux runs/case1/mgxs_library.h5 \
   -o runs/case1/homogeneous_face_flux.h5 \
   --volume-flux runs/case1/low_order_driver.h5 \

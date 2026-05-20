@@ -12,7 +12,7 @@ from .adf_sidecar import create_flux_ratio_adf_sidecar, create_unity_adf_sidecar
 from .bundle import ArtifactSpec, bundle_artifacts, parse_extra_artifact
 from .doctor import run_doctor
 from .homogeneous_face_flux import create_homogeneous_face_flux
-from .low_order_driver import create_low_order_driver
+from .low_order_driver import check_low_order_driver, create_low_order_driver
 from .macrolib import convert_mgxs_hdf5_to_macrolib
 from .mgxs_diff import diff_hdf5_files
 from .mgxs_inspect import inspect_files
@@ -34,6 +34,8 @@ def build_parser() -> argparse.ArgumentParser:
             "handoffs, 'openmc2donjon export-surface-flux <statepoint> ...' to "
             "export OpenMC face fluxes, 'openmc2donjon make-low-order-driver "
             "<input_h5> ...' to canonicalize a low-order driver handoff, "
+            "'openmc2donjon check-low-order-driver <input_h5> <driver_h5>' to "
+            "validate the low-order handoff, "
             "'openmc2donjon make-homogeneous-face-flux <input_h5> ...' to "
             "reconstruct homogeneous face fluxes, 'openmc2donjon "
             "make-adf-sidecar <input_h5> ...' to create an ADF "
@@ -687,12 +689,52 @@ def build_make_low_order_driver_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_check_low_order_driver_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="openmc2donjon check-low-order-driver",
+        description=(
+            "Validate a canonical low-order driver HDF5 handoff against MGXS "
+            "mixture, group, face, and current sign-convention metadata."
+        ),
+    )
+    parser.add_argument("input_h5", type=Path, help="MGXS HDF5 handoff used for metadata")
+    parser.add_argument("driver_h5", type=Path, help="canonical low-order driver HDF5")
+    parser.add_argument(
+        "--faces",
+        default=None,
+        help="comma-separated face names expected in the driver",
+    )
+    parser.add_argument(
+        "--face-widths",
+        default=None,
+        help=(
+            "optional width check: one width for all faces or comma-separated "
+            "widths matching --faces/driver faces; verifies reconstructed "
+            "homogeneous face flux is positive"
+        ),
+    )
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        default=None,
+        help="write a machine-readable low-order driver contract summary JSON",
+    )
+    parser.add_argument(
+        "--no-fail",
+        action="store_true",
+        help="always return zero after printing the contract report",
+    )
+    return parser
+
+
 def main(argv: list[str] | None = None) -> int:
     raw_argv = sys.argv[1:] if argv is None else list(argv)
     if raw_argv and raw_argv[0] == "export-surface-flux":
         return _export_surface_flux_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "make-low-order-driver":
         return _make_low_order_driver_main(raw_argv[1:])
+    if raw_argv and raw_argv[0] == "check-low-order-driver":
+        return _check_low_order_driver_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "make-homogeneous-face-flux":
         return _make_homogeneous_face_flux_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "make-adf-sidecar":
@@ -930,6 +972,26 @@ def _make_low_order_driver_main(argv: list[str]) -> int:
     except Exception as exc:
         parser.exit(1, f"openmc2donjon make-low-order-driver: error: {exc}\n")
     return 0
+
+
+def _check_low_order_driver_main(argv: list[str]) -> int:
+    parser = build_check_low_order_driver_parser()
+    args = parser.parse_args(argv)
+    try:
+        report = check_low_order_driver(
+            args.input_h5,
+            args.driver_h5,
+            faces=None if args.faces is None else parse_faces(args.faces),
+            face_widths=(
+                None
+                if args.face_widths is None
+                else _parse_float_tuple(args.face_widths, "--face-widths")
+            ),
+            summary_json=args.summary_json,
+        )
+    except Exception as exc:
+        parser.exit(1, f"openmc2donjon check-low-order-driver: error: {exc}\n")
+    return 0 if report.ok or args.no_fail else 1
 
 
 def _make_homogeneous_face_flux_main(argv: list[str]) -> int:

@@ -11,7 +11,7 @@ import h5py
 import numpy as np
 
 from openmc2donjon.cli import main as cli_main
-from openmc2donjon.low_order_driver import PASS_DECISION
+from openmc2donjon.low_order_driver import CHECK_FAIL_DECISION, CHECK_PASS_DECISION, PASS_DECISION
 
 
 class LowOrderDriverTests(unittest.TestCase):
@@ -23,6 +23,7 @@ class LowOrderDriverTests(unittest.TestCase):
             driver = tmp / "low_order_driver.h5"
             homogeneous = tmp / "homogeneous_face_flux.h5"
             summary = tmp / "low_order_driver_summary.json"
+            check_summary = tmp / "low_order_driver_check_summary.json"
             _write_mgxs(mgxs)
             _write_raw_driver(raw)
 
@@ -73,6 +74,30 @@ class LowOrderDriverTests(unittest.TestCase):
             self.assertEqual(payload["volume_flux_dataset"], "volume_flux")
             self.assertEqual(payload["net_current_dataset"], "net_current_density")
 
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = cli_main(
+                    [
+                        "check-low-order-driver",
+                        str(mgxs),
+                        str(driver),
+                        "--faces",
+                        "FD_XMIN,FD_XMAX",
+                        "--face-widths",
+                        "4.0,2.0",
+                        "--summary-json",
+                        str(check_summary),
+                    ]
+                )
+            check_payload = json.loads(check_summary.read_text(encoding="utf-8"))
+
+            self.assertEqual(rc, 0)
+            self.assertIn(CHECK_PASS_DECISION, stream.getvalue())
+            self.assertEqual(check_payload["decision"], CHECK_PASS_DECISION)
+            self.assertTrue(check_payload["ok"])
+            self.assertEqual(check_payload["face_names"], ["FD_XMIN", "FD_XMAX"])
+            self.assertGreater(check_payload["homogeneous_face_flux_min"], 0.0)
+
             with contextlib.redirect_stdout(io.StringIO()):
                 rc = cli_main(
                     [
@@ -103,6 +128,55 @@ class LowOrderDriverTests(unittest.TestCase):
                 ]
             ),
         )
+
+    def test_check_low_order_driver_fails_bad_sign_convention(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            mgxs = tmp / "mgxs.h5"
+            raw = tmp / "raw_driver.h5"
+            driver = tmp / "low_order_driver.h5"
+            summary = tmp / "low_order_driver_check_summary.json"
+            _write_mgxs(mgxs)
+            _write_raw_driver(raw)
+            with contextlib.redirect_stdout(io.StringIO()):
+                rc = cli_main(
+                    [
+                        "make-low-order-driver",
+                        str(mgxs),
+                        "-o",
+                        str(driver),
+                        "--volume-flux",
+                        str(raw),
+                        "--net-current",
+                        str(raw),
+                        "--faces",
+                        "FD_XMIN,FD_XMAX",
+                    ]
+                )
+            self.assertEqual(rc, 0)
+            with h5py.File(driver, "a") as h5:
+                h5["net_current_density"].attrs["sign_convention"] = "inward positive"
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = cli_main(
+                    [
+                        "check-low-order-driver",
+                        str(mgxs),
+                        str(driver),
+                        "--faces",
+                        "FD_XMIN,FD_XMAX",
+                        "--summary-json",
+                        str(summary),
+                    ]
+                )
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+
+        self.assertEqual(rc, 1)
+        self.assertIn(CHECK_FAIL_DECISION, stream.getvalue())
+        self.assertEqual(payload["decision"], CHECK_FAIL_DECISION)
+        self.assertFalse(payload["ok"])
+        self.assertIn("sign_convention", payload["errors"][0])
 
 
 def _write_mgxs(path: Path) -> None:
