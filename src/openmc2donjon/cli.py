@@ -12,6 +12,7 @@ from .adf_sidecar import create_flux_ratio_adf_sidecar, create_unity_adf_sidecar
 from .bundle import ArtifactSpec, bundle_artifacts, parse_extra_artifact
 from .doctor import run_doctor
 from .homogeneous_face_flux import create_homogeneous_face_flux
+from .low_order_driver import create_low_order_driver
 from .macrolib import convert_mgxs_hdf5_to_macrolib
 from .mgxs_diff import diff_hdf5_files
 from .mgxs_inspect import inspect_files
@@ -31,9 +32,11 @@ def build_parser() -> argparse.ArgumentParser:
             "Use 'openmc2donjon inspect <input_h5>' to inspect an HDF5 handoff, "
             "'openmc2donjon diff <reference_h5> <candidate_h5>' to compare two "
             "handoffs, 'openmc2donjon export-surface-flux <statepoint> ...' to "
-            "export OpenMC face fluxes, 'openmc2donjon make-homogeneous-face-flux "
-            "<input_h5> ...' to reconstruct homogeneous face fluxes, "
-            "'openmc2donjon make-adf-sidecar <input_h5> ...' to create an ADF "
+            "export OpenMC face fluxes, 'openmc2donjon make-low-order-driver "
+            "<input_h5> ...' to canonicalize a low-order driver handoff, "
+            "'openmc2donjon make-homogeneous-face-flux <input_h5> ...' to "
+            "reconstruct homogeneous face fluxes, 'openmc2donjon "
+            "make-adf-sidecar <input_h5> ...' to create an ADF "
             "sidecar, 'openmc2donjon augment-adf <input_h5> ...' to inject "
             "computed discontinuity factors, "
             "'openmc2donjon bundle --output-dir DIR ...' to collect "
@@ -643,10 +646,53 @@ def build_make_homogeneous_face_flux_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_make_low_order_driver_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="openmc2donjon make-low-order-driver",
+        description=(
+            "Canonicalize external low-order driver volume flux and outward "
+            "net current density into the HDF5 layout consumed by "
+            "make-homogeneous-face-flux."
+        ),
+    )
+    parser.add_argument("input_h5", type=Path, help="MGXS HDF5 handoff used for metadata")
+    parser.add_argument("-o", "--output", type=Path, required=True, help="low-order driver HDF5")
+    parser.add_argument(
+        "--volume-flux",
+        required=True,
+        help="HDF5 file or FILE::DATASET containing volume-average flux",
+    )
+    parser.add_argument(
+        "--net-current",
+        required=True,
+        help="HDF5 file or FILE::DATASET containing outward net current density",
+    )
+    parser.add_argument(
+        "--faces",
+        default="FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX",
+        help="comma-separated face names",
+    )
+    parser.add_argument(
+        "--source-label",
+        default="external low-order driver",
+        help="provenance label stored in the output HDF5",
+    )
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        default=None,
+        help="write a machine-readable low-order driver summary JSON",
+    )
+    parser.add_argument("--force", action="store_true", help="overwrite output if it exists")
+    return parser
+
+
 def main(argv: list[str] | None = None) -> int:
     raw_argv = sys.argv[1:] if argv is None else list(argv)
     if raw_argv and raw_argv[0] == "export-surface-flux":
         return _export_surface_flux_main(raw_argv[1:])
+    if raw_argv and raw_argv[0] == "make-low-order-driver":
+        return _make_low_order_driver_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "make-homogeneous-face-flux":
         return _make_homogeneous_face_flux_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "make-adf-sidecar":
@@ -864,6 +910,25 @@ def _export_surface_flux_main(argv: list[str]) -> int:
         )
     except Exception as exc:
         parser.exit(1, f"openmc2donjon export-surface-flux: error: {exc}\n")
+    return 0
+
+
+def _make_low_order_driver_main(argv: list[str]) -> int:
+    parser = build_make_low_order_driver_parser()
+    args = parser.parse_args(argv)
+    try:
+        create_low_order_driver(
+            args.input_h5,
+            args.output,
+            volume_flux=args.volume_flux,
+            net_current=args.net_current,
+            faces=parse_faces(args.faces),
+            source_label=args.source_label,
+            force=args.force,
+            summary_json=args.summary_json,
+        )
+    except Exception as exc:
+        parser.exit(1, f"openmc2donjon make-low-order-driver: error: {exc}\n")
     return 0
 
 

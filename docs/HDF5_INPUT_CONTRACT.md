@@ -263,6 +263,27 @@ openmc2donjon export-surface-flux statepoint.120.h5 \
 The exported HDF5 contains `/surface_flux/mean` with layout
 `(mesh_y, mesh_x, group, face)` and a `/mixture_names` mesh mapping.
 
+Low-order driver outputs can be canonicalized before the homogeneous
+reconstruction step:
+
+```sh
+openmc2donjon make-low-order-driver mgxs_library.h5 \
+  -o low_order_driver.h5 \
+  --volume-flux raw_low_order_driver.h5 \
+  --net-current raw_low_order_driver.h5 \
+  --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX
+```
+
+The command validates the external driver data against MGXS mixture/group
+metadata and writes:
+
+```text
+/volume_flux          shape=(M, G)
+/net_current_density  shape=(M, F, G), positive outward
+/mixture_names
+/face_names
+```
+
 For a diffusion-current homogeneous denominator, `make-homogeneous-face-flux`
 uses `D = 1/(3 * transport_total)` from the MGXS handoff and computes:
 

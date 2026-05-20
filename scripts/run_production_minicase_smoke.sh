@@ -42,6 +42,11 @@ CHECK_SUMMARY="$CONVERT_RUN_DIR/check_summary.json"
 MANIFEST="$CONVERT_RUN_DIR/manifest.json"
 SURFACE_FLUX="$RUN_DIR/openmc_surface_flux.h5"
 SURFACE_FLUX_SUMMARY="$RUN_DIR/openmc_surface_flux_summary.json"
+LOW_ORDER_RAW="$RUN_DIR/low_order_driver_raw.h5"
+LOW_ORDER_DRIVER="$RUN_DIR/low_order_driver.h5"
+LOW_ORDER_DRIVER_SUMMARY="$RUN_DIR/low_order_driver_summary.json"
+HOMOGENEOUS_FACE_FLUX="$RUN_DIR/homogeneous_face_flux.h5"
+HOMOGENEOUS_FACE_FLUX_SUMMARY="$RUN_DIR/homogeneous_face_flux_summary.json"
 ADF_SIDECAR="$RUN_DIR/adf_sidecar.h5"
 ADF_SIDECAR_SUMMARY="$RUN_DIR/adf_sidecar_summary.json"
 ADF_RUN_DIR="$RUN_DIR/openmc2donjon_adf_run"
@@ -198,17 +203,71 @@ echo "== Export OpenMC surface flux =="
   --summary-json "$SURFACE_FLUX_SUMMARY"
 
 echo
+echo "== Build low-order driver handoff =="
+"$PYTHON_BIN" - "$MGXS" "$LOW_ORDER_RAW" "$ADF_FACES" <<'PY'
+from pathlib import Path
+import sys
+
+import h5py
+import numpy as np
+
+mgxs_path = Path(sys.argv[1])
+output_path = Path(sys.argv[2])
+faces = tuple(part.strip() for part in sys.argv[3].split(",") if part.strip())
+
+with h5py.File(mgxs_path, "r") as h5:
+    mixture_names = tuple(str(name) for name in h5["mixtures"])
+    ngroups = int(h5.attrs["energy_groups"])
+
+volume_flux = np.zeros((len(mixture_names), ngroups), dtype=float)
+net_current = np.zeros((len(mixture_names), len(faces), ngroups), dtype=float)
+for mix_index in range(len(mixture_names)):
+    volume_flux[mix_index] = 1.0 + 0.25 * mix_index + 0.10 * np.arange(ngroups)
+    for face_index in range(len(faces)):
+        net_current[mix_index, face_index] = (
+            ((-1.0) ** face_index) * 0.01 * (mix_index + 1) * (np.arange(ngroups) + 1)
+        )
+
+with h5py.File(output_path, "w") as h5:
+    volume = h5.create_dataset("volume_flux", data=volume_flux)
+    current = h5.create_dataset("net_current_density", data=net_current)
+    names = np.asarray(mixture_names, dtype="S")
+    volume.attrs["mixture_names"] = names
+    current.attrs["mixture_names"] = names
+
+print(f"wrote low-order driver raw fixture: {output_path}")
+PY
+
+"$PYTHON_BIN" -m openmc2donjon.cli make-low-order-driver "$MGXS" \
+  -o "$LOW_ORDER_DRIVER" \
+  --volume-flux "$LOW_ORDER_RAW" \
+  --net-current "$LOW_ORDER_RAW" \
+  --faces "$ADF_FACES" \
+  --source-label "production minicase external low-order driver fixture" \
+  --summary-json "$LOW_ORDER_DRIVER_SUMMARY"
+
+echo
+echo "== Reconstruct homogeneous face flux =="
+"$PYTHON_BIN" -m openmc2donjon.cli make-homogeneous-face-flux "$MGXS" \
+  -o "$HOMOGENEOUS_FACE_FLUX" \
+  --volume-flux "$LOW_ORDER_DRIVER" \
+  --net-current "$LOW_ORDER_DRIVER" \
+  --faces "$ADF_FACES" \
+  --face-widths 4.0 \
+  --summary-json "$HOMOGENEOUS_FACE_FLUX_SUMMARY"
+
+echo
 echo "== Build flux-ratio ADF sidecar =="
 "$PYTHON_BIN" -m openmc2donjon.cli make-adf-sidecar "$MGXS" \
   -o "$ADF_SIDECAR" \
   --mode flux-ratio \
   --surface-flux "$SURFACE_FLUX" \
-  --homogeneous-face-flux "$SURFACE_FLUX::surface_flux/mean" \
+  --homogeneous-face-flux "$HOMOGENEOUS_FACE_FLUX" \
   --faces "$ADF_FACES" \
   --invalid-fill 1.0 \
-  --adf-kind flux-ratio-smoke \
+  --adf-kind flux-ratio-minicase \
   --adf-real false \
-  --adf-source-label "production minicase surface-flux self-ratio smoke" \
+  --adf-source-label "production minicase OpenMC surface flux over low-order driver homogeneous flux" \
   --summary-json "$ADF_SIDECAR_SUMMARY"
 
 echo
@@ -220,14 +279,14 @@ OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
   --run-dir "$ADF_RUN_DIR" \
   --adf-source "$ADF_SIDECAR" \
   --adf-faces "$ADF_FACES" \
-  --adf-kind flux-ratio-smoke \
+  --adf-kind flux-ratio-minicase \
   --adf-real false \
   --check \
   --require-adf \
   --require-volume \
   --require-transport-dataset
 
-"$PYTHON_BIN" - "$SURFACE_FLUX" "$SURFACE_FLUX_SUMMARY" "$ADF_SIDECAR" "$ADF_SIDECAR_SUMMARY" "$ADF_H5" "$ADF_MCO" "$ADF_RUN_SUMMARY" "$ADF_CHECK_SUMMARY" "$ADF_INJECT_SUMMARY" "$ADF_MANIFEST" <<'PY'
+"$PYTHON_BIN" - "$SURFACE_FLUX" "$SURFACE_FLUX_SUMMARY" "$LOW_ORDER_DRIVER" "$LOW_ORDER_DRIVER_SUMMARY" "$HOMOGENEOUS_FACE_FLUX" "$HOMOGENEOUS_FACE_FLUX_SUMMARY" "$ADF_SIDECAR" "$ADF_SIDECAR_SUMMARY" "$ADF_H5" "$ADF_MCO" "$ADF_RUN_SUMMARY" "$ADF_CHECK_SUMMARY" "$ADF_INJECT_SUMMARY" "$ADF_MANIFEST" <<'PY'
 import json
 from pathlib import Path
 import sys
@@ -239,14 +298,18 @@ from openmc2donjon.from_openmc_summary import validate_from_openmc_summary
 
 surface_flux = Path(sys.argv[1])
 surface_flux_summary_path = Path(sys.argv[2])
-sidecar = Path(sys.argv[3])
-sidecar_summary_path = Path(sys.argv[4])
-mgxs = Path(sys.argv[5])
-mco = Path(sys.argv[6])
-summary_path = Path(sys.argv[7])
-check_summary_path = Path(sys.argv[8])
-adf_summary_path = Path(sys.argv[9])
-manifest_path = Path(sys.argv[10])
+low_order_driver = Path(sys.argv[3])
+low_order_driver_summary_path = Path(sys.argv[4])
+homogeneous_face_flux = Path(sys.argv[5])
+homogeneous_face_flux_summary_path = Path(sys.argv[6])
+sidecar = Path(sys.argv[7])
+sidecar_summary_path = Path(sys.argv[8])
+mgxs = Path(sys.argv[9])
+mco = Path(sys.argv[10])
+summary_path = Path(sys.argv[11])
+check_summary_path = Path(sys.argv[12])
+adf_summary_path = Path(sys.argv[13])
+manifest_path = Path(sys.argv[14])
 faces = ("FD_XMIN", "FD_XMAX", "FD_YMIN", "FD_YMAX")
 
 surface_flux_summary = json.loads(surface_flux_summary_path.read_text(encoding="utf-8"))
@@ -266,6 +329,47 @@ with h5py.File(surface_flux, "r") as h5:
     if values.shape != (1, 2, 2, 4):
         raise SystemExit(f"unexpected surface-flux shape: {values.shape}")
 
+low_order_driver_summary = json.loads(low_order_driver_summary_path.read_text(encoding="utf-8"))
+if low_order_driver_summary["decision"] != "openmc2donjon_low_order_driver_passed":
+    raise SystemExit("low-order driver summary did not pass")
+if low_order_driver_summary["schema"] != "openmc2donjon.low-order-driver.v1":
+    raise SystemExit("low-order driver summary schema mismatch")
+if tuple(low_order_driver_summary["face_names"]) != faces:
+    raise SystemExit("low-order driver summary face names mismatch")
+
+with h5py.File(low_order_driver, "r") as h5:
+    if h5.attrs["schema"] != "openmc2donjon.low-order-driver.v1":
+        raise SystemExit("low-order driver HDF5 schema mismatch")
+    volume_flux = h5["volume_flux"][:]
+    net_current = h5["net_current_density"][:]
+    if volume_flux.shape != (2, 2):
+        raise SystemExit(f"unexpected low-order volume-flux shape: {volume_flux.shape}")
+    if net_current.shape != (2, 4, 2):
+        raise SystemExit(f"unexpected low-order net-current shape: {net_current.shape}")
+    if not np.all(np.isfinite(volume_flux)) or np.any(volume_flux <= 0.0):
+        raise SystemExit("low-order volume flux is not positive finite")
+    if not np.all(np.isfinite(net_current)):
+        raise SystemExit("low-order net current is not finite")
+
+homogeneous_face_flux_summary = json.loads(
+    homogeneous_face_flux_summary_path.read_text(encoding="utf-8")
+)
+if homogeneous_face_flux_summary["decision"] != "openmc2donjon_homogeneous_face_flux_passed":
+    raise SystemExit("homogeneous face-flux summary did not pass")
+if homogeneous_face_flux_summary["schema"] != "openmc2donjon.homogeneous-face-flux.v1":
+    raise SystemExit("homogeneous face-flux summary schema mismatch")
+if tuple(homogeneous_face_flux_summary["face_names"]) != faces:
+    raise SystemExit("homogeneous face-flux summary face names mismatch")
+
+with h5py.File(homogeneous_face_flux, "r") as h5:
+    if h5.attrs["schema"] != "openmc2donjon.homogeneous-face-flux.v1":
+        raise SystemExit("homogeneous face-flux HDF5 schema mismatch")
+    values = h5["homogeneous_face_flux"][:]
+    if values.shape != (2, 4, 2):
+        raise SystemExit(f"unexpected homogeneous face-flux shape: {values.shape}")
+    if not np.all(np.isfinite(values)) or np.any(values <= 0.0):
+        raise SystemExit("homogeneous face flux is not positive finite")
+
 sidecar_summary = json.loads(sidecar_summary_path.read_text(encoding="utf-8"))
 if sidecar_summary["decision"] != "openmc2donjon_adf_sidecar_passed":
     raise SystemExit("ADF sidecar summary did not pass")
@@ -273,7 +377,7 @@ if sidecar_summary["schema"] != "openmc2donjon.adf-sidecar.v1":
     raise SystemExit("ADF sidecar summary schema mismatch")
 if sidecar_summary["mode"] != "flux-ratio":
     raise SystemExit("ADF sidecar mode mismatch")
-if sidecar_summary["adf_kind"] != "flux-ratio-smoke":
+if sidecar_summary["adf_kind"] != "flux-ratio-minicase":
     raise SystemExit("ADF sidecar kind mismatch")
 if sidecar_summary["adf_real"] is not False:
     raise SystemExit("ADF sidecar summary should be marked adf_real=false")
@@ -281,22 +385,25 @@ if tuple(sidecar_summary["face_names"]) != faces:
     raise SystemExit("ADF sidecar summary face names mismatch")
 
 with h5py.File(sidecar, "r") as h5:
-    if h5.attrs["adf_kind"] != "flux-ratio-smoke" or h5.attrs["adf_real"] != "false":
+    if h5.attrs["adf_kind"] != "flux-ratio-minicase" or h5.attrs["adf_real"] != "false":
         raise SystemExit("ADF sidecar provenance mismatch")
     values = h5["adf"][:]
     if values.shape != (2, 4, 2):
         raise SystemExit(f"unexpected ADF sidecar shape: {values.shape}")
-    np.testing.assert_allclose(values, 1.0)
+    if not np.all(np.isfinite(values)) or np.any(values <= 0.0):
+        raise SystemExit("ADF sidecar contains non-positive or non-finite values")
 
 with h5py.File(mgxs, "r") as h5:
-    if h5.attrs["adf_kind"] != "flux-ratio-smoke" or h5.attrs["adf_real"] != "false":
+    if h5.attrs["adf_kind"] != "flux-ratio-minicase" or h5.attrs["adf_real"] != "false":
         raise SystemExit("injected HDF5 ADF provenance mismatch")
     names = sorted(h5["mixtures"])
     if names != ["ASM_FUEL_LEFT", "ASM_MOD_RIGHT"]:
         raise SystemExit(f"unexpected ADF mixture names: {names}")
     for name in names:
         for face in faces:
-            np.testing.assert_allclose(h5[f"mixtures/{name}/adf/{face}"][:], 1.0)
+            values = h5[f"mixtures/{name}/adf/{face}"][:]
+            if not np.all(np.isfinite(values)) or np.any(values <= 0.0):
+                raise SystemExit(f"{name}/{face}: invalid injected ADF values")
 
 blocks = lcm_ascii.read_lcm_ascii(mco)
 block_names = [block.name for block in blocks if block.name]

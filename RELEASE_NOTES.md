@@ -43,6 +43,8 @@
 - Added `openmc2donjon export-surface-flux` for exporting OpenMC
   `MeshSurfaceFilter`/`MuSurfaceFilter` current tallies to the flux-ratio
   surface-flux HDF5 layout.
+- Added `openmc2donjon make-low-order-driver` for canonicalizing external
+  low-order volume flux and outward net-current handoffs.
 - Added `openmc2donjon make-homogeneous-face-flux` for reconstructing the
   homogeneous denominator from volume flux, outward net current, and
   `transport_total`.
@@ -51,7 +53,8 @@
 - Added `examples/production_minicase` plus a smoke script for a fresh
   continuous-energy OpenMC MGXS case that does not rely on the C5G7 snapshot.
 - Extended the production minicase smoke to run the OpenMC statepoint ->
-  surface flux -> flux-ratio ADF sidecar -> checked MULTICOMPO path.
+  surface flux -> low-order driver handoff -> homogeneous face flux ->
+  flux-ratio ADF sidecar -> checked MULTICOMPO path.
 - Extended release check so the C5G7 statepoint parity path exercises
   `openmc2donjon-from-openmc`, reads back the generated MCO, and validates the
   summary manifest.
