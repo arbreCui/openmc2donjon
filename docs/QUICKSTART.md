@@ -80,7 +80,19 @@ openmc2donjon-from-openmc \
 
 The run directory contains the HDF5 handoff, DONJON ASCII output, summary JSON,
 check summary when `--check` is enabled, and `manifest.json`. Existing managed
-files are refused unless `--force-run-dir` is set.
+files are refused unless `--force-run-dir` is set. Add side artifacts to the
+same manifest with repeatable `--extra-artifact LABEL=PATH` options:
+
+```sh
+openmc2donjon-from-openmc \
+  --recipe export_recipe.py \
+  --statepoint statepoint.120.h5 \
+  --run-dir runs/case1 \
+  --extra-artifact surface-flux=openmc_surface_flux.h5 \
+  --extra-artifact low-order-driver=low_order_driver.h5 \
+  --extra-artifact homogeneous-face-flux=homogeneous_face_flux.h5 \
+  --check
+```
 
 To keep explicit paths instead of using a managed run directory:
 

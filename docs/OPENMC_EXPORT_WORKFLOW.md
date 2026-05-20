@@ -68,7 +68,20 @@ With `--run-dir`, the command writes `mgxs_library.h5`, `out.mcompo.txt`,
 `manifest.json`. The summary JSON records recipe, statepoint, HDF5, output,
 group count, Legendre order, and mixture names. The summary schema is documented
 in [From-OpenMC summary JSON](FROM_OPENMC_SUMMARY_SCHEMA.md). Existing managed
-run-directory files are refused unless `--force-run-dir` is set.
+run-directory files are refused unless `--force-run-dir` is set. Additional
+production side artifacts can be copied into the same manifest during the
+one-step run:
+
+```sh
+openmc2donjon-from-openmc \
+  --recipe export_recipe.py \
+  --statepoint statepoint.120.h5 \
+  --run-dir runs/case1 \
+  --extra-artifact surface-flux=runs/case1/openmc_surface_flux.h5 \
+  --extra-artifact low-order-driver=runs/case1/low_order_driver.h5 \
+  --extra-artifact homogeneous-face-flux=runs/case1/homogeneous_face_flux.h5 \
+  --check
+```
 
 To add extra files to an existing handoff manifest:
 

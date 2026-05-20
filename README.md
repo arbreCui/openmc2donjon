@@ -269,8 +269,21 @@ openmc2donjon-from-openmc \
 
 This writes `mgxs_library.h5`, `out.mcompo.txt`, `run_summary.json`, optional
 `check_summary.json`, and `manifest.json` in the run directory. Existing managed
-files are refused unless `--force-run-dir` is set. To add extra artifacts to a
-handoff manifest later:
+files are refused unless `--force-run-dir` is set. Side artifacts can be copied
+into the same manifest during the run:
+
+```sh
+openmc2donjon-from-openmc \
+  --recipe export_recipe.py \
+  --statepoint statepoint.120.h5 \
+  --run-dir runs/case1 \
+  --extra-artifact surface-flux=openmc_surface_flux.h5 \
+  --extra-artifact low-order-driver=low_order_driver.h5 \
+  --extra-artifact homogeneous-face-flux=homogeneous_face_flux.h5 \
+  --check
+```
+
+To add extra artifacts to a handoff manifest later:
 
 ```sh
 openmc2donjon bundle \

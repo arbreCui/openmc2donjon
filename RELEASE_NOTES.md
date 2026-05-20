@@ -34,6 +34,8 @@
   manifest-backed directory.
 - Added `openmc2donjon-from-openmc --run-dir` for standard production run
   directories with managed outputs and a bundle manifest.
+- Added `openmc2donjon-from-openmc --extra-artifact LABEL=PATH` so side
+  products can be copied into the managed run-directory manifest.
 - Added `openmc2donjon augment-adf` for injecting computed ADF/DF sidecars into
   MGXS HDF5 handoffs before DONJON conversion.
 - Added `openmc2donjon make-adf-sidecar` for generating an identity

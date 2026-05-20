@@ -214,6 +214,62 @@ class FromOpenMCCliTests(unittest.TestCase):
             "mgxs_input_contract_passed",
         )
 
+    def test_run_dir_manifest_includes_extra_artifacts(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        recipe = repo_root / "examples/recipe_export_smoke/minimal_recipe.py"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            statepoint = tmp / "statepoint.fake.h5"
+            surface_flux = tmp / "openmc_surface_flux.h5"
+            driver_summary = tmp / "low_order_driver_summary.json"
+            run_dir = tmp / "production_run"
+            statepoint.write_text("fake statepoint\n", encoding="utf-8")
+            surface_flux.write_bytes(b"surface flux fixture\n")
+            driver_summary.write_text(
+                json.dumps(
+                    {
+                        "schema": "openmc2donjon.low-order-driver.v1",
+                        "decision": "openmc2donjon_low_order_driver_passed",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                rc = from_openmc_main(
+                    [
+                        "--recipe",
+                        str(recipe),
+                        "--statepoint",
+                        str(statepoint),
+                        "--run-dir",
+                        str(run_dir),
+                        "--extra-artifact",
+                        f"surface-flux={surface_flux}",
+                        "--extra-artifact",
+                        f"low-order-driver-summary={driver_summary}",
+                    ]
+                )
+
+            manifest = run_dir / "manifest.json"
+            manifest_payload = json.loads(manifest.read_text(encoding="utf-8"))
+            labels = {artifact["label"]: artifact for artifact in manifest_payload["artifacts"]}
+
+        self.assertEqual(rc, 0)
+        self.assertIn("surface-flux", labels)
+        self.assertIn("low-order-driver-summary", labels)
+        self.assertEqual(labels["surface-flux"]["bundled_path"], "openmc_surface_flux.h5")
+        self.assertEqual(
+            labels["low-order-driver-summary"]["summary_schema"],
+            "openmc2donjon.low-order-driver.v1",
+        )
+        self.assertEqual(
+            labels["low-order-driver-summary"]["summary_decision"],
+            "openmc2donjon_low_order_driver_passed",
+        )
+
     def test_run_dir_injects_adf_sidecar_before_checked_conversion(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         recipe = repo_root / "examples/recipe_export_smoke/minimal_recipe.py"
@@ -331,6 +387,33 @@ class FromOpenMCCliTests(unittest.TestCase):
 
         self.assertEqual(cm.exception.code, 2)
         self.assertIn("--force-run-dir", err.getvalue())
+
+    def test_extra_artifact_requires_run_dir(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        recipe = repo_root / "examples/recipe_export_smoke/minimal_recipe.py"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            statepoint = tmp / "statepoint.fake.h5"
+            extra = tmp / "notes.txt"
+            statepoint.write_text("fake statepoint\n", encoding="utf-8")
+            extra.write_text("notes\n", encoding="utf-8")
+
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as cm:
+                from_openmc_main(
+                    [
+                        "--recipe",
+                        str(recipe),
+                        "--statepoint",
+                        str(statepoint),
+                        "--extra-artifact",
+                        f"notes={extra}",
+                    ]
+                )
+
+        self.assertEqual(cm.exception.code, 2)
+        self.assertIn("--extra-artifact requires --run-dir", err.getvalue())
 
     def test_recipe_to_multicompo_with_checked_hdf5(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]

@@ -93,6 +93,9 @@ openmc2donjon-from-openmc \
   --run-dir /tmp/openmc2donjon_minicase/output_adf \
   --adf-source /tmp/openmc2donjon_minicase/adf_sidecar.h5 \
   --adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
+  --extra-artifact surface-flux=/tmp/openmc2donjon_minicase/openmc_surface_flux.h5 \
+  --extra-artifact low-order-driver=/tmp/openmc2donjon_minicase/low_order_driver.h5 \
+  --extra-artifact homogeneous-face-flux=/tmp/openmc2donjon_minicase/homogeneous_face_flux.h5 \
   --check \
   --require-adf \
   --require-volume \

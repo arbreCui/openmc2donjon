@@ -281,6 +281,14 @@ OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
   --adf-faces "$ADF_FACES" \
   --adf-kind flux-ratio-minicase \
   --adf-real false \
+  --extra-artifact "surface-flux=$SURFACE_FLUX" \
+  --extra-artifact "surface-flux-summary=$SURFACE_FLUX_SUMMARY" \
+  --extra-artifact "low-order-raw=$LOW_ORDER_RAW" \
+  --extra-artifact "low-order-driver=$LOW_ORDER_DRIVER" \
+  --extra-artifact "low-order-driver-summary=$LOW_ORDER_DRIVER_SUMMARY" \
+  --extra-artifact "homogeneous-face-flux=$HOMOGENEOUS_FACE_FLUX" \
+  --extra-artifact "homogeneous-face-flux-summary=$HOMOGENEOUS_FACE_FLUX_SUMMARY" \
+  --extra-artifact "adf-sidecar-summary=$ADF_SIDECAR_SUMMARY" \
   --check \
   --require-adf \
   --require-volume \
@@ -439,7 +447,15 @@ required = {
     "check-summary",
     "adf-source",
     "adf-summary",
+    "adf-sidecar-summary",
     "recipe",
+    "surface-flux",
+    "surface-flux-summary",
+    "low-order-raw",
+    "low-order-driver",
+    "low-order-driver-summary",
+    "homogeneous-face-flux",
+    "homogeneous-face-flux-summary",
 }
 if set(labels) != required:
     raise SystemExit(f"unexpected ADF manifest labels: {sorted(labels)}")
@@ -447,6 +463,15 @@ if labels["adf-summary"].get("summary_schema") != "openmc2donjon.adf-augment.v1"
     raise SystemExit("ADF manifest did not record augment summary schema")
 if labels["adf-summary"].get("summary_decision") != "openmc2donjon_adf_augment_passed":
     raise SystemExit("ADF manifest did not record augment decision")
+expected_summary_decisions = {
+    "surface-flux-summary": "openmc2donjon_surface_flux_export_passed",
+    "low-order-driver-summary": "openmc2donjon_low_order_driver_passed",
+    "homogeneous-face-flux-summary": "openmc2donjon_homogeneous_face_flux_passed",
+    "adf-sidecar-summary": "openmc2donjon_adf_sidecar_passed",
+}
+for label, decision in expected_summary_decisions.items():
+    if labels[label].get("summary_decision") != decision:
+        raise SystemExit(f"manifest did not record {label} decision")
 
 print(
     "production minicase ADF readback OK: "

@@ -9,7 +9,7 @@ from pathlib import Path
 
 from . import __version__
 from .adf_augment import augment_hdf5_with_adf, parse_faces
-from .bundle import ArtifactSpec, bundle_artifacts
+from .bundle import ArtifactSpec, bundle_artifacts, parse_extra_artifact
 from .from_openmc_summary import FROM_OPENMC_SUMMARY_SCHEMA
 from .macrolib import convert_mgxs_hdf5_to_macrolib
 from .mgxs_input_contract import run_preflight
@@ -192,6 +192,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="with --adf-source, write a machine-readable ADF injection summary JSON",
     )
+    parser.add_argument(
+        "--extra-artifact",
+        action="append",
+        default=[],
+        metavar="LABEL=PATH",
+        help="with --run-dir, copy an additional artifact into manifest.json; repeatable",
+    )
     return parser
 
 
@@ -199,6 +206,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     _apply_run_dir_defaults(args)
+    if args.extra_artifact and args.run_dir is None:
+        parser.error("--extra-artifact requires --run-dir")
+    _extra_artifacts_from_args(args, parser)
     if args.expected_adf_faces is None and args.adf_faces is not None:
         args.expected_adf_faces = args.adf_faces
     if args.dry_run:
@@ -250,6 +260,12 @@ def _run_dry_run(args: argparse.Namespace) -> None:
             print("  adf_summary_json: none")
         else:
             print(f"  adf_summary_json: {args.adf_summary_json} (not written)")
+    if args.extra_artifact:
+        print("  extra_artifacts:")
+        for artifact in _extra_artifacts_from_args(args):
+            print(f"    {artifact.label}: {artifact.source} (not copied)")
+    else:
+        print("  extra_artifacts: none")
     if args.summary_json is None:
         print("  summary_json: none")
     else:
@@ -400,6 +416,10 @@ def _prepare_run_dir(
         adf_source_destination = run_dir / args.adf_source.name
         if not _same_path(args.adf_source, adf_source_destination):
             managed_paths.append(adf_source_destination)
+    for artifact in _extra_artifacts_from_args(args, parser):
+        destination = run_dir / artifact.source.name
+        if not _same_path(artifact.source, destination):
+            managed_paths.append(destination)
     existing = [path for path in managed_paths if path is not None and path.exists()]
     if existing and not args.force_run_dir:
         rendered = ", ".join(str(path) for path in existing)
@@ -466,12 +486,28 @@ def _write_run_dir_manifest(
         artifacts.append(ArtifactSpec(label="adf-source", source=args.adf_source))
         if args.adf_summary_json is not None:
             artifacts.append(ArtifactSpec(label="adf-summary", source=args.adf_summary_json))
+    artifacts.extend(_extra_artifacts_from_args(args))
     artifacts.append(ArtifactSpec(label="recipe", source=recipe_path))
     bundle_artifacts(
         output_dir=args.run_dir,
         artifacts=artifacts,
         force=True,
     )
+
+
+def _extra_artifacts_from_args(
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser | None = None,
+) -> list[ArtifactSpec]:
+    artifacts: list[ArtifactSpec] = []
+    for raw in args.extra_artifact:
+        try:
+            artifacts.append(parse_extra_artifact(raw))
+        except ValueError as exc:
+            if parser is not None:
+                parser.error(f"--extra-artifact {raw!r}: {exc}")
+            raise
+    return artifacts
 
 
 def _render_optional_list(values: list[str] | None) -> str:
