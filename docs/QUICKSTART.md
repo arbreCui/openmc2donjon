@@ -153,6 +153,18 @@ openmc2donjon augment-adf mgxs_library.h5 \
 `adf_real=false`; use it to verify plumbing before replacing the sidecar with
 case-specific physics ADF/DF values.
 
+For a physics sidecar, provide heterogeneous and homogeneous face-flux HDF5
+datasets:
+
+```sh
+openmc2donjon make-adf-sidecar mgxs_library.h5 \
+  -o adf_sidecar.h5 \
+  --mode flux-ratio \
+  --surface-flux openmc_surface_flux.h5 \
+  --homogeneous-face-flux homogeneous_face_flux.h5 \
+  --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX
+```
+
 Or inject the sidecar during the one-step OpenMC export:
 
 ```sh

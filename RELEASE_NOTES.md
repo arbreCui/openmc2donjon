@@ -38,6 +38,8 @@
   MGXS HDF5 handoffs before DONJON conversion.
 - Added `openmc2donjon make-adf-sidecar` for generating an identity
   `adf_real=false` sidecar that exercises the ADF/DF injection workflow.
+- Extended `make-adf-sidecar` with a `flux-ratio` mode that writes physical
+  sidecars from heterogeneous and homogeneous face-flux HDF5 datasets.
 - Added `openmc2donjon-from-openmc --adf-source` so the one-step OpenMC export
   path can inject ADF before checked DONJON conversion.
 - Added `examples/production_minicase` plus a smoke script for a fresh

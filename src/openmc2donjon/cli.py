@@ -8,7 +8,7 @@ import sys
 
 from . import __version__
 from .adf_augment import augment_hdf5_with_adf, parse_faces
-from .adf_sidecar import create_unity_adf_sidecar
+from .adf_sidecar import create_flux_ratio_adf_sidecar, create_unity_adf_sidecar
 from .bundle import ArtifactSpec, bundle_artifacts, parse_extra_artifact
 from .doctor import run_doctor
 from .macrolib import convert_mgxs_hdf5_to_macrolib
@@ -447,9 +447,12 @@ def build_make_adf_sidecar_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--mode",
-        choices=("unity",),
+        choices=("unity", "flux-ratio"),
         default="unity",
-        help="sidecar generation mode (default: unity)",
+        help=(
+            "sidecar generation mode: unity for identity values, flux-ratio "
+            "for heterogeneous/homogeneous face-flux ratios (default: unity)"
+        ),
     )
     parser.add_argument(
         "--faces",
@@ -461,6 +464,58 @@ def build_make_adf_sidecar_parser() -> argparse.ArgumentParser:
         type=float,
         default=1.0,
         help="constant ADF value for --mode unity (default: 1.0)",
+    )
+    parser.add_argument(
+        "--surface-flux",
+        "--heterogeneous-face-flux",
+        dest="surface_flux",
+        default=None,
+        help=(
+            "for --mode flux-ratio, HDF5 file or FILE::DATASET containing "
+            "heterogeneous face flux values"
+        ),
+    )
+    parser.add_argument(
+        "--homogeneous-face-flux",
+        default=None,
+        help=(
+            "for --mode flux-ratio, HDF5 file or FILE::DATASET containing "
+            "homogeneous face flux values"
+        ),
+    )
+    parser.add_argument(
+        "--invalid-fill",
+        type=float,
+        default=None,
+        help="for --mode flux-ratio, positive value used to fill invalid ADF bins",
+    )
+    parser.add_argument(
+        "--clip-min",
+        type=float,
+        default=None,
+        help="for --mode flux-ratio, lower bound applied after invalid-bin filling",
+    )
+    parser.add_argument(
+        "--clip-max",
+        type=float,
+        default=None,
+        help="for --mode flux-ratio, upper bound applied after invalid-bin filling",
+    )
+    parser.add_argument(
+        "--adf-kind",
+        default="flux-ratio",
+        help="for --mode flux-ratio, root adf_kind provenance attribute",
+    )
+    parser.add_argument(
+        "--adf-real",
+        choices=("true", "false"),
+        default="true",
+        help="for --mode flux-ratio, root adf_real provenance attribute",
+    )
+    parser.add_argument(
+        "--adf-source-label",
+        default=None,
+        help="for --mode flux-ratio, root adf_source provenance attribute",
     )
     parser.add_argument(
         "--summary-json",
@@ -637,14 +692,37 @@ def _make_adf_sidecar_main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
     try:
         faces = parse_faces(args.faces)
-        create_unity_adf_sidecar(
-            args.input_h5,
-            args.output,
-            faces=faces,
-            value=args.value,
-            force=args.force,
-            summary_json=args.summary_json,
-        )
+        if args.mode == "unity":
+            create_unity_adf_sidecar(
+                args.input_h5,
+                args.output,
+                faces=faces,
+                value=args.value,
+                force=args.force,
+                summary_json=args.summary_json,
+            )
+        elif args.mode == "flux-ratio":
+            if args.surface_flux is None:
+                parser.error("--mode flux-ratio requires --surface-flux")
+            if args.homogeneous_face_flux is None:
+                parser.error("--mode flux-ratio requires --homogeneous-face-flux")
+            create_flux_ratio_adf_sidecar(
+                args.input_h5,
+                args.output,
+                surface_flux=args.surface_flux,
+                homogeneous_face_flux=args.homogeneous_face_flux,
+                faces=faces,
+                force=args.force,
+                summary_json=args.summary_json,
+                invalid_fill=args.invalid_fill,
+                clip_min=args.clip_min,
+                clip_max=args.clip_max,
+                adf_kind=args.adf_kind,
+                adf_real=args.adf_real == "true",
+                adf_source_label=args.adf_source_label,
+            )
+        else:
+            parser.error(f"unsupported --mode: {args.mode}")
     except Exception as exc:
         parser.exit(1, f"openmc2donjon make-adf-sidecar: error: {exc}\n")
     return 0

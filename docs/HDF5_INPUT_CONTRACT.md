@@ -221,6 +221,32 @@ openmc2donjon augment-adf mgxs_library.h5 \
 identity values and `adf_real=false`, useful for workflow checks before a real
 ADF/DF post-processor supplies physical values.
 
+For production ADF/DF generation, `make-adf-sidecar --mode flux-ratio` computes:
+
+```text
+ADF[mix, face, group] =
+    heterogeneous_face_flux[mix, face, group]
+  / homogeneous_face_flux[mix, face, group]
+```
+
+The two flux inputs may use explicit `FILE::/dataset/path` references or one of
+the built-in dataset names:
+
+```text
+surface flux:          /surface_flux/mean
+                       /heterogeneous_face_flux
+                       /surface_flux_proxy
+
+homogeneous face flux: /homogeneous_face_flux
+                       /homogeneous/face_flux
+```
+
+Accepted array layouts are `(M, F, G)`, `(M, G, F)`, `(Y, X, G, F)`, or
+`(Y, X, F, G)`. Three-dimensional arrays may use `mixture_names` and
+`face_names` attributes. Four-dimensional mesh arrays must provide a
+`mixture_names` mesh dataset or attribute so cells can be mapped back to MGXS
+mixture names.
+
 The sidecar can either reuse the normal MGXS layout with
 `/mixtures/<domain_name>/adf`, or provide a compact root dataset:
 

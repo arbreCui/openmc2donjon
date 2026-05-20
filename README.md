@@ -209,6 +209,21 @@ openmc2donjon augment-adf mgxs_library.h5 \
 `adf_real=false`. It is a plumbing check for the ADF/DF workflow; replace the
 sidecar with case-specific physics values for production neutronics.
 
+To build a physics sidecar from face-flux data, use the flux-ratio mode:
+
+```sh
+openmc2donjon make-adf-sidecar mgxs_library.h5 \
+  -o adf_sidecar.h5 \
+  --mode flux-ratio \
+  --surface-flux openmc_surface_flux.h5 \
+  --homogeneous-face-flux homogeneous_face_flux.h5 \
+  --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX
+```
+
+This writes `ADF = heterogeneous face flux / homogeneous face flux`. Inputs can
+be HDF5 files with known dataset names or explicit `FILE::/dataset/path`
+references.
+
 The one-step OpenMC entry point can inject the same sidecar before preflight:
 
 ```sh

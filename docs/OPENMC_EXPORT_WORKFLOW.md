@@ -101,6 +101,18 @@ The generated unity sidecar is marked `adf_real=false`; it verifies the
 interface and should be replaced by case-specific physics ADF/DF values for
 production neutronics.
 
+When heterogeneous and homogeneous face fluxes are available, generate the
+sidecar directly from their ratio:
+
+```sh
+openmc2donjon make-adf-sidecar runs/case1/mgxs_library.h5 \
+  -o runs/case1/adf_sidecar.h5 \
+  --mode flux-ratio \
+  --surface-flux runs/case1/openmc_surface_flux.h5 \
+  --homogeneous-face-flux runs/case1/homogeneous_face_flux.h5 \
+  --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX
+```
+
 For the one-step production path, pass the sidecar directly:
 
 ```sh
