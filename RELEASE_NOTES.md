@@ -34,6 +34,8 @@
   directories with managed outputs and a bundle manifest.
 - Added `openmc2donjon augment-adf` for injecting computed ADF/DF sidecars into
   MGXS HDF5 handoffs before DONJON conversion.
+- Added `openmc2donjon-from-openmc --adf-source` so the one-step OpenMC export
+  path can inject ADF before checked DONJON conversion.
 - Extended release check so the C5G7 statepoint parity path exercises
   `openmc2donjon-from-openmc`, reads back the generated MCO, and validates the
   summary manifest.

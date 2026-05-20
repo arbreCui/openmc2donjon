@@ -33,6 +33,13 @@ ONE_STEP_CHECK_SUMMARY="$ONE_STEP_RUN_DIR/check_summary.json"
 ONE_STEP_DIFF_SUMMARY="$ONE_STEP_RUN_DIR/diff_summary.json"
 BUNDLE_MANIFEST="$ONE_STEP_RUN_DIR/manifest.json"
 ONE_STEP_DRY_RUN_DIR="$RUN_DIR/one_step_dry_run_$$"
+ADF_SIDECAR="$RUN_DIR/adf_sidecar.h5"
+ADF_RUN_DIR="$RUN_DIR/one_step_adf_run"
+ADF_H5="$ADF_RUN_DIR/mgxs_library.h5"
+ADF_MCO="$ADF_RUN_DIR/out.mcompo.txt"
+ADF_SUMMARY="$ADF_RUN_DIR/adf_summary.json"
+ADF_CHECK_SUMMARY="$ADF_RUN_DIR/check_summary.json"
+ADF_MANIFEST="$ADF_RUN_DIR/manifest.json"
 
 echo "== openmc2donjon recipe export smoke =="
 echo "repo: $REPO_ROOT"
@@ -40,6 +47,27 @@ echo "run_dir: $RUN_DIR"
 echo "python: $PYTHON_BIN"
 
 printf 'recipe smoke statepoint marker\n' > "$STATEPOINT"
+"$PYTHON_BIN" - "$ADF_SIDECAR" <<'PY'
+from pathlib import Path
+import sys
+
+import h5py
+import numpy as np
+
+path = Path(sys.argv[1])
+values = np.array(
+    [
+        [[1.01, 1.02], [0.99, 0.98]],
+        [[1.03, 1.04], [0.97, 0.96]],
+    ]
+)
+with h5py.File(path, "w") as h5:
+    h5.attrs["adf_kind"] = "production"
+    h5.attrs["adf_real"] = "true"
+    dataset = h5.create_dataset("adf", data=values)
+    dataset.attrs["mixture_names"] = np.asarray(["FUEL_A", "MOD_A"], dtype="S")
+    dataset.attrs["face_names"] = np.asarray(["FD_XMIN", "FD_XMAX"], dtype="S")
+PY
 
 echo
 echo "== Doctor =="
@@ -227,6 +255,75 @@ if payload["mixture_names"] != ["FUEL_A", "MOD_A"]:
 if payload["hdf5"] != str(one_step_h5) or payload["output"] != str(one_step_mco):
     raise SystemExit("summary paths do not match one-step outputs")
 print(f"summary {summary.name}: schema={payload['schema']} mixtures={payload['mixture_count']}")
+PY
+
+echo
+echo "== One-step with ADF sidecar =="
+"$PYTHON_BIN" -m openmc2donjon.from_openmc_cli \
+  --recipe "$RECIPE" \
+  --statepoint "$STATEPOINT" \
+  --run-dir "$ADF_RUN_DIR" \
+  --adf-source "$ADF_SIDECAR" \
+  --adf-faces FD_XMIN,FD_XMAX \
+  --check \
+  --require-adf \
+  --require-volume \
+  --require-transport-dataset
+
+"$PYTHON_BIN" - "$ADF_H5" "$ADF_MCO" "$ADF_SUMMARY" "$ADF_CHECK_SUMMARY" "$ADF_MANIFEST" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+import h5py
+import numpy as np
+from openmc2donjon import lcm_ascii
+
+h5_path = Path(sys.argv[1])
+mco_path = Path(sys.argv[2])
+adf_summary = Path(sys.argv[3])
+check_summary = Path(sys.argv[4])
+manifest_path = Path(sys.argv[5])
+
+with h5py.File(h5_path, "r") as h5:
+    np.testing.assert_allclose(h5["mixtures/FUEL_A/adf/FD_XMIN"][:], [1.01, 1.02])
+    np.testing.assert_allclose(h5["mixtures/MOD_A/adf/FD_XMAX"][:], [0.97, 0.96])
+
+blocks = lcm_ascii.read_lcm_ascii(mco_path)
+names = [block.name for block in blocks if block.name]
+for required_name in ("MACROLIB", "ADF", "HADF", "FD_XMIN", "FD_XMAX"):
+    if required_name not in names:
+        raise SystemExit(f"{mco_path}: missing {required_name} block")
+
+adf_payload = json.loads(adf_summary.read_text(encoding="utf-8"))
+if adf_payload["decision"] != "openmc2donjon_adf_augment_passed":
+    raise SystemExit("ADF injection summary did not pass")
+if adf_payload["face_names"] != ["FD_XMIN", "FD_XMAX"]:
+    raise SystemExit("ADF injection summary face names mismatch")
+
+check_payload = json.loads(check_summary.read_text(encoding="utf-8"))
+if check_payload["decision"] != "mgxs_input_contract_passed":
+    raise SystemExit("ADF one-step preflight did not pass")
+
+manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+labels = {artifact["label"]: artifact for artifact in manifest_payload["artifacts"]}
+required_labels = {
+    "mgxs",
+    "mcompo",
+    "run-summary",
+    "check-summary",
+    "adf-source",
+    "adf-summary",
+    "recipe",
+}
+missing = sorted(required_labels - set(labels))
+if missing:
+    raise SystemExit(f"ADF bundle manifest missing labels: {missing}")
+if labels["adf-summary"].get("summary_schema") != "openmc2donjon.adf-augment.v1":
+    raise SystemExit("ADF bundle did not record augment summary schema")
+if labels["adf-summary"].get("summary_decision") != "openmc2donjon_adf_augment_passed":
+    raise SystemExit("ADF bundle did not record augment decision")
+print(f"ADF one-step readback: blocks={len(blocks)} labels={sorted(labels)}")
 PY
 
 echo

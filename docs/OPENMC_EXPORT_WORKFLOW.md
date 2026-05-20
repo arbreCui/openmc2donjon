@@ -91,6 +91,18 @@ openmc2donjon augment-adf runs/case1/mgxs_library.h5 \
   --summary-json runs/case1/adf_summary.json
 ```
 
+For the one-step production path, pass the sidecar directly:
+
+```sh
+openmc2donjon-from-openmc \
+  --recipe examples/export_recipe_template.py \
+  --statepoint statepoint.120.h5 \
+  --run-dir runs/case1 \
+  --adf-source runs/case1/adf_sidecar.h5 \
+  --adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
+  --check --require-adf
+```
+
 For a small workflow check before using a real OpenMC model:
 
 ```sh

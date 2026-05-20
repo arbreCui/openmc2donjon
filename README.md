@@ -190,6 +190,18 @@ openmc2donjon augment-adf mgxs_library.h5 \
   --summary-json adf_summary.json
 ```
 
+The one-step OpenMC entry point can inject the same sidecar before preflight:
+
+```sh
+openmc2donjon-from-openmc \
+  --recipe export_recipe.py \
+  --statepoint statepoint.120.h5 \
+  --run-dir runs/case1 \
+  --adf-source adf_sidecar.h5 \
+  --adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
+  --check --require-adf
+```
+
 For a one-command export plus conversion:
 
 ```sh

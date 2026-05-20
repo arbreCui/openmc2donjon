@@ -8,6 +8,7 @@ import tempfile
 import unittest
 
 import h5py
+import numpy as np
 
 from openmc2donjon import lcm_ascii
 from openmc2donjon.from_openmc_cli import build_parser, main as from_openmc_main
@@ -213,6 +214,62 @@ class FromOpenMCCliTests(unittest.TestCase):
             "mgxs_input_contract_passed",
         )
 
+    def test_run_dir_injects_adf_sidecar_before_checked_conversion(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        recipe = repo_root / "examples/recipe_export_smoke/minimal_recipe.py"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            statepoint = tmp / "statepoint.fake.h5"
+            adf_source = tmp / "adf_sidecar.h5"
+            run_dir = tmp / "production_run"
+            statepoint.write_text("fake statepoint\n", encoding="utf-8")
+            _write_adf_sidecar(adf_source)
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = from_openmc_main(
+                    [
+                        "--recipe",
+                        str(recipe),
+                        "--statepoint",
+                        str(statepoint),
+                        "--run-dir",
+                        str(run_dir),
+                        "--adf-source",
+                        str(adf_source),
+                        "--adf-faces",
+                        "FD_XMIN,FD_XMAX",
+                        "--check",
+                        "--require-adf",
+                        "--require-volume",
+                        "--require-transport-dataset",
+                    ]
+                )
+
+            hdf5 = run_dir / "mgxs_library.h5"
+            output = run_dir / "out.mcompo.txt"
+            adf_summary = run_dir / "adf_summary.json"
+            manifest = run_dir / "manifest.json"
+            with h5py.File(hdf5, "r") as h5:
+                fuel_xmin = h5["mixtures/FUEL_A/adf/FD_XMIN"][:]
+                mod_xmax = h5["mixtures/MOD_A/adf/FD_XMAX"][:]
+            adf_payload = json.loads(adf_summary.read_text(encoding="utf-8"))
+            manifest_payload = json.loads(manifest.read_text(encoding="utf-8"))
+            paths_exist = [hdf5.exists(), output.exists(), adf_summary.exists()]
+
+        self.assertEqual(rc, 0)
+        self.assertIn("injected ADF into HDF5", stream.getvalue())
+        self.assertIn("mgxs_input_contract_passed", stream.getvalue())
+        self.assertTrue(all(paths_exist))
+        np.testing.assert_allclose(fuel_xmin, [1.01, 1.02])
+        np.testing.assert_allclose(mod_xmax, [0.97, 0.96])
+        self.assertEqual(adf_payload["decision"], "openmc2donjon_adf_augment_passed")
+        labels = {artifact["label"]: artifact for artifact in manifest_payload["artifacts"]}
+        self.assertIn("adf-source", labels)
+        self.assertIn("adf-summary", labels)
+        self.assertEqual(labels["adf-summary"]["summary_schema"], "openmc2donjon.adf-augment.v1")
+
     def test_run_dir_dry_run_uses_standard_paths_without_writing(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         recipe = repo_root / "examples/recipe_export_smoke/minimal_recipe.py"
@@ -368,6 +425,21 @@ class FromOpenMCCliTests(unittest.TestCase):
         self.assertFalse(conversion_summary_exists)
         self.assertEqual(payload["decision"], "mgxs_input_contract_failed")
         self.assertIn("mgxs_input_contract_failed", stream.getvalue())
+
+
+def _write_adf_sidecar(path: Path) -> None:
+    values = np.array(
+        [
+            [[1.01, 1.02], [0.99, 0.98]],
+            [[1.03, 1.04], [0.97, 0.96]],
+        ]
+    )
+    with h5py.File(path, "w") as h5:
+        h5.attrs["adf_kind"] = "production"
+        h5.attrs["adf_real"] = "true"
+        dataset = h5.create_dataset("adf", data=values)
+        dataset.attrs["mixture_names"] = np.asarray(["FUEL_A", "MOD_A"], dtype="S")
+        dataset.attrs["face_names"] = np.asarray(["FD_XMIN", "FD_XMAX"], dtype="S")
 
 
 if __name__ == "__main__":

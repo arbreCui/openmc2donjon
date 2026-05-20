@@ -134,6 +134,18 @@ openmc2donjon augment-adf mgxs_library.h5 \
   --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX
 ```
 
+Or inject the sidecar during the one-step OpenMC export:
+
+```sh
+openmc2donjon-from-openmc \
+  --recipe export_recipe.py \
+  --statepoint statepoint.120.h5 \
+  --run-dir runs/case1 \
+  --adf-source adf_sidecar.h5 \
+  --adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
+  --check --require-adf
+```
+
 Run preflight on the HDF5:
 
 ```sh

@@ -8,6 +8,7 @@ import tempfile
 from pathlib import Path
 
 from . import __version__
+from .adf_augment import augment_hdf5_with_adf, parse_faces
 from .bundle import ArtifactSpec, bundle_artifacts
 from .from_openmc_summary import FROM_OPENMC_SUMMARY_SCHEMA
 from .macrolib import convert_mgxs_hdf5_to_macrolib
@@ -106,6 +107,33 @@ def build_parser() -> argparse.ArgumentParser:
         help="write this constant H-FACTOR when the exported HDF5 does not provide one",
     )
     parser.add_argument(
+        "--adf-source",
+        type=Path,
+        default=None,
+        help="HDF5 sidecar containing computed ADF/DF values to inject before conversion",
+    )
+    parser.add_argument(
+        "--adf-faces",
+        default=None,
+        help="comma-separated expected ADF face names in --adf-source",
+    )
+    parser.add_argument(
+        "--adf-kind",
+        default=None,
+        help="override root adf_kind provenance attribute when injecting --adf-source",
+    )
+    parser.add_argument(
+        "--adf-real",
+        choices=("true", "false"),
+        default=None,
+        help="override root adf_real provenance attribute when injecting --adf-source",
+    )
+    parser.add_argument(
+        "--adf-source-label",
+        default=None,
+        help="override root adf_source provenance attribute when injecting --adf-source",
+    )
+    parser.add_argument(
         "--mixture",
         action="append",
         default=None,
@@ -158,6 +186,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="with --check, write a machine-readable preflight summary JSON",
     )
+    parser.add_argument(
+        "--adf-summary-json",
+        type=Path,
+        default=None,
+        help="with --adf-source, write a machine-readable ADF injection summary JSON",
+    )
     return parser
 
 
@@ -165,6 +199,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     _apply_run_dir_defaults(args)
+    if args.expected_adf_faces is None and args.adf_faces is not None:
+        args.expected_adf_faces = args.adf_faces
     if args.dry_run:
         _run_dry_run(args)
         return 0
@@ -205,6 +241,15 @@ def _run_dry_run(args: argparse.Namespace) -> None:
     print(f"  selected_mixtures: {_render_optional_list(args.mixture)}")
     print(f"  single_point_burnup: {_render_optional_value(args.burnup)}")
     print(f"  h_factor_default: {_render_optional_value(args.h_factor_default)}")
+    if args.adf_source is None:
+        print("  adf_source: none")
+    else:
+        print(f"  adf_source: {args.adf_source} (not read)")
+        print(f"  adf_faces: {_render_optional_value(args.adf_faces)}")
+        if args.adf_summary_json is None:
+            print("  adf_summary_json: none")
+        else:
+            print(f"  adf_summary_json: {args.adf_summary_json} (not written)")
     if args.summary_json is None:
         print("  summary_json: none")
     else:
@@ -243,6 +288,9 @@ def _run_pipeline(
         f"{export_summary.energy_groups} groups, P{export_summary.legendre_order} "
         f"from recipe {recipe_summary.recipe_path}"
     )
+
+    if args.adf_source is not None:
+        _inject_adf(args, hdf5_path)
 
     if args.check:
         ok = run_preflight(
@@ -324,6 +372,8 @@ def _apply_run_dir_defaults(args: argparse.Namespace) -> None:
         args.summary_json = run_dir / "run_summary.json"
     if args.check and args.check_summary_json is None:
         args.check_summary_json = run_dir / "check_summary.json"
+    if args.adf_source is not None and args.adf_summary_json is None:
+        args.adf_summary_json = run_dir / "adf_summary.json"
 
 
 def _prepare_run_dir(
@@ -345,6 +395,11 @@ def _prepare_run_dir(
         managed_paths.append(recipe_destination)
     if args.check:
         managed_paths.append(args.check_summary_json)
+    if args.adf_source is not None:
+        managed_paths.append(args.adf_summary_json)
+        adf_source_destination = run_dir / args.adf_source.name
+        if not _same_path(args.adf_source, adf_source_destination):
+            managed_paths.append(adf_source_destination)
     existing = [path for path in managed_paths if path is not None and path.exists()]
     if existing and not args.force_run_dir:
         rendered = ", ".join(str(path) for path in existing)
@@ -371,6 +426,27 @@ def _output_path(raw_output: str | None, output_format: str) -> Path:
     return Path(_default_output_name(output_format))
 
 
+def _inject_adf(args: argparse.Namespace, hdf5_path: Path) -> None:
+    with tempfile.TemporaryDirectory(
+        prefix=f"{hdf5_path.name}.adf.",
+        dir=str(hdf5_path.parent),
+    ) as tmpdir:
+        augmented_path = Path(tmpdir) / hdf5_path.name
+        augment_hdf5_with_adf(
+            hdf5_path,
+            adf_source=args.adf_source,
+            output_h5=augmented_path,
+            expected_faces=parse_faces(args.adf_faces),
+            force=True,
+            adf_kind=args.adf_kind,
+            adf_real=args.adf_real,
+            adf_source_label=args.adf_source_label,
+            summary_json=args.adf_summary_json,
+        )
+        augmented_path.replace(hdf5_path)
+    print(f"injected ADF into HDF5: {hdf5_path}")
+
+
 def _write_run_dir_manifest(
     args: argparse.Namespace,
     hdf5_path: Path,
@@ -386,6 +462,10 @@ def _write_run_dir_manifest(
         artifacts.append(ArtifactSpec(label="run-summary", source=args.summary_json))
     if args.check and args.check_summary_json is not None:
         artifacts.append(ArtifactSpec(label="check-summary", source=args.check_summary_json))
+    if args.adf_source is not None:
+        artifacts.append(ArtifactSpec(label="adf-source", source=args.adf_source))
+        if args.adf_summary_json is not None:
+            artifacts.append(ArtifactSpec(label="adf-summary", source=args.adf_summary_json))
     artifacts.append(ArtifactSpec(label="recipe", source=recipe_path))
     bundle_artifacts(
         output_dir=args.run_dir,
