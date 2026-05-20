@@ -45,11 +45,19 @@ This checks:
 - root `L_MACROLIB` write/readback;
 - one-command `openmc2donjon-from-openmc` conversion.
 
+On a machine with OpenMC and continuous-energy data configured, run the minimal
+production-style case:
+
+```sh
+bash scripts/run_production_minicase_smoke.sh
+```
+
 ## One-Step OpenMC To DONJON
 
 For a real OpenMC case, write a small recipe that builds the case's
 `openmc.mgxs.Library`. You can start from
-[`examples/openmc_recipe_template/`](../examples/openmc_recipe_template/). Then run:
+[`examples/openmc_recipe_template/`](../examples/openmc_recipe_template/) or inspect
+[`examples/production_minicase/`](../examples/production_minicase/). Then run:
 
 ```sh
 openmc2donjon-from-openmc \

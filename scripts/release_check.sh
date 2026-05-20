@@ -137,6 +137,12 @@ PYTHON_BIN="$PYTHON_BIN" \
   bash "$REPO_ROOT/scripts/run_recipe_export_smoke.sh"
 
 echo
+echo "== Production minicase smoke =="
+RUN_DIR="$RUN_DIR/production_minicase" \
+PYTHON_BIN="$PYTHON_BIN" \
+  bash "$REPO_ROOT/scripts/run_production_minicase_smoke.sh"
+
+echo
 echo "== C5G7 converter smoke =="
 RUN_DIR="$RUN_DIR/c5g7_demo" bash "$REPO_ROOT/scripts/run_c5g7_demo.sh" --skip-tests
 

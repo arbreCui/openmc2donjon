@@ -155,6 +155,14 @@ openmc2donjon doctor
 bash scripts/run_recipe_export_smoke.sh
 ```
 
+For a minimal real OpenMC case that builds XML, runs MGXS tallies, and converts
+a fresh statepoint, see
+[`examples/production_minicase/`](examples/production_minicase/) or run:
+
+```sh
+bash scripts/run_production_minicase_smoke.sh
+```
+
 Check a recipe before writing an HDF5 handoff:
 
 ```sh
