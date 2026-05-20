@@ -220,6 +220,13 @@ openmc2donjon export-surface-flux statepoint.120.h5 \
   --mu-edges 0.0,0.25,0.5,0.75,1.0 \
   --face-area 4.0
 
+openmc2donjon make-homogeneous-face-flux mgxs_library.h5 \
+  -o homogeneous_face_flux.h5 \
+  --volume-flux low_order_driver.h5 \
+  --net-current low_order_driver.h5 \
+  --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
+  --face-widths 4.0
+
 openmc2donjon make-adf-sidecar mgxs_library.h5 \
   -o adf_sidecar.h5 \
   --mode flux-ratio \

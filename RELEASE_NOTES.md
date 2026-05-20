@@ -43,6 +43,9 @@
 - Added `openmc2donjon export-surface-flux` for exporting OpenMC
   `MeshSurfaceFilter`/`MuSurfaceFilter` current tallies to the flux-ratio
   surface-flux HDF5 layout.
+- Added `openmc2donjon make-homogeneous-face-flux` for reconstructing the
+  homogeneous denominator from volume flux, outward net current, and
+  `transport_total`.
 - Added `openmc2donjon-from-openmc --adf-source` so the one-step OpenMC export
   path can inject ADF before checked DONJON conversion.
 - Added `examples/production_minicase` plus a smoke script for a fresh

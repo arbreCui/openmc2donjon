@@ -263,6 +263,21 @@ openmc2donjon export-surface-flux statepoint.120.h5 \
 The exported HDF5 contains `/surface_flux/mean` with layout
 `(mesh_y, mesh_x, group, face)` and a `/mixture_names` mesh mapping.
 
+For a diffusion-current homogeneous denominator, `make-homogeneous-face-flux`
+uses `D = 1/(3 * transport_total)` from the MGXS handoff and computes:
+
+```text
+phi_face[mix, face, group] =
+    phi_avg[mix, group]
+  - J_out[mix, face, group] * face_width[face] / (2D[mix, group])
+```
+
+It reads volume flux datasets named `/volume_flux/average`, `/volume_flux`,
+`/scalar_flux`, or `/flux`, and net outward current datasets named
+`/net_current_density`, `/net_current`, `/boundary_currents/net`, or
+`/current_density`. Explicit `FILE::/dataset/path` references are also
+accepted. The output is `/homogeneous_face_flux` with layout `(M, F, G)`.
+
 The sidecar can either reuse the normal MGXS layout with
 `/mixtures/<domain_name>/adf`, or provide a compact root dataset:
 
