@@ -134,6 +134,19 @@ bash examples/hex_minicase/run_smoke.sh
 
 This is a converter capability smoke, not an accepted physics benchmark.
 
+`examples/openmc_hex_minicase` builds and runs a tiny continuous-energy OpenMC
+hex lattice, exports the statepoint through `openmc2donjon-from-openmc`, and
+then runs checked `L_MULTICOMPO` and `L_MACROLIB` conversion/readback. It
+exercises the real production recipe/statepoint entry point with seven OpenMC
+hex cell domains, 2 groups, P1 scattering, explicit `transport_total`, and
+positive volumes.
+
+```sh
+bash examples/openmc_hex_minicase/run_smoke.sh
+```
+
+This is an OpenMC workflow capability smoke, not an accepted physics benchmark.
+
 `examples/uox_5x5_tg6` adapts a local DRAGON/APEX UOX 5x5 TG6 HDF5 file into
 the openmc2donjon MGXS input contract, then runs checked `L_MULTICOMPO` and
 `L_MACROLIB` conversion/readback. It is useful because it exercises a second
@@ -162,8 +175,9 @@ bash scripts/release_check.sh --run-local-candidates
 
 ## Hex Status
 
-Hex support is implemented as converter/modeling capability and covered by the
-synthetic `examples/hex_minicase` smoke. This repository does not currently
-include an accepted hex benchmark. A hex validation line should only be promoted
-when the benchmark has complete material/profile/control inputs and a defensible
-reference solution.
+Hex support is implemented as converter/modeling capability and covered by both
+the synthetic `examples/hex_minicase` smoke and the real OpenMC
+`examples/openmc_hex_minicase` recipe/statepoint smoke. This repository does not
+currently include an accepted hex benchmark. A hex validation line should only
+be promoted when the benchmark has complete material/profile/control inputs and
+a defensible reference solution.

@@ -17,8 +17,8 @@
   DRAGON/DONJON checkout.
 - Experimental one-parameter `BURN` multi-state serialization is available and
   has a tiny DONJON `NCR:` consumer smoke.
-- Hex support exists as capability work, with a synthetic hex-domain converter
-  smoke, but no accepted hex benchmark is included yet.
+- Hex support exists as capability work, with synthetic and real OpenMC hex
+  workflow smokes, but no accepted hex benchmark is included yet.
 
 ## Near-Term Work
 
@@ -40,6 +40,8 @@
    - Keep the accepted snapshot for C5G7.
    - Keep `examples/hex_minicase` as a small capability smoke for hex-domain
      mapping and six-face ADF payloads.
+   - Keep `examples/openmc_hex_minicase` as the small real OpenMC hex workflow
+     smoke.
    - Add smaller synthetic fixtures for unit-level examples when helpful.
 
 4. Keep the experimental `BURN`-axis consumer smoke green.

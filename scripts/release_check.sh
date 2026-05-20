@@ -164,6 +164,9 @@ if [[ "$RUN_LOCAL_CANDIDATES" -eq 1 ]]; then
   RUN_DIR="$RUN_DIR/hex_minicase" \
   PYTHON_BIN="$PYTHON_BIN" \
     bash "$REPO_ROOT/examples/hex_minicase/run_smoke.sh"
+  RUN_DIR="$RUN_DIR/openmc_hex_minicase" \
+  PYTHON_BIN="$PYTHON_BIN" \
+    bash "$REPO_ROOT/examples/openmc_hex_minicase/run_smoke.sh"
   RUN_DIR="$RUN_DIR/uox_5x5_tg6" \
   PYTHON_BIN="$PYTHON_BIN" \
     bash "$REPO_ROOT/examples/uox_5x5_tg6/run_smoke.sh"

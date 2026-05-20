@@ -71,7 +71,8 @@ OpenMC MGXS domains
 Current validation status:
 
 - C5G7 assembly-wise is the accepted validation line.
-- Hex-domain support exists as converter/modeling capability.
+- Hex-domain support exists as converter/modeling capability, including a real
+  OpenMC hex workflow smoke.
 - Experimental `BURN`-axis multi-state serialization exists, but is not part of
   the accepted physics validation yet.
 - A suitable accepted hex benchmark is still future work.
@@ -83,7 +84,7 @@ Supported input scope:
 | One-state MGXS HDF5 | Production path | C5G7 assembly-wise acceptance uses this path. |
 | One-dimensional `BURN` multi-state HDF5 | Experimental serialization | Unit-tested and DONJON-smoked, not yet a physics validation line. |
 | Multi-axis branch library | Not supported | Extra `/state_points/*` axes are rejected instead of ignored. |
-| Hex spatial domains | Converter/modeling capability | Awaiting a suitable accepted hex benchmark. |
+| Hex spatial domains | Converter/modeling capability | Synthetic and real OpenMC smokes exist; awaiting a suitable accepted hex benchmark. |
 
 Experimental BURN-axis DONJON consumer smoke:
 
@@ -161,6 +162,13 @@ a fresh statepoint, see
 
 ```sh
 bash scripts/run_production_minicase_smoke.sh
+```
+
+For the same production-facing workflow on a tiny hex lattice, see
+[`examples/openmc_hex_minicase/`](examples/openmc_hex_minicase/) or run:
+
+```sh
+bash examples/openmc_hex_minicase/run_smoke.sh
 ```
 
 Check a recipe before writing an HDF5 handoff:

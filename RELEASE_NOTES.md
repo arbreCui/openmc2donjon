@@ -75,6 +75,9 @@
 - Added `examples/hex_minicase`, a synthetic hex-domain capability smoke with
   seven cell-domain mixtures, P1 scattering, explicit `transport_total`, and
   six-face ADF readback through `L_MULTICOMPO` and `L_MACROLIB`.
+- Added `examples/openmc_hex_minicase`, a real continuous-energy OpenMC hex
+  lattice recipe/statepoint smoke with seven hex cell-domain mixtures and
+  checked `L_MULTICOMPO`/`L_MACROLIB` readback.
 - Added `examples/uox_5x5_tg6`, a candidate non-C5G7 adapter/smoke for a local
   DRAGON/APEX UOX 5x5 TG6 HDF5 source, producing checked `L_MULTICOMPO` and
   `L_MACROLIB` outputs.
