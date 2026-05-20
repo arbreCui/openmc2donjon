@@ -123,6 +123,17 @@ accepted physics benchmark.
 
 ## Candidate Examples
 
+`examples/hex_minicase` builds a synthetic OpenMC-style hex-domain MGXS HDF5
+handoff, then runs checked `L_MULTICOMPO` and `L_MACROLIB` conversion/readback.
+It exercises seven hex cell domains, P1 scattering, explicit `transport_total`,
+and six-face ADF data.
+
+```sh
+bash examples/hex_minicase/run_smoke.sh
+```
+
+This is a converter capability smoke, not an accepted physics benchmark.
+
 `examples/uox_5x5_tg6` adapts a local DRAGON/APEX UOX 5x5 TG6 HDF5 file into
 the openmc2donjon MGXS input contract, then runs checked `L_MULTICOMPO` and
 `L_MACROLIB` conversion/readback. It is useful because it exercises a second
@@ -151,7 +162,8 @@ bash scripts/release_check.sh --run-local-candidates
 
 ## Hex Status
 
-Hex support is implemented as converter/modeling capability, but this repository
-does not currently include an accepted hex benchmark. A hex validation line
-should only be promoted when the benchmark has complete material/profile/control
-inputs and a defensible reference solution.
+Hex support is implemented as converter/modeling capability and covered by the
+synthetic `examples/hex_minicase` smoke. This repository does not currently
+include an accepted hex benchmark. A hex validation line should only be promoted
+when the benchmark has complete material/profile/control inputs and a defensible
+reference solution.

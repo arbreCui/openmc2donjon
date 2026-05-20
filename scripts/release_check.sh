@@ -39,7 +39,7 @@ Default:
 Options:
   --skip-tests                 skip pytest
   --run-donjon                 run the full DONJON C5G7 acceptance decks
-  --run-local-candidates       run local non-accepted candidate examples
+  --run-local-candidates       run non-accepted candidate/capability examples
   --require-statepoint-export  fail if C5G7_STATEPOINT is unavailable
 
 Environment:
@@ -160,13 +160,16 @@ RUN_DIR="$RUN_DIR/c5g7_demo" bash "$REPO_ROOT/scripts/run_c5g7_demo.sh" --skip-t
 
 if [[ "$RUN_LOCAL_CANDIDATES" -eq 1 ]]; then
   echo
-  echo "== Local candidate smokes =="
+  echo "== Candidate/capability smokes =="
+  RUN_DIR="$RUN_DIR/hex_minicase" \
+  PYTHON_BIN="$PYTHON_BIN" \
+    bash "$REPO_ROOT/examples/hex_minicase/run_smoke.sh"
   RUN_DIR="$RUN_DIR/uox_5x5_tg6" \
   PYTHON_BIN="$PYTHON_BIN" \
     bash "$REPO_ROOT/examples/uox_5x5_tg6/run_smoke.sh"
 else
   echo
-  echo "== Local candidate smokes skipped =="
+  echo "== Candidate/capability smokes skipped =="
 fi
 
 echo
