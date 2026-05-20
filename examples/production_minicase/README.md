@@ -68,8 +68,7 @@ openmc2donjon-from-openmc \
   --surface-flux-mesh-shape 1,2 \
   --surface-flux-mu-edges 0.0,0.25,0.5,0.75,1.0 \
   --surface-flux-face-area 4.0 \
-  --low-order-volume-flux /tmp/openmc2donjon_minicase/raw_low_order_driver.h5 \
-  --low-order-net-current /tmp/openmc2donjon_minicase/raw_low_order_driver.h5 \
+  --low-order-raw-driver /tmp/openmc2donjon_minicase/raw_low_order_driver.h5 \
   --low-order-net-current-sign-convention auto \
   --adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
   --adf-face-widths 4.0 \

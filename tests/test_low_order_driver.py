@@ -217,6 +217,50 @@ class LowOrderDriverTests(unittest.TestCase):
             ],
         )
 
+    def test_make_low_order_driver_adapts_raw_bundle(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            mgxs = tmp / "mgxs.h5"
+            raw = tmp / "raw_driver_bundle.h5"
+            driver = tmp / "low_order_driver.h5"
+            summary = tmp / "low_order_driver_summary.json"
+            _write_mgxs(mgxs)
+            _write_raw_driver_bundle(raw)
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = cli_main(
+                    [
+                        "make-low-order-driver",
+                        str(mgxs),
+                        "-o",
+                        str(driver),
+                        "--raw-driver",
+                        str(raw),
+                        "--faces",
+                        "FD_XMIN,FD_XMAX",
+                        "--summary-json",
+                        str(summary),
+                    ]
+                )
+
+            with h5py.File(driver, "r") as h5:
+                attrs = dict(h5.attrs)
+                volume_flux = h5["volume_flux"][:]
+                net_current = h5["net_current_density"][:]
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+
+        self.assertEqual(rc, 0)
+        self.assertIn("adapter: raw-driver-bundle", stream.getvalue())
+        self.assertEqual(attrs["adapter_mode"], "raw-driver-bundle")
+        self.assertEqual(attrs["raw_driver_schema"], "openmc2donjon.low-order-driver-raw.v1")
+        self.assertEqual(payload["adapter_mode"], "raw-driver-bundle")
+        self.assertEqual(payload["raw_driver_h5"], str(raw))
+        self.assertEqual(payload["volume_flux_dataset"], "driver/flux")
+        self.assertEqual(payload["net_current_dataset"], "driver/current")
+        np.testing.assert_allclose(volume_flux, [[10.0, 20.0], [30.0, 40.0]])
+        np.testing.assert_allclose(net_current[0, 0], [1.0, -2.0])
+
     def test_make_low_order_driver_flips_declared_inward_current(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
@@ -351,6 +395,29 @@ def _write_raw_driver_reversed_faces(path: Path) -> None:
         )
         names = np.asarray(["fuel", "mod"], dtype="S")
         faces = np.asarray(["FD_XMAX", "FD_XMIN"], dtype="S")
+        volume.attrs["mixture_names"] = names
+        current.attrs["mixture_names"] = names
+        current.attrs["face_names"] = faces
+
+
+def _write_raw_driver_bundle(path: Path) -> None:
+    with h5py.File(path, "w") as h5:
+        h5.attrs["schema"] = "openmc2donjon.low-order-driver-raw.v1"
+        h5.attrs["volume_flux_dataset"] = "driver/flux"
+        h5.attrs["net_current_dataset"] = "driver/current"
+        group = h5.create_group("driver")
+        volume = group.create_dataset("flux", data=np.array([[10.0, 20.0], [30.0, 40.0]]))
+        current = group.create_dataset(
+            "current",
+            data=np.array(
+                [
+                    [[1.0, -2.0], [0.0, 1.0]],
+                    [[0.0, 0.0], [2.0, -4.0]],
+                ]
+            ),
+        )
+        names = np.asarray(["fuel", "mod"], dtype="S")
+        faces = np.asarray(["FD_XMIN", "FD_XMAX"], dtype="S")
         volume.attrs["mixture_names"] = names
         current.attrs["mixture_names"] = names
         current.attrs["face_names"] = faces

@@ -106,8 +106,7 @@ openmc2donjon-from-openmc \
   --build-flux-ratio-adf \
   --export-surface-flux \
   --surface-flux-mu-edges 0.0,0.25,0.5,0.75,1.0 \
-  --low-order-volume-flux raw_low_order_driver.h5 \
-  --low-order-net-current raw_low_order_driver.h5 \
+  --low-order-raw-driver raw_low_order_driver.h5 \
   --low-order-net-current-sign-convention auto \
   --adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
   --adf-face-widths 4.0 \
@@ -200,8 +199,7 @@ openmc2donjon export-surface-flux statepoint.120.h5 \
 
 openmc2donjon make-low-order-driver mgxs_library.h5 \
   -o low_order_driver.h5 \
-  --volume-flux raw_low_order_driver.h5 \
-  --net-current raw_low_order_driver.h5 \
+  --raw-driver raw_low_order_driver.h5 \
   --net-current-sign-convention auto \
   --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX
 

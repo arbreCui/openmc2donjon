@@ -218,6 +218,7 @@ for mix_index in range(len(mixture_names)):
         )
 
 with h5py.File(output_path, "w") as h5:
+    h5.attrs["schema"] = "openmc2donjon.low-order-driver-raw.v1"
     volume = h5.create_dataset("volume_flux", data=volume_flux)
     current = h5.create_dataset("net_current_density", data=net_current)
     names = np.asarray(mixture_names, dtype="S")
@@ -240,8 +241,7 @@ OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
   --surface-flux-mesh-shape 1,2 \
   --surface-flux-mu-edges "$SURFACE_FLUX_MU_EDGES" \
   --surface-flux-face-area 4.0 \
-  --low-order-volume-flux "$LOW_ORDER_RAW" \
-  --low-order-net-current "$LOW_ORDER_RAW" \
+  --low-order-raw-driver "$LOW_ORDER_RAW" \
   --low-order-source-label "production minicase external low-order driver fixture" \
   --adf-faces "$ADF_FACES" \
   --adf-face-widths 4.0 \
@@ -304,6 +304,8 @@ if low_order_driver_summary["schema"] != "openmc2donjon.low-order-driver.v1":
     raise SystemExit("low-order driver summary schema mismatch")
 if tuple(low_order_driver_summary["face_names"]) != faces:
     raise SystemExit("low-order driver summary face names mismatch")
+if low_order_driver_summary["adapter_mode"] != "raw-driver-bundle":
+    raise SystemExit("low-order driver did not use raw-driver adapter")
 
 low_order_driver_check_summary = json.loads(
     low_order_driver_check_summary_path.read_text(encoding="utf-8")

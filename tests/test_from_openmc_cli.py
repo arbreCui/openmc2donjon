@@ -353,9 +353,7 @@ class FromOpenMCCliTests(unittest.TestCase):
                         "--build-flux-ratio-adf",
                         "--adf-surface-flux",
                         str(surface_flux),
-                        "--low-order-volume-flux",
-                        str(raw_driver),
-                        "--low-order-net-current",
+                        "--low-order-raw-driver",
                         str(raw_driver),
                         "--adf-faces",
                         "FD_XMIN,FD_XMAX",
@@ -373,6 +371,7 @@ class FromOpenMCCliTests(unittest.TestCase):
             hdf5 = run_dir / "mgxs_library.h5"
             sidecar = run_dir / "adf_sidecar.h5"
             sidecar_summary = run_dir / "adf_sidecar_summary.json"
+            low_order_driver_summary = run_dir / "low_order_driver_summary.json"
             low_order_check = run_dir / "low_order_driver_check_summary.json"
             homogeneous = run_dir / "homogeneous_face_flux.h5"
             check_summary = run_dir / "check_summary.json"
@@ -382,6 +381,9 @@ class FromOpenMCCliTests(unittest.TestCase):
                 mod_xmax = h5["mixtures/MOD_A/adf/FD_XMAX"][:]
                 attrs = dict(h5.attrs)
             sidecar_payload = json.loads(sidecar_summary.read_text(encoding="utf-8"))
+            low_order_driver_payload = json.loads(
+                low_order_driver_summary.read_text(encoding="utf-8")
+            )
             low_order_payload = json.loads(low_order_check.read_text(encoding="utf-8"))
             check_payload = json.loads(check_summary.read_text(encoding="utf-8"))
             manifest_payload = json.loads(manifest.read_text(encoding="utf-8"))
@@ -400,6 +402,8 @@ class FromOpenMCCliTests(unittest.TestCase):
         self.assertEqual(attrs["adf_real"], "false")
         self.assertEqual(sidecar_payload["decision"], "openmc2donjon_adf_sidecar_passed")
         self.assertFalse(sidecar_payload["adf_real"])
+        self.assertEqual(low_order_driver_payload["adapter_mode"], "raw-driver-bundle")
+        self.assertEqual(low_order_driver_payload["raw_driver_h5"], str(raw_driver))
         self.assertEqual(
             low_order_payload["decision"],
             "openmc2donjon_low_order_driver_contract_passed",

@@ -269,8 +269,7 @@ reconstruction step:
 ```sh
 openmc2donjon make-low-order-driver mgxs_library.h5 \
   -o low_order_driver.h5 \
-  --volume-flux raw_low_order_driver.h5 \
-  --net-current raw_low_order_driver.h5 \
+  --raw-driver raw_low_order_driver.h5 \
   --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX
 ```
 
@@ -283,6 +282,14 @@ metadata and writes:
 /mixture_names
 /face_names
 ```
+
+The preferred production adapter input is a single raw-driver HDF5 bundle. A
+minimal bundle exposes `/volume_flux` and `/net_current_density`. For
+nonstandard dataset paths, set root attributes `volume_flux_dataset` and
+`net_current_dataset`; `make-low-order-driver --raw-driver` will follow those
+paths. The optional root `schema` attribute may be
+`openmc2donjon.low-order-driver-raw.v1`, but unversioned raw files are accepted
+as long as the required datasets and metadata are present.
 
 Raw driver datasets may declare `mixture_names` and `face_names` attributes or
 root datasets. `make-low-order-driver` uses those names to reorder mixture and

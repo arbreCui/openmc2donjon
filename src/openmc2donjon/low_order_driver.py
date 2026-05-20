@@ -12,6 +12,8 @@ from . import __version__
 from .adf_augment import parse_faces
 from .adf_sidecar import DEFAULT_CARTESIAN_FACES
 from .homogeneous_face_flux import (
+    NET_CURRENT_DATASETS,
+    VOLUME_FLUX_DATASETS,
     load_net_current,
     load_volume_flux,
     reconstruct_homogeneous_face_flux,
@@ -19,6 +21,7 @@ from .homogeneous_face_flux import (
 
 
 SCHEMA = "openmc2donjon.low-order-driver.v1"
+RAW_DRIVER_SCHEMA = "openmc2donjon.low-order-driver-raw.v1"
 PASS_DECISION = "openmc2donjon_low_order_driver_passed"
 CHECK_SCHEMA = "openmc2donjon.low-order-driver-contract.v1"
 CHECK_PASS_DECISION = "openmc2donjon_low_order_driver_contract_passed"
@@ -47,6 +50,18 @@ class LowOrderDriverReport:
     net_current_sign_convention_source: str | None = None
     net_current_sign_convention_output: str = "positive outward"
     net_current_sign_multiplier: float = 1.0
+    adapter_mode: str = "explicit-datasets"
+    raw_driver_h5: Path | None = None
+    raw_driver_schema: str | None = None
+
+
+@dataclass(frozen=True)
+class LowOrderSourceReferences:
+    volume_flux: str | Path
+    net_current: str | Path
+    adapter_mode: str
+    raw_driver_h5: Path | None = None
+    raw_driver_schema: str | None = None
 
 
 @dataclass(frozen=True)
@@ -75,8 +90,9 @@ def create_low_order_driver(
     input_h5: Path,
     output_h5: Path,
     *,
-    volume_flux: str | Path,
-    net_current: str | Path,
+    volume_flux: str | Path | None = None,
+    net_current: str | Path | None = None,
+    raw_driver: str | Path | None = None,
     faces: tuple[str, ...] | None = None,
     net_current_sign_convention: str | None = None,
     source_label: str = "external low-order driver",
@@ -110,13 +126,18 @@ def create_low_order_driver(
     energy_bounds = metadata["energy_bounds"]
     energy_groups = int(energy_bounds.size - 1)
 
+    sources = _resolve_low_order_sources(
+        raw_driver=raw_driver,
+        volume_flux=volume_flux,
+        net_current=net_current,
+    )
     volume = load_volume_flux(
-        volume_flux,
+        sources.volume_flux,
         mixture_names=mixture_names,
         energy_groups=energy_groups,
     )
     current = load_net_current(
-        net_current,
+        sources.net_current,
         mixture_names=mixture_names,
         energy_groups=energy_groups,
         face_names=face_names,
@@ -140,6 +161,9 @@ def create_low_order_driver(
         net_current_sign_convention_source=current.current_sign_convention_source,
         net_current_sign_convention_output=current.current_sign_convention_output,
         net_current_sign_multiplier=current.current_sign_multiplier,
+        adapter_mode=sources.adapter_mode,
+        raw_driver_h5=sources.raw_driver_h5,
+        raw_driver_schema=sources.raw_driver_schema,
         source_label=source_label,
     )
 
@@ -167,6 +191,9 @@ def create_low_order_driver(
         net_current_sign_convention_output=current.current_sign_convention_output
         or "positive outward",
         net_current_sign_multiplier=current.current_sign_multiplier,
+        adapter_mode=sources.adapter_mode,
+        raw_driver_h5=sources.raw_driver_h5,
+        raw_driver_schema=sources.raw_driver_schema,
     )
     print_report(report)
     if summary_json is not None:
@@ -257,6 +284,12 @@ def print_report(report: LowOrderDriverReport) -> None:
         f"faces={','.join(report.face_names)}"
     )
     print(f"  source: {report.source_label}")
+    print(f"  adapter: {report.adapter_mode}")
+    if report.raw_driver_h5 is not None:
+        print(
+            f"  raw_driver: {report.raw_driver_h5} "
+            f"schema={report.raw_driver_schema or 'unversioned'}"
+        )
     print(
         "  volume_flux range: "
         f"min={report.volume_flux_minimum:.6g} "
@@ -347,6 +380,9 @@ def write_summary(path: Path, report: LowOrderDriverReport) -> None:
         "net_current_sign_convention_source": report.net_current_sign_convention_source,
         "net_current_sign_convention_output": report.net_current_sign_convention_output,
         "net_current_sign_multiplier": report.net_current_sign_multiplier,
+        "adapter_mode": report.adapter_mode,
+        "raw_driver_h5": None if report.raw_driver_h5 is None else str(report.raw_driver_h5),
+        "raw_driver_schema": report.raw_driver_schema,
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -378,6 +414,90 @@ def write_check_summary(path: Path, report: LowOrderDriverCheckReport) -> None:
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _resolve_low_order_sources(
+    *,
+    raw_driver: str | Path | None,
+    volume_flux: str | Path | None,
+    net_current: str | Path | None,
+) -> LowOrderSourceReferences:
+    if raw_driver is None:
+        if volume_flux is None:
+            raise ValueError("missing low-order volume flux; use --volume-flux or --raw-driver")
+        if net_current is None:
+            raise ValueError("missing low-order net current; use --net-current or --raw-driver")
+        return LowOrderSourceReferences(
+            volume_flux=volume_flux,
+            net_current=net_current,
+            adapter_mode="explicit-datasets",
+        )
+
+    raw_text = str(raw_driver)
+    if "::" in raw_text:
+        raise ValueError("--raw-driver expects an HDF5 file path, not FILE::DATASET")
+    raw_path = Path(raw_driver)
+    raw = _read_raw_driver_bundle(raw_path)
+    return LowOrderSourceReferences(
+        volume_flux=volume_flux or _dataset_reference(raw_path, raw["volume_flux_dataset"]),
+        net_current=net_current or _dataset_reference(raw_path, raw["net_current_dataset"]),
+        adapter_mode="raw-driver-bundle",
+        raw_driver_h5=raw_path,
+        raw_driver_schema=raw["schema"],
+    )
+
+
+def _read_raw_driver_bundle(path: Path) -> dict[str, str | None]:
+    import h5py
+
+    if not path.exists():
+        raise FileNotFoundError(f"raw low-order driver HDF5 does not exist: {path}")
+    with h5py.File(path, "r") as h5:
+        schema = _decode_text(h5.attrs.get("schema", "unversioned"))
+        volume_dataset = _optional_dataset_attr(
+            h5,
+            ("volume_flux_dataset", "volume_flux_path", "scalar_flux_dataset"),
+        )
+        current_dataset = _optional_dataset_attr(
+            h5,
+            ("net_current_dataset", "net_current_density_dataset", "current_dataset"),
+        )
+        if volume_dataset is None and not any(name in h5 for name in VOLUME_FLUX_DATASETS):
+            raise ValueError(
+                "raw low-order driver has no supported volume-flux dataset; "
+                f"expected one of {VOLUME_FLUX_DATASETS}"
+            )
+        if current_dataset is None and not any(name in h5 for name in NET_CURRENT_DATASETS):
+            raise ValueError(
+                "raw low-order driver has no supported net-current dataset; "
+                f"expected one of {NET_CURRENT_DATASETS}"
+            )
+        _ensure_dataset_if_declared(h5, volume_dataset, "volume-flux")
+        _ensure_dataset_if_declared(h5, current_dataset, "net-current")
+    return {
+        "schema": schema,
+        "volume_flux_dataset": volume_dataset,
+        "net_current_dataset": current_dataset,
+    }
+
+
+def _dataset_reference(path: Path, dataset: str | None) -> str | Path:
+    if dataset is None:
+        return path
+    return f"{path}::{dataset}"
+
+
+def _optional_dataset_attr(h5, names: tuple[str, ...]) -> str | None:
+    for name in names:
+        if name in h5.attrs:
+            value = _decode_text(h5.attrs[name]).strip().lstrip("/")
+            return value or None
+    return None
+
+
+def _ensure_dataset_if_declared(h5, dataset: str | None, label: str) -> None:
+    if dataset is not None and dataset not in h5:
+        raise ValueError(f"raw low-order driver declares missing {label} dataset: {dataset}")
 
 
 def _read_mgxs_metadata(path: Path) -> dict[str, np.ndarray | tuple[str, ...]]:
@@ -508,6 +628,9 @@ def _write_hdf5(
     net_current_sign_convention_source: str | None,
     net_current_sign_convention_output: str | None,
     net_current_sign_multiplier: float,
+    adapter_mode: str,
+    raw_driver_h5: Path | None,
+    raw_driver_schema: str | None,
     source_label: str,
 ) -> None:
     import h5py
@@ -518,6 +641,10 @@ def _write_hdf5(
         h5.attrs["package_version"] = __version__
         h5.attrs["source_mgxs"] = str(input_h5)
         h5.attrs["source_label"] = source_label
+        h5.attrs["adapter_mode"] = adapter_mode
+        if raw_driver_h5 is not None:
+            h5.attrs["raw_driver_h5"] = str(raw_driver_h5)
+            h5.attrs["raw_driver_schema"] = raw_driver_schema or "unversioned"
         h5.attrs["volume_flux_source"] = str(volume_flux_source)
         h5.attrs["volume_flux_dataset"] = volume_flux_dataset
         h5.attrs["net_current_source"] = str(net_current_source)

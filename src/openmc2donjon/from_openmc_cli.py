@@ -190,6 +190,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="with --export-surface-flux, face area used in current-to-flux reconstruction",
     )
     parser.add_argument(
+        "--low-order-raw-driver",
+        default=None,
+        help=(
+            "with --build-flux-ratio-adf, raw low-order driver HDF5 bundle; "
+            "omitted low-order flux/current datasets are auto-detected in this file"
+        ),
+    )
+    parser.add_argument(
         "--low-order-volume-flux",
         default=None,
         help=(
@@ -388,6 +396,18 @@ def _run_dry_run(args: argparse.Namespace) -> None:
             print(f"    surface_flux_face_area: {args.surface_flux_face_area}")
         else:
             print(f"    surface_flux: {args.adf_surface_flux} (not read)")
+        print(
+            "    low_order_raw_driver: "
+            f"{_render_optional_value(args.low_order_raw_driver)}"
+        )
+        print(
+            "    low_order_volume_flux: "
+            f"{_render_optional_value(args.low_order_volume_flux)}"
+        )
+        print(
+            "    low_order_net_current: "
+            f"{_render_optional_value(args.low_order_net_current)}"
+        )
         print(f"    low_order_driver: {paths['low_order_driver']} (not written)")
         print(
             f"    low_order_driver_check_summary: "
@@ -677,6 +697,7 @@ def _build_flux_ratio_adf(
     create_low_order_driver(
         hdf5_path,
         paths["low_order_driver"],
+        raw_driver=args.low_order_raw_driver,
         volume_flux=args.low_order_volume_flux,
         net_current=args.low_order_net_current,
         faces=faces,
@@ -822,6 +843,7 @@ def _validate_flux_ratio_adf_args(
         or args.surface_flux_mesh_shape is not None
         or args.surface_flux_mu_edges is not None
         or args.surface_flux_face_area != 1.0
+        or args.low_order_raw_driver is not None
         or args.low_order_volume_flux is not None
         or args.low_order_net_current is not None
         or args.low_order_net_current_sign_convention is not None
@@ -859,10 +881,19 @@ def _validate_flux_ratio_adf_args(
             parser.error(str(exc))
         if not (args.surface_flux_face_area > 0.0):
             parser.error("--surface-flux-face-area must be positive")
-    if args.low_order_volume_flux is None:
-        parser.error("--build-flux-ratio-adf requires --low-order-volume-flux")
-    if args.low_order_net_current is None:
-        parser.error("--build-flux-ratio-adf requires --low-order-net-current")
+    has_raw_low_order = args.low_order_raw_driver is not None
+    has_explicit_low_order = (
+        args.low_order_volume_flux is not None and args.low_order_net_current is not None
+    )
+    if not (has_raw_low_order or has_explicit_low_order):
+        parser.error(
+            "--build-flux-ratio-adf requires --low-order-raw-driver or both "
+            "--low-order-volume-flux and --low-order-net-current"
+        )
+    if args.low_order_volume_flux is None and args.low_order_net_current is not None:
+        parser.error("--low-order-net-current also requires --low-order-volume-flux")
+    if args.low_order_volume_flux is not None and args.low_order_net_current is None:
+        parser.error("--low-order-volume-flux also requires --low-order-net-current")
     try:
         _flux_ratio_faces(args)
         _parse_float_tuple(args.adf_face_widths, "--adf-face-widths")

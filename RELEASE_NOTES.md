@@ -53,6 +53,9 @@
 - Extended low-order driver canonicalization to convert raw `positive inward`
   net-current sign conventions to the project canonical `positive outward`
   convention, with conversion provenance in summaries.
+- Added raw low-order driver bundle adapters via `--raw-driver` and
+  `--low-order-raw-driver`, with adapter provenance recorded in HDF5 and JSON
+  summaries.
 - Added `openmc2donjon check-low-order-driver` for strict low-order handoff
   preflight, including current sign convention and optional face-width
   homogeneous-flux positivity checks.

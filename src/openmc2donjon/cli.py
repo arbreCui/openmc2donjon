@@ -661,7 +661,7 @@ def build_make_low_order_driver_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="openmc2donjon make-low-order-driver",
         description=(
-            "Canonicalize external low-order driver volume flux and outward "
+            "Canonicalize external low-order driver volume flux and "
             "net current density into the HDF5 layout consumed by "
             "make-homogeneous-face-flux."
         ),
@@ -669,13 +669,21 @@ def build_make_low_order_driver_parser() -> argparse.ArgumentParser:
     parser.add_argument("input_h5", type=Path, help="MGXS HDF5 handoff used for metadata")
     parser.add_argument("-o", "--output", type=Path, required=True, help="low-order driver HDF5")
     parser.add_argument(
+        "--raw-driver",
+        default=None,
+        help=(
+            "raw low-order driver HDF5 bundle; when set, --volume-flux and "
+            "--net-current default to auto-detected datasets in this file"
+        ),
+    )
+    parser.add_argument(
         "--volume-flux",
-        required=True,
+        default=None,
         help="HDF5 file or FILE::DATASET containing volume-average flux",
     )
     parser.add_argument(
         "--net-current",
-        required=True,
+        default=None,
         help="HDF5 file or FILE::DATASET containing net current density",
     )
     parser.add_argument(
@@ -980,6 +988,7 @@ def _make_low_order_driver_main(argv: list[str]) -> int:
         create_low_order_driver(
             args.input_h5,
             args.output,
+            raw_driver=args.raw_driver,
             volume_flux=args.volume_flux,
             net_current=args.net_current,
             faces=parse_faces(args.faces),
