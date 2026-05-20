@@ -46,6 +46,10 @@ MGXS_TYPES = [
     "consistent nu-scatter matrix",
     "transport",
 ]
+SURFACE_FLUX_TALLY_NAME = "openmc2donjon_surface_current_mu"
+SURFACE_FLUX_MESH_SHAPE = (1, 2)
+SURFACE_FLUX_MU_EDGES = [0.0, 0.25, 0.5, 0.75, 1.0]
+SURFACE_FLUX_FACE_AREA = 4.0
 
 
 @dataclass(frozen=True)
@@ -164,7 +168,23 @@ def build_tallies(geometry: openmc.Geometry) -> openmc.Tallies:
         library.add_to_tallies(tallies, merge=True)
     else:
         library.add_to_tallies_file(tallies, merge=True)
+    tallies.append(build_surface_flux_tally())
     return tallies
+
+
+def build_surface_flux_tally() -> openmc.Tally:
+    mesh = openmc.RegularMesh(mesh_id=3001, name="openmc2donjon minicase face mesh")
+    mesh.dimension = (SURFACE_FLUX_MESH_SHAPE[1], SURFACE_FLUX_MESH_SHAPE[0])
+    mesh.lower_left = (-2.0, -2.0)
+    mesh.upper_right = (2.0, 2.0)
+    tally = openmc.Tally(name=SURFACE_FLUX_TALLY_NAME)
+    tally.filters = [
+        openmc.MeshSurfaceFilter(mesh),
+        openmc.MuSurfaceFilter(SURFACE_FLUX_MU_EDGES),
+        openmc.EnergyFilter(ENERGY_BOUNDS_EV),
+    ]
+    tally.scores = ["current"]
+    return tally
 
 
 def export_openmc_xml(

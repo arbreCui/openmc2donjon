@@ -247,6 +247,22 @@ Accepted array layouts are `(M, F, G)`, `(M, G, F)`, `(Y, X, G, F)`, or
 `mixture_names` mesh dataset or attribute so cells can be mapped back to MGXS
 mixture names.
 
+For OpenMC statepoints that contain a `MeshSurfaceFilter` + `MuSurfaceFilter`
+current tally, `export-surface-flux` writes the supported surface-flux layout:
+
+```sh
+openmc2donjon export-surface-flux statepoint.120.h5 \
+  --mgxs mgxs_library.h5 \
+  -o openmc_surface_flux.h5 \
+  --tally-name openmc2donjon_surface_current_mu \
+  --mesh-shape 1,2 \
+  --mu-edges 0.0,0.25,0.5,0.75,1.0 \
+  --face-area 4.0
+```
+
+The exported HDF5 contains `/surface_flux/mean` with layout
+`(mesh_y, mesh_x, group, face)` and a `/mixture_names` mesh mapping.
+
 The sidecar can either reuse the normal MGXS layout with
 `/mixtures/<domain_name>/adf`, or provide a compact root dataset:
 

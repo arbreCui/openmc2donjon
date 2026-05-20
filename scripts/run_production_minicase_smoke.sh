@@ -40,6 +40,8 @@ MCO="$CONVERT_RUN_DIR/out.mcompo.txt"
 SUMMARY="$CONVERT_RUN_DIR/run_summary.json"
 CHECK_SUMMARY="$CONVERT_RUN_DIR/check_summary.json"
 MANIFEST="$CONVERT_RUN_DIR/manifest.json"
+SURFACE_FLUX="$RUN_DIR/openmc_surface_flux.h5"
+SURFACE_FLUX_SUMMARY="$RUN_DIR/openmc_surface_flux_summary.json"
 ADF_SIDECAR="$RUN_DIR/adf_sidecar.h5"
 ADF_SIDECAR_SUMMARY="$RUN_DIR/adf_sidecar_summary.json"
 ADF_RUN_DIR="$RUN_DIR/openmc2donjon_adf_run"
@@ -50,6 +52,7 @@ ADF_CHECK_SUMMARY="$ADF_RUN_DIR/check_summary.json"
 ADF_INJECT_SUMMARY="$ADF_RUN_DIR/adf_summary.json"
 ADF_MANIFEST="$ADF_RUN_DIR/manifest.json"
 ADF_FACES="FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX"
+SURFACE_FLUX_MU_EDGES="0.0,0.25,0.5,0.75,1.0"
 
 echo "== openmc2donjon production minicase smoke =="
 echo "repo: $REPO_ROOT"
@@ -183,10 +186,29 @@ print(
 PY
 
 echo
-echo "== Build ADF sidecar =="
+echo "== Export OpenMC surface flux =="
+"$PYTHON_BIN" -m openmc2donjon.cli export-surface-flux "$STATEPOINT" \
+  --mgxs "$MGXS" \
+  -o "$SURFACE_FLUX" \
+  --tally-name openmc2donjon_surface_current_mu \
+  --mesh-shape 1,2 \
+  --mu-edges "$SURFACE_FLUX_MU_EDGES" \
+  --face-area 4.0 \
+  --faces "$ADF_FACES" \
+  --summary-json "$SURFACE_FLUX_SUMMARY"
+
+echo
+echo "== Build flux-ratio ADF sidecar =="
 "$PYTHON_BIN" -m openmc2donjon.cli make-adf-sidecar "$MGXS" \
   -o "$ADF_SIDECAR" \
+  --mode flux-ratio \
+  --surface-flux "$SURFACE_FLUX" \
+  --homogeneous-face-flux "$SURFACE_FLUX::surface_flux/mean" \
   --faces "$ADF_FACES" \
+  --invalid-fill 1.0 \
+  --adf-kind flux-ratio-smoke \
+  --adf-real false \
+  --adf-source-label "production minicase surface-flux self-ratio smoke" \
   --summary-json "$ADF_SIDECAR_SUMMARY"
 
 echo
@@ -198,14 +220,14 @@ OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
   --run-dir "$ADF_RUN_DIR" \
   --adf-source "$ADF_SIDECAR" \
   --adf-faces "$ADF_FACES" \
-  --adf-kind unity \
+  --adf-kind flux-ratio-smoke \
   --adf-real false \
   --check \
   --require-adf \
   --require-volume \
   --require-transport-dataset
 
-"$PYTHON_BIN" - "$ADF_SIDECAR" "$ADF_SIDECAR_SUMMARY" "$ADF_H5" "$ADF_MCO" "$ADF_RUN_SUMMARY" "$ADF_CHECK_SUMMARY" "$ADF_INJECT_SUMMARY" "$ADF_MANIFEST" <<'PY'
+"$PYTHON_BIN" - "$SURFACE_FLUX" "$SURFACE_FLUX_SUMMARY" "$ADF_SIDECAR" "$ADF_SIDECAR_SUMMARY" "$ADF_H5" "$ADF_MCO" "$ADF_RUN_SUMMARY" "$ADF_CHECK_SUMMARY" "$ADF_INJECT_SUMMARY" "$ADF_MANIFEST" <<'PY'
 import json
 from pathlib import Path
 import sys
@@ -215,28 +237,51 @@ import numpy as np
 from openmc2donjon import lcm_ascii
 from openmc2donjon.from_openmc_summary import validate_from_openmc_summary
 
-sidecar = Path(sys.argv[1])
-sidecar_summary_path = Path(sys.argv[2])
-mgxs = Path(sys.argv[3])
-mco = Path(sys.argv[4])
-summary_path = Path(sys.argv[5])
-check_summary_path = Path(sys.argv[6])
-adf_summary_path = Path(sys.argv[7])
-manifest_path = Path(sys.argv[8])
+surface_flux = Path(sys.argv[1])
+surface_flux_summary_path = Path(sys.argv[2])
+sidecar = Path(sys.argv[3])
+sidecar_summary_path = Path(sys.argv[4])
+mgxs = Path(sys.argv[5])
+mco = Path(sys.argv[6])
+summary_path = Path(sys.argv[7])
+check_summary_path = Path(sys.argv[8])
+adf_summary_path = Path(sys.argv[9])
+manifest_path = Path(sys.argv[10])
 faces = ("FD_XMIN", "FD_XMAX", "FD_YMIN", "FD_YMAX")
+
+surface_flux_summary = json.loads(surface_flux_summary_path.read_text(encoding="utf-8"))
+if surface_flux_summary["decision"] != "openmc2donjon_surface_flux_export_passed":
+    raise SystemExit("surface-flux summary did not pass")
+if surface_flux_summary["schema"] != "openmc2donjon.surface-flux.v1":
+    raise SystemExit("surface-flux summary schema mismatch")
+if surface_flux_summary["mesh_shape"] != [1, 2]:
+    raise SystemExit("surface-flux mesh shape mismatch")
+if tuple(surface_flux_summary["face_names"]) != faces:
+    raise SystemExit("surface-flux face names mismatch")
+
+with h5py.File(surface_flux, "r") as h5:
+    if h5.attrs["schema"] != "openmc2donjon.surface-flux.v1":
+        raise SystemExit("surface-flux HDF5 schema mismatch")
+    values = h5["surface_flux/mean"][:]
+    if values.shape != (1, 2, 2, 4):
+        raise SystemExit(f"unexpected surface-flux shape: {values.shape}")
 
 sidecar_summary = json.loads(sidecar_summary_path.read_text(encoding="utf-8"))
 if sidecar_summary["decision"] != "openmc2donjon_adf_sidecar_passed":
     raise SystemExit("ADF sidecar summary did not pass")
 if sidecar_summary["schema"] != "openmc2donjon.adf-sidecar.v1":
     raise SystemExit("ADF sidecar summary schema mismatch")
+if sidecar_summary["mode"] != "flux-ratio":
+    raise SystemExit("ADF sidecar mode mismatch")
+if sidecar_summary["adf_kind"] != "flux-ratio-smoke":
+    raise SystemExit("ADF sidecar kind mismatch")
 if sidecar_summary["adf_real"] is not False:
     raise SystemExit("ADF sidecar summary should be marked adf_real=false")
 if tuple(sidecar_summary["face_names"]) != faces:
     raise SystemExit("ADF sidecar summary face names mismatch")
 
 with h5py.File(sidecar, "r") as h5:
-    if h5.attrs["adf_kind"] != "unity" or h5.attrs["adf_real"] != "false":
+    if h5.attrs["adf_kind"] != "flux-ratio-smoke" or h5.attrs["adf_real"] != "false":
         raise SystemExit("ADF sidecar provenance mismatch")
     values = h5["adf"][:]
     if values.shape != (2, 4, 2):
@@ -244,7 +289,7 @@ with h5py.File(sidecar, "r") as h5:
     np.testing.assert_allclose(values, 1.0)
 
 with h5py.File(mgxs, "r") as h5:
-    if h5.attrs["adf_kind"] != "unity" or h5.attrs["adf_real"] != "false":
+    if h5.attrs["adf_kind"] != "flux-ratio-smoke" or h5.attrs["adf_real"] != "false":
         raise SystemExit("injected HDF5 ADF provenance mismatch")
     names = sorted(h5["mixtures"])
     if names != ["ASM_FUEL_LEFT", "ASM_MOD_RIGHT"]:

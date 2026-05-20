@@ -157,6 +157,14 @@ For a physics sidecar, provide heterogeneous and homogeneous face-flux HDF5
 datasets:
 
 ```sh
+openmc2donjon export-surface-flux statepoint.120.h5 \
+  --mgxs mgxs_library.h5 \
+  -o openmc_surface_flux.h5 \
+  --tally-name openmc2donjon_surface_current_mu \
+  --mesh-shape 1,2 \
+  --mu-edges 0.0,0.25,0.5,0.75,1.0 \
+  --face-area 4.0
+
 openmc2donjon make-adf-sidecar mgxs_library.h5 \
   -o adf_sidecar.h5 \
   --mode flux-ratio \

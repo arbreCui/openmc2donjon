@@ -40,12 +40,15 @@
   `adf_real=false` sidecar that exercises the ADF/DF injection workflow.
 - Extended `make-adf-sidecar` with a `flux-ratio` mode that writes physical
   sidecars from heterogeneous and homogeneous face-flux HDF5 datasets.
+- Added `openmc2donjon export-surface-flux` for exporting OpenMC
+  `MeshSurfaceFilter`/`MuSurfaceFilter` current tallies to the flux-ratio
+  surface-flux HDF5 layout.
 - Added `openmc2donjon-from-openmc --adf-source` so the one-step OpenMC export
   path can inject ADF before checked DONJON conversion.
 - Added `examples/production_minicase` plus a smoke script for a fresh
   continuous-energy OpenMC MGXS case that does not rely on the C5G7 snapshot.
-- Extended the production minicase smoke to run the
-  OpenMC -> MGXS -> ADF sidecar -> checked MULTICOMPO path.
+- Extended the production minicase smoke to run the OpenMC statepoint ->
+  surface flux -> flux-ratio ADF sidecar -> checked MULTICOMPO path.
 - Extended release check so the C5G7 statepoint parity path exercises
   `openmc2donjon-from-openmc`, reads back the generated MCO, and validates the
   summary manifest.

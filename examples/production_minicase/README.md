@@ -50,13 +50,27 @@ manifest.json
 export_recipe.py
 ```
 
-To exercise the ADF/DF path, generate an identity sidecar from the exported
-MGXS and rerun the one-step workflow with sidecar injection:
+To exercise the ADF/DF path, export the OpenMC surface-flux tally, build a
+flux-ratio sidecar, and rerun the one-step workflow with sidecar injection:
 
 ```sh
+openmc2donjon export-surface-flux "$CASE_DIR/statepoint.12.h5" \
+  --mgxs "$RUN_DIR/mgxs_library.h5" \
+  -o /tmp/openmc2donjon_minicase/openmc_surface_flux.h5 \
+  --tally-name openmc2donjon_surface_current_mu \
+  --mesh-shape 1,2 \
+  --mu-edges 0.0,0.25,0.5,0.75,1.0 \
+  --face-area 4.0
+
 openmc2donjon make-adf-sidecar "$RUN_DIR/mgxs_library.h5" \
   -o /tmp/openmc2donjon_minicase/adf_sidecar.h5 \
-  --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX
+  --mode flux-ratio \
+  --surface-flux /tmp/openmc2donjon_minicase/openmc_surface_flux.h5 \
+  --homogeneous-face-flux /tmp/openmc2donjon_minicase/openmc_surface_flux.h5::surface_flux/mean \
+  --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
+  --invalid-fill 1.0 \
+  --adf-kind flux-ratio-smoke \
+  --adf-real false
 
 OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
 openmc2donjon-from-openmc \
@@ -71,8 +85,8 @@ openmc2donjon-from-openmc \
   --require-transport-dataset
 ```
 
-The generated sidecar is marked `adf_real=false`: it is an interface and
-workflow check, not a production physics ADF estimate.
+The minicase uses a surface-flux self-ratio marked `adf_real=false`; it is an
+interface and workflow check, not a production physics ADF estimate.
 
 For the repository smoke test, run:
 

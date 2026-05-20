@@ -16,6 +16,10 @@ from .mgxs_diff import diff_hdf5_files
 from .mgxs_inspect import inspect_files
 from .mgxs_input_contract import run_preflight
 from .multicompo import DEFAULT_ROOT_NAME, convert_mgxs_hdf5
+from .openmc_surface_flux import (
+    DEFAULT_TALLY_NAME as DEFAULT_SURFACE_FLUX_TALLY_NAME,
+    export_openmc_surface_flux,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -25,9 +29,10 @@ def build_parser() -> argparse.ArgumentParser:
             "Convert an OpenMC MGXS HDF5 dump to DONJON ASCII LCM objects. "
             "Use 'openmc2donjon inspect <input_h5>' to inspect an HDF5 handoff, "
             "'openmc2donjon diff <reference_h5> <candidate_h5>' to compare two "
-            "handoffs, 'openmc2donjon make-adf-sidecar <input_h5> ...' to "
-            "create an ADF sidecar, 'openmc2donjon augment-adf <input_h5> ...' "
-            "to inject computed discontinuity factors, "
+            "handoffs, 'openmc2donjon export-surface-flux <statepoint> ...' to "
+            "export OpenMC face fluxes, 'openmc2donjon make-adf-sidecar "
+            "<input_h5> ...' to create an ADF sidecar, 'openmc2donjon "
+            "augment-adf <input_h5> ...' to inject computed discontinuity factors, "
             "'openmc2donjon bundle --output-dir DIR ...' to collect "
             "production artifacts, 'openmc2donjon doctor' for environment checks, or "
             "'openmc2donjon check <input_h5>' for input-contract preflight."
@@ -531,8 +536,73 @@ def build_make_adf_sidecar_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_export_surface_flux_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="openmc2donjon export-surface-flux",
+        description=(
+            "Export an OpenMC MeshSurfaceFilter + MuSurfaceFilter current tally "
+            "from a statepoint into the face-flux HDF5 layout consumed by "
+            "make-adf-sidecar --mode flux-ratio."
+        ),
+    )
+    parser.add_argument("statepoint", type=Path, help="OpenMC statepoint containing the tally")
+    parser.add_argument("-o", "--output", type=Path, required=True, help="surface-flux HDF5 output")
+    parser.add_argument(
+        "--mgxs",
+        type=Path,
+        default=None,
+        help="MGXS HDF5 handoff used for energy bounds and mixture names",
+    )
+    parser.add_argument(
+        "--tally-name",
+        default=DEFAULT_SURFACE_FLUX_TALLY_NAME,
+        help=f"OpenMC tally name (default: {DEFAULT_SURFACE_FLUX_TALLY_NAME})",
+    )
+    parser.add_argument(
+        "--mesh-shape",
+        default=None,
+        help="mesh shape as Y,X; defaults to 1,N when mixture names are available",
+    )
+    parser.add_argument(
+        "--mixture-names",
+        default=None,
+        help="comma-separated mixture names in row-major mesh order when --mgxs is not enough",
+    )
+    parser.add_argument(
+        "--energy-bounds",
+        default=None,
+        help="comma-separated ascending energy bounds in eV when --mgxs is not supplied",
+    )
+    parser.add_argument(
+        "--mu-edges",
+        required=True,
+        help="comma-separated MuSurfaceFilter bin edges used by the tally",
+    )
+    parser.add_argument(
+        "--face-area",
+        type=float,
+        default=1.0,
+        help="area used in surface_flux=sum(current_mu/mu_midpoint)/face_area",
+    )
+    parser.add_argument(
+        "--faces",
+        default="FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX",
+        help="comma-separated output face names",
+    )
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        default=None,
+        help="write a machine-readable surface-flux export summary JSON",
+    )
+    parser.add_argument("--force", action="store_true", help="overwrite output if it exists")
+    return parser
+
+
 def main(argv: list[str] | None = None) -> int:
     raw_argv = sys.argv[1:] if argv is None else list(argv)
+    if raw_argv and raw_argv[0] == "export-surface-flux":
+        return _export_surface_flux_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "make-adf-sidecar":
         return _make_adf_sidecar_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "augment-adf":
@@ -726,6 +796,69 @@ def _make_adf_sidecar_main(argv: list[str]) -> int:
     except Exception as exc:
         parser.exit(1, f"openmc2donjon make-adf-sidecar: error: {exc}\n")
     return 0
+
+
+def _export_surface_flux_main(argv: list[str]) -> int:
+    parser = build_export_surface_flux_parser()
+    args = parser.parse_args(argv)
+    try:
+        export_openmc_surface_flux(
+            args.statepoint,
+            args.output,
+            mgxs_h5=args.mgxs,
+            tally_name=args.tally_name,
+            mesh_shape=_parse_mesh_shape(args.mesh_shape),
+            mu_edges=_parse_float_tuple(args.mu_edges, "--mu-edges"),
+            face_area=args.face_area,
+            face_names=parse_faces(args.faces),
+            mixture_names=_parse_optional_str_tuple(args.mixture_names),
+            energy_bounds=_parse_optional_float_tuple(args.energy_bounds, "--energy-bounds"),
+            force=args.force,
+            summary_json=args.summary_json,
+        )
+    except Exception as exc:
+        parser.exit(1, f"openmc2donjon export-surface-flux: error: {exc}\n")
+    return 0
+
+
+def _parse_mesh_shape(raw: str | None) -> tuple[int, int] | None:
+    if raw is None:
+        return None
+    parts = [part.strip() for part in raw.split(",") if part.strip()]
+    if len(parts) != 2:
+        raise ValueError("--mesh-shape must be Y,X")
+    try:
+        mesh_shape = (int(parts[0]), int(parts[1]))
+    except ValueError as exc:
+        raise ValueError("--mesh-shape must contain integers") from exc
+    if mesh_shape[0] <= 0 or mesh_shape[1] <= 0:
+        raise ValueError("--mesh-shape entries must be positive")
+    return mesh_shape
+
+
+def _parse_float_tuple(raw: str, option: str) -> tuple[float, ...]:
+    parts = [part.strip() for part in raw.split(",") if part.strip()]
+    if not parts:
+        raise ValueError(f"{option} must list at least one value")
+    try:
+        return tuple(float(part) for part in parts)
+    except ValueError as exc:
+        raise ValueError(f"{option} must contain numeric values") from exc
+
+
+def _parse_optional_float_tuple(raw: str | None, option: str) -> tuple[float, ...] | None:
+    if raw is None:
+        return None
+    return _parse_float_tuple(raw, option)
+
+
+def _parse_optional_str_tuple(raw: str | None) -> tuple[str, ...] | None:
+    if raw is None:
+        return None
+    values = tuple(part.strip() for part in raw.split(",") if part.strip())
+    if not values:
+        raise ValueError("--mixture-names must list at least one name")
+    return values
 
 
 def _bundle_artifacts_from_args(

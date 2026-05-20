@@ -105,6 +105,14 @@ When heterogeneous and homogeneous face fluxes are available, generate the
 sidecar directly from their ratio:
 
 ```sh
+openmc2donjon export-surface-flux statepoint.120.h5 \
+  --mgxs runs/case1/mgxs_library.h5 \
+  -o runs/case1/openmc_surface_flux.h5 \
+  --tally-name openmc2donjon_surface_current_mu \
+  --mesh-shape 1,2 \
+  --mu-edges 0.0,0.25,0.5,0.75,1.0 \
+  --face-area 4.0
+
 openmc2donjon make-adf-sidecar runs/case1/mgxs_library.h5 \
   -o runs/case1/adf_sidecar.h5 \
   --mode flux-ratio \
