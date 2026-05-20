@@ -125,6 +125,15 @@ To confirm a regenerated handoff matches a baseline:
 openmc2donjon diff accepted_mgxs.h5 mgxs_library.h5
 ```
 
+To inject computed ADF/DF values before conversion:
+
+```sh
+openmc2donjon augment-adf mgxs_library.h5 \
+  --adf-source adf_sidecar.h5 \
+  -o mgxs_with_adf.h5 \
+  --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX
+```
+
 Run preflight on the HDF5:
 
 ```sh

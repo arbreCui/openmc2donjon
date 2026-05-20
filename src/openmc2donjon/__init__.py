@@ -2,6 +2,7 @@
 
 __version__ = "0.1.2"
 
+from .adf_augment import augment_hdf5_with_adf
 from .macrolib import write_macrolib
 from .multicompo import (
     MixtureHistory,
@@ -19,6 +20,7 @@ from .openmc_statepoint import (
 
 __all__ = [
     "__version__",
+    "augment_hdf5_with_adf",
     "convert_mgxs_hdf5",
     "DomainExportSpec",
     "dry_run_openmc_statepoint_recipe",

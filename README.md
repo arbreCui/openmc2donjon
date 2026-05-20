@@ -180,6 +180,16 @@ Compare a regenerated HDF5 handoff against a locked baseline:
 openmc2donjon diff accepted_mgxs.h5 candidate_mgxs.h5 --summary-json diff.json
 ```
 
+Inject computed ADF/DF values into a handoff before conversion:
+
+```sh
+openmc2donjon augment-adf mgxs_library.h5 \
+  --adf-source adf_sidecar.h5 \
+  -o mgxs_with_adf.h5 \
+  --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
+  --summary-json adf_summary.json
+```
+
 For a one-command export plus conversion:
 
 ```sh

@@ -204,6 +204,28 @@ FD_YMAX
 When ADF datasets are present, the MULTICOMPO writer emits the embedded
 `MACROLIB/ADF` payload and sets the corresponding DONJON state-vector flags.
 
+Computed ADF/DF values can also be injected from a sidecar HDF5:
+
+```sh
+openmc2donjon augment-adf mgxs_library.h5 \
+  --adf-source adf_sidecar.h5 \
+  -o mgxs_with_adf.h5 \
+  --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX
+```
+
+The sidecar can either reuse the normal MGXS layout with
+`/mixtures/<domain_name>/adf`, or provide a compact root dataset:
+
+```text
+/adf                              shape=(M, F, G)
+  attrs:
+    mixture_names = [name_1, ..., name_M]
+    face_names    = [face_1, ..., face_F]
+```
+
+The augment step requires every input mixture to have the same positive,
+finite ADF faces and writes the standard per-mixture `/adf/<face_name>` layout.
+
 ## Scattering Convention
 
 The dense scatter matrix is interpreted as:

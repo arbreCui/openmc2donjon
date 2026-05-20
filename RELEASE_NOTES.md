@@ -32,6 +32,8 @@
   manifest-backed directory.
 - Added `openmc2donjon-from-openmc --run-dir` for standard production run
   directories with managed outputs and a bundle manifest.
+- Added `openmc2donjon augment-adf` for injecting computed ADF/DF sidecars into
+  MGXS HDF5 handoffs before DONJON conversion.
 - Extended release check so the C5G7 statepoint parity path exercises
   `openmc2donjon-from-openmc`, reads back the generated MCO, and validates the
   summary manifest.

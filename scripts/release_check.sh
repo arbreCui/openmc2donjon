@@ -124,6 +124,7 @@ echo "== CLI smoke =="
 "$PYTHON_BIN" -m openmc2donjon.cli --version
 "$PYTHON_BIN" -m openmc2donjon.cli --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli check --help >/dev/null
+"$PYTHON_BIN" -m openmc2donjon.cli augment-adf --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.export_cli --version
 "$PYTHON_BIN" -m openmc2donjon.export_cli --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.from_openmc_cli --version
@@ -142,6 +143,62 @@ RUN_DIR="$RUN_DIR/c5g7_demo" bash "$REPO_ROOT/scripts/run_c5g7_demo.sh" --skip-t
 echo
 echo "== Accepted baseline manifest =="
 "$PYTHON_BIN" "$REPO_ROOT/examples/donjon_openmc2donjon/validate_accepted_baseline.py"
+
+echo
+echo "== C5G7 ADF augment smoke =="
+adf_stripped="$RUN_DIR/c5g7_adf_augment.no_adf.h5"
+adf_augmented="$RUN_DIR/c5g7_adf_augment.with_adf.h5"
+adf_summary="$RUN_DIR/c5g7_adf_augment.summary.json"
+"$PYTHON_BIN" - "$C5G7_ACCEPTED_H5" "$adf_stripped" <<'PY'
+import shutil
+import sys
+from pathlib import Path
+
+import h5py
+
+source = Path(sys.argv[1])
+stripped = Path(sys.argv[2])
+shutil.copyfile(source, stripped)
+with h5py.File(stripped, "r+") as h5:
+    for key in list(h5.attrs):
+        if str(key).startswith("adf"):
+            del h5.attrs[key]
+    for group in h5["mixtures"].values():
+        if "adf" in group:
+            del group["adf"]
+PY
+"$PYTHON_BIN" -m openmc2donjon.cli augment-adf "$adf_stripped" \
+  --adf-source "$C5G7_ACCEPTED_H5" \
+  -o "$adf_augmented" \
+  --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
+  --summary-json "$adf_summary"
+"$PYTHON_BIN" -m openmc2donjon.cli check "$adf_augmented" \
+  --require-adf \
+  --expected-adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
+  --require-volume \
+  --require-transport-dataset
+"$PYTHON_BIN" - "$C5G7_ACCEPTED_H5" "$adf_augmented" "$adf_summary" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+import h5py
+import numpy as np
+
+source = Path(sys.argv[1])
+augmented = Path(sys.argv[2])
+summary = json.loads(Path(sys.argv[3]).read_text(encoding="utf-8"))
+if summary.get("decision") != "openmc2donjon_adf_augment_passed":
+    raise SystemExit(f"ADF augment summary failed: {summary}")
+faces = ("FD_XMIN", "FD_XMAX", "FD_YMIN", "FD_YMAX")
+with h5py.File(source, "r") as src, h5py.File(augmented, "r") as out:
+    mixture = tuple(src["mixtures"])[1]
+    expected = np.asarray(src[f"mixtures/{mixture}/adf"][:], dtype=float)
+    actual = np.stack([out[f"mixtures/{mixture}/adf/{face}"][:] for face in faces])
+    if not np.allclose(actual, expected, rtol=0.0, atol=0.0):
+        raise SystemExit("ADF augment payload differs from C5G7 production source")
+print("C5G7 ADF augment OK")
+PY
 
 echo
 echo "== C5G7 statepoint exporter parity =="

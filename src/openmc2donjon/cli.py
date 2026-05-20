@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 
 from . import __version__
+from .adf_augment import augment_hdf5_with_adf, parse_faces
 from .bundle import ArtifactSpec, bundle_artifacts, parse_extra_artifact
 from .doctor import run_doctor
 from .macrolib import convert_mgxs_hdf5_to_macrolib
@@ -23,7 +24,9 @@ def build_parser() -> argparse.ArgumentParser:
             "Convert an OpenMC MGXS HDF5 dump to DONJON ASCII LCM objects. "
             "Use 'openmc2donjon inspect <input_h5>' to inspect an HDF5 handoff, "
             "'openmc2donjon diff <reference_h5> <candidate_h5>' to compare two "
-            "handoffs, 'openmc2donjon bundle --output-dir DIR ...' to collect "
+            "handoffs, 'openmc2donjon augment-adf <input_h5> ...' to inject "
+            "computed discontinuity factors, "
+            "'openmc2donjon bundle --output-dir DIR ...' to collect "
             "production artifacts, 'openmc2donjon doctor' for environment checks, or "
             "'openmc2donjon check <input_h5>' for input-contract preflight."
         ),
@@ -369,8 +372,64 @@ def build_bundle_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_augment_adf_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="openmc2donjon augment-adf",
+        description="Inject computed ADF/DF values into an MGXS HDF5 handoff.",
+    )
+    parser.add_argument("input_h5", type=Path, help="MGXS HDF5 file to augment")
+    parser.add_argument(
+        "--adf-source",
+        type=Path,
+        required=True,
+        help="HDF5 sidecar containing ADF values",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        required=True,
+        help="augmented MGXS HDF5 output path",
+    )
+    parser.add_argument(
+        "--faces",
+        default=None,
+        help="comma-separated expected face names, for example FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX",
+    )
+    parser.add_argument(
+        "--adf-kind",
+        default=None,
+        help="override root adf_kind provenance attribute",
+    )
+    parser.add_argument(
+        "--adf-real",
+        choices=("true", "false"),
+        default=None,
+        help="override root adf_real provenance attribute",
+    )
+    parser.add_argument(
+        "--adf-source-label",
+        default=None,
+        help="override root adf_source provenance attribute",
+    )
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        default=None,
+        help="write a machine-readable ADF augmentation summary JSON",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="overwrite the augmented output HDF5 if it already exists",
+    )
+    return parser
+
+
 def main(argv: list[str] | None = None) -> int:
     raw_argv = sys.argv[1:] if argv is None else list(argv)
+    if raw_argv and raw_argv[0] == "augment-adf":
+        return _augment_adf_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "bundle":
         return _bundle_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "doctor":
@@ -497,6 +556,27 @@ def _bundle_main(argv: list[str]) -> int:
         )
     except Exception as exc:
         parser.exit(1, f"openmc2donjon bundle: error: {exc}\n")
+    return 0
+
+
+def _augment_adf_main(argv: list[str]) -> int:
+    parser = build_augment_adf_parser()
+    args = parser.parse_args(argv)
+    try:
+        faces = parse_faces(args.faces)
+        augment_hdf5_with_adf(
+            args.input_h5,
+            adf_source=args.adf_source,
+            output_h5=args.output,
+            expected_faces=faces,
+            force=args.force,
+            adf_kind=args.adf_kind,
+            adf_real=args.adf_real,
+            adf_source_label=args.adf_source_label,
+            summary_json=args.summary_json,
+        )
+    except Exception as exc:
+        parser.exit(1, f"openmc2donjon augment-adf: error: {exc}\n")
     return 0
 
 

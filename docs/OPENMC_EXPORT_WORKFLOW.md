@@ -80,6 +80,17 @@ openmc2donjon bundle \
   --force
 ```
 
+If ADF/DF values are produced by a separate OpenMC or nodal post-processing
+step, inject them into the HDF5 handoff before conversion:
+
+```sh
+openmc2donjon augment-adf runs/case1/mgxs_library.h5 \
+  --adf-source runs/case1/adf_sidecar.h5 \
+  -o runs/case1/mgxs_with_adf.h5 \
+  --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
+  --summary-json runs/case1/adf_summary.json
+```
+
 For a small workflow check before using a real OpenMC model:
 
 ```sh
