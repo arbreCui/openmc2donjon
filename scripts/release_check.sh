@@ -19,11 +19,12 @@ PYTEST_PYTHON="${PYTEST_PYTHON:-$PYTHON_BIN}"
 
 RUN_TESTS=1
 RUN_DONJON=0
+RUN_LOCAL_CANDIDATES=0
 REQUIRE_STATEPOINT_EXPORT=0
 
 usage() {
   cat <<'EOF'
-usage: scripts/release_check.sh [--skip-tests] [--run-donjon] [--require-statepoint-export]
+usage: scripts/release_check.sh [--skip-tests] [--run-donjon] [--run-local-candidates] [--require-statepoint-export]
 
 Run the release/handoff checks for the accepted C5G7 assembly-wise baseline.
 
@@ -38,6 +39,7 @@ Default:
 Options:
   --skip-tests                 skip pytest
   --run-donjon                 run the full DONJON C5G7 acceptance decks
+  --run-local-candidates       run local non-accepted candidate examples
   --require-statepoint-export  fail if C5G7_STATEPOINT is unavailable
 
 Environment:
@@ -56,6 +58,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --run-donjon)
       RUN_DONJON=1
+      shift
+      ;;
+    --run-local-candidates)
+      RUN_LOCAL_CANDIDATES=1
       shift
       ;;
     --require-statepoint-export)
@@ -104,6 +110,7 @@ echo "repo: $REPO_ROOT"
 echo "run_dir: $RUN_DIR"
 echo "python: $PYTHON_BIN"
 echo "run_donjon: $RUN_DONJON"
+echo "run_local_candidates: $RUN_LOCAL_CANDIDATES"
 
 require_executable "$PYTHON_BIN"
 require_path "$PACKAGE_SRC/openmc2donjon/cli.py"
@@ -150,6 +157,17 @@ PYTHON_BIN="$PYTHON_BIN" \
 echo
 echo "== C5G7 converter smoke =="
 RUN_DIR="$RUN_DIR/c5g7_demo" bash "$REPO_ROOT/scripts/run_c5g7_demo.sh" --skip-tests
+
+if [[ "$RUN_LOCAL_CANDIDATES" -eq 1 ]]; then
+  echo
+  echo "== Local candidate smokes =="
+  RUN_DIR="$RUN_DIR/uox_5x5_tg6" \
+  PYTHON_BIN="$PYTHON_BIN" \
+    bash "$REPO_ROOT/examples/uox_5x5_tg6/run_smoke.sh"
+else
+  echo
+  echo "== Local candidate smokes skipped =="
+fi
 
 echo
 echo "== Accepted baseline manifest =="

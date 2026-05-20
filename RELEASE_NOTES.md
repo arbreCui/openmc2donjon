@@ -75,6 +75,9 @@
 - Added `examples/uox_5x5_tg6`, a candidate non-C5G7 adapter/smoke for a local
   DRAGON/APEX UOX 5x5 TG6 HDF5 source, producing checked `L_MULTICOMPO` and
   `L_MACROLIB` outputs.
+- Added `scripts/release_check.sh --run-local-candidates` to include local
+  non-accepted candidate examples without changing the default accepted
+  validation line.
 - Extended release check so the C5G7 statepoint parity path exercises
   `openmc2donjon-from-openmc`, reads back the generated MCO, and validates the
   summary manifest.

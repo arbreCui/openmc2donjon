@@ -118,6 +118,13 @@ This example is a candidate coverage case, not an accepted physics benchmark.
 The source is an APEX/APOLLO2-A HDF5 file rather than an OpenMC statepoint, and
 the adapter is intentionally kept in the example directory.
 
+It can also be included in the release check on machines with the local source
+file:
+
+```sh
+bash scripts/release_check.sh --run-local-candidates
+```
+
 ## Hex Status
 
 Hex support is implemented as converter/modeling capability, but this repository
