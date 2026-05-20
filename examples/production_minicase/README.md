@@ -50,6 +50,30 @@ manifest.json
 export_recipe.py
 ```
 
+To exercise the ADF/DF path, generate an identity sidecar from the exported
+MGXS and rerun the one-step workflow with sidecar injection:
+
+```sh
+openmc2donjon make-adf-sidecar "$RUN_DIR/mgxs_library.h5" \
+  -o /tmp/openmc2donjon_minicase/adf_sidecar.h5 \
+  --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX
+
+OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
+openmc2donjon-from-openmc \
+  --recipe examples/production_minicase/export_recipe.py \
+  --statepoint "$CASE_DIR/statepoint.12.h5" \
+  --run-dir /tmp/openmc2donjon_minicase/output_adf \
+  --adf-source /tmp/openmc2donjon_minicase/adf_sidecar.h5 \
+  --adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
+  --check \
+  --require-adf \
+  --require-volume \
+  --require-transport-dataset
+```
+
+The generated sidecar is marked `adf_real=false`: it is an interface and
+workflow check, not a production physics ADF estimate.
+
 For the repository smoke test, run:
 
 ```sh

@@ -8,6 +8,7 @@ import sys
 
 from . import __version__
 from .adf_augment import augment_hdf5_with_adf, parse_faces
+from .adf_sidecar import create_unity_adf_sidecar
 from .bundle import ArtifactSpec, bundle_artifacts, parse_extra_artifact
 from .doctor import run_doctor
 from .macrolib import convert_mgxs_hdf5_to_macrolib
@@ -24,8 +25,9 @@ def build_parser() -> argparse.ArgumentParser:
             "Convert an OpenMC MGXS HDF5 dump to DONJON ASCII LCM objects. "
             "Use 'openmc2donjon inspect <input_h5>' to inspect an HDF5 handoff, "
             "'openmc2donjon diff <reference_h5> <candidate_h5>' to compare two "
-            "handoffs, 'openmc2donjon augment-adf <input_h5> ...' to inject "
-            "computed discontinuity factors, "
+            "handoffs, 'openmc2donjon make-adf-sidecar <input_h5> ...' to "
+            "create an ADF sidecar, 'openmc2donjon augment-adf <input_h5> ...' "
+            "to inject computed discontinuity factors, "
             "'openmc2donjon bundle --output-dir DIR ...' to collect "
             "production artifacts, 'openmc2donjon doctor' for environment checks, or "
             "'openmc2donjon check <input_h5>' for input-contract preflight."
@@ -426,8 +428,58 @@ def build_augment_adf_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_make_adf_sidecar_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="openmc2donjon make-adf-sidecar",
+        description=(
+            "Create an ADF/DF sidecar HDF5 from an MGXS handoff. The initial "
+            "mode is unity/identity ADF for workflow integration; replace it "
+            "with physics ADF values for production neutronics."
+        ),
+    )
+    parser.add_argument("input_h5", type=Path, help="MGXS HDF5 file used for mixture/group metadata")
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        required=True,
+        help="ADF sidecar HDF5 output path",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=("unity",),
+        default="unity",
+        help="sidecar generation mode (default: unity)",
+    )
+    parser.add_argument(
+        "--faces",
+        default="FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX",
+        help="comma-separated face names to write (default: Cartesian four faces)",
+    )
+    parser.add_argument(
+        "--value",
+        type=float,
+        default=1.0,
+        help="constant ADF value for --mode unity (default: 1.0)",
+    )
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        default=None,
+        help="write a machine-readable ADF sidecar summary JSON",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="overwrite the sidecar HDF5 if it already exists",
+    )
+    return parser
+
+
 def main(argv: list[str] | None = None) -> int:
     raw_argv = sys.argv[1:] if argv is None else list(argv)
+    if raw_argv and raw_argv[0] == "make-adf-sidecar":
+        return _make_adf_sidecar_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "augment-adf":
         return _augment_adf_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "bundle":
@@ -577,6 +629,24 @@ def _augment_adf_main(argv: list[str]) -> int:
         )
     except Exception as exc:
         parser.exit(1, f"openmc2donjon augment-adf: error: {exc}\n")
+    return 0
+
+
+def _make_adf_sidecar_main(argv: list[str]) -> int:
+    parser = build_make_adf_sidecar_parser()
+    args = parser.parse_args(argv)
+    try:
+        faces = parse_faces(args.faces)
+        create_unity_adf_sidecar(
+            args.input_h5,
+            args.output,
+            faces=faces,
+            value=args.value,
+            force=args.force,
+            summary_json=args.summary_json,
+        )
+    except Exception as exc:
+        parser.exit(1, f"openmc2donjon make-adf-sidecar: error: {exc}\n")
     return 0
 
 

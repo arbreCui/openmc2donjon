@@ -86,12 +86,20 @@ If ADF/DF values are produced by a separate OpenMC or nodal post-processing
 step, inject them into the HDF5 handoff before conversion:
 
 ```sh
+openmc2donjon make-adf-sidecar runs/case1/mgxs_library.h5 \
+  -o runs/case1/adf_sidecar.h5 \
+  --mode unity
+
 openmc2donjon augment-adf runs/case1/mgxs_library.h5 \
   --adf-source runs/case1/adf_sidecar.h5 \
   -o runs/case1/mgxs_with_adf.h5 \
   --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
   --summary-json runs/case1/adf_summary.json
 ```
+
+The generated unity sidecar is marked `adf_real=false`; it verifies the
+interface and should be replaced by case-specific physics ADF/DF values for
+production neutronics.
 
 For the one-step production path, pass the sidecar directly:
 

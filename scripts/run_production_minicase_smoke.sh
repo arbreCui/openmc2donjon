@@ -40,6 +40,16 @@ MCO="$CONVERT_RUN_DIR/out.mcompo.txt"
 SUMMARY="$CONVERT_RUN_DIR/run_summary.json"
 CHECK_SUMMARY="$CONVERT_RUN_DIR/check_summary.json"
 MANIFEST="$CONVERT_RUN_DIR/manifest.json"
+ADF_SIDECAR="$RUN_DIR/adf_sidecar.h5"
+ADF_SIDECAR_SUMMARY="$RUN_DIR/adf_sidecar_summary.json"
+ADF_RUN_DIR="$RUN_DIR/openmc2donjon_adf_run"
+ADF_H5="$ADF_RUN_DIR/mgxs_library.h5"
+ADF_MCO="$ADF_RUN_DIR/out.mcompo.txt"
+ADF_RUN_SUMMARY="$ADF_RUN_DIR/run_summary.json"
+ADF_CHECK_SUMMARY="$ADF_RUN_DIR/check_summary.json"
+ADF_INJECT_SUMMARY="$ADF_RUN_DIR/adf_summary.json"
+ADF_MANIFEST="$ADF_RUN_DIR/manifest.json"
+ADF_FACES="FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX"
 
 echo "== openmc2donjon production minicase smoke =="
 echo "repo: $REPO_ROOT"
@@ -169,6 +179,126 @@ print(
     "production minicase readback OK: "
     f"blocks={len(blocks)} mixtures={summary['mixture_count']} "
     f"groups={summary['energy_groups']} P{summary['legendre_order']}"
+)
+PY
+
+echo
+echo "== Build ADF sidecar =="
+"$PYTHON_BIN" -m openmc2donjon.cli make-adf-sidecar "$MGXS" \
+  -o "$ADF_SIDECAR" \
+  --faces "$ADF_FACES" \
+  --summary-json "$ADF_SIDECAR_SUMMARY"
+
+echo
+echo "== Export and convert with ADF sidecar =="
+OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
+"$PYTHON_BIN" -m openmc2donjon.from_openmc_cli \
+  --recipe "$EXAMPLE_DIR/export_recipe.py" \
+  --statepoint "$STATEPOINT" \
+  --run-dir "$ADF_RUN_DIR" \
+  --adf-source "$ADF_SIDECAR" \
+  --adf-faces "$ADF_FACES" \
+  --adf-kind unity \
+  --adf-real false \
+  --check \
+  --require-adf \
+  --require-volume \
+  --require-transport-dataset
+
+"$PYTHON_BIN" - "$ADF_SIDECAR" "$ADF_SIDECAR_SUMMARY" "$ADF_H5" "$ADF_MCO" "$ADF_RUN_SUMMARY" "$ADF_CHECK_SUMMARY" "$ADF_INJECT_SUMMARY" "$ADF_MANIFEST" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+import h5py
+import numpy as np
+from openmc2donjon import lcm_ascii
+from openmc2donjon.from_openmc_summary import validate_from_openmc_summary
+
+sidecar = Path(sys.argv[1])
+sidecar_summary_path = Path(sys.argv[2])
+mgxs = Path(sys.argv[3])
+mco = Path(sys.argv[4])
+summary_path = Path(sys.argv[5])
+check_summary_path = Path(sys.argv[6])
+adf_summary_path = Path(sys.argv[7])
+manifest_path = Path(sys.argv[8])
+faces = ("FD_XMIN", "FD_XMAX", "FD_YMIN", "FD_YMAX")
+
+sidecar_summary = json.loads(sidecar_summary_path.read_text(encoding="utf-8"))
+if sidecar_summary["decision"] != "openmc2donjon_adf_sidecar_passed":
+    raise SystemExit("ADF sidecar summary did not pass")
+if sidecar_summary["schema"] != "openmc2donjon.adf-sidecar.v1":
+    raise SystemExit("ADF sidecar summary schema mismatch")
+if sidecar_summary["adf_real"] is not False:
+    raise SystemExit("ADF sidecar summary should be marked adf_real=false")
+if tuple(sidecar_summary["face_names"]) != faces:
+    raise SystemExit("ADF sidecar summary face names mismatch")
+
+with h5py.File(sidecar, "r") as h5:
+    if h5.attrs["adf_kind"] != "unity" or h5.attrs["adf_real"] != "false":
+        raise SystemExit("ADF sidecar provenance mismatch")
+    values = h5["adf"][:]
+    if values.shape != (2, 4, 2):
+        raise SystemExit(f"unexpected ADF sidecar shape: {values.shape}")
+    np.testing.assert_allclose(values, 1.0)
+
+with h5py.File(mgxs, "r") as h5:
+    if h5.attrs["adf_kind"] != "unity" or h5.attrs["adf_real"] != "false":
+        raise SystemExit("injected HDF5 ADF provenance mismatch")
+    names = sorted(h5["mixtures"])
+    if names != ["ASM_FUEL_LEFT", "ASM_MOD_RIGHT"]:
+        raise SystemExit(f"unexpected ADF mixture names: {names}")
+    for name in names:
+        for face in faces:
+            np.testing.assert_allclose(h5[f"mixtures/{name}/adf/{face}"][:], 1.0)
+
+blocks = lcm_ascii.read_lcm_ascii(mco)
+block_names = [block.name for block in blocks if block.name]
+for required_name in ("MACROLIB", "ADF", "HADF", *faces):
+    if required_name not in block_names:
+        raise SystemExit(f"ADF MULTICOMPO readback missing {required_name}")
+
+summary = json.loads(summary_path.read_text(encoding="utf-8"))
+summary_errors = validate_from_openmc_summary(summary)
+if summary_errors:
+    raise SystemExit("invalid ADF from-OpenMC summary: " + "; ".join(summary_errors))
+if summary["checked"] is not True or summary["check_passed"] is not True:
+    raise SystemExit("ADF conversion summary did not record checked conversion")
+
+check_summary = json.loads(check_summary_path.read_text(encoding="utf-8"))
+if check_summary["decision"] != "mgxs_input_contract_passed":
+    raise SystemExit("ADF production minicase preflight did not pass")
+
+adf_summary = json.loads(adf_summary_path.read_text(encoding="utf-8"))
+if adf_summary["schema"] != "openmc2donjon.adf-augment.v1":
+    raise SystemExit("ADF injection summary schema mismatch")
+if adf_summary["decision"] != "openmc2donjon_adf_augment_passed":
+    raise SystemExit("ADF injection summary did not pass")
+if tuple(adf_summary["face_names"]) != faces:
+    raise SystemExit("ADF injection summary face names mismatch")
+
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+labels = {artifact["label"]: artifact for artifact in manifest["artifacts"]}
+required = {
+    "mgxs",
+    "mcompo",
+    "run-summary",
+    "check-summary",
+    "adf-source",
+    "adf-summary",
+    "recipe",
+}
+if set(labels) != required:
+    raise SystemExit(f"unexpected ADF manifest labels: {sorted(labels)}")
+if labels["adf-summary"].get("summary_schema") != "openmc2donjon.adf-augment.v1":
+    raise SystemExit("ADF manifest did not record augment summary schema")
+if labels["adf-summary"].get("summary_decision") != "openmc2donjon_adf_augment_passed":
+    raise SystemExit("ADF manifest did not record augment decision")
+
+print(
+    "production minicase ADF readback OK: "
+    f"blocks={len(blocks)} faces={','.join(faces)} labels={sorted(labels)}"
 )
 PY
 

@@ -124,6 +124,7 @@ echo "== CLI smoke =="
 "$PYTHON_BIN" -m openmc2donjon.cli --version
 "$PYTHON_BIN" -m openmc2donjon.cli --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli check --help >/dev/null
+"$PYTHON_BIN" -m openmc2donjon.cli make-adf-sidecar --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli augment-adf --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.export_cli --version
 "$PYTHON_BIN" -m openmc2donjon.export_cli --help >/dev/null

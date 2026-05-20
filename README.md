@@ -194,12 +194,20 @@ openmc2donjon diff accepted_mgxs.h5 candidate_mgxs.h5 --summary-json diff.json
 Inject computed ADF/DF values into a handoff before conversion:
 
 ```sh
+openmc2donjon make-adf-sidecar mgxs_library.h5 \
+  -o adf_sidecar.h5 \
+  --mode unity
+
 openmc2donjon augment-adf mgxs_library.h5 \
   --adf-source adf_sidecar.h5 \
   -o mgxs_with_adf.h5 \
   --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
   --summary-json adf_summary.json
 ```
+
+`make-adf-sidecar --mode unity` creates identity discontinuity factors marked
+`adf_real=false`. It is a plumbing check for the ADF/DF workflow; replace the
+sidecar with case-specific physics values for production neutronics.
 
 The one-step OpenMC entry point can inject the same sidecar before preflight:
 

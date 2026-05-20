@@ -207,11 +207,19 @@ When ADF datasets are present, the MULTICOMPO writer emits the embedded
 Computed ADF/DF values can also be injected from a sidecar HDF5:
 
 ```sh
+openmc2donjon make-adf-sidecar mgxs_library.h5 \
+  -o adf_sidecar.h5 \
+  --mode unity
+
 openmc2donjon augment-adf mgxs_library.h5 \
   --adf-source adf_sidecar.h5 \
   -o mgxs_with_adf.h5 \
   --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX
 ```
+
+`make-adf-sidecar --mode unity` writes a compact root `/adf` sidecar with
+identity values and `adf_real=false`, useful for workflow checks before a real
+ADF/DF post-processor supplies physical values.
 
 The sidecar can either reuse the normal MGXS layout with
 `/mixtures/<domain_name>/adf`, or provide a compact root dataset:

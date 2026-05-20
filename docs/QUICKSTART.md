@@ -139,11 +139,19 @@ openmc2donjon diff accepted_mgxs.h5 mgxs_library.h5
 To inject computed ADF/DF values before conversion:
 
 ```sh
+openmc2donjon make-adf-sidecar mgxs_library.h5 \
+  -o adf_sidecar.h5 \
+  --mode unity
+
 openmc2donjon augment-adf mgxs_library.h5 \
   --adf-source adf_sidecar.h5 \
   -o mgxs_with_adf.h5 \
   --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX
 ```
+
+`make-adf-sidecar --mode unity` writes identity ADF values marked
+`adf_real=false`; use it to verify plumbing before replacing the sidecar with
+case-specific physics ADF/DF values.
 
 Or inject the sidecar during the one-step OpenMC export:
 
