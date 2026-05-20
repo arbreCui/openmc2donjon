@@ -46,6 +46,10 @@ class HomogeneousFaceFluxReport:
     median: float
     maximum: float
     nonpositive_count: int
+    net_current_sign_convention_input: str | None = None
+    net_current_sign_convention_source: str | None = None
+    net_current_sign_convention_output: str | None = None
+    net_current_sign_multiplier: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -53,6 +57,10 @@ class LoadedArray:
     values: np.ndarray
     path: Path
     dataset_path: str
+    current_sign_convention_input: str | None = None
+    current_sign_convention_source: str | None = None
+    current_sign_convention_output: str | None = None
+    current_sign_multiplier: float = 1.0
 
 
 def create_homogeneous_face_flux(
@@ -63,6 +71,7 @@ def create_homogeneous_face_flux(
     net_current: str | Path,
     faces: tuple[str, ...] | None = None,
     face_widths: tuple[float, ...] | None = None,
+    net_current_sign_convention: str | None = None,
     force: bool = False,
     summary_json: Path | None = None,
 ) -> HomogeneousFaceFluxReport:
@@ -99,6 +108,7 @@ def create_homogeneous_face_flux(
         mixture_names=mixture_names,
         energy_groups=energy_groups,
         face_names=face_names,
+        sign_convention=net_current_sign_convention,
     )
     values = reconstruct_homogeneous_face_flux(
         volume.values,
@@ -136,6 +146,10 @@ def create_homogeneous_face_flux(
         median=stats["median"],
         maximum=stats["max"],
         nonpositive_count=int(np.count_nonzero(values <= 0.0)),
+        net_current_sign_convention_input=current.current_sign_convention_input,
+        net_current_sign_convention_source=current.current_sign_convention_source,
+        net_current_sign_convention_output=current.current_sign_convention_output,
+        net_current_sign_multiplier=current.current_sign_multiplier,
     )
     print_report(report)
     if summary_json is not None:
@@ -182,7 +196,7 @@ def load_volume_flux(
     mixture_names: tuple[str, ...],
     energy_groups: int,
 ) -> LoadedArray:
-    values, path, dataset_path, declared_mixtures, _declared_faces = _load_dataset(
+    values, path, dataset_path, declared_mixtures, _declared_faces, _declared_sign = _load_dataset(
         reference,
         candidates=VOLUME_FLUX_DATASETS,
         label="volume flux",
@@ -203,8 +217,9 @@ def load_net_current(
     mixture_names: tuple[str, ...],
     energy_groups: int,
     face_names: tuple[str, ...],
+    sign_convention: str | None = None,
 ) -> LoadedArray:
-    values, path, dataset_path, declared_mixtures, declared_faces = _load_dataset(
+    values, path, dataset_path, declared_mixtures, declared_faces, declared_sign = _load_dataset(
         reference,
         candidates=NET_CURRENT_DATASETS,
         label="net current",
@@ -218,7 +233,21 @@ def load_net_current(
         declared_faces=declared_faces,
         label=f"net current {path}:{dataset_path}",
     )
-    return LoadedArray(values=normalized, path=path, dataset_path=dataset_path)
+    signed_values, sign_input, sign_source, sign_multiplier = _apply_net_current_sign_convention(
+        normalized,
+        declared_sign=declared_sign,
+        override=sign_convention,
+        label=f"net current {path}:{dataset_path}",
+    )
+    return LoadedArray(
+        values=signed_values,
+        path=path,
+        dataset_path=dataset_path,
+        current_sign_convention_input=sign_input,
+        current_sign_convention_source=sign_source,
+        current_sign_convention_output="positive outward",
+        current_sign_multiplier=sign_multiplier,
+    )
 
 
 def print_report(report: HomogeneousFaceFluxReport) -> None:
@@ -236,6 +265,14 @@ def print_report(report: HomogeneousFaceFluxReport) -> None:
     )
     if report.nonpositive_count:
         print(f"  nonpositive_bins={report.nonpositive_count}")
+    if report.net_current_sign_convention_input is not None:
+        print(
+            "  net_current_sign: "
+            f"input={report.net_current_sign_convention_input} "
+            f"source={report.net_current_sign_convention_source} "
+            f"multiplier={report.net_current_sign_multiplier:g} "
+            f"output={report.net_current_sign_convention_output}"
+        )
     print()
     print("Homogeneous face flux decision")
     print(f"  {PASS_DECISION}")
@@ -261,6 +298,10 @@ def write_summary(path: Path, report: HomogeneousFaceFluxReport) -> None:
         "median": report.median,
         "max": report.maximum,
         "nonpositive_count": report.nonpositive_count,
+        "net_current_sign_convention_input": report.net_current_sign_convention_input,
+        "net_current_sign_convention_source": report.net_current_sign_convention_source,
+        "net_current_sign_convention_output": report.net_current_sign_convention_output,
+        "net_current_sign_multiplier": report.net_current_sign_multiplier,
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -325,6 +366,16 @@ def _write_hdf5(
         h5.attrs["volume_flux_dataset"] = volume_flux.dataset_path
         h5.attrs["net_current"] = str(net_current.path)
         h5.attrs["net_current_dataset"] = net_current.dataset_path
+        h5.attrs["net_current_sign_convention_input"] = (
+            net_current.current_sign_convention_input or "unknown"
+        )
+        h5.attrs["net_current_sign_convention_source"] = (
+            net_current.current_sign_convention_source or "unknown"
+        )
+        h5.attrs["net_current_sign_convention_output"] = (
+            net_current.current_sign_convention_output or "positive outward"
+        )
+        h5.attrs["net_current_sign_multiplier"] = float(net_current.current_sign_multiplier)
         h5.create_dataset("energy_bounds", data=energy_bounds)
         h5.create_dataset("mixture_names", data=np.asarray(mixture_names, dtype="S"))
         h5.create_dataset("face_names", data=np.asarray(face_names, dtype="S"))
@@ -340,7 +391,7 @@ def _load_dataset(
     *,
     candidates: tuple[str, ...],
     label: str,
-) -> tuple[np.ndarray, Path, str, Any, Any]:
+) -> tuple[np.ndarray, Path, str, Any, Any, str | None]:
     import h5py
 
     path, requested = _split_dataset_reference(reference)
@@ -364,7 +415,12 @@ def _load_dataset(
         values = np.asarray(obj[:], dtype=float)
         declared_mixtures = _names_from_hdf5(obj, h5, ("mixture_names", "mixtures", "domain_names"))
         declared_faces = _names_from_hdf5(obj, h5, ("face_names", "faces", "boundary_names"))
-    return values, path, dataset_path, declared_mixtures, declared_faces
+        declared_sign = _text_from_hdf5(
+            obj,
+            h5,
+            ("sign_convention", "net_current_sign_convention", "current_sign_convention"),
+        )
+    return values, path, dataset_path, declared_mixtures, declared_faces, declared_sign
 
 
 def _normalize_volume_flux(
@@ -509,6 +565,62 @@ def _reorder_by_declared_faces(
     return values[:, [index_by_name[name] for name in face_names], :]
 
 
+def _apply_net_current_sign_convention(
+    values: np.ndarray,
+    *,
+    declared_sign: str | None,
+    override: str | None,
+    label: str,
+) -> tuple[np.ndarray, str, str, float]:
+    raw_override = None if override is None else str(override).strip()
+    if raw_override and _normalize_sign_words(raw_override) != "auto":
+        raw = raw_override
+        source = "argument"
+    elif declared_sign:
+        raw = declared_sign
+        source = "hdf5"
+    else:
+        raw = "positive outward"
+        source = "default"
+    canonical, multiplier = _net_current_sign_multiplier(raw, label)
+    return values * multiplier, canonical, source, multiplier
+
+
+def _net_current_sign_multiplier(raw: str, label: str) -> tuple[str, float]:
+    normalized = _normalize_sign_words(raw)
+    if normalized in {
+        "positive outward",
+        "outward positive",
+        "outward",
+        "outward normal",
+        "positive outward normal",
+    }:
+        return "positive outward", 1.0
+    if normalized in {
+        "positive inward",
+        "inward positive",
+        "inward",
+        "inward normal",
+        "positive inward normal",
+    }:
+        return "positive inward", -1.0
+    raise ValueError(
+        f"{label}: unsupported net-current sign convention {raw!r}; "
+        "use positive-outward or positive-inward"
+    )
+
+
+def _normalize_sign_words(raw: str) -> str:
+    return " ".join(
+        str(raw)
+        .strip()
+        .lower()
+        .replace("_", " ")
+        .replace("-", " ")
+        .split()
+    )
+
+
 def _resolve_face_widths(
     face_widths: tuple[float, ...] | None,
     face_names: tuple[str, ...],
@@ -545,6 +657,21 @@ def _names_from_hdf5(obj, root, keys: tuple[str, ...]):
     for key in keys:
         if key in root and not hasattr(root[key], "keys"):
             return root[key][:]
+    return None
+
+
+def _text_from_hdf5(obj, root, keys: tuple[str, ...]) -> str | None:
+    for owner in (obj, root):
+        for key in keys:
+            if key in owner.attrs:
+                return _decode_text(owner.attrs[key])
+    for key in keys:
+        if key in root and not hasattr(root[key], "keys"):
+            values = np.asarray(root[key][()])
+            if values.shape == ():
+                return _decode_text(values[()])
+            if values.size == 1:
+                return _decode_text(values.reshape(-1)[0])
     return None
 
 

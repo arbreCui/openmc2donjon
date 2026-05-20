@@ -43,6 +43,10 @@ class LowOrderDriverReport:
     net_current_minimum: float
     net_current_median: float
     net_current_maximum: float
+    net_current_sign_convention_input: str | None = None
+    net_current_sign_convention_source: str | None = None
+    net_current_sign_convention_output: str = "positive outward"
+    net_current_sign_multiplier: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -74,6 +78,7 @@ def create_low_order_driver(
     volume_flux: str | Path,
     net_current: str | Path,
     faces: tuple[str, ...] | None = None,
+    net_current_sign_convention: str | None = None,
     source_label: str = "external low-order driver",
     force: bool = False,
     summary_json: Path | None = None,
@@ -115,6 +120,7 @@ def create_low_order_driver(
         mixture_names=mixture_names,
         energy_groups=energy_groups,
         face_names=face_names,
+        sign_convention=net_current_sign_convention,
     )
     _validate_values(volume.values, current.values)
 
@@ -130,6 +136,10 @@ def create_low_order_driver(
         volume_flux_dataset=volume.dataset_path,
         net_current_source=current.path,
         net_current_dataset=current.dataset_path,
+        net_current_sign_convention_input=current.current_sign_convention_input,
+        net_current_sign_convention_source=current.current_sign_convention_source,
+        net_current_sign_convention_output=current.current_sign_convention_output,
+        net_current_sign_multiplier=current.current_sign_multiplier,
         source_label=source_label,
     )
 
@@ -152,6 +162,11 @@ def create_low_order_driver(
         net_current_minimum=current_stats["min"],
         net_current_median=current_stats["median"],
         net_current_maximum=current_stats["max"],
+        net_current_sign_convention_input=current.current_sign_convention_input,
+        net_current_sign_convention_source=current.current_sign_convention_source,
+        net_current_sign_convention_output=current.current_sign_convention_output
+        or "positive outward",
+        net_current_sign_multiplier=current.current_sign_multiplier,
     )
     print_report(report)
     if summary_json is not None:
@@ -254,6 +269,13 @@ def print_report(report: LowOrderDriverReport) -> None:
         f"median={report.net_current_median:.6g} "
         f"max={report.net_current_maximum:.6g}"
     )
+    print(
+        "  net_current_sign: "
+        f"input={report.net_current_sign_convention_input or 'positive outward'} "
+        f"source={report.net_current_sign_convention_source or 'default'} "
+        f"multiplier={report.net_current_sign_multiplier:g} "
+        f"output={report.net_current_sign_convention_output}"
+    )
     print()
     print("Low-order driver decision")
     print(f"  {PASS_DECISION}")
@@ -321,6 +343,10 @@ def write_summary(path: Path, report: LowOrderDriverReport) -> None:
         "net_current_min": report.net_current_minimum,
         "net_current_median": report.net_current_median,
         "net_current_max": report.net_current_maximum,
+        "net_current_sign_convention_input": report.net_current_sign_convention_input,
+        "net_current_sign_convention_source": report.net_current_sign_convention_source,
+        "net_current_sign_convention_output": report.net_current_sign_convention_output,
+        "net_current_sign_multiplier": report.net_current_sign_multiplier,
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -478,6 +504,10 @@ def _write_hdf5(
     volume_flux_dataset: str,
     net_current_source: Path,
     net_current_dataset: str,
+    net_current_sign_convention_input: str | None,
+    net_current_sign_convention_source: str | None,
+    net_current_sign_convention_output: str | None,
+    net_current_sign_multiplier: float,
     source_label: str,
 ) -> None:
     import h5py
@@ -492,6 +522,16 @@ def _write_hdf5(
         h5.attrs["volume_flux_dataset"] = volume_flux_dataset
         h5.attrs["net_current_source"] = str(net_current_source)
         h5.attrs["net_current_dataset"] = net_current_dataset
+        h5.attrs["net_current_sign_convention_input"] = (
+            net_current_sign_convention_input or "positive outward"
+        )
+        h5.attrs["net_current_sign_convention_source"] = (
+            net_current_sign_convention_source or "default"
+        )
+        h5.attrs["net_current_sign_convention_output"] = (
+            net_current_sign_convention_output or "positive outward"
+        )
+        h5.attrs["net_current_sign_multiplier"] = float(net_current_sign_multiplier)
         h5.create_dataset("energy_bounds", data=energy_bounds)
         h5.create_dataset("mixture_names", data=np.asarray(mixture_names, dtype="S"))
         h5.create_dataset("face_names", data=np.asarray(face_names, dtype="S"))

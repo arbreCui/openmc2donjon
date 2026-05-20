@@ -626,7 +626,16 @@ def build_make_homogeneous_face_flux_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--net-current",
         required=True,
-        help="HDF5 file or FILE::DATASET containing outward net current density",
+        help="HDF5 file or FILE::DATASET containing net current density",
+    )
+    parser.add_argument(
+        "--net-current-sign-convention",
+        default=None,
+        choices=("auto", "positive-outward", "positive-inward"),
+        help=(
+            "raw net-current sign convention; default auto reads HDF5 "
+            "sign_convention metadata or assumes positive-outward"
+        ),
     )
     parser.add_argument(
         "--faces",
@@ -667,7 +676,16 @@ def build_make_low_order_driver_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--net-current",
         required=True,
-        help="HDF5 file or FILE::DATASET containing outward net current density",
+        help="HDF5 file or FILE::DATASET containing net current density",
+    )
+    parser.add_argument(
+        "--net-current-sign-convention",
+        default=None,
+        choices=("auto", "positive-outward", "positive-inward"),
+        help=(
+            "raw net-current sign convention; default auto reads HDF5 "
+            "sign_convention metadata or assumes positive-outward"
+        ),
     )
     parser.add_argument(
         "--faces",
@@ -965,6 +983,7 @@ def _make_low_order_driver_main(argv: list[str]) -> int:
             volume_flux=args.volume_flux,
             net_current=args.net_current,
             faces=parse_faces(args.faces),
+            net_current_sign_convention=args.net_current_sign_convention,
             source_label=args.source_label,
             force=args.force,
             summary_json=args.summary_json,
@@ -1005,6 +1024,7 @@ def _make_homogeneous_face_flux_main(argv: list[str]) -> int:
             net_current=args.net_current,
             faces=parse_faces(args.faces),
             face_widths=_parse_float_tuple(args.face_widths, "--face-widths"),
+            net_current_sign_convention=args.net_current_sign_convention,
             force=args.force,
             summary_json=args.summary_json,
         )

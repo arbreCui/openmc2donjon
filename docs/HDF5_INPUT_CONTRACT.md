@@ -290,6 +290,14 @@ face axes into the requested canonical `--faces` order. If `face_names` are
 absent, the raw net-current face axis is interpreted as already matching
 `--faces`.
 
+Raw net-current datasets may also declare a `sign_convention`,
+`net_current_sign_convention`, or `current_sign_convention` attribute/root
+dataset. Supported values are `positive outward` and `positive inward`.
+`positive inward` is multiplied by `-1` during canonicalization so the written
+`low_order_driver.h5` always uses `positive outward`. If no sign metadata is
+present, use `--net-current-sign-convention positive-inward` to request the
+same conversion explicitly.
+
 Before using the driver as an ADF denominator source, run the strict contract
 check:
 

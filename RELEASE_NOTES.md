@@ -50,6 +50,9 @@
 - Extended low-order driver canonicalization to honor declared raw
   `face_names`, reordering net-current faces into the requested canonical
   order.
+- Extended low-order driver canonicalization to convert raw `positive inward`
+  net-current sign conventions to the project canonical `positive outward`
+  convention, with conversion provenance in summaries.
 - Added `openmc2donjon check-low-order-driver` for strict low-order handoff
   preflight, including current sign convention and optional face-width
   homogeneous-flux positivity checks.

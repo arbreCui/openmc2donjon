@@ -70,6 +70,7 @@ openmc2donjon-from-openmc \
   --surface-flux-face-area 4.0 \
   --low-order-volume-flux /tmp/openmc2donjon_minicase/raw_low_order_driver.h5 \
   --low-order-net-current /tmp/openmc2donjon_minicase/raw_low_order_driver.h5 \
+  --low-order-net-current-sign-convention auto \
   --adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
   --adf-face-widths 4.0 \
   --adf-invalid-fill 1.0 \

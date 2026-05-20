@@ -202,7 +202,16 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "with --build-flux-ratio-adf, HDF5 file or FILE::DATASET containing "
-            "outward net current density"
+            "net current density"
+        ),
+    )
+    parser.add_argument(
+        "--low-order-net-current-sign-convention",
+        default=None,
+        choices=("auto", "positive-outward", "positive-inward"),
+        help=(
+            "with --build-flux-ratio-adf, raw low-order current sign; default "
+            "auto reads HDF5 sign_convention metadata or assumes positive-outward"
         ),
     )
     parser.add_argument(
@@ -671,6 +680,7 @@ def _build_flux_ratio_adf(
         volume_flux=args.low_order_volume_flux,
         net_current=args.low_order_net_current,
         faces=faces,
+        net_current_sign_convention=args.low_order_net_current_sign_convention,
         source_label=args.low_order_source_label,
         force=True,
         summary_json=paths["low_order_driver_summary"],
@@ -814,6 +824,7 @@ def _validate_flux_ratio_adf_args(
         or args.surface_flux_face_area != 1.0
         or args.low_order_volume_flux is not None
         or args.low_order_net_current is not None
+        or args.low_order_net_current_sign_convention is not None
         or args.low_order_source_label != "external low-order driver"
         or args.adf_face_widths != "1.0"
         or args.adf_invalid_fill is not None

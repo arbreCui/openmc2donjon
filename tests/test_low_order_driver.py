@@ -217,6 +217,94 @@ class LowOrderDriverTests(unittest.TestCase):
             ],
         )
 
+    def test_make_low_order_driver_flips_declared_inward_current(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            mgxs = tmp / "mgxs.h5"
+            raw = tmp / "raw_driver.h5"
+            driver = tmp / "low_order_driver.h5"
+            summary = tmp / "low_order_driver_summary.json"
+            _write_mgxs(mgxs)
+            _write_raw_driver_positive_inward(raw)
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                rc = cli_main(
+                    [
+                        "make-low-order-driver",
+                        str(mgxs),
+                        "-o",
+                        str(driver),
+                        "--volume-flux",
+                        str(raw),
+                        "--net-current",
+                        str(raw),
+                        "--faces",
+                        "FD_XMIN,FD_XMAX",
+                        "--summary-json",
+                        str(summary),
+                    ]
+                )
+
+            with h5py.File(driver, "r") as h5:
+                net_current = h5["net_current_density"][:]
+                root_attrs = dict(h5.attrs)
+                current_attrs = dict(h5["net_current_density"].attrs)
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+
+        self.assertEqual(rc, 0)
+        np.testing.assert_allclose(
+            net_current,
+            [
+                [[1.0, -2.0], [0.0, 1.0]],
+                [[0.0, 0.0], [2.0, -4.0]],
+            ],
+        )
+        self.assertEqual(current_attrs["sign_convention"], "positive outward")
+        self.assertEqual(root_attrs["net_current_sign_convention_input"], "positive inward")
+        self.assertEqual(root_attrs["net_current_sign_convention_output"], "positive outward")
+        self.assertEqual(root_attrs["net_current_sign_multiplier"], -1.0)
+        self.assertEqual(payload["net_current_sign_convention_source"], "hdf5")
+        self.assertEqual(payload["net_current_sign_multiplier"], -1.0)
+
+    def test_make_low_order_driver_cli_overrides_missing_current_sign(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            mgxs = tmp / "mgxs.h5"
+            raw = tmp / "raw_driver.h5"
+            driver = tmp / "low_order_driver.h5"
+            summary = tmp / "low_order_driver_summary.json"
+            _write_mgxs(mgxs)
+            _write_raw_driver_positive_inward(raw, write_sign=False)
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                rc = cli_main(
+                    [
+                        "make-low-order-driver",
+                        str(mgxs),
+                        "-o",
+                        str(driver),
+                        "--volume-flux",
+                        str(raw),
+                        "--net-current",
+                        str(raw),
+                        "--net-current-sign-convention",
+                        "positive-inward",
+                        "--faces",
+                        "FD_XMIN,FD_XMAX",
+                        "--summary-json",
+                        str(summary),
+                    ]
+                )
+
+            with h5py.File(driver, "r") as h5:
+                net_current = h5["net_current_density"][:]
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+
+        self.assertEqual(rc, 0)
+        np.testing.assert_allclose(net_current[0, 0], [1.0, -2.0])
+        self.assertEqual(payload["net_current_sign_convention_source"], "argument")
+        self.assertEqual(payload["net_current_sign_multiplier"], -1.0)
+
 
 def _write_mgxs(path: Path) -> None:
     with h5py.File(path, "w") as h5:
@@ -266,6 +354,25 @@ def _write_raw_driver_reversed_faces(path: Path) -> None:
         volume.attrs["mixture_names"] = names
         current.attrs["mixture_names"] = names
         current.attrs["face_names"] = faces
+
+
+def _write_raw_driver_positive_inward(path: Path, *, write_sign: bool = True) -> None:
+    with h5py.File(path, "w") as h5:
+        volume = h5.create_dataset("volume_flux", data=np.array([[10.0, 20.0], [30.0, 40.0]]))
+        current = h5.create_dataset(
+            "net_current_density",
+            data=np.array(
+                [
+                    [[-1.0, 2.0], [-0.0, -1.0]],
+                    [[-0.0, -0.0], [-2.0, 4.0]],
+                ]
+            ),
+        )
+        names = np.asarray(["fuel", "mod"], dtype="S")
+        volume.attrs["mixture_names"] = names
+        current.attrs["mixture_names"] = names
+        if write_sign:
+            current.attrs["sign_convention"] = "positive inward"
 
 
 def _decode(value: object) -> str:
