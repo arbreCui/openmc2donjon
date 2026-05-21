@@ -365,10 +365,13 @@ def _as_scatter_moments(values: np.ndarray, ngroups: int, domain_name: str) -> n
         raise ValueError(
             f"domain {domain_name}: scatter matrix must be 2D or 3D, got shape {arr.shape}"
         )
-    if arr.shape[1:] == (ngroups, ngroups):
-        return arr
+    # OpenMC ScatterMatrixXS.get_xs(moment="all") returns [from, to, moment].
+    # In a 2-group P1 calculation this shape is (2, 2, 2), so the usual shape
+    # inference is ambiguous. Prefer OpenMC's native moment-last convention.
     if arr.shape[:2] == (ngroups, ngroups):
         return np.moveaxis(arr, -1, 0)
+    if arr.shape[1:] == (ngroups, ngroups):
+        return arr
     raise ValueError(
         f"domain {domain_name}: scatter matrix shape {arr.shape} is incompatible with "
         f"{ngroups} groups"

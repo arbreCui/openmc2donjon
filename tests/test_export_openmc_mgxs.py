@@ -168,6 +168,46 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
         np.testing.assert_allclose(mod_scatter[0], np.eye(3))
         np.testing.assert_allclose(mod_scatter[1], np.zeros((3, 3)))
 
+    def test_exports_ambiguous_two_group_p1_scatter_as_openmc_moment_last(self) -> None:
+        class EnergyGroups2:
+            group_edges = np.array([1.0e-5, 1.0, 1.0e7])
+
+        class Library2:
+            def __init__(self) -> None:
+                self.energy_groups = EnergyGroups2()
+                self.domain = FakeDomain("fuel", 1, 3.0, True)
+                self.domains = [self.domain]
+                self.scatter = np.array(
+                    [
+                        [[0.40, 0.04], [0.03, 0.003]],
+                        [[0.02, 0.002], [0.50, 0.05]],
+                    ]
+                )
+                self.data = {
+                    "total": np.array([0.5, 0.6]),
+                    "absorption": np.array([0.05, 0.06]),
+                    "fission": np.array([0.01, 0.02]),
+                    "nu-fission": np.array([0.025, 0.05]),
+                    "chi": np.array([1.0, 0.0]),
+                    "scatter matrix": self.scatter,
+                }
+
+            def get_mgxs(self, domain: FakeDomain, mgxs_type: str) -> FakeMGXS:
+                if domain is not self.domain or mgxs_type not in self.data:
+                    raise KeyError((domain, mgxs_type))
+                return FakeMGXS(self.data[mgxs_type])
+
+        library = Library2()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "mgxs.h5"
+            export_openmc_mgxs_library(library, path)
+            with h5py.File(path, "r") as h5:
+                stored_scatter = h5["mixtures"]["fuel"]["scatter_matrix"][:]
+
+        self.assertEqual(stored_scatter.shape, (2, 2, 2))
+        np.testing.assert_allclose(stored_scatter[0], library.scatter[:, :, 0])
+        np.testing.assert_allclose(stored_scatter[1], library.scatter[:, :, 1])
+
     def test_export_cli_reads_pickled_library(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             pickle_path = Path(tmpdir) / "library.pkl"
