@@ -20,6 +20,8 @@ class SphAugmentTests(unittest.TestCase):
             sidecar = root / "sph.h5"
             augmented = root / "with_sph.h5"
             macrolib = root / "out.macrolib.txt"
+            extracted_sidecar = root / "sph_from_macrolib.h5"
+            extracted_summary = root / "sph_from_macrolib.summary.json"
             write_mgxs_fixture(mgxs)
 
             self.assertEqual(
@@ -80,6 +82,33 @@ class SphAugmentTests(unittest.TestCase):
             parsed = read_macrolib_ascii(macrolib)
             self.assertEqual(parsed.state_vector[13], 1)
             np.testing.assert_allclose(parsed.sph, np.full((2, 2), 1.25))
+
+            self.assertEqual(
+                cli_main(
+                    [
+                        "make-sph-sidecar",
+                        str(mgxs),
+                        "-o",
+                        str(extracted_sidecar),
+                        "--mode",
+                        "macrolib",
+                        "--macrolib",
+                        str(macrolib),
+                        "--summary-json",
+                        str(extracted_summary),
+                    ]
+                ),
+                0,
+            )
+            with h5py.File(extracted_sidecar, "r") as h5:
+                self.assertEqual(h5.attrs["sph_kind"], "macrolib-nsph")
+                self.assertTrue(bool(h5.attrs["sph_real"]))
+                self.assertEqual(h5.attrs["source_macrolib"], str(macrolib))
+                np.testing.assert_allclose(h5["sph"][:], np.full((2, 2), 1.25))
+            self.assertIn(
+                "openmc2donjon_sph_sidecar_passed",
+                extracted_summary.read_text(encoding="utf-8"),
+            )
 
     def test_check_rejects_partial_sph(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -23,7 +23,11 @@ from .openmc_surface_flux import (
     DEFAULT_TALLY_NAME as DEFAULT_SURFACE_FLUX_TALLY_NAME,
     export_openmc_surface_flux,
 )
-from .sph_augment import augment_hdf5_with_sph, create_unity_sph_sidecar
+from .sph_augment import (
+    augment_hdf5_with_sph,
+    create_macrolib_sph_sidecar,
+    create_unity_sph_sidecar,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -662,9 +666,9 @@ def build_make_sph_sidecar_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="openmc2donjon make-sph-sidecar",
         description=(
-            "Create a constant SPH sidecar HDF5 from an MGXS handoff. "
-            "Unity SPH is useful for plumbing; replace it with transport "
-            "equivalence factors for production neutronics."
+            "Create an SPH sidecar HDF5 from an MGXS handoff. Unity SPH is "
+            "useful for plumbing; macrolib mode extracts DONJON/DRAGON NSPH "
+            "factors from an L_MACROLIB ASCII dump."
         ),
     )
     parser.add_argument("input_h5", type=Path, help="MGXS HDF5 file used for mixture/group metadata")
@@ -676,26 +680,38 @@ def build_make_sph_sidecar_parser() -> argparse.ArgumentParser:
         help="SPH sidecar HDF5 output path",
     )
     parser.add_argument(
+        "--mode",
+        choices=("unity", "macrolib"),
+        default="unity",
+        help="sidecar source mode (default: unity)",
+    )
+    parser.add_argument(
+        "--macrolib",
+        type=Path,
+        default=None,
+        help="for --mode macrolib, L_MACROLIB ASCII file containing GROUP/*/NSPH",
+    )
+    parser.add_argument(
         "--value",
         type=float,
         default=1.0,
-        help="constant SPH value to write (default: 1.0)",
+        help="constant SPH value for --mode unity (default: 1.0)",
     )
     parser.add_argument(
         "--sph-kind",
-        default="unity",
-        help="root sph_kind provenance attribute (default: unity)",
+        default=None,
+        help="root sph_kind provenance attribute (default: unity or macrolib-nsph)",
     )
     parser.add_argument(
         "--sph-real",
         choices=("true", "false"),
-        default="false",
-        help="root sph_real provenance attribute (default: false)",
+        default=None,
+        help="root sph_real provenance attribute (default: false for unity, true for macrolib)",
     )
     parser.add_argument(
         "--sph-applied",
         choices=("true", "false"),
-        default="false",
+        default=None,
         help="root sph_applied provenance attribute (default: false)",
     )
     parser.add_argument(
@@ -1218,16 +1234,32 @@ def _make_sph_sidecar_main(argv: list[str]) -> int:
     parser = build_make_sph_sidecar_parser()
     args = parser.parse_args(argv)
     try:
-        create_unity_sph_sidecar(
-            args.input_h5,
-            args.output,
-            value=args.value,
-            force=args.force,
-            sph_kind=args.sph_kind,
-            sph_real=args.sph_real == "true",
-            sph_applied=args.sph_applied == "true",
-            summary_json=args.summary_json,
-        )
+        if args.mode == "unity":
+            create_unity_sph_sidecar(
+                args.input_h5,
+                args.output,
+                value=args.value,
+                force=args.force,
+                sph_kind=args.sph_kind or "unity",
+                sph_real=False if args.sph_real is None else args.sph_real == "true",
+                sph_applied=False if args.sph_applied is None else args.sph_applied == "true",
+                summary_json=args.summary_json,
+            )
+        elif args.mode == "macrolib":
+            if args.macrolib is None:
+                parser.error("--mode macrolib requires --macrolib")
+            create_macrolib_sph_sidecar(
+                args.input_h5,
+                args.output,
+                macrolib_ascii=args.macrolib,
+                force=args.force,
+                sph_kind=args.sph_kind or "macrolib-nsph",
+                sph_real=True if args.sph_real is None else args.sph_real == "true",
+                sph_applied=False if args.sph_applied is None else args.sph_applied == "true",
+                summary_json=args.summary_json,
+            )
+        else:
+            parser.error(f"unsupported --mode: {args.mode}")
     except Exception as exc:
         parser.exit(1, f"openmc2donjon make-sph-sidecar: error: {exc}\n")
     return 0

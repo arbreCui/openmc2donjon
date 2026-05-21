@@ -261,6 +261,11 @@ openmc2donjon make-sph-sidecar mgxs_library.h5 \
   -o sph_sidecar.h5 \
   --value 1.0
 
+openmc2donjon make-sph-sidecar mgxs_library.h5 \
+  -o sph_from_macrolib.h5 \
+  --mode macrolib \
+  --macrolib donor.macrolib.txt
+
 openmc2donjon augment-sph mgxs_library.h5 \
   --sph-source sph_sidecar.h5 \
   -o mgxs_with_sph.h5

@@ -266,6 +266,7 @@ echo "== C5G7 SPH augment smoke =="
 sph_sidecar="$RUN_DIR/c5g7_sph.sidecar.h5"
 sph_augmented="$RUN_DIR/c5g7_sph.with_sph.h5"
 sph_macrolib="$RUN_DIR/c5g7_sph.macrolib.txt"
+sph_macrolib_sidecar="$RUN_DIR/c5g7_sph.from_macrolib.sidecar.h5"
 sph_summary="$RUN_DIR/c5g7_sph.summary.json"
 "$PYTHON_BIN" -m openmc2donjon.cli make-sph-sidecar "$C5G7_ACCEPTED_H5" \
   -o "$sph_sidecar" \
@@ -281,6 +282,10 @@ sph_summary="$RUN_DIR/c5g7_sph.summary.json"
   --require-sph \
   --require-volume \
   --require-transport-dataset
+"$PYTHON_BIN" -m openmc2donjon.cli make-sph-sidecar "$C5G7_ACCEPTED_H5" \
+  -o "$sph_macrolib_sidecar" \
+  --mode macrolib \
+  --macrolib "$sph_macrolib"
 "$PYTHON_BIN" - "$sph_macrolib" "$sph_summary" <<'PY'
 import json
 import sys
@@ -299,6 +304,20 @@ if macrolib.state_vector[13] != 1:
 if macrolib.sph is None or not np.allclose(macrolib.sph, 1.0, rtol=0.0, atol=0.0):
     raise SystemExit("macrolib NSPH payload is not unity")
 print("C5G7 SPH augment OK")
+PY
+"$PYTHON_BIN" - "$sph_macrolib_sidecar" <<'PY'
+import sys
+from pathlib import Path
+
+import h5py
+import numpy as np
+
+with h5py.File(Path(sys.argv[1]), "r") as h5:
+    if h5.attrs.get("sph_kind") != "macrolib-nsph":
+        raise SystemExit("SPH macrolib sidecar kind is wrong")
+    if not np.allclose(h5["sph"][:], 1.0, rtol=0.0, atol=0.0):
+        raise SystemExit("SPH macrolib sidecar payload is not unity")
+print("C5G7 SPH macrolib extraction OK")
 PY
 
 echo

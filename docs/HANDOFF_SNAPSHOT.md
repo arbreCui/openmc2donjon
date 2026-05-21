@@ -34,7 +34,8 @@ remain separate mixtures when their spectra or leakage environments differ.
   canonicalization, face-flux contract checks, and flux-ratio ADF workflow
   plumbing.
 - SPH sidecar injection and DONJON `NSPH` carry-through for routes where the
-  downstream solver uses SPH equivalence factors instead of ADF/DF.
+  downstream solver uses SPH equivalence factors instead of ADF/DF, including
+  extraction from DONJON/DRAGON `L_MACROLIB` ASCII dumps.
 - External homogeneous face-flux adapter pattern for low-order, nodal, SPN, or
   diffusion solvers that already compute the ADF denominator directly.
 - Managed run directories with `mgxs_library.h5`, DONJON ASCII output,
