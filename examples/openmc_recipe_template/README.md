@@ -72,19 +72,7 @@ openmc2donjon-from-openmc \
 Use the same recipe to add MGXS tallies before running OpenMC:
 
 ```sh
-PYTHONPATH=/path/to/openmc2donjon/src:. python - <<'PY'
-import openmc
-
-from export_recipe import build_library
-
-library = build_library()
-tallies = openmc.Tallies()
-if hasattr(library, "add_to_tallies"):
-    library.add_to_tallies(tallies)
-else:
-    library.add_to_tallies_file(tallies)
-tallies.export_to_xml()
-PY
+openmc2donjon-export --recipe export_recipe.py --write-tallies tallies.xml
 ```
 
 Then run OpenMC normally to produce a statepoint containing those MGXS tallies.

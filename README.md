@@ -208,6 +208,12 @@ openmc2donjon-export --recipe export_recipe.py --no-load-statepoint --dry-run
 openmc2donjon-export --recipe export_recipe.py --no-load-statepoint --dry-run --strict-dry-run
 ```
 
+Write the matching OpenMC MGXS tallies before running the statepoint:
+
+```sh
+openmc2donjon-export --recipe export_recipe.py --write-tallies tallies.xml
+```
+
 Dry-run output includes a production checklist for MGXS coverage, transport
 readiness, domain mapping, volume provenance, and `domain_mode`.
 `--strict-dry-run` turns checklist warnings/failures into a non-zero exit code

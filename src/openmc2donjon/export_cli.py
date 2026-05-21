@@ -12,6 +12,7 @@ from .export_openmc_mgxs import export_openmc_mgxs_library
 from .openmc_statepoint import (
     StatepointLoadError,
     dry_run_openmc_statepoint_recipe,
+    export_openmc_tallies_recipe,
     export_openmc_statepoint_recipe,
 )
 from .recipe_dry_run_report import (
@@ -25,8 +26,8 @@ def build_parser() -> argparse.ArgumentParser:
         prog="openmc2donjon-export",
         description=(
             "Export an OpenMC mgxs.Library-like object to the openmc2donjon "
-            "HDF5 input contract. Use either a pickled library or a Python "
-            "recipe plus statepoint."
+            "HDF5 input contract, or write OpenMC tallies.xml from a Python "
+            "recipe before running OpenMC."
         ),
     )
     parser.add_argument(
@@ -53,6 +54,20 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-load-statepoint",
         action="store_true",
         help="with --recipe, export the library without loading a statepoint first",
+    )
+    parser.add_argument(
+        "--write-tallies",
+        type=Path,
+        metavar="PATH",
+        help=(
+            "with --recipe, write OpenMC tallies.xml from the recipe MGXS library "
+            "instead of exporting HDF5"
+        ),
+    )
+    parser.add_argument(
+        "--no-merge-tallies",
+        action="store_true",
+        help="with --write-tallies, pass merge=False when adding MGXS tallies",
     )
     parser.add_argument("-o", "--output", help="output HDF5 path")
     parser.add_argument(
@@ -93,15 +108,41 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--statepoint can only be used with --recipe")
     if args.no_load_statepoint and args.recipe is None:
         parser.error("--no-load-statepoint can only be used with --recipe")
+    if args.write_tallies is not None and args.recipe is None:
+        parser.error("--write-tallies can only be used with --recipe")
+    if args.write_tallies is not None and args.dry_run:
+        parser.error("--write-tallies cannot be combined with --dry-run")
+    if args.no_merge_tallies and args.write_tallies is None:
+        parser.error("--no-merge-tallies requires --write-tallies")
     if args.dry_run and args.recipe is None:
         parser.error("--dry-run can only be used with --recipe")
     if args.strict_dry_run and not args.dry_run:
         parser.error("--strict-dry-run requires --dry-run")
-    if not args.dry_run and args.output is None:
+    if not args.dry_run and args.write_tallies is None and args.output is None:
         parser.error("-o/--output is required unless --dry-run is set")
 
     try:
         if args.recipe is not None:
+            if args.write_tallies is not None:
+                summary = export_openmc_tallies_recipe(
+                    args.recipe,
+                    args.write_tallies,
+                    merge=not args.no_merge_tallies,
+                    overwrite=not args.no_overwrite,
+                )
+                tally_count = (
+                    "unknown" if summary.tally_count is None else str(summary.tally_count)
+                )
+                print(
+                    f"wrote OpenMC tallies from recipe {summary.recipe_path} "
+                    f"to {summary.output_path}"
+                )
+                print(
+                    f"  tallies: {tally_count} "
+                    f"extra_tallies={summary.extra_tally_count} "
+                    f"merge={str(summary.merged).lower()}"
+                )
+                return 0
             if args.dry_run:
                 summary = dry_run_openmc_statepoint_recipe(
                     args.recipe,

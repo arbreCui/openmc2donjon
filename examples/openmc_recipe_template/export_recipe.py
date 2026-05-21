@@ -136,6 +136,16 @@ def load_statepoint(library, statepoint_path):
             print(f"OpenMC keff = {keff}")
 
 
+def extra_tallies(library):
+    """Return case-specific non-MGXS tallies to include in tallies.xml.
+
+    Leave this empty for a plain MGXS export.  Add surface-current or other
+    auxiliary tallies here if they are needed for ADF/DF or diagnostics.
+    """
+
+    return []
+
+
 def root_attrs():
     return {
         "domain_mode": DOMAIN_MODE,

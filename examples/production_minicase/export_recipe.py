@@ -51,6 +51,10 @@ def domain_names(library):
     return _minicase.domain_names(library)
 
 
+def extra_tallies(library):
+    return [_minicase.build_surface_flux_tally()]
+
+
 def load_statepoint(library, statepoint_path):
     return _minicase.load_statepoint(library, statepoint_path)
 

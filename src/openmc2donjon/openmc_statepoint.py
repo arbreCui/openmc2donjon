@@ -44,6 +44,17 @@ class RecipeExportSummary:
 
 
 @dataclass(frozen=True)
+class RecipeTalliesExportSummary:
+    """Summary for a recipe-driven OpenMC tallies XML export."""
+
+    recipe_path: Path
+    output_path: Path
+    tally_count: int | None
+    extra_tally_count: int
+    merged: bool
+
+
+@dataclass(frozen=True)
 class RecipeDryRunDomain:
     """One domain or subdomain that would become a DONJON mixture."""
 
@@ -188,6 +199,75 @@ def export_openmc_statepoint_recipe(
         statepoint_path=statepoint_file,
         statepoint_loaded=statepoint_loaded,
         output=summary,
+    )
+
+
+def export_openmc_tallies_recipe(
+    recipe_path: str | Path,
+    output_path: str | Path,
+    *,
+    merge: bool = True,
+    overwrite: bool = True,
+) -> RecipeTalliesExportSummary:
+    """Write an OpenMC ``tallies.xml`` file from a recipe MGXS library.
+
+    The recipe must define ``build_library`` or ``get_library``.  The exported
+    tallies include the MGXS tallies required by the library.  A recipe can add
+    case-specific tallies, such as surface-current tallies for ADF generation,
+    by defining ``extra_tallies(...)`` or ``get_extra_tallies(...)``.
+    """
+
+    recipe = load_recipe_module(recipe_path)
+    recipe_file = Path(recipe_path).resolve()
+    output_file = Path(output_path).resolve()
+    if output_file.exists() and not overwrite:
+        raise FileExistsError(output_file)
+
+    library = _call_required(
+        recipe,
+        ("build_library", "get_library"),
+        recipe_path=recipe_file,
+        output_path=output_file,
+    )
+    try:
+        import openmc  # type: ignore[import-not-found]
+    except ImportError as exc:  # pragma: no cover - depends on user environment
+        raise RuntimeError(
+            "OpenMC is required to write tallies.xml from a recipe; install OpenMC "
+            "in this environment or generate tallies from the recipe inside your "
+            "OpenMC runtime."
+        ) from exc
+
+    tallies = openmc.Tallies()
+    _add_library_to_tallies(library, tallies, merge=merge)
+    extras = _call_optional(
+        recipe,
+        ("extra_tallies", "get_extra_tallies"),
+        library=library,
+        tallies=tallies,
+        recipe_path=recipe_file,
+        output_path=output_file,
+    )
+    extra_count = _append_extra_tallies(tallies, extras)
+    replacement = _call_optional(
+        recipe,
+        ("postprocess_tallies", "finalize_tallies"),
+        library=library,
+        tallies=tallies,
+        recipe_path=recipe_file,
+        output_path=output_file,
+    )
+    if replacement is not None:
+        tallies = replacement
+
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    _export_tallies_xml(tallies, output_file)
+    return RecipeTalliesExportSummary(
+        recipe_path=recipe_file,
+        output_path=output_file,
+        tally_count=_safe_len(tallies),
+        extra_tally_count=extra_count,
+        merged=merge,
     )
 
 
@@ -663,6 +743,84 @@ def _load_statepoint(
                     f"matching statepoint. OpenMC reported: {exc}"
                 ) from exc
             raise
+
+
+def _add_library_to_tallies(library: Any, tallies: Any, *, merge: bool) -> None:
+    if hasattr(library, "add_to_tallies"):
+        try:
+            library.add_to_tallies(tallies, merge=merge)
+        except TypeError:
+            library.add_to_tallies(tallies)
+        return
+    if hasattr(library, "add_to_tallies_file"):
+        try:
+            library.add_to_tallies_file(tallies, merge=merge)
+        except TypeError:
+            library.add_to_tallies_file(tallies)
+        return
+    raise TypeError(
+        "recipe library has no add_to_tallies/add_to_tallies_file method; "
+        "build an OpenMC mgxs.Library in the recipe before writing tallies.xml"
+    )
+
+
+def _append_extra_tallies(tallies: Any, extras: Any) -> int:
+    if extras is None:
+        return 0
+    if _looks_like_single_tally(extras):
+        _append_one_tally(tallies, extras)
+        return 1
+    if _looks_like_tallies_collection(extras):
+        count = 0
+        for tally in extras:
+            _append_one_tally(tallies, tally)
+            count += 1
+        return count
+    try:
+        iterator = iter(extras)
+    except TypeError as exc:
+        raise TypeError(
+            "recipe extra_tallies must return a Tally, Tallies, iterable of tallies, or None"
+        ) from exc
+    count = 0
+    for tally in iterator:
+        _append_one_tally(tallies, tally)
+        count += 1
+    return count
+
+
+def _looks_like_single_tally(value: Any) -> bool:
+    return hasattr(value, "scores") or value.__class__.__name__ == "Tally"
+
+
+def _looks_like_tallies_collection(value: Any) -> bool:
+    if isinstance(value, (str, bytes, bytearray)):
+        return False
+    return hasattr(value, "__iter__") and value.__class__.__name__ == "Tallies"
+
+
+def _append_one_tally(tallies: Any, tally: Any) -> None:
+    if hasattr(tallies, "append"):
+        tallies.append(tally)
+        return
+    if hasattr(tallies, "extend"):
+        tallies.extend([tally])
+        return
+    raise TypeError("OpenMC Tallies object does not support append/extend")
+
+
+def _export_tallies_xml(tallies: Any, output_path: Path) -> None:
+    try:
+        tallies.export_to_xml(str(output_path))
+    except TypeError:
+        tallies.export_to_xml(path=str(output_path))
+
+
+def _safe_len(value: Any) -> int | None:
+    try:
+        return len(value)
+    except TypeError:
+        return None
 
 
 def _call_required(module: ModuleType, names: tuple[str, ...], **available: Any) -> Any:

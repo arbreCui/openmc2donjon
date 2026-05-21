@@ -15,6 +15,8 @@ class ProductionMinicaseExampleTests(unittest.TestCase):
 
         self.assertIn("from openmc2donjon import DomainExportSpec", text)
         self.assertIn("def domain_specs(library):", text)
+        self.assertIn("def extra_tallies(library):", text)
+        self.assertIn("build_surface_flux_tally", text)
         self.assertIn("volume=float(_minicase.DOMAIN_VOLUME_BY_ID[int(domain.id)])", text)
         self.assertIn('"source_domain_id"', text)
 
@@ -36,6 +38,9 @@ class ProductionMinicaseExampleTests(unittest.TestCase):
         )
 
         self.assertIn("examples/production_minicase", text)
+        self.assertIn("Write OpenMC tallies from recipe CLI", text)
+        self.assertIn("--write-tallies \"$RECIPE_TALLIES\"", text)
+        self.assertIn("openmc2donjon_surface_current_mu", text)
         self.assertIn("Strict production dry-run", text)
         self.assertIn("--strict-dry-run", text)
         self.assertIn("--force-run-dir", text)

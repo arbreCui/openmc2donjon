@@ -16,6 +16,7 @@ class OpenMCRecipeTemplateTests(unittest.TestCase):
         self.assertIn("DOMAIN_VOLUME_BY_ID_CM3", text)
         self.assertIn("DEFAULT_DOMAIN_VOLUME_CM3", text)
         self.assertIn("def domain_specs(library):", text)
+        self.assertIn("def extra_tallies(library):", text)
         self.assertIn("volume=domain_volume_cm3(domain)", text)
         self.assertIn('"scatter matrix"', text)
 
@@ -27,6 +28,7 @@ class OpenMCRecipeTemplateTests(unittest.TestCase):
             text,
         )
         self.assertIn("--strict-dry-run", text)
+        self.assertIn("--write-tallies tallies.xml", text)
         self.assertIn("DOMAIN_VOLUME_BY_ID_CM3", text)
 
 

@@ -43,6 +43,17 @@ domain mapping, volume provenance, and `domain_mode`. It does not read MGXS
 values or write an HDF5 file. Use `--strict-dry-run` in automation when recipe
 warnings should fail early, before an expensive OpenMC run is launched.
 
+Use the same recipe to write the OpenMC MGXS tallies before running OpenMC:
+
+```sh
+openmc2donjon-export \
+  --recipe export_recipe.py \
+  --write-tallies tallies.xml
+```
+
+The recipe can define `extra_tallies(...)` to append case-specific non-MGXS
+tallies, such as surface-current tallies used later for ADF/DF generation.
+
 To export and immediately write DONJON ASCII in one command:
 
 ```sh

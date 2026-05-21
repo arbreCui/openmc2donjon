@@ -41,6 +41,7 @@ EXAMPLE_DIR="$REPO_ROOT/examples/production_minicase"
 CASE_DIR="$RUN_DIR/openmc_case"
 DRY_RUN_DIR="$RUN_DIR/openmc2donjon_dry_run"
 CONVERT_RUN_DIR="$RUN_DIR/openmc2donjon_run"
+RECIPE_TALLIES="$RUN_DIR/tallies_from_recipe.xml"
 STATEPOINT="$CASE_DIR/statepoint.${MINICASE_BATCHES}.h5"
 MGXS="$CONVERT_RUN_DIR/mgxs_library.h5"
 MCO="$CONVERT_RUN_DIR/out.mcompo.txt"
@@ -117,6 +118,31 @@ echo "== Build OpenMC XML =="
   --particles "$MINICASE_PARTICLES" \
   --batches "$MINICASE_BATCHES" \
   --inactive "$MINICASE_INACTIVE"
+
+echo
+echo "== Write OpenMC tallies from recipe CLI =="
+OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
+"$PYTHON_BIN" -m openmc2donjon.export_cli \
+  --recipe "$EXAMPLE_DIR/export_recipe.py" \
+  --write-tallies "$RECIPE_TALLIES" \
+  --no-overwrite
+"$PYTHON_BIN" - "$RECIPE_TALLIES" <<'PY'
+from pathlib import Path
+import sys
+import xml.etree.ElementTree as ET
+
+tallies_path = Path(sys.argv[1])
+root = ET.parse(tallies_path).getroot()
+names = [element.attrib.get("name", "") for element in root.findall("tally")]
+if "openmc2donjon_surface_current_mu" not in names:
+    raise SystemExit("recipe-written tallies.xml is missing the surface-current tally")
+if len(names) < 2:
+    raise SystemExit(f"recipe-written tallies.xml has too few tallies: {len(names)}")
+print(
+    "recipe-written tallies OK: "
+    f"tallies={len(names)} surface_current=openmc2donjon_surface_current_mu"
+)
+PY
 
 echo
 echo "== Strict production dry-run =="

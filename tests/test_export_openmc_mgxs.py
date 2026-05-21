@@ -5,8 +5,10 @@ from pathlib import Path
 import contextlib
 import io
 import pickle
+import sys
 import tempfile
 import textwrap
+import types
 import unittest
 
 import h5py
@@ -407,6 +409,66 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
         self.assertEqual([mixture.name for mixture in mixtures], ["ASM_Y01_X01"])
         self.assertEqual(mixtures[0].volume, 12.5)
         np.testing.assert_array_equal(mesh_index, [1, 1, 1])
+
+    def test_export_cli_writes_openmc_tallies_from_recipe(self) -> None:
+        recipe = """
+            class Tally:
+                def __init__(self, name):
+                    self.name = name
+                    self.scores = ["flux"]
+
+            class Library:
+                def __init__(self):
+                    self.added_with_merge = None
+
+                def add_to_tallies(self, tallies, merge=True):
+                    self.added_with_merge = merge
+                    tallies.append(Tally(f"mgxs-merge-{merge}"))
+
+            def build_library(output_path):
+                return Library()
+
+            def extra_tallies(library, tallies, output_path):
+                return [Tally("surface-current")]
+        """
+
+        class FakeTallies(list):
+            def export_to_xml(self, path):
+                lines = [f"tally:{tally.name}" for tally in self]
+                Path(path).write_text("\\n".join(lines) + "\\n", encoding="utf-8")
+
+        original_openmc = sys.modules.get("openmc")
+        sys.modules["openmc"] = types.SimpleNamespace(Tallies=FakeTallies)
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                recipe_path = Path(tmpdir) / "recipe.py"
+                tallies_path = Path(tmpdir) / "tallies.xml"
+                recipe_path.write_text(textwrap.dedent(recipe), encoding="utf-8")
+
+                stream = io.StringIO()
+                with contextlib.redirect_stdout(stream):
+                    rc = export_cli_main(
+                        [
+                            "--recipe",
+                            str(recipe_path),
+                            "--write-tallies",
+                            str(tallies_path),
+                        ]
+                    )
+
+                rendered = stream.getvalue()
+                payload = tallies_path.read_text(encoding="utf-8")
+        finally:
+            if original_openmc is None:
+                sys.modules.pop("openmc", None)
+            else:
+                sys.modules["openmc"] = original_openmc
+
+        self.assertEqual(rc, 0)
+        self.assertIn("wrote OpenMC tallies from recipe", rendered)
+        self.assertIn("tallies: 2 extra_tallies=1 merge=true", rendered)
+        self.assertIn("tally:mgxs-merge-True", payload)
+        self.assertIn("tally:surface-current", payload)
 
     def test_export_cli_recipe_dry_run_without_statepoint_or_output(self) -> None:
         recipe = """

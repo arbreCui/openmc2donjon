@@ -14,7 +14,9 @@ from .export_openmc_mgxs import DomainExportSpec, export_openmc_mgxs_library
 from .openmc_statepoint import (
     RecipeDryRunSummary,
     RecipeExportSummary,
+    RecipeTalliesExportSummary,
     dry_run_openmc_statepoint_recipe,
+    export_openmc_tallies_recipe,
     export_openmc_statepoint_recipe,
 )
 
@@ -29,6 +31,8 @@ __all__ = [
     "MixtureHistory",
     "RecipeDryRunSummary",
     "RecipeExportSummary",
+    "RecipeTalliesExportSummary",
+    "export_openmc_tallies_recipe",
     "write_macrolib",
     "write_multicompo",
     "write_multicompo_histories",
