@@ -11,7 +11,7 @@ from pathlib import Path
 from . import __version__
 from .adf_augment import augment_hdf5_with_adf, parse_faces
 from .adf_sidecar import DEFAULT_CARTESIAN_FACES, create_flux_ratio_adf_sidecar
-from .bundle import ArtifactSpec, bundle_artifacts, parse_extra_artifact
+from .bundle import ArtifactSpec, bundle_artifacts, parse_extra_artifact, validate_bundle
 from .face_flux_check import check_face_flux
 from .from_openmc_summary import FROM_OPENMC_SUMMARY_SCHEMA
 from .homogeneous_face_flux import create_homogeneous_face_flux
@@ -114,8 +114,19 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "write a standard production run directory with mgxs_library.h5, "
-            "DONJON ASCII output, summary JSON, and manifest.json"
+            "DONJON ASCII output, summary JSON, manifest.json, and bundle validation"
         ),
+    )
+    parser.add_argument(
+        "--no-validate-bundle",
+        action="store_true",
+        help="with --run-dir, skip automatic manifest-backed bundle validation",
+    )
+    parser.add_argument(
+        "--bundle-validation-summary-json",
+        type=Path,
+        default=None,
+        help="with --run-dir, write bundle validation summary JSON here",
     )
     parser.add_argument(
         "--root-name",
@@ -434,8 +445,12 @@ def main(argv: list[str] | None = None) -> int:
         args.check = True
         args.require_sph = True
     _apply_run_dir_defaults(args)
+    if args.bundle_validation_summary_json is not None and args.run_dir is None:
+        parser.error("--bundle-validation-summary-json requires --run-dir")
     if args.extra_artifact and args.run_dir is None:
         parser.error("--extra-artifact requires --run-dir")
+    if args.no_validate_bundle and args.bundle_validation_summary_json is not None:
+        parser.error("--bundle-validation-summary-json cannot be used with --no-validate-bundle")
     _extra_artifacts_from_args(args, parser)
     if args.expected_adf_faces is None and args.adf_faces is not None:
         args.expected_adf_faces = args.adf_faces
@@ -706,6 +721,13 @@ def _run_pipeline(
         print(f"wrote summary: {args.summary_json}")
     if args.run_dir is not None:
         _write_run_dir_manifest(args, hdf5_path, output_path, recipe_summary.recipe_path)
+        if not args.no_validate_bundle:
+            report = validate_bundle(
+                args.run_dir / "manifest.json",
+                summary_json=args.bundle_validation_summary_json,
+            )
+            if not report.ok:
+                return False
     return True
 
 
@@ -725,6 +747,8 @@ def _apply_run_dir_defaults(args: argparse.Namespace) -> None:
         args.adf_summary_json = run_dir / "adf_summary.json"
     if (args.sph_source is not None or args.sph_macrolib is not None) and args.sph_summary_json is None:
         args.sph_summary_json = run_dir / "sph_summary.json"
+    if not args.no_validate_bundle and args.bundle_validation_summary_json is None:
+        args.bundle_validation_summary_json = run_dir / "bundle_validation_summary.json"
 
 
 def _prepare_run_dir(
@@ -741,6 +765,8 @@ def _prepare_run_dir(
         args.summary_json,
         run_dir / "manifest.json",
     ]
+    if not args.no_validate_bundle:
+        managed_paths.append(args.bundle_validation_summary_json)
     recipe_destination = run_dir / args.recipe.name
     if not _same_path(args.recipe, recipe_destination):
         managed_paths.append(recipe_destination)

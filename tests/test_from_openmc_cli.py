@@ -269,17 +269,28 @@ def build_library():
             summary = run_dir / "run_summary.json"
             check_summary = run_dir / "check_summary.json"
             manifest = run_dir / "manifest.json"
+            bundle_validation = run_dir / "bundle_validation_summary.json"
             recipe_copy = run_dir / recipe.name
             conversion_payload = json.loads(summary.read_text(encoding="utf-8"))
             check_payload = json.loads(check_summary.read_text(encoding="utf-8"))
             manifest_payload = json.loads(manifest.read_text(encoding="utf-8"))
+            validation_payload = json.loads(bundle_validation.read_text(encoding="utf-8"))
             standard_paths_exist = [
                 path.exists()
-                for path in (hdf5, output, summary, check_summary, manifest, recipe_copy)
+                for path in (
+                    hdf5,
+                    output,
+                    summary,
+                    check_summary,
+                    manifest,
+                    bundle_validation,
+                    recipe_copy,
+                )
             ]
 
         self.assertEqual(rc, 0)
         self.assertIn("OpenMC-to-DONJON bundle", stream.getvalue())
+        self.assertIn("openmc2donjon_bundle_validation_passed", stream.getvalue())
         self.assertTrue(all(standard_paths_exist))
         assert_from_openmc_summary(self, conversion_payload)
         self.assertEqual(conversion_payload["hdf5"], str(hdf5))
@@ -289,6 +300,11 @@ def build_library():
         self.assertEqual(conversion_payload["check_summary_json"], str(check_summary))
         self.assertEqual(check_payload["decision"], "mgxs_input_contract_passed")
         self.assertEqual(manifest_payload["schema"], "openmc2donjon.bundle.v1")
+        self.assertEqual(
+            validation_payload["decision"],
+            "openmc2donjon_bundle_validation_passed",
+        )
+        self.assertTrue(validation_payload["ok"])
         labels = {artifact["label"]: artifact for artifact in manifest_payload["artifacts"]}
         self.assertEqual(set(labels), {"mgxs", "mcompo", "run-summary", "check-summary", "recipe"})
         self.assertEqual(labels["run-summary"]["summary_schema"], FROM_OPENMC_SUMMARY_SCHEMA)
