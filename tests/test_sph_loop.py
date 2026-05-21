@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import csv
 import io
 import json
 from pathlib import Path
@@ -98,10 +99,29 @@ class SphLoopTests(unittest.TestCase):
             self.assertEqual(len(payload["workflows"]), 2)
             self.assertEqual(len(payload["postprocesses"]), 2)
             self.assertEqual(payload["final_solve"]["iteration"], 2)
+            self.assertEqual(len(payload["audit_rows"]), 3)
+            self.assertEqual(payload["audit_rows"][0]["stage"], "iteration")
+            self.assertEqual(payload["audit_rows"][0]["iteration"], 1)
+            self.assertAlmostEqual(payload["audit_rows"][0]["keff"], 1.0)
+            self.assertAlmostEqual(payload["audit_rows"][1]["sph_maximum"], 2.0)
+            self.assertEqual(payload["audit_rows"][2]["stage"], "final")
+            self.assertEqual(payload["audit_rows"][2]["iteration"], 2)
+            self.assertAlmostEqual(payload["audit_rows"][2]["keff"], 1.002)
             self.assertTrue((root / "loop_run/iter00_initial/out.macrolib.txt").exists())
             self.assertTrue((root / "loop_run/iter00_solve/solver.stdout.txt").exists())
             self.assertTrue((root / "loop_run/iter01_solve/solver.stdout.txt").exists())
             self.assertTrue((root / "loop_run/iter02_solve/solver.stdout.txt").exists())
+            audit_csv = root / "sph_loop_audit.csv"
+            audit_text = root / "sph_loop_audit.txt"
+            self.assertEqual(Path(payload["audit_csv"]), audit_csv)
+            self.assertEqual(Path(payload["audit_text"]), audit_text)
+            self.assertTrue(audit_csv.exists())
+            self.assertTrue(audit_text.exists())
+            with audit_csv.open(encoding="utf-8", newline="") as stream:
+                rows = list(csv.DictReader(stream))
+            self.assertEqual([row["stage"] for row in rows], ["iteration", "iteration", "final"])
+            self.assertEqual(rows[2]["keff"], "1.002")
+            self.assertIn("OpenMC-to-DONJON SPH loop audit", audit_text.read_text(encoding="utf-8"))
 
             final_sph = root / "loop_run/iter02_sph/next_sph.sidecar.h5"
             expected = np.asarray([[2.0, 2.0], [2.0, 2.0]])
@@ -190,6 +210,11 @@ class SphLoopTests(unittest.TestCase):
                 payload["convergence"][0]["flux_ratio_max_residual"],
                 0.0,
             )
+            self.assertEqual(len(payload["audit_rows"]), 2)
+            self.assertEqual(payload["audit_rows"][0]["stage"], "iteration")
+            self.assertEqual(payload["audit_rows"][1]["stage"], "final")
+            self.assertAlmostEqual(payload["audit_rows"][0]["keff"], 1.0)
+            self.assertAlmostEqual(payload["audit_rows"][1]["keff"], 1.001)
 
 
 def _write_mgxs(path: Path) -> None:
@@ -253,6 +278,7 @@ def main() -> int:
         group2 = (10.0, 800.0, 30.0, 400.0)
     write_flux_dump(Path(args.result), group1, group2)
     print(f"fake DONJON solve iteration={args.iteration} macrolib={args.macrolib}")
+    print(f"OPENMC2DONJON FAKE SPH LOOP K-EFFECTIVE {1.0 + 0.001 * args.iteration:.6f}")
     return 0
 
 
@@ -297,6 +323,7 @@ def main() -> int:
         raise SystemExit(f"missing macrolib input: {args.macrolib}")
     write_flux_dump(Path(args.result))
     print(f"fake exact DONJON solve iteration={args.iteration} macrolib={args.macrolib}")
+    print(f"OPENMC2DONJON FAKE EXACT SPH LOOP K-EFFECTIVE {1.0 + 0.001 * args.iteration:.6f}")
     return 0
 
 

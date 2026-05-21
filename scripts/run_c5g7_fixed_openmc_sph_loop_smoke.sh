@@ -110,6 +110,7 @@ echo "== Validate fixed-OpenMC SPH loop =="
   "$ITER1_SIDECAR" "$ITER2_SIDECAR" \
   "$BASE_MACROLIB" "$ITER1_CORRECTED_MACROLIB" "$ITER2_CORRECTED_MACROLIB" \
   "$RESULT0" "$RESULT1" "$RESULT2" <<'PY'
+import csv
 import json
 from pathlib import Path
 import re
@@ -183,6 +184,7 @@ keff0 = read_keff(result0_path, 0)
 keff1 = read_keff(result1_path, 1)
 keff2 = read_keff(result2_path, 2)
 loop_summary = json.loads(loop_summary_path.read_text(encoding="utf-8"))
+audit_csv = Path(loop_summary["audit_csv"])
 
 if loop_summary.get("decision") != "openmc2donjon_sph_loop_passed":
     raise SystemExit(f"SPH loop summary did not pass: {loop_summary_path}")
@@ -190,6 +192,16 @@ if len(loop_summary.get("solves", [])) != 3:
     raise SystemExit("configured SPH loop did not run the final solve")
 if len(loop_summary.get("postprocesses", [])) != 2:
     raise SystemExit("configured SPH loop did not apply two postprocess steps")
+if len(loop_summary.get("audit_rows", [])) != 3:
+    raise SystemExit("configured SPH loop summary is missing audit rows")
+if not audit_csv.exists():
+    raise SystemExit(f"configured SPH loop audit CSV is missing: {audit_csv}")
+with audit_csv.open(encoding="utf-8", newline="") as stream:
+    audit_rows = list(csv.DictReader(stream))
+if [row["stage"] for row in audit_rows] != ["iteration", "iteration", "final"]:
+    raise SystemExit(f"unexpected SPH loop audit stages: {audit_rows}")
+audit_keff = [float(row["keff"]) for row in audit_rows]
+np.testing.assert_allclose(audit_keff, [keff0, keff1, keff2], rtol=1.0e-6, atol=1.0e-6)
 if sph1.shape != (9, 7) or sph2.shape != (9, 7):
     raise SystemExit(f"unexpected SPH shapes: {sph1.shape}, {sph2.shape}")
 if flux0.shape != (9, 7) or flux1.shape != (9, 7) or flux2.shape != (9, 7):

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
+import re
 import shlex
 import subprocess
 from typing import Any
@@ -59,6 +61,22 @@ class SphLoopConvergenceReport:
 
 
 @dataclass(frozen=True)
+class SphLoopAuditRow:
+    stage: str
+    iteration: int
+    keff: float | None
+    sph_minimum: float | None
+    sph_maximum: float | None
+    sph_max_abs_change: float | None
+    sph_max_rel_change: float | None
+    flux_ratio_max_residual: float | None
+    converged: bool | None
+    solve_result: Path | None
+    ascii_output: Path | None
+    postprocess_output: Path | None
+
+
+@dataclass(frozen=True)
 class SphLoopReport:
     config_path: Path
     input_h5: Path
@@ -71,6 +89,8 @@ class SphLoopReport:
     final_ascii: Path
     final_sph_sidecar: Path | None
     summary_json: Path
+    audit_csv: Path
+    audit_text: Path
     convergence_enabled: bool
     converged: bool
     stop_reason: str
@@ -82,6 +102,7 @@ class SphLoopReport:
     convergence: tuple[SphLoopConvergenceReport, ...]
     postprocesses: tuple[SphLoopPostprocessReport, ...]
     final_solve: SphLoopSolveReport | None
+    audit_rows: tuple[SphLoopAuditRow, ...]
 
 
 def run_sph_loop(
@@ -156,6 +177,8 @@ def run_sph_loop(
         if summary_json is None
         else _resolve_path(summary_json, base_dir)
     )
+    audit_csv = summary_path.with_name("sph_loop_audit.csv")
+    audit_text = summary_path.with_name("sph_loop_audit.txt")
 
     initial_ascii = _write_initial_ascii(
         input_h5,
@@ -262,6 +285,14 @@ def run_sph_loop(
         solves.append(final_solve)
 
     converged = bool(convergence_reports and convergence_reports[-1].converged)
+    audit_rows = _build_audit_rows(
+        solves=tuple(solves),
+        workflows=tuple(workflows),
+        convergence=tuple(convergence_reports),
+        postprocesses=tuple(postprocesses),
+        final_solve=final_solve,
+        final_ascii=current_ascii,
+    )
     report = SphLoopReport(
         config_path=config_file,
         input_h5=input_h5,
@@ -274,6 +305,8 @@ def run_sph_loop(
         final_ascii=current_ascii,
         final_sph_sidecar=previous_sph,
         summary_json=summary_path,
+        audit_csv=audit_csv,
+        audit_text=audit_text,
         convergence_enabled=convergence_enabled,
         converged=converged,
         stop_reason=stop_reason,
@@ -285,8 +318,11 @@ def run_sph_loop(
         convergence=tuple(convergence_reports),
         postprocesses=tuple(postprocesses),
         final_solve=final_solve,
+        audit_rows=audit_rows,
     )
     print_report(report)
+    write_audit_csv(audit_csv, report.audit_rows)
+    write_audit_text(audit_text, report.audit_rows)
     write_summary(summary_path, report)
     if (
         convergence_enabled
@@ -310,6 +346,8 @@ def print_report(report: SphLoopReport) -> None:
     print(f"  reference_flux: {report.reference_flux}")
     print(f"  initial_ascii: {report.initial_ascii}")
     print(f"  final_ascii: {report.final_ascii}")
+    print(f"  audit_csv: {report.audit_csv}")
+    print(f"  audit_text: {report.audit_text}")
     if report.final_sph_sidecar is not None:
         print(f"  final_sph_sidecar: {report.final_sph_sidecar}")
     for solve in report.solves:
@@ -351,6 +389,8 @@ def write_summary(path: Path, report: SphLoopReport) -> None:
         "output_format": report.output_format,
         "initial_ascii": str(report.initial_ascii),
         "final_ascii": str(report.final_ascii),
+        "audit_csv": str(report.audit_csv),
+        "audit_text": str(report.audit_text),
         "final_sph_sidecar": (
             None if report.final_sph_sidecar is None else str(report.final_sph_sidecar)
         ),
@@ -419,10 +459,195 @@ def write_summary(path: Path, report: SphLoopReport) -> None:
             }
             for postprocess in report.postprocesses
         ],
+        "audit_rows": [
+            {
+                "stage": row.stage,
+                "iteration": row.iteration,
+                "keff": row.keff,
+                "sph_minimum": row.sph_minimum,
+                "sph_maximum": row.sph_maximum,
+                "sph_max_abs_change": row.sph_max_abs_change,
+                "sph_max_rel_change": row.sph_max_rel_change,
+                "flux_ratio_max_residual": row.flux_ratio_max_residual,
+                "converged": row.converged,
+                "solve_result": None if row.solve_result is None else str(row.solve_result),
+                "ascii_output": None if row.ascii_output is None else str(row.ascii_output),
+                "postprocess_output": (
+                    None
+                    if row.postprocess_output is None
+                    else str(row.postprocess_output)
+                ),
+            }
+            for row in report.audit_rows
+        ],
         "openmc_xs_policy": "fixed base MGXS; DONJON solves consume updated ASCII SPH handoffs",
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def write_audit_csv(path: Path, rows: tuple[SphLoopAuditRow, ...]) -> None:
+    fieldnames = [
+        "stage",
+        "iteration",
+        "keff",
+        "sph_minimum",
+        "sph_maximum",
+        "sph_max_abs_change",
+        "sph_max_rel_change",
+        "flux_ratio_max_residual",
+        "converged",
+        "solve_result",
+        "ascii_output",
+        "postprocess_output",
+    ]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(
+                {
+                    "stage": row.stage,
+                    "iteration": row.iteration,
+                    "keff": _format_optional_float(row.keff),
+                    "sph_minimum": _format_optional_float(row.sph_minimum),
+                    "sph_maximum": _format_optional_float(row.sph_maximum),
+                    "sph_max_abs_change": _format_optional_float(
+                        row.sph_max_abs_change
+                    ),
+                    "sph_max_rel_change": _format_optional_float(
+                        row.sph_max_rel_change
+                    ),
+                    "flux_ratio_max_residual": _format_optional_float(
+                        row.flux_ratio_max_residual
+                    ),
+                    "converged": "" if row.converged is None else str(row.converged),
+                    "solve_result": "" if row.solve_result is None else str(row.solve_result),
+                    "ascii_output": "" if row.ascii_output is None else str(row.ascii_output),
+                    "postprocess_output": (
+                        "" if row.postprocess_output is None else str(row.postprocess_output)
+                    ),
+                }
+            )
+
+
+def write_audit_text(path: Path, rows: tuple[SphLoopAuditRow, ...]) -> None:
+    lines = [
+        "OpenMC-to-DONJON SPH loop audit",
+        (
+            "stage      iter  keff          sph_min       sph_max       "
+            "sph_rel       flux_res      converged"
+        ),
+    ]
+    for row in rows:
+        converged = "" if row.converged is None else str(row.converged)
+        lines.append(
+            f"{row.stage:<10} {row.iteration:>4d}  "
+            f"{_format_optional_float(row.keff):<12} "
+            f"{_format_optional_float(row.sph_minimum):<12} "
+            f"{_format_optional_float(row.sph_maximum):<12} "
+            f"{_format_optional_float(row.sph_max_rel_change):<12} "
+            f"{_format_optional_float(row.flux_ratio_max_residual):<12} "
+            f"{converged:<9}"
+        )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _build_audit_rows(
+    *,
+    solves: tuple[SphLoopSolveReport, ...],
+    workflows: tuple[SphIterationWorkflowReport, ...],
+    convergence: tuple[SphLoopConvergenceReport, ...],
+    postprocesses: tuple[SphLoopPostprocessReport, ...],
+    final_solve: SphLoopSolveReport | None,
+    final_ascii: Path,
+) -> tuple[SphLoopAuditRow, ...]:
+    solve_by_iteration = {solve.iteration: solve for solve in solves}
+    postprocess_by_iteration = {item.iteration: item for item in postprocesses}
+    rows: list[SphLoopAuditRow] = []
+    for index, workflow in enumerate(workflows, start=1):
+        solve = solve_by_iteration.get(index - 1)
+        convergence_report = convergence[index - 1] if index - 1 < len(convergence) else None
+        postprocess = postprocess_by_iteration.get(index)
+        rows.append(
+            SphLoopAuditRow(
+                stage="iteration",
+                iteration=index,
+                keff=None if solve is None else _extract_solve_keff(solve),
+                sph_minimum=workflow.sph_minimum,
+                sph_maximum=workflow.sph_maximum,
+                sph_max_abs_change=(
+                    None if convergence_report is None else convergence_report.sph_max_abs_change
+                ),
+                sph_max_rel_change=(
+                    None if convergence_report is None else convergence_report.sph_max_rel_change
+                ),
+                flux_ratio_max_residual=(
+                    None
+                    if convergence_report is None
+                    else convergence_report.flux_ratio_max_residual
+                ),
+                converged=None if convergence_report is None else convergence_report.converged,
+                solve_result=None if solve is None else solve.result,
+                ascii_output=workflow.ascii_output,
+                postprocess_output=None if postprocess is None else postprocess.output,
+            )
+        )
+    if final_solve is not None:
+        rows.append(
+            SphLoopAuditRow(
+                stage="final",
+                iteration=final_solve.iteration,
+                keff=_extract_solve_keff(final_solve),
+                sph_minimum=None,
+                sph_maximum=None,
+                sph_max_abs_change=None,
+                sph_max_rel_change=None,
+                flux_ratio_max_residual=None,
+                converged=None,
+                solve_result=final_solve.result,
+                ascii_output=final_ascii,
+                postprocess_output=None,
+            )
+        )
+    return tuple(rows)
+
+
+def _extract_solve_keff(solve: SphLoopSolveReport) -> float | None:
+    for path in (solve.stdout, solve.result, solve.stderr):
+        value = _extract_keff(path)
+        if value is not None:
+            return value
+    return None
+
+
+def _extract_keff(path: Path) -> float | None:
+    if not path.exists():
+        return None
+    text = path.read_text(encoding="utf-8", errors="replace")
+    patterns = (
+        r"EFFECTIVE MULTIPLICATION FACTOR\s*=\s*([0-9.+\-Ee]+)",
+        r"K-EFFECTIVE\s+([0-9.+\-Ee]+)",
+    )
+    matches: list[str] = []
+    for pattern in patterns:
+        matches = re.findall(pattern, text)
+        if matches:
+            break
+    if not matches:
+        return None
+    try:
+        return float(matches[-1])
+    except ValueError:
+        return None
+
+
+def _format_optional_float(value: float | None) -> str:
+    if value is None:
+        return ""
+    return f"{value:.12g}"
 
 
 def _build_convergence_report(
