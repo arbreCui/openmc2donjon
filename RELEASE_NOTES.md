@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Extended the production minicase smoke with a non-C5G7 external
+  face-flux workflow: `from-openmc --build-flux-ratio-adf` now consumes
+  existing surface and homogeneous face-flux HDF5 files directly, skips
+  low-order reconstruction, and checks exact ADF parity with the reconstructed
+  minicase path.
 - Added `openmc2donjon-from-openmc --homogeneous-face-flux` so one-step
   flux-ratio ADF production runs can consume an existing homogeneous face-flux
   denominator directly instead of rebuilding it from low-order driver inputs.

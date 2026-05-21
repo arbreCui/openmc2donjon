@@ -96,6 +96,28 @@ The minicase low-order driver is a tiny fixture marked through the final
 sidecar as `adf_real=false`; it is an interface and workflow check, not a
 production physics ADF estimate.
 
+If an external low-order or nodal solve has already produced the homogeneous
+face-flux denominator, the one-step workflow can consume those files directly
+and skip the low-order reconstruction artifacts:
+
+```sh
+OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
+openmc2donjon-from-openmc \
+  --recipe examples/production_minicase/export_recipe.py \
+  --statepoint "$CASE_DIR/statepoint.12.h5" \
+  --run-dir /tmp/openmc2donjon_minicase/output_external_adf \
+  --force-run-dir \
+  --build-flux-ratio-adf \
+  --adf-surface-flux /tmp/openmc2donjon_minicase/openmc_surface_flux.h5::surface_flux/mean \
+  --homogeneous-face-flux /tmp/openmc2donjon_minicase/homogeneous_face_flux.h5::homogeneous_face_flux \
+  --adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
+  --adf-invalid-fill 1.0 \
+  --adf-kind flux-ratio-minicase-external \
+  --adf-real false \
+  --require-volume \
+  --require-transport-dataset
+```
+
 For the repository smoke test, run:
 
 ```sh

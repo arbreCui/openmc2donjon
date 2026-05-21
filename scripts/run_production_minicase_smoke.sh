@@ -64,6 +64,15 @@ ADF_RUN_SUMMARY="$ADF_RUN_DIR/run_summary.json"
 ADF_CHECK_SUMMARY="$ADF_RUN_DIR/check_summary.json"
 ADF_INJECT_SUMMARY="$ADF_RUN_DIR/adf_summary.json"
 ADF_MANIFEST="$ADF_RUN_DIR/manifest.json"
+EXTERNAL_ADF_RUN_DIR="$RUN_DIR/openmc2donjon_external_adf_run"
+EXTERNAL_ADF_H5="$EXTERNAL_ADF_RUN_DIR/mgxs_library.h5"
+EXTERNAL_ADF_MCO="$EXTERNAL_ADF_RUN_DIR/out.mcompo.txt"
+EXTERNAL_ADF_RUN_SUMMARY="$EXTERNAL_ADF_RUN_DIR/run_summary.json"
+EXTERNAL_ADF_CHECK_SUMMARY="$EXTERNAL_ADF_RUN_DIR/check_summary.json"
+EXTERNAL_ADF_INJECT_SUMMARY="$EXTERNAL_ADF_RUN_DIR/adf_summary.json"
+EXTERNAL_ADF_SIDECAR="$EXTERNAL_ADF_RUN_DIR/adf_sidecar.h5"
+EXTERNAL_ADF_SIDECAR_SUMMARY="$EXTERNAL_ADF_RUN_DIR/adf_sidecar_summary.json"
+EXTERNAL_ADF_MANIFEST="$EXTERNAL_ADF_RUN_DIR/manifest.json"
 ADF_FACES="FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX"
 SURFACE_FLUX_MU_EDGES="0.0,0.25,0.5,0.75,1.0"
 
@@ -476,6 +485,147 @@ for label, decision in expected_summary_decisions.items():
 
 print(
     "production minicase ADF readback OK: "
+    f"blocks={len(blocks)} faces={','.join(faces)} labels={sorted(labels)}"
+)
+PY
+
+echo
+echo "== Export and convert with external flux-ratio ADF inputs =="
+OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
+"$PYTHON_BIN" -m openmc2donjon.from_openmc_cli \
+  --recipe "$EXAMPLE_DIR/export_recipe.py" \
+  --statepoint "$STATEPOINT" \
+  --run-dir "$EXTERNAL_ADF_RUN_DIR" \
+  --force-run-dir \
+  --build-flux-ratio-adf \
+  --adf-surface-flux "$SURFACE_FLUX::surface_flux/mean" \
+  --homogeneous-face-flux "$HOMOGENEOUS_FACE_FLUX::homogeneous_face_flux" \
+  --adf-faces "$ADF_FACES" \
+  --adf-invalid-fill 1.0 \
+  --adf-kind flux-ratio-minicase-external \
+  --adf-real false \
+  --check \
+  --require-volume \
+  --require-transport-dataset \
+  "${SCATTER_ROW_BALANCE_ARGS[@]}"
+
+"$PYTHON_BIN" - "$ADF_H5" "$ADF_SIDECAR" "$EXTERNAL_ADF_H5" "$EXTERNAL_ADF_SIDECAR" "$EXTERNAL_ADF_MCO" "$EXTERNAL_ADF_RUN_SUMMARY" "$EXTERNAL_ADF_CHECK_SUMMARY" "$EXTERNAL_ADF_INJECT_SUMMARY" "$EXTERNAL_ADF_SIDECAR_SUMMARY" "$EXTERNAL_ADF_MANIFEST" "$SURFACE_FLUX" "$HOMOGENEOUS_FACE_FLUX" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+import h5py
+import numpy as np
+from openmc2donjon import lcm_ascii
+from openmc2donjon.from_openmc_summary import validate_from_openmc_summary
+
+reference_h5 = Path(sys.argv[1])
+reference_sidecar = Path(sys.argv[2])
+candidate_h5 = Path(sys.argv[3])
+candidate_sidecar = Path(sys.argv[4])
+candidate_mco = Path(sys.argv[5])
+summary_path = Path(sys.argv[6])
+check_summary_path = Path(sys.argv[7])
+adf_summary_path = Path(sys.argv[8])
+sidecar_summary_path = Path(sys.argv[9])
+manifest_path = Path(sys.argv[10])
+surface_flux = Path(sys.argv[11])
+homogeneous_face_flux = Path(sys.argv[12])
+faces = ("FD_XMIN", "FD_XMAX", "FD_YMIN", "FD_YMAX")
+
+with h5py.File(reference_sidecar, "r") as ref, h5py.File(candidate_sidecar, "r") as out:
+    expected = ref["adf"][:]
+    actual = out["adf"][:]
+    if not np.array_equal(actual, expected):
+        max_abs = float(np.max(np.abs(actual - expected)))
+        raise SystemExit(f"external ADF sidecar differs from reconstructed path: max_abs={max_abs}")
+    if out.attrs["adf_kind"] != "flux-ratio-minicase-external":
+        raise SystemExit("external ADF sidecar kind mismatch")
+    if out.attrs["adf_real"] != "false":
+        raise SystemExit("external ADF sidecar should be marked adf_real=false")
+
+with h5py.File(reference_h5, "r") as ref, h5py.File(candidate_h5, "r") as out:
+    for name in sorted(ref["mixtures"]):
+        for face in faces:
+            expected = ref[f"mixtures/{name}/adf/{face}"][:]
+            actual = out[f"mixtures/{name}/adf/{face}"][:]
+            if not np.array_equal(actual, expected):
+                max_abs = float(np.max(np.abs(actual - expected)))
+                raise SystemExit(f"{name}/{face}: external injected ADF differs max_abs={max_abs}")
+    if out.attrs["adf_kind"] != "flux-ratio-minicase-external":
+        raise SystemExit("external injected HDF5 ADF kind mismatch")
+    if out.attrs["adf_real"] != "false":
+        raise SystemExit("external injected HDF5 ADF real flag mismatch")
+
+blocks = lcm_ascii.read_lcm_ascii(candidate_mco)
+block_names = [block.name for block in blocks if block.name]
+for required_name in ("MACROLIB", "ADF", "HADF", *faces):
+    if required_name not in block_names:
+        raise SystemExit(f"external ADF MULTICOMPO readback missing {required_name}")
+
+summary = json.loads(summary_path.read_text(encoding="utf-8"))
+summary_errors = validate_from_openmc_summary(summary)
+if summary_errors:
+    raise SystemExit("invalid external ADF from-OpenMC summary: " + "; ".join(summary_errors))
+if summary["checked"] is not True or summary["check_passed"] is not True:
+    raise SystemExit("external ADF conversion summary did not record checked conversion")
+
+check_summary = json.loads(check_summary_path.read_text(encoding="utf-8"))
+if check_summary["decision"] != "mgxs_input_contract_passed":
+    raise SystemExit("external ADF production minicase preflight did not pass")
+
+adf_summary = json.loads(adf_summary_path.read_text(encoding="utf-8"))
+if adf_summary["decision"] != "openmc2donjon_adf_augment_passed":
+    raise SystemExit("external ADF injection summary did not pass")
+
+sidecar_summary = json.loads(sidecar_summary_path.read_text(encoding="utf-8"))
+if sidecar_summary["decision"] != "openmc2donjon_adf_sidecar_passed":
+    raise SystemExit("external ADF sidecar summary did not pass")
+if sidecar_summary["adf_kind"] != "flux-ratio-minicase-external":
+    raise SystemExit("external ADF sidecar summary kind mismatch")
+if sidecar_summary["adf_surface_flux"] != str(surface_flux):
+    raise SystemExit("external ADF sidecar surface-flux source mismatch")
+if sidecar_summary["adf_surface_flux_dataset"] != "surface_flux/mean":
+    raise SystemExit("external ADF sidecar surface-flux dataset mismatch")
+if sidecar_summary["adf_homogeneous_face_flux"] != str(homogeneous_face_flux):
+    raise SystemExit("external ADF sidecar homogeneous-flux source mismatch")
+if sidecar_summary["adf_homogeneous_face_flux_dataset"] != "homogeneous_face_flux":
+    raise SystemExit("external ADF sidecar homogeneous-flux dataset mismatch")
+
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+labels = {artifact["label"]: artifact for artifact in manifest["artifacts"]}
+required = {
+    "mgxs",
+    "mcompo",
+    "run-summary",
+    "check-summary",
+    "adf-source",
+    "adf-summary",
+    "adf-sidecar-summary",
+    "surface-flux",
+    "homogeneous-face-flux",
+    "recipe",
+}
+if set(labels) != required:
+    raise SystemExit(f"unexpected external ADF manifest labels: {sorted(labels)}")
+for forbidden in (
+    "low-order-raw",
+    "low-order-driver",
+    "low-order-driver-summary",
+    "low-order-driver-check-summary",
+    "homogeneous-face-flux-summary",
+):
+    if forbidden in labels:
+        raise SystemExit(f"external ADF manifest unexpectedly includes {forbidden}")
+if labels["surface-flux"]["source"] != str(surface_flux):
+    raise SystemExit("external ADF manifest surface-flux source mismatch")
+if labels["homogeneous-face-flux"]["source"] != str(homogeneous_face_flux):
+    raise SystemExit("external ADF manifest homogeneous-face-flux source mismatch")
+if labels["adf-sidecar-summary"].get("summary_decision") != "openmc2donjon_adf_sidecar_passed":
+    raise SystemExit("external ADF manifest did not record sidecar decision")
+
+print(
+    "production minicase external ADF readback OK: "
     f"blocks={len(blocks)} faces={','.join(faces)} labels={sorted(labels)}"
 )
 PY
