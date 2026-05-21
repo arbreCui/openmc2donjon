@@ -14,7 +14,6 @@ import numpy as np
 
 from openmc2donjon import lcm_ascii
 from openmc2donjon.from_openmc_cli import (
-    HANDOFF_SUMMARY_SCHEMA,
     build_parser,
     main as from_openmc_main,
 )
@@ -22,6 +21,7 @@ from openmc2donjon.from_openmc_summary import (
     FROM_OPENMC_SUMMARY_SCHEMA,
     validate_from_openmc_summary,
 )
+from openmc2donjon.handoff_summary import HANDOFF_SUMMARY_SCHEMA
 
 
 def assert_from_openmc_summary(

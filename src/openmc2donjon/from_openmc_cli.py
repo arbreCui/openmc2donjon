@@ -7,20 +7,19 @@ import json
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any
 
 from . import __version__
 from .adf_augment import augment_hdf5_with_adf, parse_faces
 from .adf_sidecar import DEFAULT_CARTESIAN_FACES, create_flux_ratio_adf_sidecar
 from .bundle import (
     ArtifactSpec,
-    BundleValidationReport,
     bundle_artifacts,
     parse_extra_artifact,
     validate_bundle,
 )
 from .face_flux_check import check_face_flux
 from .from_openmc_summary import FROM_OPENMC_SUMMARY_SCHEMA
+from .handoff_summary import write_handoff_summary
 from .homogeneous_face_flux import create_homogeneous_face_flux
 from .low_order_driver import check_low_order_driver, create_low_order_driver
 from .macrolib import convert_mgxs_hdf5_to_macrolib
@@ -40,11 +39,6 @@ from .recipe_dry_run_report import (
     print_strict_dry_run_decision,
 )
 from .sph_augment import augment_hdf5_with_sph, create_macrolib_sph_sidecar
-
-
-HANDOFF_SUMMARY_SCHEMA = "openmc2donjon.handoff-summary.v1"
-HANDOFF_PASS_DECISION = "openmc2donjon_handoff_passed"
-HANDOFF_FAIL_DECISION = "openmc2donjon_handoff_failed"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -767,14 +761,28 @@ def _run_pipeline(
                 summary_json=args.bundle_validation_summary_json,
             )
         if not args.no_handoff_summary:
-            _write_handoff_summary(
-                args,
+            write_handoff_summary(
+                args.handoff_summary_json,
+                package_version=__version__,
+                run_dir=args.run_dir,
                 summary=summary,
                 recipe_path=recipe_summary.recipe_path,
                 statepoint_path=recipe_summary.statepoint_path,
                 hdf5_path=hdf5_path,
                 output_path=output_path,
-                bundle_report=report,
+                output_format=args.format,
+                run_summary_json=args.summary_json,
+                check_summary_json=args.check_summary_json if args.check else None,
+                manifest_path=args.run_dir / "manifest.json",
+                bundle_validation_summary_json=(
+                    args.bundle_validation_summary_json
+                    if not args.no_validate_bundle
+                    else None
+                ),
+                bundle_validation_passed=None if report is None else report.ok,
+                bundle_validation_decision=None if report is None else report.decision,
+                adf_enabled=_effective_adf_source(args) is not None,
+                sph_enabled=_effective_sph_source(args) is not None,
             )
             print(f"wrote handoff summary: {args.handoff_summary_json}")
         if report is not None and not report.ok:
@@ -1192,127 +1200,6 @@ def _write_run_dir_manifest(
         artifacts=artifacts,
         force=True,
     )
-
-
-def _write_handoff_summary(
-    args: argparse.Namespace,
-    *,
-    summary: dict[str, object],
-    recipe_path: Path,
-    statepoint_path: Path | None,
-    hdf5_path: Path,
-    output_path: Path,
-    bundle_report: BundleValidationReport | None,
-) -> None:
-    if args.handoff_summary_json is None:
-        return
-    payload = _handoff_summary_payload(
-        args,
-        summary=summary,
-        recipe_path=recipe_path,
-        statepoint_path=statepoint_path,
-        hdf5_path=hdf5_path,
-        output_path=output_path,
-        bundle_report=bundle_report,
-    )
-    _write_json(args.handoff_summary_json, payload)
-
-
-def _handoff_summary_payload(
-    args: argparse.Namespace,
-    *,
-    summary: dict[str, object],
-    recipe_path: Path,
-    statepoint_path: Path | None,
-    hdf5_path: Path,
-    output_path: Path,
-    bundle_report: BundleValidationReport | None,
-) -> dict[str, object]:
-    manifest_path = args.run_dir / "manifest.json"
-    manifest = _read_json_object(manifest_path)
-    artifact_labels = _manifest_artifact_labels(manifest)
-    bundle_validation_passed = None if bundle_report is None else bundle_report.ok
-    ok = bundle_validation_passed is not False
-    return {
-        "schema": HANDOFF_SUMMARY_SCHEMA,
-        "package_version": __version__,
-        "decision": HANDOFF_PASS_DECISION if ok else HANDOFF_FAIL_DECISION,
-        "ok": ok,
-        "run_dir": str(args.run_dir),
-        "recipe": str(recipe_path),
-        "statepoint": None if statepoint_path is None else str(statepoint_path),
-        "hdf5": str(hdf5_path),
-        "output": str(output_path),
-        "format": args.format,
-        "run_summary_json": _path_string(args.summary_json),
-        "check_summary_json": (
-            _path_string(args.check_summary_json)
-            if args.check and args.check_summary_json is not None
-            else None
-        ),
-        "manifest": str(manifest_path),
-        "bundle_validation_summary_json": (
-            _path_string(args.bundle_validation_summary_json)
-            if not args.no_validate_bundle
-            else None
-        ),
-        "bundle_validation_enabled": not args.no_validate_bundle,
-        "bundle_validation_passed": bundle_validation_passed,
-        "bundle_validation_decision": None if bundle_report is None else bundle_report.decision,
-        "checked": bool(summary.get("checked")),
-        "check_passed": summary.get("check_passed"),
-        "energy_groups": summary.get("energy_groups"),
-        "legendre_order": summary.get("legendre_order"),
-        "mixture_count": summary.get("mixture_count"),
-        "mixture_names": summary.get("mixture_names"),
-        "state_points": summary.get("state_points"),
-        "burnup_axis": summary.get("burnup_axis"),
-        "selected_mixtures": summary.get("selected_mixtures"),
-        "artifact_count": _manifest_artifact_count(manifest),
-        "artifact_labels": artifact_labels,
-        "correction_artifacts": {
-            "adf": _effective_adf_source(args) is not None,
-            "sph": _effective_sph_source(args) is not None,
-        },
-        "openmc_xs_policy": (
-            "OpenMC MGXS are fixed at export time; low-order corrections travel "
-            "as explicit ADF/SPH side artifacts or augmented HDF5 fields."
-        ),
-    }
-
-
-def _read_json_object(path: Path) -> dict[str, Any] | None:
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return None
-    if not isinstance(payload, dict):
-        return None
-    return payload
-
-
-def _manifest_artifact_count(manifest: dict[str, Any] | None) -> int | None:
-    if manifest is None:
-        return None
-    value = manifest.get("artifact_count")
-    return value if isinstance(value, int) else None
-
-
-def _manifest_artifact_labels(manifest: dict[str, Any] | None) -> list[str]:
-    if manifest is None:
-        return []
-    artifacts = manifest.get("artifacts")
-    if not isinstance(artifacts, list):
-        return []
-    labels: list[str] = []
-    for artifact in artifacts:
-        if isinstance(artifact, dict) and isinstance(artifact.get("label"), str):
-            labels.append(artifact["label"])
-    return labels
-
-
-def _path_string(path: Path | None) -> str | None:
-    return None if path is None else str(path)
 
 
 def _extra_artifacts_from_args(
