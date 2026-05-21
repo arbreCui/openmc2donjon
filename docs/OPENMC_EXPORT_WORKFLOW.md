@@ -203,6 +203,10 @@ openmc2donjon-from-openmc \
   --require-transport-dataset
 ```
 
+`--adf-surface-flux` and `--homogeneous-face-flux` both accept
+`FILE::/dataset/path` references when the required datasets live under
+case-specific names.
+
 If the ADF sidecar was produced separately, pass it directly:
 
 ```sh

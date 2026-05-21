@@ -544,9 +544,9 @@ def build_library():
                         str(run_dir),
                         "--build-flux-ratio-adf",
                         "--adf-surface-flux",
-                        str(surface_flux),
+                        f"{surface_flux}::heterogeneous_face_flux",
                         "--homogeneous-face-flux",
-                        str(homogeneous_flux),
+                        f"{homogeneous_flux}::homogeneous_face_flux",
                         "--adf-faces",
                         "FD_XMIN,FD_XMAX",
                         "--adf-kind",
@@ -580,6 +580,14 @@ def build_library():
         self.assertEqual(attrs["adf_kind"], "flux-ratio-external-hom")
         self.assertEqual(attrs["adf_real"], "true")
         self.assertEqual(sidecar_payload["adf_homogeneous_face_flux"], str(homogeneous_flux))
+        self.assertEqual(
+            sidecar_payload["adf_surface_flux_dataset"],
+            "heterogeneous_face_flux",
+        )
+        self.assertEqual(
+            sidecar_payload["adf_homogeneous_face_flux_dataset"],
+            "homogeneous_face_flux",
+        )
         required_labels = {
             "mgxs",
             "mcompo",
@@ -597,6 +605,7 @@ def build_library():
             labels["adf-sidecar-summary"]["summary_decision"],
             "openmc2donjon_adf_sidecar_passed",
         )
+        self.assertEqual(labels["surface-flux"]["source"], str(surface_flux))
         self.assertEqual(labels["homogeneous-face-flux"]["source"], str(homogeneous_flux))
 
     def test_run_dir_dry_run_uses_standard_paths_without_writing(self) -> None:

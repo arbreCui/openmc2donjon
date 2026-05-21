@@ -134,6 +134,9 @@ openmc2donjon-from-openmc \
   --require-transport-dataset
 ```
 
+Use `FILE::/dataset/path` for either external face-flux argument when a source
+file uses case-specific dataset names.
+
 To keep explicit paths instead of using a managed run directory:
 
 ```sh

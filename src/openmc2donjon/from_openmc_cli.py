@@ -177,8 +177,8 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help=(
-            "with --build-flux-ratio-adf, existing heterogeneous face-flux HDF5; "
-            "omit when using --export-surface-flux"
+            "with --build-flux-ratio-adf, existing heterogeneous face-flux HDF5 "
+            "or FILE::DATASET; omit when using --export-surface-flux"
         ),
     )
     parser.add_argument(
@@ -686,8 +686,9 @@ def _prepare_run_dir(
         if args.adf_summary_json is not None:
             managed_paths.append(args.adf_summary_json)
         if args.adf_surface_flux is not None:
-            surface_destination = run_dir / args.adf_surface_flux.name
-            if not _same_path(args.adf_surface_flux, surface_destination):
+            surface_source = _hdf5_reference_file(args.adf_surface_flux)
+            surface_destination = run_dir / surface_source.name
+            if not _same_path(surface_source, surface_destination):
                 managed_paths.append(surface_destination)
     for artifact in _extra_artifacts_from_args(args, parser):
         destination = run_dir / artifact.source.name
@@ -778,7 +779,9 @@ def _build_flux_ratio_adf(
         )
     else:
         surface_flux = args.adf_surface_flux
-        generated_artifacts.append(ArtifactSpec(label="surface-flux", source=surface_flux))
+        generated_artifacts.append(
+            ArtifactSpec(label="surface-flux", source=_hdf5_reference_file(surface_flux))
+        )
 
     if args.homogeneous_face_flux is None:
         create_low_order_driver(
@@ -971,6 +974,16 @@ def _validate_flux_ratio_adf_args(
             "--build-flux-ratio-adf requires exactly one of "
             "--export-surface-flux or --adf-surface-flux"
         )
+    if args.adf_surface_flux is not None:
+        try:
+            _hdf5_reference_file(args.adf_surface_flux)
+        except ValueError as exc:
+            parser.error(str(exc))
+    if args.homogeneous_face_flux is not None:
+        try:
+            _hdf5_reference_file(args.homogeneous_face_flux)
+        except ValueError as exc:
+            parser.error(str(exc))
     if args.export_surface_flux:
         if args.statepoint is None and not args.dry_run:
             parser.error("--export-surface-flux requires --statepoint")

@@ -323,6 +323,9 @@ openmc2donjon-from-openmc \
   --require-transport-dataset
 ```
 
+Both external face-flux inputs accept either a known-layout HDF5 file or an
+explicit `FILE::/dataset/path` reference.
+
 The one-step OpenMC entry point can inject the same sidecar before preflight:
 
 ```sh

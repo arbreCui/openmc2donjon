@@ -38,6 +38,7 @@ Default:
   - C5G7 converter readback smoke
   - accepted baseline manifest validation
   - C5G7 production ADF source reconstruction smoke
+  - C5G7 from-OpenMC flux-ratio ADF smoke when C5G7_STATEPOINT exists
   - C5G7 statepoint exporter parity check when C5G7_STATEPOINT exists
 
 Options:
@@ -252,6 +253,13 @@ PYTHON_BIN="$PYTHON_BIN" \
 echo
 echo "== C5G7 statepoint exporter parity =="
 if [[ -e "$C5G7_STATEPOINT" ]]; then
+  echo
+  echo "== C5G7 from-OpenMC flux-ratio ADF smoke =="
+  RUN_DIR="$RUN_DIR/c5g7_from_openmc_adf" \
+  C5G7_STATEPOINT="$C5G7_STATEPOINT" \
+  PYTHON_BIN="$PYTHON_BIN" \
+    bash "$REPO_ROOT/scripts/run_c5g7_from_openmc_adf_smoke.sh"
+
   exported_run_dir="$RUN_DIR/c5g7_exporter_statepoint"
   exported_h5="$exported_run_dir/mgxs_library.h5"
   exported_mco="$exported_run_dir/out.mcompo.txt"

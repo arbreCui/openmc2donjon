@@ -5,6 +5,12 @@
 - Added `openmc2donjon-from-openmc --homogeneous-face-flux` so one-step
   flux-ratio ADF production runs can consume an existing homogeneous face-flux
   denominator directly instead of rebuilding it from low-order driver inputs.
+- Added a C5G7 from-OpenMC flux-ratio ADF release smoke that exports the saved
+  statepoint, consumes accepted OpenMC surface flux and DONJON homogeneous face
+  flux through `--build-flux-ratio-adf`, and checks exact accepted ADF payload
+  parity.
+- Allowed `openmc2donjon-from-openmc --adf-surface-flux` to accept
+  `FILE::DATASET` references and bundle the underlying HDF5 file.
 - Added a C5G7 production ADF source reconstruction smoke that rebuilds the
   accepted ADF sidecar from OpenMC surface flux over DONJON homogeneous face
   flux and checks exact payload equality.
