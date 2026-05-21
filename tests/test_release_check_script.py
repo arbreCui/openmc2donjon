@@ -44,6 +44,8 @@ class ReleaseCheckScriptTests(unittest.TestCase):
             "scripts/run_c5g7_sph_iteration_from_donjon_flux_smoke.sh",
             accepted_section,
         )
+        self.assertIn("== C5G7 fixed-OpenMC SPH loop smoke ==", accepted_section)
+        self.assertIn("scripts/run_c5g7_fixed_openmc_sph_loop_smoke.sh", accepted_section)
         self.assertNotIn("examples/openmc_hex_minicase/run_smoke.sh", candidate_section)
 
     def test_c5g7_sph_solver_response_uses_external_table_entrypoint(self) -> None:
@@ -69,6 +71,16 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertIn("DSPH:", text)
         self.assertIn("TRIVAA:", text)
         self.assertIn("openmc2donjon_c5g7_sph_iteration_solver_response_passed", text)
+
+    def test_c5g7_fixed_openmc_sph_loop_keeps_base_xs_fixed(self) -> None:
+        text = (_repo_root() / "scripts/run_c5g7_fixed_openmc_sph_loop_smoke.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("fixed OpenMC base XS", text)
+        self.assertIn("--previous-sph \"$ITER1_SIDECAR\"", text)
+        self.assertIn("extract_c5g7_donjon_volume_flux.py", text)
+        self.assertIn("openmc2donjon_c5g7_fixed_openmc_sph_loop_passed", text)
 
 
 def _repo_root() -> Path:

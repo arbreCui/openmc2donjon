@@ -300,7 +300,11 @@ def _load_previous_sph(
         raise FileNotFoundError(f"previous SPH source does not exist: {path}")
     if _looks_like_hdf5(path) or dataset is not None:
         if dataset is None:
-            loaded = load_sph_source(path, input_h5=input_h5)
+            loaded = load_sph_source(
+                path,
+                mixture_names=mixture_names,
+                energy_groups=energy_groups,
+            )
             values = np.stack([loaded.sph[name] for name in mixture_names])
             return LoadedMatrix(values=values, path=path, dataset_path="sph")
         values, dataset_path = _load_hdf5_matrix(

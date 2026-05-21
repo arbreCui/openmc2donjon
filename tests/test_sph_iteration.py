@@ -179,6 +179,57 @@ class SphIterationTests(unittest.TestCase):
             with h5py.File(sidecar, "r") as h5:
                 np.testing.assert_allclose(h5["sph"][:], expected)
 
+    def test_cli_accepts_previous_sph_sidecar(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            previous = root / "previous_sph.h5"
+            reference_flux = root / "reference_flux.csv"
+            low_order_flux = root / "low_order_flux.csv"
+            table = root / "next_sph.csv"
+            write_mgxs(mgxs)
+            with h5py.File(previous, "w") as h5:
+                dataset = h5.create_dataset(
+                    "sph",
+                    data=np.asarray([[1.1, 1.2], [0.9, 1.0]]),
+                )
+                dataset.attrs["mixture_names"] = np.asarray(("fuel", "moderator"), dtype="S")
+            reference_flux.write_text(
+                "mixture,group,flux\nfuel,1,4.0\nfuel,2,9.0\nmoderator,1,16.0\nmoderator,2,25.0\n",
+                encoding="utf-8",
+            )
+            low_order_flux.write_text(
+                "mixture,group,flux\nfuel,1,1.0\nfuel,2,1.0\nmoderator,1,1.0\nmoderator,2,1.0\n",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                cli_main(
+                    [
+                        "make-sph-update-table",
+                        str(mgxs),
+                        "-o",
+                        str(table),
+                        "--reference-flux",
+                        str(reference_flux),
+                        "--low-order-flux",
+                        str(low_order_flux),
+                        "--previous-sph",
+                        str(previous),
+                        "--damping",
+                        "0.5",
+                    ]
+                ),
+                0,
+            )
+
+            rows = table.read_text(encoding="utf-8").strip().splitlines()
+            self.assertEqual(rows[0], "mixture,group,sph")
+            self.assertIn("fuel,1,2.2", rows)
+            self.assertIn("fuel,2,3.6", rows)
+            self.assertIn("moderator,1,3.6", rows)
+            self.assertIn("moderator,2,5", rows)
+
 
 def write_mgxs(path: Path) -> None:
     with h5py.File(path, "w") as h5:
