@@ -136,6 +136,10 @@ openmc2donjon-from-openmc \
 
 Use `FILE::/dataset/path` for either external face-flux argument when a source
 file uses case-specific dataset names.
+The managed `--build-flux-ratio-adf` workflow writes
+`face_flux_check_summary.json` and bundles it in `manifest.json`; standalone
+users can run `openmc2donjon check-face-flux` before `make-adf-sidecar` for the
+same numerator/denominator contract check.
 
 To keep explicit paths instead of using a managed run directory:
 

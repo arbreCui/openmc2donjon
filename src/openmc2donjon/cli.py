@@ -11,6 +11,7 @@ from .adf_augment import augment_hdf5_with_adf, parse_faces
 from .adf_sidecar import create_flux_ratio_adf_sidecar, create_unity_adf_sidecar
 from .bundle import ArtifactSpec, bundle_artifacts, parse_extra_artifact
 from .doctor import run_doctor
+from .face_flux_check import check_face_flux
 from .homogeneous_face_flux import create_homogeneous_face_flux
 from .low_order_driver import check_low_order_driver, create_low_order_driver
 from .macrolib import convert_mgxs_hdf5_to_macrolib
@@ -36,6 +37,8 @@ def build_parser() -> argparse.ArgumentParser:
             "<input_h5> ...' to canonicalize a low-order driver handoff, "
             "'openmc2donjon check-low-order-driver <input_h5> <driver_h5>' to "
             "validate the low-order handoff, "
+            "'openmc2donjon check-face-flux <input_h5> ...' to validate "
+            "flux-ratio ADF face-flux inputs, "
             "'openmc2donjon make-homogeneous-face-flux <input_h5> ...' to "
             "reconstruct homogeneous face fluxes, 'openmc2donjon "
             "make-adf-sidecar <input_h5> ...' to create an ADF "
@@ -647,6 +650,62 @@ def build_export_surface_flux_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_check_face_flux_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="openmc2donjon check-face-flux",
+        description=(
+            "Validate heterogeneous and homogeneous face-flux HDF5 inputs "
+            "before building a flux-ratio ADF sidecar."
+        ),
+    )
+    parser.add_argument("input_h5", type=Path, help="MGXS HDF5 handoff used for metadata")
+    parser.add_argument(
+        "--surface-flux",
+        required=True,
+        help="heterogeneous face-flux HDF5 file or FILE::DATASET",
+    )
+    parser.add_argument(
+        "--homogeneous-face-flux",
+        required=True,
+        help="homogeneous face-flux HDF5 file or FILE::DATASET denominator",
+    )
+    parser.add_argument(
+        "--faces",
+        default="FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX",
+        help="comma-separated expected face names",
+    )
+    parser.add_argument(
+        "--invalid-fill",
+        type=float,
+        default=None,
+        help="explicit fill value for invalid flux-ratio bins",
+    )
+    parser.add_argument(
+        "--clip-min",
+        type=float,
+        default=None,
+        help="optional lower clip bound for ratio values",
+    )
+    parser.add_argument(
+        "--clip-max",
+        type=float,
+        default=None,
+        help="optional upper clip bound for ratio values",
+    )
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        default=None,
+        help="write a machine-readable face-flux contract summary JSON",
+    )
+    parser.add_argument(
+        "--no-fail",
+        action="store_true",
+        help="always return zero after printing the contract report",
+    )
+    return parser
+
+
 def build_make_homogeneous_face_flux_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="openmc2donjon make-homogeneous-face-flux",
@@ -797,6 +856,8 @@ def main(argv: list[str] | None = None) -> int:
     raw_argv = sys.argv[1:] if argv is None else list(argv)
     if raw_argv and raw_argv[0] == "export-surface-flux":
         return _export_surface_flux_main(raw_argv[1:])
+    if raw_argv and raw_argv[0] == "check-face-flux":
+        return _check_face_flux_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "make-low-order-driver":
         return _make_low_order_driver_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "check-low-order-driver":
@@ -1023,6 +1084,25 @@ def _export_surface_flux_main(argv: list[str]) -> int:
     except Exception as exc:
         parser.exit(1, f"openmc2donjon export-surface-flux: error: {exc}\n")
     return 0
+
+
+def _check_face_flux_main(argv: list[str]) -> int:
+    parser = build_check_face_flux_parser()
+    args = parser.parse_args(argv)
+    try:
+        report = check_face_flux(
+            args.input_h5,
+            surface_flux=args.surface_flux,
+            homogeneous_face_flux=args.homogeneous_face_flux,
+            faces=parse_faces(args.faces),
+            invalid_fill=args.invalid_fill,
+            clip_min=args.clip_min,
+            clip_max=args.clip_max,
+            summary_json=args.summary_json,
+        )
+    except Exception as exc:
+        parser.exit(1, f"openmc2donjon check-face-flux: error: {exc}\n")
+    return 0 if report.ok or args.no_fail else 1
 
 
 def _make_low_order_driver_main(argv: list[str]) -> int:

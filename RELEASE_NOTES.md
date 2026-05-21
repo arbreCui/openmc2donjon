@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added `openmc2donjon check-face-flux` and wired it into
+  `from-openmc --build-flux-ratio-adf`; managed ADF runs now write and bundle
+  `face_flux_check_summary.json` before sidecar generation.
 - Extended the production minicase smoke with a non-C5G7 external
   face-flux workflow: `from-openmc --build-flux-ratio-adf` now consumes
   existing surface and homogeneous face-flux HDF5 files directly, skips

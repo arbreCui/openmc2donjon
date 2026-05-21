@@ -454,6 +454,7 @@ def build_library():
             hdf5 = run_dir / "mgxs_library.h5"
             sidecar = run_dir / "adf_sidecar.h5"
             sidecar_summary = run_dir / "adf_sidecar_summary.json"
+            face_flux_check_summary = run_dir / "face_flux_check_summary.json"
             low_order_driver_summary = run_dir / "low_order_driver_summary.json"
             low_order_check = run_dir / "low_order_driver_check_summary.json"
             homogeneous = run_dir / "homogeneous_face_flux.h5"
@@ -464,6 +465,7 @@ def build_library():
                 mod_xmax = h5["mixtures/MOD_A/adf/FD_XMAX"][:]
                 attrs = dict(h5.attrs)
             sidecar_payload = json.loads(sidecar_summary.read_text(encoding="utf-8"))
+            face_flux_payload = json.loads(face_flux_check_summary.read_text(encoding="utf-8"))
             low_order_driver_payload = json.loads(
                 low_order_driver_summary.read_text(encoding="utf-8")
             )
@@ -485,6 +487,10 @@ def build_library():
         self.assertEqual(attrs["adf_real"], "false")
         self.assertEqual(sidecar_payload["decision"], "openmc2donjon_adf_sidecar_passed")
         self.assertFalse(sidecar_payload["adf_real"])
+        self.assertEqual(
+            face_flux_payload["decision"],
+            "openmc2donjon_face_flux_contract_passed",
+        )
         self.assertEqual(low_order_driver_payload["adapter_mode"], "raw-driver-bundle")
         self.assertEqual(low_order_driver_payload["raw_driver_h5"], str(raw_driver))
         self.assertEqual(
@@ -505,6 +511,7 @@ def build_library():
             "low-order-driver-check-summary",
             "homogeneous-face-flux",
             "homogeneous-face-flux-summary",
+            "face-flux-check-summary",
             "adf-sidecar-summary",
             "recipe",
         }
@@ -516,6 +523,10 @@ def build_library():
         self.assertEqual(
             labels["adf-sidecar-summary"]["summary_decision"],
             "openmc2donjon_adf_sidecar_passed",
+        )
+        self.assertEqual(
+            labels["face-flux-check-summary"]["summary_decision"],
+            "openmc2donjon_face_flux_contract_passed",
         )
 
     def test_run_dir_builds_flux_ratio_adf_with_external_homogeneous_flux(self) -> None:
@@ -560,6 +571,7 @@ def build_library():
 
             hdf5 = run_dir / "mgxs_library.h5"
             sidecar_summary = run_dir / "adf_sidecar_summary.json"
+            face_flux_check_summary = run_dir / "face_flux_check_summary.json"
             low_order_driver = run_dir / "low_order_driver.h5"
             generated_homogeneous_summary = run_dir / "homogeneous_face_flux_summary.json"
             manifest = run_dir / "manifest.json"
@@ -568,6 +580,7 @@ def build_library():
                 mod_xmax = h5["mixtures/MOD_A/adf/FD_XMAX"][:]
                 attrs = dict(h5.attrs)
             sidecar_payload = json.loads(sidecar_summary.read_text(encoding="utf-8"))
+            face_flux_payload = json.loads(face_flux_check_summary.read_text(encoding="utf-8"))
             manifest_payload = json.loads(manifest.read_text(encoding="utf-8"))
             labels = {artifact["label"]: artifact for artifact in manifest_payload["artifacts"]}
 
@@ -588,6 +601,12 @@ def build_library():
             sidecar_payload["adf_homogeneous_face_flux_dataset"],
             "homogeneous_face_flux",
         )
+        self.assertEqual(
+            face_flux_payload["decision"],
+            "openmc2donjon_face_flux_contract_passed",
+        )
+        self.assertEqual(face_flux_payload["surface_flux_dataset"], "heterogeneous_face_flux")
+        self.assertEqual(face_flux_payload["homogeneous_face_flux_dataset"], "homogeneous_face_flux")
         required_labels = {
             "mgxs",
             "mcompo",
@@ -597,6 +616,7 @@ def build_library():
             "adf-summary",
             "surface-flux",
             "homogeneous-face-flux",
+            "face-flux-check-summary",
             "adf-sidecar-summary",
             "recipe",
         }
@@ -604,6 +624,10 @@ def build_library():
         self.assertEqual(
             labels["adf-sidecar-summary"]["summary_decision"],
             "openmc2donjon_adf_sidecar_passed",
+        )
+        self.assertEqual(
+            labels["face-flux-check-summary"]["summary_decision"],
+            "openmc2donjon_face_flux_contract_passed",
         )
         self.assertEqual(labels["surface-flux"]["source"], str(surface_flux))
         self.assertEqual(labels["homogeneous-face-flux"]["source"], str(homogeneous_flux))

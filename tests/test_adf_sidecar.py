@@ -134,6 +134,143 @@ class AdfSidecarTests(unittest.TestCase):
         self.assertEqual(payload["median"], 2.0)
         self.assertEqual(payload["max"], 3.0)
 
+    def test_check_face_flux_passes_and_writes_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            mgxs = tmp / "mgxs.h5"
+            surface = tmp / "surface_flux.h5"
+            homogeneous = tmp / "homogeneous_face_flux.h5"
+            summary = tmp / "face_flux_check.json"
+            _write_minimal_mgxs(mgxs)
+            _write_flux_file(
+                surface,
+                "surface_flux/mean",
+                np.array(
+                    [
+                        [[2.0, 4.0], [3.0, 6.0]],
+                        [[4.0, 8.0], [5.0, 10.0]],
+                    ]
+                ),
+            )
+            _write_flux_file(
+                homogeneous,
+                "homogeneous_face_flux",
+                np.array(
+                    [
+                        [[1.0, 2.0], [1.5, 2.0]],
+                        [[2.0, 4.0], [10.0, 5.0]],
+                    ]
+                ),
+            )
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = cli_main(
+                    [
+                        "check-face-flux",
+                        str(mgxs),
+                        "--surface-flux",
+                        f"{surface}::surface_flux/mean",
+                        "--homogeneous-face-flux",
+                        f"{homogeneous}::homogeneous_face_flux",
+                        "--faces",
+                        "FD_XMIN,FD_XMAX",
+                        "--summary-json",
+                        str(summary),
+                    ]
+                )
+
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+
+        self.assertEqual(rc, 0)
+        self.assertIn("openmc2donjon_face_flux_contract_passed", stream.getvalue())
+        self.assertEqual(payload["schema"], "openmc2donjon.face-flux-contract.v1")
+        self.assertEqual(payload["decision"], "openmc2donjon_face_flux_contract_passed")
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["surface_flux"], str(surface))
+        self.assertEqual(payload["surface_flux_dataset"], "surface_flux/mean")
+        self.assertEqual(payload["homogeneous_face_flux"], str(homogeneous))
+        self.assertEqual(payload["homogeneous_face_flux_dataset"], "homogeneous_face_flux")
+        self.assertEqual(payload["face_names"], ["FD_XMIN", "FD_XMAX"])
+        self.assertEqual(payload["invalid_count"], 0)
+        self.assertEqual(payload["adf_ratio_min"], 0.5)
+        self.assertEqual(payload["adf_ratio_median"], 2.0)
+        self.assertEqual(payload["adf_ratio_max"], 3.0)
+
+    def test_check_face_flux_requires_explicit_invalid_fill(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            mgxs = tmp / "mgxs.h5"
+            surface = tmp / "surface_flux.h5"
+            homogeneous = tmp / "homogeneous_face_flux.h5"
+            summary = tmp / "face_flux_check.json"
+            _write_minimal_mgxs(mgxs)
+            _write_flux_file(surface, "surface_flux/mean", np.ones((2, 2, 2)))
+            _write_flux_file(homogeneous, "homogeneous_face_flux", np.zeros((2, 2, 2)))
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                rc = cli_main(
+                    [
+                        "check-face-flux",
+                        str(mgxs),
+                        "--surface-flux",
+                        str(surface),
+                        "--homogeneous-face-flux",
+                        str(homogeneous),
+                        "--faces",
+                        "FD_XMIN,FD_XMAX",
+                        "--summary-json",
+                        str(summary),
+                    ]
+                )
+
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+
+        self.assertEqual(rc, 1)
+        self.assertEqual(payload["decision"], "openmc2donjon_face_flux_contract_failed")
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["invalid_count"], 8)
+        self.assertEqual(payload["nonpositive_homogeneous_count"], 8)
+        self.assertIn("invalid bin", " ".join(payload["errors"]))
+
+    def test_check_face_flux_accepts_invalid_fill_policy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            mgxs = tmp / "mgxs.h5"
+            surface = tmp / "surface_flux.h5"
+            homogeneous = tmp / "homogeneous_face_flux.h5"
+            summary = tmp / "face_flux_check.json"
+            _write_minimal_mgxs(mgxs)
+            _write_flux_file(surface, "surface_flux/mean", np.ones((2, 2, 2)))
+            _write_flux_file(homogeneous, "homogeneous_face_flux", np.zeros((2, 2, 2)))
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                rc = cli_main(
+                    [
+                        "check-face-flux",
+                        str(mgxs),
+                        "--surface-flux",
+                        str(surface),
+                        "--homogeneous-face-flux",
+                        str(homogeneous),
+                        "--faces",
+                        "FD_XMIN,FD_XMAX",
+                        "--invalid-fill",
+                        "1.0",
+                        "--summary-json",
+                        str(summary),
+                    ]
+                )
+
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(payload["decision"], "openmc2donjon_face_flux_contract_passed")
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["invalid_count"], 8)
+        self.assertEqual(payload["invalid_filled_count"], 8)
+        self.assertEqual(payload["invalid_fill"], 1.0)
+
     def test_make_flux_ratio_sidecar_reads_mesh_layout(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)

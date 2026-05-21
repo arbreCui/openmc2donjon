@@ -56,6 +56,7 @@ LOW_ORDER_DRIVER_SUMMARY="$ADF_RUN_DIR/low_order_driver_summary.json"
 LOW_ORDER_DRIVER_CHECK_SUMMARY="$ADF_RUN_DIR/low_order_driver_check_summary.json"
 HOMOGENEOUS_FACE_FLUX="$ADF_RUN_DIR/homogeneous_face_flux.h5"
 HOMOGENEOUS_FACE_FLUX_SUMMARY="$ADF_RUN_DIR/homogeneous_face_flux_summary.json"
+FACE_FLUX_CHECK_SUMMARY="$ADF_RUN_DIR/face_flux_check_summary.json"
 ADF_SIDECAR="$ADF_RUN_DIR/adf_sidecar.h5"
 ADF_SIDECAR_SUMMARY="$ADF_RUN_DIR/adf_sidecar_summary.json"
 ADF_H5="$ADF_RUN_DIR/mgxs_library.h5"
@@ -72,6 +73,7 @@ EXTERNAL_ADF_CHECK_SUMMARY="$EXTERNAL_ADF_RUN_DIR/check_summary.json"
 EXTERNAL_ADF_INJECT_SUMMARY="$EXTERNAL_ADF_RUN_DIR/adf_summary.json"
 EXTERNAL_ADF_SIDECAR="$EXTERNAL_ADF_RUN_DIR/adf_sidecar.h5"
 EXTERNAL_ADF_SIDECAR_SUMMARY="$EXTERNAL_ADF_RUN_DIR/adf_sidecar_summary.json"
+EXTERNAL_FACE_FLUX_CHECK_SUMMARY="$EXTERNAL_ADF_RUN_DIR/face_flux_check_summary.json"
 EXTERNAL_ADF_MANIFEST="$EXTERNAL_ADF_RUN_DIR/manifest.json"
 ADF_FACES="FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX"
 SURFACE_FLUX_MU_EDGES="0.0,0.25,0.5,0.75,1.0"
@@ -287,7 +289,7 @@ OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
   --require-transport-dataset \
   "${SCATTER_ROW_BALANCE_ARGS[@]}"
 
-"$PYTHON_BIN" - "$SURFACE_FLUX" "$SURFACE_FLUX_SUMMARY" "$LOW_ORDER_DRIVER" "$LOW_ORDER_DRIVER_SUMMARY" "$LOW_ORDER_DRIVER_CHECK_SUMMARY" "$HOMOGENEOUS_FACE_FLUX" "$HOMOGENEOUS_FACE_FLUX_SUMMARY" "$ADF_SIDECAR" "$ADF_SIDECAR_SUMMARY" "$ADF_H5" "$ADF_MCO" "$ADF_RUN_SUMMARY" "$ADF_CHECK_SUMMARY" "$ADF_INJECT_SUMMARY" "$ADF_MANIFEST" <<'PY'
+"$PYTHON_BIN" - "$SURFACE_FLUX" "$SURFACE_FLUX_SUMMARY" "$LOW_ORDER_DRIVER" "$LOW_ORDER_DRIVER_SUMMARY" "$LOW_ORDER_DRIVER_CHECK_SUMMARY" "$HOMOGENEOUS_FACE_FLUX" "$HOMOGENEOUS_FACE_FLUX_SUMMARY" "$FACE_FLUX_CHECK_SUMMARY" "$ADF_SIDECAR" "$ADF_SIDECAR_SUMMARY" "$ADF_H5" "$ADF_MCO" "$ADF_RUN_SUMMARY" "$ADF_CHECK_SUMMARY" "$ADF_INJECT_SUMMARY" "$ADF_MANIFEST" <<'PY'
 import json
 from pathlib import Path
 import sys
@@ -304,14 +306,15 @@ low_order_driver_summary_path = Path(sys.argv[4])
 low_order_driver_check_summary_path = Path(sys.argv[5])
 homogeneous_face_flux = Path(sys.argv[6])
 homogeneous_face_flux_summary_path = Path(sys.argv[7])
-sidecar = Path(sys.argv[8])
-sidecar_summary_path = Path(sys.argv[9])
-mgxs = Path(sys.argv[10])
-mco = Path(sys.argv[11])
-summary_path = Path(sys.argv[12])
-check_summary_path = Path(sys.argv[13])
-adf_summary_path = Path(sys.argv[14])
-manifest_path = Path(sys.argv[15])
+face_flux_check_summary_path = Path(sys.argv[8])
+sidecar = Path(sys.argv[9])
+sidecar_summary_path = Path(sys.argv[10])
+mgxs = Path(sys.argv[11])
+mco = Path(sys.argv[12])
+summary_path = Path(sys.argv[13])
+check_summary_path = Path(sys.argv[14])
+adf_summary_path = Path(sys.argv[15])
+manifest_path = Path(sys.argv[16])
 faces = ("FD_XMIN", "FD_XMAX", "FD_YMIN", "FD_YMAX")
 
 surface_flux_summary = json.loads(surface_flux_summary_path.read_text(encoding="utf-8"))
@@ -385,6 +388,20 @@ with h5py.File(homogeneous_face_flux, "r") as h5:
         raise SystemExit(f"unexpected homogeneous face-flux shape: {values.shape}")
     if not np.all(np.isfinite(values)) or np.any(values <= 0.0):
         raise SystemExit("homogeneous face flux is not positive finite")
+
+face_flux_check_summary = json.loads(
+    face_flux_check_summary_path.read_text(encoding="utf-8")
+)
+if face_flux_check_summary["decision"] != "openmc2donjon_face_flux_contract_passed":
+    raise SystemExit("face-flux contract summary did not pass")
+if face_flux_check_summary["schema"] != "openmc2donjon.face-flux-contract.v1":
+    raise SystemExit("face-flux contract summary schema mismatch")
+if tuple(face_flux_check_summary["face_names"]) != faces:
+    raise SystemExit("face-flux contract summary face names mismatch")
+if face_flux_check_summary["surface_flux_dataset"] != "surface_flux/mean":
+    raise SystemExit("face-flux contract surface dataset mismatch")
+if face_flux_check_summary["homogeneous_face_flux_dataset"] != "homogeneous_face_flux":
+    raise SystemExit("face-flux contract homogeneous dataset mismatch")
 
 sidecar_summary = json.loads(sidecar_summary_path.read_text(encoding="utf-8"))
 if sidecar_summary["decision"] != "openmc2donjon_adf_sidecar_passed":
@@ -465,6 +482,7 @@ required = {
     "low-order-driver-check-summary",
     "homogeneous-face-flux",
     "homogeneous-face-flux-summary",
+    "face-flux-check-summary",
 }
 if set(labels) != required:
     raise SystemExit(f"unexpected ADF manifest labels: {sorted(labels)}")
@@ -477,6 +495,7 @@ expected_summary_decisions = {
     "low-order-driver-summary": "openmc2donjon_low_order_driver_passed",
     "low-order-driver-check-summary": "openmc2donjon_low_order_driver_contract_passed",
     "homogeneous-face-flux-summary": "openmc2donjon_homogeneous_face_flux_passed",
+    "face-flux-check-summary": "openmc2donjon_face_flux_contract_passed",
     "adf-sidecar-summary": "openmc2donjon_adf_sidecar_passed",
 }
 for label, decision in expected_summary_decisions.items():
@@ -509,7 +528,7 @@ OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
   --require-transport-dataset \
   "${SCATTER_ROW_BALANCE_ARGS[@]}"
 
-"$PYTHON_BIN" - "$ADF_H5" "$ADF_SIDECAR" "$EXTERNAL_ADF_H5" "$EXTERNAL_ADF_SIDECAR" "$EXTERNAL_ADF_MCO" "$EXTERNAL_ADF_RUN_SUMMARY" "$EXTERNAL_ADF_CHECK_SUMMARY" "$EXTERNAL_ADF_INJECT_SUMMARY" "$EXTERNAL_ADF_SIDECAR_SUMMARY" "$EXTERNAL_ADF_MANIFEST" "$SURFACE_FLUX" "$HOMOGENEOUS_FACE_FLUX" <<'PY'
+"$PYTHON_BIN" - "$ADF_H5" "$ADF_SIDECAR" "$EXTERNAL_ADF_H5" "$EXTERNAL_ADF_SIDECAR" "$EXTERNAL_ADF_MCO" "$EXTERNAL_ADF_RUN_SUMMARY" "$EXTERNAL_ADF_CHECK_SUMMARY" "$EXTERNAL_ADF_INJECT_SUMMARY" "$EXTERNAL_ADF_SIDECAR_SUMMARY" "$EXTERNAL_FACE_FLUX_CHECK_SUMMARY" "$EXTERNAL_ADF_MANIFEST" "$SURFACE_FLUX" "$HOMOGENEOUS_FACE_FLUX" <<'PY'
 import json
 from pathlib import Path
 import sys
@@ -528,9 +547,10 @@ summary_path = Path(sys.argv[6])
 check_summary_path = Path(sys.argv[7])
 adf_summary_path = Path(sys.argv[8])
 sidecar_summary_path = Path(sys.argv[9])
-manifest_path = Path(sys.argv[10])
-surface_flux = Path(sys.argv[11])
-homogeneous_face_flux = Path(sys.argv[12])
+face_flux_check_summary_path = Path(sys.argv[10])
+manifest_path = Path(sys.argv[11])
+surface_flux = Path(sys.argv[12])
+homogeneous_face_flux = Path(sys.argv[13])
 faces = ("FD_XMIN", "FD_XMAX", "FD_YMIN", "FD_YMAX")
 
 with h5py.File(reference_sidecar, "r") as ref, h5py.File(candidate_sidecar, "r") as out:
@@ -592,6 +612,22 @@ if sidecar_summary["adf_homogeneous_face_flux"] != str(homogeneous_face_flux):
 if sidecar_summary["adf_homogeneous_face_flux_dataset"] != "homogeneous_face_flux":
     raise SystemExit("external ADF sidecar homogeneous-flux dataset mismatch")
 
+face_flux_check_summary = json.loads(
+    face_flux_check_summary_path.read_text(encoding="utf-8")
+)
+if face_flux_check_summary["decision"] != "openmc2donjon_face_flux_contract_passed":
+    raise SystemExit("external face-flux contract summary did not pass")
+if face_flux_check_summary["schema"] != "openmc2donjon.face-flux-contract.v1":
+    raise SystemExit("external face-flux contract summary schema mismatch")
+if face_flux_check_summary["surface_flux"] != str(surface_flux):
+    raise SystemExit("external face-flux contract surface source mismatch")
+if face_flux_check_summary["surface_flux_dataset"] != "surface_flux/mean":
+    raise SystemExit("external face-flux contract surface dataset mismatch")
+if face_flux_check_summary["homogeneous_face_flux"] != str(homogeneous_face_flux):
+    raise SystemExit("external face-flux contract homogeneous source mismatch")
+if face_flux_check_summary["homogeneous_face_flux_dataset"] != "homogeneous_face_flux":
+    raise SystemExit("external face-flux contract homogeneous dataset mismatch")
+
 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 labels = {artifact["label"]: artifact for artifact in manifest["artifacts"]}
 required = {
@@ -602,6 +638,7 @@ required = {
     "adf-source",
     "adf-summary",
     "adf-sidecar-summary",
+    "face-flux-check-summary",
     "surface-flux",
     "homogeneous-face-flux",
     "recipe",
@@ -623,6 +660,8 @@ if labels["homogeneous-face-flux"]["source"] != str(homogeneous_face_flux):
     raise SystemExit("external ADF manifest homogeneous-face-flux source mismatch")
 if labels["adf-sidecar-summary"].get("summary_decision") != "openmc2donjon_adf_sidecar_passed":
     raise SystemExit("external ADF manifest did not record sidecar decision")
+if labels["face-flux-check-summary"].get("summary_decision") != "openmc2donjon_face_flux_contract_passed":
+    raise SystemExit("external ADF manifest did not record face-flux contract decision")
 
 print(
     "production minicase external ADF readback OK: "

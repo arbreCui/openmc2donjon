@@ -30,6 +30,7 @@ one OpenMC MGXS domain -> one cross-section set -> one DONJON mixture
 | `openmc2donjon.openmc_surface_flux` | OpenMC mesh-surface angular-current tally exporter for flux-ratio ADF sidecars. |
 | `openmc2donjon.low_order_driver` | Canonical low-order driver volume-flux/net-current handoff for homogeneous face-flux reconstruction. |
 | `openmc2donjon.homogeneous_face_flux` | Diffusion-current homogeneous face-flux reconstruction for the flux-ratio ADF denominator. |
+| `openmc2donjon.face_flux_check` | Contract preflight for heterogeneous and homogeneous face-flux inputs before ADF sidecar generation. |
 | `openmc2donjon.adf_augment` | ADF/DF sidecar injector for adding computed discontinuity factors to an MGXS HDF5 handoff. |
 | `openmc2donjon.multicompo` | `L_MULTICOMPO` container writer for one-state spatial-domain MGXS data, with experimental `BURN`-axis histories. |
 | `openmc2donjon.macrolib` | root `L_MACROLIB` writer for direct DONJON ingestion. |

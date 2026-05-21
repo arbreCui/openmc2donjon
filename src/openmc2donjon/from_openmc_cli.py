@@ -12,6 +12,7 @@ from . import __version__
 from .adf_augment import augment_hdf5_with_adf, parse_faces
 from .adf_sidecar import DEFAULT_CARTESIAN_FACES, create_flux_ratio_adf_sidecar
 from .bundle import ArtifactSpec, bundle_artifacts, parse_extra_artifact
+from .face_flux_check import check_face_flux
 from .from_openmc_summary import FROM_OPENMC_SUMMARY_SCHEMA
 from .homogeneous_face_flux import create_homogeneous_face_flux
 from .low_order_driver import check_low_order_driver, create_low_order_driver
@@ -481,6 +482,10 @@ def _run_dry_run(args: argparse.Namespace) -> bool:
                 f"{paths['low_order_driver_check_summary']} (not written)"
             )
             print(f"    homogeneous_face_flux: {paths['homogeneous_face_flux']} (not written)")
+        print(
+            f"    face_flux_check_summary: "
+            f"{paths['face_flux_check_summary']} (not written)"
+        )
         print(f"    adf_sidecar: {paths['adf_sidecar']} (not written)")
         print(f"    adf_sidecar_summary: {paths['adf_sidecar_summary']} (not written)")
     else:
@@ -682,7 +687,13 @@ def _prepare_run_dir(
             homogeneous_destination = run_dir / homogeneous_source.name
             if not _same_path(homogeneous_source, homogeneous_destination):
                 managed_paths.append(homogeneous_destination)
-        managed_paths.extend([paths["adf_sidecar"], paths["adf_sidecar_summary"]])
+        managed_paths.extend(
+            [
+                paths["face_flux_check_summary"],
+                paths["adf_sidecar"],
+                paths["adf_sidecar_summary"],
+            ]
+        )
         if args.adf_summary_json is not None:
             managed_paths.append(args.adf_summary_json)
         if args.adf_surface_flux is not None:
@@ -820,6 +831,19 @@ def _build_flux_ratio_adf(
     else:
         homogeneous_face_flux = args.homogeneous_face_flux
 
+    face_flux_check = check_face_flux(
+        hdf5_path,
+        surface_flux=surface_flux,
+        homogeneous_face_flux=homogeneous_face_flux,
+        faces=faces,
+        invalid_fill=args.adf_invalid_fill,
+        clip_min=args.adf_clip_min,
+        clip_max=args.adf_clip_max,
+        summary_json=paths["face_flux_check_summary"],
+    )
+    if not face_flux_check.ok:
+        raise ValueError("face-flux contract check failed")
+
     create_flux_ratio_adf_sidecar(
         hdf5_path,
         paths["adf_sidecar"],
@@ -866,6 +890,12 @@ def _build_flux_ratio_adf(
             )
         )
     generated_artifacts.append(
+        ArtifactSpec(
+            label="face-flux-check-summary",
+            source=paths["face_flux_check_summary"],
+        )
+    )
+    generated_artifacts.append(
         ArtifactSpec(label="adf-sidecar-summary", source=paths["adf_sidecar_summary"])
     )
     return paths["adf_sidecar"], generated_artifacts
@@ -881,6 +911,7 @@ def _flux_ratio_adf_paths(args: argparse.Namespace) -> dict[str, Path]:
         "low_order_driver_check_summary": run_dir / "low_order_driver_check_summary.json",
         "homogeneous_face_flux": run_dir / "homogeneous_face_flux.h5",
         "homogeneous_face_flux_summary": run_dir / "homogeneous_face_flux_summary.json",
+        "face_flux_check_summary": run_dir / "face_flux_check_summary.json",
         "adf_sidecar": run_dir / "adf_sidecar.h5",
         "adf_sidecar_summary": run_dir / "adf_sidecar_summary.json",
     }

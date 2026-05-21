@@ -262,6 +262,11 @@ openmc2donjon make-homogeneous-face-flux mgxs_library.h5 \
   --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
   --face-widths 4.0
 
+openmc2donjon check-face-flux mgxs_library.h5 \
+  --surface-flux openmc_surface_flux.h5 \
+  --homogeneous-face-flux homogeneous_face_flux.h5 \
+  --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX
+
 openmc2donjon make-adf-sidecar mgxs_library.h5 \
   -o adf_sidecar.h5 \
   --mode flux-ratio \
@@ -278,8 +283,8 @@ attributes `volume_flux_dataset` and `net_current_dataset`, or pass explicit
 `--volume-flux FILE::dataset` and `--net-current FILE::dataset`.
 
 For a managed production run directory, `openmc2donjon-from-openmc` can build
-the same flux-ratio ADF sidecar, run the low-order contract check, inject ADF,
-and bundle the side artifacts:
+the same flux-ratio ADF sidecar, run the low-order and face-flux contract
+checks, inject ADF, and bundle the side artifacts:
 
 ```sh
 openmc2donjon-from-openmc \

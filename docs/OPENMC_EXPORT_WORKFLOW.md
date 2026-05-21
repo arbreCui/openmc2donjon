@@ -147,6 +147,11 @@ openmc2donjon make-homogeneous-face-flux runs/case1/mgxs_library.h5 \
   --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
   --face-widths 4.0
 
+openmc2donjon check-face-flux runs/case1/mgxs_library.h5 \
+  --surface-flux runs/case1/openmc_surface_flux.h5 \
+  --homogeneous-face-flux runs/case1/homogeneous_face_flux.h5 \
+  --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX
+
 openmc2donjon make-adf-sidecar runs/case1/mgxs_library.h5 \
   -o runs/case1/adf_sidecar.h5 \
   --mode flux-ratio \
@@ -158,7 +163,7 @@ openmc2donjon make-adf-sidecar runs/case1/mgxs_library.h5 \
 For the one-step production path, let `openmc2donjon-from-openmc` build and
 inject the sidecar inside the managed run directory. It also writes and bundles
 the surface-flux, low-order driver, low-order contract check, homogeneous
-face-flux, and ADF-sidecar summaries:
+face-flux, face-flux contract check, and ADF-sidecar summaries:
 
 ```sh
 openmc2donjon-from-openmc \

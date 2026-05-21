@@ -361,6 +361,23 @@ It reads volume flux datasets named `/volume_flux/average`, `/volume_flux`,
 `/current_density`. Explicit `FILE::/dataset/path` references are also
 accepted. The output is `/homogeneous_face_flux` with layout `(M, F, G)`.
 
+Before making the final ADF sidecar, `check-face-flux` validates the numerator
+and denominator handoff together:
+
+```sh
+openmc2donjon check-face-flux mgxs_library.h5 \
+  --surface-flux openmc_surface_flux.h5 \
+  --homogeneous-face-flux homogeneous_face_flux.h5 \
+  --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
+  --summary-json face_flux_check_summary.json
+```
+
+The check requires matching MGXS mixture/group metadata, matching face names,
+positive finite heterogeneous and homogeneous fluxes, and a positive finite
+ratio. If invalid ratio bins are expected, they must be acknowledged with an
+explicit `--invalid-fill` policy; the JSON summary records the invalid and
+filled bin counts plus the same clip bounds used by sidecar generation.
+
 The sidecar can either reuse the normal MGXS layout with
 `/mixtures/<domain_name>/adf`, or provide a compact root dataset:
 
