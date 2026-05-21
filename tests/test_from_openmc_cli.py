@@ -13,7 +13,11 @@ import h5py
 import numpy as np
 
 from openmc2donjon import lcm_ascii
-from openmc2donjon.from_openmc_cli import build_parser, main as from_openmc_main
+from openmc2donjon.from_openmc_cli import (
+    HANDOFF_SUMMARY_SCHEMA,
+    build_parser,
+    main as from_openmc_main,
+)
 from openmc2donjon.from_openmc_summary import (
     FROM_OPENMC_SUMMARY_SCHEMA,
     validate_from_openmc_summary,
@@ -270,11 +274,13 @@ def build_library():
             check_summary = run_dir / "check_summary.json"
             manifest = run_dir / "manifest.json"
             bundle_validation = run_dir / "bundle_validation_summary.json"
+            handoff_summary = run_dir / "handoff_summary.json"
             recipe_copy = run_dir / recipe.name
             conversion_payload = json.loads(summary.read_text(encoding="utf-8"))
             check_payload = json.loads(check_summary.read_text(encoding="utf-8"))
             manifest_payload = json.loads(manifest.read_text(encoding="utf-8"))
             validation_payload = json.loads(bundle_validation.read_text(encoding="utf-8"))
+            handoff_payload = json.loads(handoff_summary.read_text(encoding="utf-8"))
             standard_paths_exist = [
                 path.exists()
                 for path in (
@@ -284,6 +290,7 @@ def build_library():
                     check_summary,
                     manifest,
                     bundle_validation,
+                    handoff_summary,
                     recipe_copy,
                 )
             ]
@@ -305,8 +312,26 @@ def build_library():
             "openmc2donjon_bundle_validation_passed",
         )
         self.assertTrue(validation_payload["ok"])
+        self.assertEqual(handoff_payload["schema"], HANDOFF_SUMMARY_SCHEMA)
+        self.assertEqual(handoff_payload["decision"], "openmc2donjon_handoff_passed")
+        self.assertTrue(handoff_payload["ok"])
+        self.assertEqual(handoff_payload["manifest"], str(manifest))
+        self.assertEqual(
+            handoff_payload["bundle_validation_summary_json"],
+            str(bundle_validation),
+        )
+        self.assertTrue(handoff_payload["bundle_validation_passed"])
+        self.assertEqual(
+            handoff_payload["bundle_validation_decision"],
+            validation_payload["decision"],
+        )
+        self.assertEqual(handoff_payload["artifact_count"], 5)
         labels = {artifact["label"]: artifact for artifact in manifest_payload["artifacts"]}
         self.assertEqual(set(labels), {"mgxs", "mcompo", "run-summary", "check-summary", "recipe"})
+        self.assertEqual(
+            set(handoff_payload["artifact_labels"]),
+            {"mgxs", "mcompo", "run-summary", "check-summary", "recipe"},
+        )
         self.assertEqual(labels["run-summary"]["summary_schema"], FROM_OPENMC_SUMMARY_SCHEMA)
         self.assertEqual(
             labels["check-summary"]["summary_decision"],
@@ -830,6 +855,15 @@ def build_library():
         self.assertIn(f"summary_json: {run_dir / 'run_summary.json'} (not written)", rendered)
         self.assertIn(
             f"check_summary_json: {run_dir / 'check_summary.json'} (not written)",
+            rendered,
+        )
+        self.assertIn(
+            f"bundle_validation_summary_json: "
+            f"{run_dir / 'bundle_validation_summary.json'} (not written)",
+            rendered,
+        )
+        self.assertIn(
+            f"handoff_summary_json: {run_dir / 'handoff_summary.json'} (not written)",
             rendered,
         )
         self.assertFalse(run_dir_exists)
