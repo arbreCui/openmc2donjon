@@ -32,6 +32,7 @@ from .recipe_dry_run_report import (
     print_recipe_dry_run_summary,
     print_strict_dry_run_decision,
 )
+from .sph_augment import augment_hdf5_with_sph, create_macrolib_sph_sidecar
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -164,6 +165,43 @@ def build_parser() -> argparse.ArgumentParser:
         "--adf-source-label",
         default=None,
         help="override root adf_source provenance attribute when injecting --adf-source",
+    )
+    parser.add_argument(
+        "--sph-source",
+        type=Path,
+        default=None,
+        help="HDF5 sidecar containing SPH/NSPH factors to inject before conversion",
+    )
+    parser.add_argument(
+        "--sph-macrolib",
+        type=Path,
+        default=None,
+        help=(
+            "L_MACROLIB ASCII source containing GROUP/*/NSPH; with --run-dir, "
+            "a canonical sph_sidecar.h5 is built and injected"
+        ),
+    )
+    parser.add_argument(
+        "--sph-kind",
+        default=None,
+        help="override root sph_kind provenance attribute when injecting SPH",
+    )
+    parser.add_argument(
+        "--sph-real",
+        choices=("true", "false"),
+        default=None,
+        help="override root sph_real provenance attribute when injecting SPH",
+    )
+    parser.add_argument(
+        "--sph-applied",
+        choices=("true", "false"),
+        default=None,
+        help="override root sph_applied provenance attribute when injecting SPH",
+    )
+    parser.add_argument(
+        "--sph-source-label",
+        default=None,
+        help="override root sph_source provenance attribute when injecting SPH",
     )
     parser.add_argument(
         "--build-flux-ratio-adf",
@@ -319,6 +357,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="with --check, require ADF data for every mixture",
     )
     parser.add_argument(
+        "--require-sph",
+        action="store_true",
+        help="with --check, require SPH data for every mixture",
+    )
+    parser.add_argument(
         "--expected-adf-faces",
         default=None,
         help="with --check, comma-separated ADF face names expected on every ADF-bearing mixture",
@@ -366,6 +409,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="with --adf-source, write a machine-readable ADF injection summary JSON",
     )
     parser.add_argument(
+        "--sph-summary-json",
+        type=Path,
+        default=None,
+        help="with --sph-source/--sph-macrolib, write a machine-readable SPH injection summary JSON",
+    )
+    parser.add_argument(
         "--extra-artifact",
         action="append",
         default=[],
@@ -381,6 +430,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.build_flux_ratio_adf:
         args.check = True
         args.require_adf = True
+    if args.sph_source is not None or args.sph_macrolib is not None:
+        args.check = True
+        args.require_sph = True
     _apply_run_dir_defaults(args)
     if args.extra_artifact and args.run_dir is None:
         parser.error("--extra-artifact requires --run-dir")
@@ -388,6 +440,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.expected_adf_faces is None and args.adf_faces is not None:
         args.expected_adf_faces = args.adf_faces
     _validate_flux_ratio_adf_args(args, parser)
+    _validate_sph_args(args, parser)
     if args.strict_dry_run and not args.dry_run:
         parser.error("--strict-dry-run requires --dry-run")
     try:
@@ -490,6 +543,23 @@ def _run_dry_run(args: argparse.Namespace) -> bool:
         print(f"    adf_sidecar_summary: {paths['adf_sidecar_summary']} (not written)")
     else:
         print("  flux_ratio_adf: disabled")
+    if args.sph_source is not None:
+        print(f"  sph_source: {args.sph_source} (not read)")
+        if args.sph_summary_json is None:
+            print("  sph_summary_json: none")
+        else:
+            print(f"  sph_summary_json: {args.sph_summary_json} (not written)")
+    elif args.sph_macrolib is not None:
+        paths = _sph_paths(args)
+        print(f"  sph_macrolib: {args.sph_macrolib} (not read)")
+        print(f"  sph_sidecar: {paths['sph_sidecar']} (not written)")
+        print(f"  sph_sidecar_summary: {paths['sph_sidecar_summary']} (not written)")
+        if args.sph_summary_json is None:
+            print("  sph_summary_json: none")
+        else:
+            print(f"  sph_summary_json: {args.sph_summary_json} (not written)")
+    else:
+        print("  sph_source: none")
     if args.extra_artifact:
         print("  extra_artifacts:")
         for artifact in _extra_artifacts_from_args(args):
@@ -505,6 +575,7 @@ def _run_dry_run(args: argparse.Namespace) -> bool:
         print(f"    require_volume: {_yes_no(args.require_volume)}")
         print(f"    require_transport_dataset: {_yes_no(args.require_transport_dataset)}")
         print(f"    require_adf: {_yes_no(args.require_adf)}")
+        print(f"    require_sph: {_yes_no(args.require_sph)}")
         print(f"    expected_adf_faces: {_render_optional_value(args.expected_adf_faces)}")
         print(
             "    scatter_row_balance_warn: "
@@ -558,12 +629,22 @@ def _run_pipeline(
     if adf_source is not None:
         _inject_adf(args, hdf5_path, adf_source=adf_source)
 
+    if args.sph_macrolib is not None:
+        args._generated_sph_source, args._generated_sph_artifacts = _build_macrolib_sph(
+            args,
+            hdf5_path,
+        )
+    sph_source = _effective_sph_source(args)
+    if sph_source is not None:
+        _inject_sph(args, hdf5_path, sph_source=sph_source)
+
     if args.check:
         ok = run_preflight(
             [hdf5_path],
             output_format=args.format,
             output_path=output_path,
             require_adf=args.require_adf,
+            require_sph=args.require_sph,
             expected_adf_faces=args.expected_adf_faces,
             require_transport_dataset=args.require_transport_dataset,
             require_volume=args.require_volume,
@@ -642,6 +723,8 @@ def _apply_run_dir_defaults(args: argparse.Namespace) -> None:
         args.check_summary_json = run_dir / "check_summary.json"
     if (args.adf_source is not None or args.build_flux_ratio_adf) and args.adf_summary_json is None:
         args.adf_summary_json = run_dir / "adf_summary.json"
+    if (args.sph_source is not None or args.sph_macrolib is not None) and args.sph_summary_json is None:
+        args.sph_summary_json = run_dir / "sph_summary.json"
 
 
 def _prepare_run_dir(
@@ -668,6 +751,23 @@ def _prepare_run_dir(
         adf_source_destination = run_dir / args.adf_source.name
         if not _same_path(args.adf_source, adf_source_destination):
             managed_paths.append(adf_source_destination)
+    if args.sph_source is not None:
+        managed_paths.append(args.sph_summary_json)
+        sph_source_destination = run_dir / args.sph_source.name
+        if not _same_path(args.sph_source, sph_source_destination):
+            managed_paths.append(sph_source_destination)
+    if args.sph_macrolib is not None:
+        paths = _sph_paths(args)
+        managed_paths.extend(
+            [
+                args.sph_summary_json,
+                paths["sph_sidecar"],
+                paths["sph_sidecar_summary"],
+            ]
+        )
+        sph_macrolib_destination = run_dir / args.sph_macrolib.name
+        if not _same_path(args.sph_macrolib, sph_macrolib_destination):
+            managed_paths.append(sph_macrolib_destination)
     if args.build_flux_ratio_adf:
         paths = _flux_ratio_adf_paths(args)
         if args.export_surface_flux:
@@ -750,6 +850,27 @@ def _inject_adf(args: argparse.Namespace, hdf5_path: Path, *, adf_source: Path) 
         )
         augmented_path.replace(hdf5_path)
     print(f"injected ADF into HDF5: {hdf5_path}")
+
+
+def _inject_sph(args: argparse.Namespace, hdf5_path: Path, *, sph_source: Path) -> None:
+    with tempfile.TemporaryDirectory(
+        prefix=f"{hdf5_path.name}.sph.",
+        dir=str(hdf5_path.parent),
+    ) as tmpdir:
+        augmented_path = Path(tmpdir) / hdf5_path.name
+        augment_hdf5_with_sph(
+            hdf5_path,
+            sph_source=sph_source,
+            output_h5=augmented_path,
+            force=True,
+            sph_kind=args.sph_kind,
+            sph_real=args.sph_real,
+            sph_applied=args.sph_applied,
+            sph_source_label=args.sph_source_label,
+            summary_json=args.sph_summary_json,
+        )
+        augmented_path.replace(hdf5_path)
+    print(f"injected SPH into HDF5: {hdf5_path}")
 
 
 def _build_flux_ratio_adf(
@@ -917,9 +1038,43 @@ def _flux_ratio_adf_paths(args: argparse.Namespace) -> dict[str, Path]:
     }
 
 
+def _sph_paths(args: argparse.Namespace) -> dict[str, Path]:
+    run_dir = args.run_dir
+    return {
+        "sph_sidecar": run_dir / "sph_sidecar.h5",
+        "sph_sidecar_summary": run_dir / "sph_sidecar_summary.json",
+    }
+
+
 def _effective_adf_source(args: argparse.Namespace) -> Path | None:
     generated = getattr(args, "_generated_adf_source", None)
     return generated or args.adf_source
+
+
+def _build_macrolib_sph(
+    args: argparse.Namespace,
+    hdf5_path: Path,
+) -> tuple[Path, list[ArtifactSpec]]:
+    paths = _sph_paths(args)
+    create_macrolib_sph_sidecar(
+        hdf5_path,
+        paths["sph_sidecar"],
+        macrolib_ascii=args.sph_macrolib,
+        force=True,
+        sph_kind=args.sph_kind or "macrolib-nsph",
+        sph_real=_optional_bool(args.sph_real, default=True),
+        sph_applied=_optional_bool(args.sph_applied, default=False),
+        summary_json=paths["sph_sidecar_summary"],
+    )
+    return paths["sph_sidecar"], [
+        ArtifactSpec(label="sph-macrolib", source=args.sph_macrolib),
+        ArtifactSpec(label="sph-sidecar-summary", source=paths["sph_sidecar_summary"]),
+    ]
+
+
+def _effective_sph_source(args: argparse.Namespace) -> Path | None:
+    generated = getattr(args, "_generated_sph_source", None)
+    return generated or args.sph_source
 
 
 def _write_run_dir_manifest(
@@ -943,6 +1098,12 @@ def _write_run_dir_manifest(
         if args.adf_summary_json is not None:
             artifacts.append(ArtifactSpec(label="adf-summary", source=args.adf_summary_json))
     artifacts.extend(getattr(args, "_generated_adf_artifacts", []))
+    sph_source = _effective_sph_source(args)
+    if sph_source is not None:
+        artifacts.append(ArtifactSpec(label="sph-source", source=sph_source))
+        if args.sph_summary_json is not None:
+            artifacts.append(ArtifactSpec(label="sph-summary", source=args.sph_summary_json))
+    artifacts.extend(getattr(args, "_generated_sph_artifacts", []))
     artifacts.extend(_extra_artifacts_from_args(args))
     artifacts.append(ArtifactSpec(label="recipe", source=recipe_path))
     bundle_artifacts(
@@ -1068,6 +1229,26 @@ def _validate_flux_ratio_adf_args(
             parser.error("--adf-clip-min must be <= --adf-clip-max")
     if args.adf_invalid_fill is not None and args.adf_invalid_fill <= 0.0:
         parser.error("--adf-invalid-fill must be positive")
+
+
+def _validate_sph_args(
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+) -> None:
+    if args.sph_source is not None and args.sph_macrolib is not None:
+        parser.error("--sph-source and --sph-macrolib are mutually exclusive")
+    has_sph_source = args.sph_source is not None or args.sph_macrolib is not None
+    dependent_options = (
+        args.sph_kind is not None
+        or args.sph_real is not None
+        or args.sph_applied is not None
+        or args.sph_source_label is not None
+        or args.sph_summary_json is not None
+    )
+    if not has_sph_source and dependent_options:
+        parser.error("SPH provenance/summary options require --sph-source or --sph-macrolib")
+    if args.sph_macrolib is not None and args.run_dir is None:
+        parser.error("--sph-macrolib requires --run-dir so its generated sidecar is bundled")
 
 
 def _hdf5_reference_file(reference: str | Path) -> Path:

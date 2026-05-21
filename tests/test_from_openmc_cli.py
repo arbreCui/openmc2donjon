@@ -409,6 +409,158 @@ def build_library():
         self.assertIn("adf-summary", labels)
         self.assertEqual(labels["adf-summary"]["summary_schema"], "openmc2donjon.adf-augment.v1")
 
+    def test_run_dir_injects_sph_sidecar_before_checked_conversion(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        recipe = repo_root / "examples/recipe_export_smoke/minimal_recipe.py"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            statepoint = tmp / "statepoint.fake.h5"
+            sph_source = tmp / "sph_sidecar.h5"
+            run_dir = tmp / "production_run"
+            statepoint.write_text("fake statepoint\n", encoding="utf-8")
+            _write_sph_sidecar(sph_source)
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = from_openmc_main(
+                    [
+                        "--recipe",
+                        str(recipe),
+                        "--statepoint",
+                        str(statepoint),
+                        "--run-dir",
+                        str(run_dir),
+                        "--sph-source",
+                        str(sph_source),
+                        "--sph-kind",
+                        "production-sph",
+                        "--sph-real",
+                        "true",
+                        "--sph-applied",
+                        "false",
+                        "--check",
+                        "--require-volume",
+                        "--require-transport-dataset",
+                    ]
+                )
+
+            hdf5 = run_dir / "mgxs_library.h5"
+            output = run_dir / "out.mcompo.txt"
+            sph_summary = run_dir / "sph_summary.json"
+            check_summary = run_dir / "check_summary.json"
+            manifest = run_dir / "manifest.json"
+            with h5py.File(hdf5, "r") as h5:
+                fuel_sph = h5["mixtures/FUEL_A/sph"][:]
+                mod_sph = h5["mixtures/MOD_A/sph"][:]
+                attrs = dict(h5.attrs)
+            sph_payload = json.loads(sph_summary.read_text(encoding="utf-8"))
+            check_payload = json.loads(check_summary.read_text(encoding="utf-8"))
+            manifest_payload = json.loads(manifest.read_text(encoding="utf-8"))
+            labels = {artifact["label"]: artifact for artifact in manifest_payload["artifacts"]}
+            paths_exist = [hdf5.exists(), output.exists(), sph_summary.exists()]
+
+        self.assertEqual(rc, 0)
+        self.assertIn("injected SPH into HDF5", stream.getvalue())
+        self.assertIn("mgxs_input_contract_passed", stream.getvalue())
+        self.assertTrue(all(paths_exist))
+        np.testing.assert_allclose(fuel_sph, [1.10, 0.90])
+        np.testing.assert_allclose(mod_sph, [0.95, 1.05])
+        self.assertEqual(attrs["sph_kind"], "production-sph")
+        self.assertTrue(bool(attrs["sph_real"]))
+        self.assertFalse(bool(attrs["sph_applied"]))
+        self.assertEqual(sph_payload["decision"], "openmc2donjon_sph_augment_passed")
+        self.assertEqual(check_payload["decision"], "mgxs_input_contract_passed")
+        self.assertIn("sph-source", labels)
+        self.assertIn("sph-summary", labels)
+        self.assertEqual(labels["sph-summary"]["summary_schema"], "openmc2donjon.sph-augment.v1")
+
+    def test_run_dir_builds_sph_sidecar_from_macrolib(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        recipe = repo_root / "examples/recipe_export_smoke/minimal_recipe.py"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            statepoint = tmp / "statepoint.fake.h5"
+            sph_source = tmp / "sph_sidecar.h5"
+            donor_hdf5 = tmp / "donor_mgxs.h5"
+            donor_macrolib = tmp / "donor.macrolib.txt"
+            run_dir = tmp / "production_run"
+            statepoint.write_text("fake statepoint\n", encoding="utf-8")
+            _write_sph_sidecar(sph_source)
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                donor_rc = from_openmc_main(
+                    [
+                        "--recipe",
+                        str(recipe),
+                        "--statepoint",
+                        str(statepoint),
+                        "--keep-hdf5",
+                        str(donor_hdf5),
+                        "--format",
+                        "macrolib",
+                        "-o",
+                        str(donor_macrolib),
+                        "--sph-source",
+                        str(sph_source),
+                    ]
+                )
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = from_openmc_main(
+                    [
+                        "--recipe",
+                        str(recipe),
+                        "--statepoint",
+                        str(statepoint),
+                        "--run-dir",
+                        str(run_dir),
+                        "--sph-macrolib",
+                        str(donor_macrolib),
+                        "--check",
+                        "--require-volume",
+                        "--require-transport-dataset",
+                    ]
+                )
+
+            hdf5 = run_dir / "mgxs_library.h5"
+            sidecar = run_dir / "sph_sidecar.h5"
+            sidecar_summary = run_dir / "sph_sidecar_summary.json"
+            sph_summary = run_dir / "sph_summary.json"
+            manifest = run_dir / "manifest.json"
+            with h5py.File(hdf5, "r") as h5:
+                fuel_sph = h5["mixtures/FUEL_A/sph"][:]
+                attrs = dict(h5.attrs)
+            sidecar_payload = json.loads(sidecar_summary.read_text(encoding="utf-8"))
+            sph_payload = json.loads(sph_summary.read_text(encoding="utf-8"))
+            manifest_payload = json.loads(manifest.read_text(encoding="utf-8"))
+            labels = {artifact["label"]: artifact for artifact in manifest_payload["artifacts"]}
+            sidecar_exists = sidecar.exists()
+
+        self.assertEqual(donor_rc, 0)
+        self.assertEqual(rc, 0)
+        self.assertTrue(sidecar_exists)
+        self.assertIn("openmc2donjon_sph_sidecar_passed", stream.getvalue())
+        np.testing.assert_allclose(fuel_sph, [1.10, 0.90])
+        self.assertEqual(attrs["sph_kind"], "macrolib-nsph")
+        self.assertTrue(bool(attrs["sph_real"]))
+        self.assertFalse(bool(attrs["sph_applied"]))
+        self.assertEqual(sidecar_payload["decision"], "openmc2donjon_sph_sidecar_passed")
+        self.assertEqual(sph_payload["decision"], "openmc2donjon_sph_augment_passed")
+        required = {
+            "sph-source",
+            "sph-summary",
+            "sph-macrolib",
+            "sph-sidecar-summary",
+        }
+        self.assertTrue(required <= set(labels))
+        self.assertEqual(
+            labels["sph-sidecar-summary"]["summary_decision"],
+            "openmc2donjon_sph_sidecar_passed",
+        )
+
     def test_run_dir_builds_flux_ratio_adf_workflow(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         recipe = repo_root / "examples/recipe_export_smoke/minimal_recipe.py"
@@ -829,6 +981,23 @@ def _write_adf_sidecar(path: Path) -> None:
         dataset = h5.create_dataset("adf", data=values)
         dataset.attrs["mixture_names"] = np.asarray(["FUEL_A", "MOD_A"], dtype="S")
         dataset.attrs["face_names"] = np.asarray(["FD_XMIN", "FD_XMAX"], dtype="S")
+
+
+def _write_sph_sidecar(path: Path) -> None:
+    values = np.array(
+        [
+            [1.10, 0.90],
+            [0.95, 1.05],
+        ],
+        dtype=float,
+    )
+    with h5py.File(path, "w") as h5:
+        h5.attrs["schema"] = "openmc2donjon.sph-sidecar.v1"
+        h5.attrs["sph_kind"] = "fixture"
+        h5.attrs["sph_real"] = True
+        h5.attrs["sph_applied"] = False
+        dataset = h5.create_dataset("sph", data=values)
+        dataset.attrs["mixture_names"] = np.asarray(["FUEL_A", "MOD_A"], dtype="S")
 
 
 def _write_surface_flux(path: Path) -> None:

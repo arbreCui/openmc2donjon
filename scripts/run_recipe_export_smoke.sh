@@ -46,6 +46,13 @@ ADF_MCO="$ADF_RUN_DIR/out.mcompo.txt"
 ADF_SUMMARY="$ADF_RUN_DIR/adf_summary.json"
 ADF_CHECK_SUMMARY="$ADF_RUN_DIR/check_summary.json"
 ADF_MANIFEST="$ADF_RUN_DIR/manifest.json"
+SPH_SIDECAR="$RUN_DIR/sph_sidecar.h5"
+SPH_RUN_DIR="$RUN_DIR/one_step_sph_run"
+SPH_H5="$SPH_RUN_DIR/mgxs_library.h5"
+SPH_MAC="$SPH_RUN_DIR/out.macrolib.txt"
+SPH_SUMMARY="$SPH_RUN_DIR/sph_summary.json"
+SPH_CHECK_SUMMARY="$SPH_RUN_DIR/check_summary.json"
+SPH_MANIFEST="$SPH_RUN_DIR/manifest.json"
 
 echo "== openmc2donjon recipe export smoke =="
 echo "repo: $REPO_ROOT"
@@ -53,26 +60,36 @@ echo "run_dir: $RUN_DIR"
 echo "python: $PYTHON_BIN"
 
 printf 'recipe smoke statepoint marker\n' > "$STATEPOINT"
-"$PYTHON_BIN" - "$ADF_SIDECAR" <<'PY'
+"$PYTHON_BIN" - "$ADF_SIDECAR" "$SPH_SIDECAR" <<'PY'
 from pathlib import Path
 import sys
 
 import h5py
 import numpy as np
 
-path = Path(sys.argv[1])
+adf_path = Path(sys.argv[1])
+sph_path = Path(sys.argv[2])
 values = np.array(
     [
         [[1.01, 1.02], [0.99, 0.98]],
         [[1.03, 1.04], [0.97, 0.96]],
     ]
 )
-with h5py.File(path, "w") as h5:
+with h5py.File(adf_path, "w") as h5:
     h5.attrs["adf_kind"] = "production"
     h5.attrs["adf_real"] = "true"
     dataset = h5.create_dataset("adf", data=values)
     dataset.attrs["mixture_names"] = np.asarray(["FUEL_A", "MOD_A"], dtype="S")
     dataset.attrs["face_names"] = np.asarray(["FD_XMIN", "FD_XMAX"], dtype="S")
+
+sph_values = np.array([[1.10, 0.90], [0.95, 1.05]], dtype=float)
+with h5py.File(sph_path, "w") as h5:
+    h5.attrs["schema"] = "openmc2donjon.sph-sidecar.v1"
+    h5.attrs["sph_kind"] = "production-sph"
+    h5.attrs["sph_real"] = True
+    h5.attrs["sph_applied"] = False
+    dataset = h5.create_dataset("sph", data=sph_values)
+    dataset.attrs["mixture_names"] = np.asarray(["FUEL_A", "MOD_A"], dtype="S")
 PY
 
 echo
@@ -336,6 +353,75 @@ if labels["adf-summary"].get("summary_schema") != "openmc2donjon.adf-augment.v1"
 if labels["adf-summary"].get("summary_decision") != "openmc2donjon_adf_augment_passed":
     raise SystemExit("ADF bundle did not record augment decision")
 print(f"ADF one-step readback: blocks={len(blocks)} labels={sorted(labels)}")
+PY
+
+echo
+echo "== One-step with SPH sidecar =="
+"$PYTHON_BIN" -m openmc2donjon.from_openmc_cli \
+  --recipe "$RECIPE" \
+  --statepoint "$STATEPOINT" \
+  --run-dir "$SPH_RUN_DIR" \
+  --format macrolib \
+  --sph-source "$SPH_SIDECAR" \
+  --sph-kind production-sph \
+  --sph-real true \
+  --sph-applied false \
+  --check \
+  --require-volume \
+  --require-transport-dataset \
+  "${SCATTER_ROW_BALANCE_ARGS[@]}"
+
+"$PYTHON_BIN" - "$SPH_H5" "$SPH_MAC" "$SPH_SUMMARY" "$SPH_CHECK_SUMMARY" "$SPH_MANIFEST" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+import h5py
+import numpy as np
+from openmc2donjon.macrolib import read_macrolib_ascii
+
+h5_path = Path(sys.argv[1])
+macrolib_path = Path(sys.argv[2])
+sph_summary = Path(sys.argv[3])
+check_summary = Path(sys.argv[4])
+manifest_path = Path(sys.argv[5])
+
+with h5py.File(h5_path, "r") as h5:
+    np.testing.assert_allclose(h5["mixtures/FUEL_A/sph"][:], [1.10, 0.90])
+    np.testing.assert_allclose(h5["mixtures/MOD_A/sph"][:], [0.95, 1.05])
+    if h5.attrs["sph_kind"] != "production-sph":
+        raise SystemExit("SPH provenance kind was not preserved")
+
+macrolib = read_macrolib_ascii(macrolib_path)
+np.testing.assert_allclose(macrolib.sph, [[1.10, 0.90], [0.95, 1.05]])
+
+sph_payload = json.loads(sph_summary.read_text(encoding="utf-8"))
+if sph_payload["decision"] != "openmc2donjon_sph_augment_passed":
+    raise SystemExit("SPH injection summary did not pass")
+
+check_payload = json.loads(check_summary.read_text(encoding="utf-8"))
+if check_payload["decision"] != "mgxs_input_contract_passed":
+    raise SystemExit("SPH one-step preflight did not pass")
+
+manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+labels = {artifact["label"]: artifact for artifact in manifest_payload["artifacts"]}
+required_labels = {
+    "mgxs",
+    "macrolib",
+    "run-summary",
+    "check-summary",
+    "sph-source",
+    "sph-summary",
+    "recipe",
+}
+missing = sorted(required_labels - set(labels))
+if missing:
+    raise SystemExit(f"SPH bundle manifest missing labels: {missing}")
+if labels["sph-summary"].get("summary_schema") != "openmc2donjon.sph-augment.v1":
+    raise SystemExit("SPH bundle did not record augment summary schema")
+if labels["sph-summary"].get("summary_decision") != "openmc2donjon_sph_augment_passed":
+    raise SystemExit("SPH bundle did not record augment decision")
+print(f"SPH one-step readback: NSPH={macrolib.sph.shape} labels={sorted(labels)}")
 PY
 
 echo
