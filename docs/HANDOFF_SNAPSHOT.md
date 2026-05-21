@@ -31,7 +31,8 @@ remain separate mixtures when their spectra or leakage environments differ.
 - `transport_total` / `STRD` carry-through for transport-corrected diffusion
   data.
 - ADF/DF sidecar injection, OpenMC surface-flux export, low-order driver
-  canonicalization, and flux-ratio ADF workflow plumbing.
+  canonicalization, face-flux contract checks, and flux-ratio ADF workflow
+  plumbing.
 - Managed run directories with `mgxs_library.h5`, DONJON ASCII output,
   summaries, recipe copies, and bundle manifests.
 
@@ -118,8 +119,8 @@ All passed.
 
 ## Next Physical Work
 
-1. Replace minicase ADF/low-order fixtures with a real low-order driver handoff
-   from the intended DONJON calculation route.
+1. Replace the deterministic external low-order handoff example with the real
+   low-order driver handoff from the intended DONJON calculation route.
 2. Add a larger OpenMC-sourced user case with assembly-wise domains and
    production ADF/DF, then compare DONJON k-effective against the OpenMC
    reference at that homogenization level.

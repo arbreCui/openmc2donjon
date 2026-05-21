@@ -212,6 +212,14 @@ openmc2donjon-from-openmc \
 `FILE::/dataset/path` references when the required datasets live under
 case-specific names.
 
+For a compact, deterministic example of an external low-order handoff with
+case-specific dataset paths, mixture/face reordering, and positive-inward
+current conversion, run:
+
+```sh
+bash examples/external_low_order_handoff/run_smoke.sh
+```
+
 If the ADF sidecar was produced separately, pass it directly:
 
 ```sh

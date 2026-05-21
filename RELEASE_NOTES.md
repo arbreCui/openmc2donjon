@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added `examples/external_low_order_handoff`, a deterministic production-facing
+  example for external low-order/nodal driver handoffs with case-specific HDF5
+  paths, mixture/face reordering, positive-inward current conversion,
+  homogeneous face-flux reconstruction, face-flux contract checking, and ADF
+  injection/readback.
 - Added `openmc2donjon check-face-flux` and wired it into
   `from-openmc --build-flux-ratio-adf`; managed ADF runs now write and bundle
   `face_flux_check_summary.json` before sidecar generation.

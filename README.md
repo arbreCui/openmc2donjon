@@ -168,6 +168,16 @@ a fresh statepoint, see
 bash scripts/run_production_minicase_smoke.sh
 ```
 
+For a deterministic external low-order/nodal handoff example that exercises
+case-specific driver dataset paths, mixture/face reordering, current sign
+conversion, homogeneous face-flux reconstruction, and flux-ratio ADF injection,
+see [`examples/external_low_order_handoff/`](examples/external_low_order_handoff/)
+or run:
+
+```sh
+bash examples/external_low_order_handoff/run_smoke.sh
+```
+
 For the same production-facing workflow on a tiny hex lattice, see
 [`examples/openmc_hex_minicase/`](examples/openmc_hex_minicase/) or run:
 

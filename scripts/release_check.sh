@@ -155,6 +155,12 @@ PYTHON_BIN="$PYTHON_BIN" \
   bash "$REPO_ROOT/scripts/run_recipe_export_smoke.sh"
 
 echo
+echo "== External low-order handoff smoke =="
+RUN_DIR="$RUN_DIR/external_low_order_handoff" \
+PYTHON_BIN="$PYTHON_BIN" \
+  bash "$REPO_ROOT/examples/external_low_order_handoff/run_smoke.sh"
+
+echo
 echo "== Production minicase smoke =="
 RUN_DIR="$RUN_DIR/production_minicase" \
 PYTHON_BIN="$PYTHON_BIN" \

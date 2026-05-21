@@ -141,6 +141,12 @@ The managed `--build-flux-ratio-adf` workflow writes
 users can run `openmc2donjon check-face-flux` before `make-adf-sidecar` for the
 same numerator/denominator contract check.
 
+A complete deterministic external low-order handoff example is available here:
+
+```sh
+bash examples/external_low_order_handoff/run_smoke.sh
+```
+
 To keep explicit paths instead of using a managed run directory:
 
 ```sh
