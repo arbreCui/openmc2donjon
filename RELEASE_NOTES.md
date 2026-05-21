@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a current handoff snapshot for reviewers, covering capabilities,
+  accepted C5G7 validation, release gates, known boundaries, and next physical
+  work.
 - Added a concise quickstart for the installed CLI and recipe/statepoint
   workflows.
 - Reorganized the README first screen around install, smoke, and one-step

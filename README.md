@@ -26,6 +26,7 @@ For a first pass through the workflow, start with
 
 Start here:
 
+- [Current handoff snapshot](docs/HANDOFF_SNAPSHOT.md)
 - [Quickstart](docs/QUICKSTART.md)
 - [OpenMC export workflow](docs/OPENMC_EXPORT_WORKFLOW.md)
 - [HDF5 input contract](docs/HDF5_INPUT_CONTRACT.md)

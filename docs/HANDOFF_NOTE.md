@@ -1,5 +1,9 @@
 # Handoff Note
 
+For a current repo-wide status snapshot, start with
+[Handoff Snapshot](HANDOFF_SNAPSHOT.md). This note keeps the accepted C5G7
+handoff baseline details.
+
 ## Stable Tag
 
 ```text
