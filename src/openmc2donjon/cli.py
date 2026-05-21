@@ -11,6 +11,7 @@ from .adf_augment import augment_hdf5_with_adf, parse_faces
 from .adf_sidecar import create_flux_ratio_adf_sidecar, create_unity_adf_sidecar
 from .bundle import ArtifactSpec, bundle_artifacts, parse_extra_artifact
 from .doctor import run_doctor
+from .donjon_flux import extract_donjon_volume_flux
 from .face_flux_check import check_face_flux
 from .homogeneous_face_flux import create_homogeneous_face_flux
 from .low_order_driver import check_low_order_driver, create_low_order_driver
@@ -54,6 +55,8 @@ def build_parser() -> argparse.ArgumentParser:
             "<input_h5> ...', 'openmc2donjon make-sph-update-table "
             "<input_h5> ...', and 'openmc2donjon augment-sph <input_h5> ...' "
             "to iterate and carry SPH equivalence factors, "
+            "'openmc2donjon extract-donjon-volume-flux <input_h5> ...' to "
+            "adapt DONJON L_FLUX dumps into canonical low-order volume flux, "
             "'openmc2donjon bundle --output-dir DIR ...' to collect "
             "production artifacts, 'openmc2donjon doctor' for environment checks, or "
             "'openmc2donjon check <input_h5>' for input-contract preflight."
@@ -804,6 +807,66 @@ def build_make_sph_update_table_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_extract_donjon_volume_flux_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="openmc2donjon extract-donjon-volume-flux",
+        description=(
+            "Extract DONJON L_FLUX scalar unknowns from a UTL dump into the "
+            "canonical HDF5 volume-flux layout consumed by SPH iteration."
+        ),
+    )
+    parser.add_argument("input_h5", type=Path, help="MGXS HDF5 handoff used for metadata")
+    parser.add_argument(
+        "--flux-dump",
+        type=Path,
+        required=True,
+        help="DONJON result containing a UTL L_FLUX dump",
+    )
+    parser.add_argument("-o", "--output", type=Path, required=True, help="volume-flux HDF5")
+    parser.add_argument(
+        "--map-h5",
+        type=Path,
+        default=None,
+        help=(
+            "HDF5 map containing /scalar_flux_ids, or /kn plus /mixture_names; "
+            "mutually exclusive with --scalar-flux-map"
+        ),
+    )
+    parser.add_argument(
+        "--scalar-flux-map",
+        default=None,
+        help=(
+            "comma-separated one-based DONJON scalar flux IDs, for example "
+            "fuel=1,moderator=2; mutually exclusive with --map-h5"
+        ),
+    )
+    parser.add_argument(
+        "--kn-column",
+        type=int,
+        default=1,
+        help="one-based /kn column containing scalar flux IDs when --map-h5 uses /kn (default: 1)",
+    )
+    parser.add_argument(
+        "--list-offset",
+        type=int,
+        default=0,
+        help="number of unnamed real list vectors to skip before group 1 (default: 0)",
+    )
+    parser.add_argument(
+        "--source-label",
+        default="DONJON L_FLUX scalar unknown extraction",
+        help="provenance label stored in output metadata",
+    )
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        default=None,
+        help="write a machine-readable extraction summary JSON",
+    )
+    parser.add_argument("--force", action="store_true", help="overwrite output if it exists")
+    return parser
+
+
 def build_export_surface_flux_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="openmc2donjon export-surface-flux",
@@ -1091,6 +1154,8 @@ def main(argv: list[str] | None = None) -> int:
         return _make_sph_update_table_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "augment-sph":
         return _augment_sph_main(raw_argv[1:])
+    if raw_argv and raw_argv[0] == "extract-donjon-volume-flux":
+        return _extract_donjon_volume_flux_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "bundle":
         return _bundle_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "doctor":
@@ -1378,6 +1443,32 @@ def _make_sph_update_table_main(argv: list[str]) -> int:
     return 0
 
 
+def _extract_donjon_volume_flux_main(argv: list[str]) -> int:
+    parser = build_extract_donjon_volume_flux_parser()
+    args = parser.parse_args(argv)
+    try:
+        if args.map_h5 is not None and args.scalar_flux_map is not None:
+            parser.error("--map-h5 and --scalar-flux-map are mutually exclusive")
+        scalar_flux_ids = (
+            None if args.scalar_flux_map is None else _parse_scalar_flux_map(args.scalar_flux_map)
+        )
+        extract_donjon_volume_flux(
+            args.input_h5,
+            args.flux_dump,
+            args.output,
+            map_h5=args.map_h5,
+            scalar_flux_ids=scalar_flux_ids,
+            scalar_flux_column=args.kn_column - 1,
+            list_offset=args.list_offset,
+            source_label=args.source_label,
+            force=args.force,
+            summary_json=args.summary_json,
+        )
+    except Exception as exc:
+        parser.exit(1, f"openmc2donjon extract-donjon-volume-flux: error: {exc}\n")
+    return 0
+
+
 def _export_surface_flux_main(argv: list[str]) -> int:
     parser = build_export_surface_flux_parser()
     args = parser.parse_args(argv)
@@ -1519,6 +1610,30 @@ def _parse_optional_str_tuple(raw: str | None) -> tuple[str, ...] | None:
     if not values:
         raise ValueError("--mixture-names must list at least one name")
     return values
+
+
+def _parse_scalar_flux_map(raw: str) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for item in (part.strip() for part in raw.split(",")):
+        if not item:
+            continue
+        if "=" not in item:
+            raise ValueError("--scalar-flux-map entries must look like mixture=id")
+        name, value = (part.strip() for part in item.split("=", 1))
+        if not name:
+            raise ValueError("--scalar-flux-map mixture names must be non-empty")
+        if name in out:
+            raise ValueError(f"--scalar-flux-map repeats mixture {name!r}")
+        try:
+            scalar_id = int(value)
+        except ValueError as exc:
+            raise ValueError(f"--scalar-flux-map id for {name!r} must be an integer") from exc
+        if scalar_id <= 0:
+            raise ValueError(f"--scalar-flux-map id for {name!r} must be positive")
+        out[name] = scalar_id
+    if not out:
+        raise ValueError("--scalar-flux-map must list at least one mixture=id entry")
+    return out
 
 
 def _bundle_artifacts_from_args(
