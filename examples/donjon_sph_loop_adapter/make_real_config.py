@@ -41,6 +41,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--clip-min", type=float, default=0.5)
     parser.add_argument("--clip-max", type=float, default=3.0)
     parser.add_argument("--case-id-prefix", default="openmc2donjon_sph_loop")
+    parser.add_argument(
+        "--stage-prefix",
+        default="odj_sph_loop",
+        help="short /tmp staging prefix used to avoid DONJON 120-column path limits",
+    )
     args = parser.parse_args(argv)
 
     config = {
@@ -77,7 +82,7 @@ def main(argv: list[str] | None = None) -> int:
                 "--case-id",
                 f"{args.case_id_prefix}_solve_iter{{iteration}}",
                 "--work-dir",
-                "{solve_dir}/donjon_stage",
+                f"/tmp/{args.stage_prefix}_solve_iter{{iteration}}",
             ],
             "result": "donjon_flux.result",
         },
@@ -99,7 +104,7 @@ def main(argv: list[str] | None = None) -> int:
                 "--case-id",
                 f"{args.case_id_prefix}_apply_iter{{iteration1}}",
                 "--work-dir",
-                "{workflow_dir}/donjon_stage",
+                f"/tmp/{args.stage_prefix}_apply_iter{{iteration1}}",
             ],
             "output": "corrected.macrolib.txt",
         },

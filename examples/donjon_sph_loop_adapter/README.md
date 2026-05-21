@@ -40,15 +40,17 @@ python examples/donjon_sph_loop_adapter/make_real_config.py \
   --donjon-root /path/to/dragon-5.1/Donjon
 ```
 
-The runner stages the current ASCII macrolib, renders an `.x2m` deck under
+The runner stages the current ASCII macrolib under a short `/tmp` path, renders
+an `.x2m` deck under
 `$DONJON_ROOT/data/openmc2donjon/case_runs/donjon_sph_loop_adapter/`, runs
 `rdonjon -q`, then copies the DONJON listing or corrected macrolib back to the
 path requested by `run-sph-loop`.
 
 Templates:
 
-- `templates/solve_lflux_dump.x2m.in` is the solve-side skeleton.  Replace the
-  geometry/tracking/solve body with the real DONJON model and keep
+- `templates/solve_lflux_dump.x2m.in` is a minimal runnable 1x2 Cartesian
+  solve-side template.  Replace the geometry/tracking/solve body with the real
+  DONJON model and keep
   `UTL: FLUX :: IMPR STATE-VECTOR * DUMP ;`.
 - `templates/apply_nsph_mac.x2m.in` is a generic `DSPH`/`MAC` postprocess deck
   for applying `NSPH` factors written by the loop.

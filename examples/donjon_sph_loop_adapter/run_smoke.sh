@@ -6,6 +6,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PACKAGE_SRC="${OPENMC2DONJON_SRC:-$REPO_ROOT/src}"
 RUN_DIR="${RUN_DIR:-/private/tmp/openmc2donjon_donjon_sph_loop_adapter}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
+DONJON_ROOT="${DONJON_ROOT:-/Users/wen/dragon-5.1/Donjon}"
 
 export PYTHONDONTWRITEBYTECODE="${PYTHONDONTWRITEBYTECODE:-1}"
 export PYTHONPATH="$PACKAGE_SRC${PYTHONPATH:+:$PYTHONPATH}"
@@ -64,8 +65,8 @@ assert config["schema"] == "openmc2donjon.sph-loop-config.v1"
 assert "donjon_deck_runner.py" in " ".join(config["solver"]["command"])
 assert "solve_lflux_dump.x2m.in" in " ".join(config["solver"]["command"])
 assert "apply_nsph_mac.x2m.in" in " ".join(config["postprocess"]["command"])
-assert "{solve_dir}/donjon_stage" in config["solver"]["command"]
-assert "{workflow_dir}/donjon_stage" in config["postprocess"]["command"]
+assert any(part.startswith("/tmp/") for part in config["solver"]["command"])
+assert any(part.startswith("/tmp/") for part in config["postprocess"]["command"])
 PY
 
 "$PYTHON_BIN" -m openmc2donjon.cli run-sph-loop \
@@ -137,7 +138,7 @@ DRY_DECK="$DRY_ROOT/data/openmc2donjon/case_runs/donjon_sph_loop_adapter/$DRY_CA
   --case-id "$DRY_CASE_ID" \
   --work-dir "$DRY_STAGE"
 
-"$PYTHON_BIN" - "$DRY_DECK" "$DRY_STAGE/$DRY_CASE_ID.macrolib.txt" <<'PY'
+"$PYTHON_BIN" - "$DRY_DECK" "$DRY_STAGE/input.macrolib.txt" <<'PY'
 from __future__ import annotations
 
 from pathlib import Path
@@ -152,8 +153,56 @@ text = deck.read_text(encoding="utf-8")
 assert "DSPH:" in text
 assert "MAC:" in text
 assert str(staged_macrolib) in text
-assert ".corrected.macrolib.txt" in text
+assert "corrected.macrolib.txt" in text
 print(f"DONJON real deck runner dry-run OK: deck={deck}")
 PY
+
+if [[ -x "$DONJON_ROOT/rdonjon" ]]; then
+  REAL_SOLVE_RESULT="$RUN_DIR/real_donjon_solve.result"
+  REAL_FLUX_H5="$RUN_DIR/real_donjon_volume_flux.h5"
+  REAL_FLUX_SUMMARY="$RUN_DIR/real_donjon_volume_flux.summary.json"
+  REAL_SOLVE_CASE_ID="odj_real_solve"
+  "$PYTHON_BIN" "$SCRIPT_DIR/donjon_deck_runner.py" solve \
+    --donjon-root "$DONJON_ROOT" \
+    --deck-template "$TEMPLATE_DIR/solve_lflux_dump.x2m.in" \
+    --macrolib "$LOOP_DIR/iter00_initial/out.macrolib.txt" \
+    --result "$REAL_SOLVE_RESULT" \
+    --iteration 0 \
+    --case-id "$REAL_SOLVE_CASE_ID" \
+    --work-dir "/tmp/${REAL_SOLVE_CASE_ID}"
+
+  "$PYTHON_BIN" -m openmc2donjon.cli extract-donjon-volume-flux "$MGXS" \
+    --flux-dump "$REAL_SOLVE_RESULT" \
+    --scalar-flux-map ASM_LEFT=1,ASM_RIGHT=2 \
+    --output "$REAL_FLUX_H5" \
+    --summary-json "$REAL_FLUX_SUMMARY" \
+    --force
+
+  "$PYTHON_BIN" - "$REAL_SOLVE_RESULT" "$REAL_FLUX_H5" <<'PY'
+from __future__ import annotations
+
+from pathlib import Path
+import sys
+
+import h5py
+import numpy as np
+
+
+listing = Path(sys.argv[1])
+flux_h5 = Path(sys.argv[2])
+text = listing.read_text(errors="replace")
+assert "OPENMC2DONJON DONJON SPH LOOP ADAPTER K-EFFECTIVE" in text
+assert "FLUX" in text
+with h5py.File(flux_h5, "r") as h5:
+    values = h5["donjon_volume_flux"][:]
+    np.testing.assert_array_equal(h5["scalar_flux_ids"][:], [1, 2])
+    assert values.shape == (2, 2)
+    assert np.all(np.isfinite(values))
+    assert np.all(values > 0.0)
+print(f"DONJON real solve L_FLUX smoke OK: flux={flux_h5}")
+PY
+else
+  echo "DONJON runner unavailable; skipping real L_FLUX solve smoke"
+fi
 
 echo "openmc2donjon DONJON SPH loop adapter smoke: PASS"

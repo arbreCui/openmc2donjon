@@ -89,8 +89,8 @@ def _prepare_context(args: argparse.Namespace, *, mode: str) -> dict[str, object
     work_dir = args.work_dir or Path("/tmp") / "openmc2donjon_donjon_deck_runner" / case_id
     work_dir.mkdir(parents=True, exist_ok=True)
 
-    staged_macrolib = work_dir / f"{case_id}.macrolib.txt"
-    corrected = work_dir / f"{case_id}.corrected.macrolib.txt"
+    staged_macrolib = work_dir / "input.macrolib.txt"
+    corrected = work_dir / "corrected.macrolib.txt"
     shutil.copyfile(args.macrolib, staged_macrolib)
 
     deck_rel = f"{args.case_dir.rstrip('/')}/{case_id}.x2m"

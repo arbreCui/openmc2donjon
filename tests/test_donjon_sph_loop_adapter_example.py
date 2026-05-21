@@ -116,8 +116,8 @@ class DonjonSphLoopAdapterExampleTests(unittest.TestCase):
             self.assertIn("apply_nsph_mac.x2m.in", " ".join(postprocess))
             self.assertIn("case_solve_iter{iteration}", solver)
             self.assertIn("case_apply_iter{iteration1}", postprocess)
-            self.assertIn("{solve_dir}/donjon_stage", solver)
-            self.assertIn("{workflow_dir}/donjon_stage", postprocess)
+            self.assertIn("/tmp/odj_sph_loop_solve_iter{iteration}", solver)
+            self.assertIn("/tmp/odj_sph_loop_apply_iter{iteration1}", postprocess)
 
     def test_donjon_deck_runner_dry_run_renders_apply_deck(self) -> None:
         root = _repo_root()
@@ -164,14 +164,30 @@ class DonjonSphLoopAdapterExampleTests(unittest.TestCase):
                 donjon_root
                 / "data/openmc2donjon/case_runs/donjon_sph_loop_adapter/dry_case.x2m"
             )
-            staged = work_dir / "dry_case.macrolib.txt"
+            staged = work_dir / "input.macrolib.txt"
             self.assertTrue(deck.exists())
             self.assertTrue(staged.exists())
             text = deck.read_text(encoding="utf-8")
             self.assertIn("DSPH:", text)
             self.assertIn("MAC:", text)
             self.assertIn(str(staged), text)
-            self.assertIn("dry_case.corrected.macrolib.txt", text)
+            self.assertIn("corrected.macrolib.txt", text)
+
+    def test_solve_template_is_minimal_runnable_cartesian_deck(self) -> None:
+        root = _repo_root()
+        template = (
+            root
+            / "examples/donjon_sph_loop_adapter/templates/solve_lflux_dump.x2m.in"
+        )
+        text = template.read_text(encoding="utf-8")
+
+        self.assertIn("CAR2D 2 1", text)
+        self.assertIn("TRIVAT:", text)
+        self.assertIn("TRIVAA:", text)
+        self.assertIn("FLUD:", text)
+        self.assertIn("GREP:", text)
+        self.assertIn("UTL: FLUX :: IMPR STATE-VECTOR * DUMP ;", text)
+        self.assertIn("OPENMC2DONJON DONJON SPH LOOP ADAPTER K-EFFECTIVE", text)
 
     def test_smoke_script_exercises_loop_driver(self) -> None:
         root = _repo_root()
@@ -187,6 +203,9 @@ class DonjonSphLoopAdapterExampleTests(unittest.TestCase):
         self.assertIn("make_real_config.py", text)
         self.assertIn("donjon_deck_runner.py", text)
         self.assertIn("--dry-run", text)
+        self.assertIn("extract-donjon-volume-flux", text)
+        self.assertIn("ASM_LEFT=1,ASM_RIGHT=2", text)
+        self.assertIn("DONJON runner unavailable; skipping real L_FLUX solve smoke", text)
 
 
 def _repo_root() -> Path:
