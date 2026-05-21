@@ -4,6 +4,12 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PACKAGE_SRC="${OPENMC2DONJON_SRC:-$REPO_ROOT/src}"
 RUN_DIR="${RUN_DIR:-/private/tmp/openmc2donjon_hex_minicase}"
+SCATTER_ROW_BALANCE_WARN="${OPENMC2DONJON_SCATTER_ROW_BALANCE_WARN:-5e-2}"
+SCATTER_ROW_BALANCE_FAIL="${OPENMC2DONJON_SCATTER_ROW_BALANCE_FAIL:-}"
+SCATTER_ROW_BALANCE_ARGS=(--scatter-row-balance-warn "$SCATTER_ROW_BALANCE_WARN")
+if [[ -n "$SCATTER_ROW_BALANCE_FAIL" ]]; then
+  SCATTER_ROW_BALANCE_ARGS+=(--scatter-row-balance-fail "$SCATTER_ROW_BALANCE_FAIL")
+fi
 
 if [[ -z "${PYTHON_BIN:-}" ]]; then
   if [[ -x /Users/wen/miniforge3/envs/openmc-dev/bin/python ]]; then
@@ -41,7 +47,8 @@ PYTHONPATH="$PACKAGE_SRC" "$PYTHON_BIN" -m openmc2donjon.cli check "$MGXS_H5" \
   --require-volume \
   --require-transport-dataset \
   --require-adf \
-  --expected-adf-faces "$ADF_FACES"
+  --expected-adf-faces "$ADF_FACES" \
+  "${SCATTER_ROW_BALANCE_ARGS[@]}"
 
 echo
 echo "== Convert =="
@@ -51,7 +58,8 @@ PYTHONPATH="$PACKAGE_SRC" "$PYTHON_BIN" -m openmc2donjon.cli "$MGXS_H5" \
   --require-volume \
   --require-transport-dataset \
   --require-adf \
-  --expected-adf-faces "$ADF_FACES"
+  --expected-adf-faces "$ADF_FACES" \
+  "${SCATTER_ROW_BALANCE_ARGS[@]}"
 PYTHONPATH="$PACKAGE_SRC" "$PYTHON_BIN" -m openmc2donjon.cli "$MGXS_H5" \
   --format macrolib \
   -o "$MACROLIB_TXT" \
@@ -59,7 +67,8 @@ PYTHONPATH="$PACKAGE_SRC" "$PYTHON_BIN" -m openmc2donjon.cli "$MGXS_H5" \
   --require-volume \
   --require-transport-dataset \
   --require-adf \
-  --expected-adf-faces "$ADF_FACES"
+  --expected-adf-faces "$ADF_FACES" \
+  "${SCATTER_ROW_BALANCE_ARGS[@]}"
 
 echo
 echo "== Readback =="

@@ -15,6 +15,9 @@
 - Added `openmc2donjon-export --dry-run` for recipe/domain preflight checks.
 - Added `openmc2donjon check` as the packaged MGXS HDF5 input-contract
   preflight entry point.
+- Added optional scatter row-balance thresholds to input-contract preflight,
+  reporting the worst `total - absorption - sum(P0 scatter)` residual in text
+  and JSON summaries.
 - Added `openmc2donjon ... --check` to run input-contract preflight before
   writing DONJON ASCII.
 - Added checked conversion support to `openmc2donjon-from-openmc` so the
@@ -87,6 +90,8 @@
 - Extended release check so the C5G7 statepoint parity path exercises
   `openmc2donjon-from-openmc`, reads back the generated MCO, and validates the
   summary manifest.
+- Wired row-balance preflight checks into production, hex, UOX, recipe, C5G7
+  demo, and C5G7 acceptance smoke scripts.
 
 ## v0.1.2-openmc-workflow - 2026-05-19
 

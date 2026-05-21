@@ -6,6 +6,7 @@ DATA_DIR="${OPENMC2DONJON_DATA_DIR:-$REPO_ROOT/examples/donjon_openmc2donjon}"
 PACKAGE_SRC="${OPENMC2DONJON_SRC:-$REPO_ROOT/src}"
 RUN_DIR="${RUN_DIR:-/private/tmp/openmc2donjon_c5g7_demo}"
 PYTEST_CACHE="${PYTEST_CACHE:-/private/tmp/openmc2donjon_pytest_cache}"
+C5G7_SCATTER_ROW_BALANCE_FAIL="${OPENMC2DONJON_C5G7_SCATTER_ROW_BALANCE_FAIL:-1e-8}"
 
 if [[ -z "${PYTHON_BIN:-}" ]]; then
   if [[ -x /Users/wen/miniforge3/envs/openmc-dev/bin/python ]]; then
@@ -96,6 +97,7 @@ export PYTHONPATH="$PACKAGE_SRC${PYTHONPATH:+:$PYTHONPATH}"
 MGXS="$DATA_DIR/c5g7_assembly_p1_adf_production.h5"
 OUT_MCO="$RUN_DIR/c5g7_demo.mco"
 OUT_MAC="$RUN_DIR/c5g7_demo.macrolib.txt"
+CHECK_JSON="$RUN_DIR/c5g7_demo_check_summary.json"
 
 echo "== openmc2donjon C5G7 demo =="
 echo "repo: $REPO_ROOT"
@@ -112,6 +114,16 @@ if [[ "$RUN_TESTS" -eq 1 ]]; then
   echo "== Package tests =="
   "$PYTEST_PYTHON" -m pytest -q -o "cache_dir=$PYTEST_CACHE" "$REPO_ROOT/tests"
 fi
+
+echo
+echo "== C5G7 HDF5 preflight =="
+"$PYTHON_BIN" -m openmc2donjon.cli check "$MGXS" \
+  --summary-json "$CHECK_JSON" \
+  --require-adf \
+  --expected-adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
+  --require-volume \
+  --require-transport-dataset \
+  --scatter-row-balance-fail "$C5G7_SCATTER_ROW_BALANCE_FAIL"
 
 echo
 echo "== Converter smoke =="

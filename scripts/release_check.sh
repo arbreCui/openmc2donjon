@@ -7,6 +7,8 @@ RUN_DIR="${RUN_DIR:-/private/tmp/openmc2donjon_release_check}"
 PYTEST_CACHE="${PYTEST_CACHE:-/private/tmp/openmc2donjon_pytest_cache}"
 C5G7_STATEPOINT="${C5G7_STATEPOINT:-/Users/wen/openmc-workspace/c5g7_converter_test/runs/assembly_p1/statepoint.120.h5}"
 C5G7_ACCEPTED_H5="$REPO_ROOT/examples/donjon_openmc2donjon/c5g7_assembly_p1_adf_production.h5"
+C5G7_SCATTER_ROW_BALANCE_FAIL="${OPENMC2DONJON_C5G7_SCATTER_ROW_BALANCE_FAIL:-1e-8}"
+C5G7_EXPORT_SCATTER_ROW_BALANCE_FAIL="${OPENMC2DONJON_C5G7_EXPORT_SCATTER_ROW_BALANCE_FAIL:-1e-2}"
 
 if [[ -z "${PYTHON_BIN:-}" ]]; then
   if [[ -x /Users/wen/miniforge3/envs/openmc-dev/bin/python ]]; then
@@ -211,7 +213,8 @@ PY
   --require-adf \
   --expected-adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
   --require-volume \
-  --require-transport-dataset
+  --require-transport-dataset \
+  --scatter-row-balance-fail "$C5G7_SCATTER_ROW_BALANCE_FAIL"
 "$PYTHON_BIN" - "$C5G7_ACCEPTED_H5" "$adf_augmented" "$adf_summary" <<'PY'
 import json
 import sys
@@ -254,7 +257,8 @@ if [[ -e "$C5G7_STATEPOINT" ]]; then
     --require-volume \
     --require-transport-dataset \
     --require-adf \
-    --expected-adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX
+    --expected-adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
+    --scatter-row-balance-fail "$C5G7_EXPORT_SCATTER_ROW_BALANCE_FAIL"
   "$PYTHON_BIN" -m openmc2donjon.cli diff "$C5G7_ACCEPTED_H5" "$exported_h5" \
     --summary-json "$exported_diff_summary"
   "$PYTHON_BIN" - "$exported_h5" "$exported_mco" "$exported_summary" "$exported_check_summary" "$exported_diff_summary" "$exported_manifest" <<'PY'

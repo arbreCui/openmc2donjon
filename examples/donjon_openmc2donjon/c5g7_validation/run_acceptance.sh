@@ -7,6 +7,7 @@ DATA_DIR="$DONJON_DIR/data/openmc2donjon"
 PACKAGE_SRC="${OPENMC2DONJON_SRC:-/Users/wen/openmc-workspace/openmc2donjon/src}"
 PYTHON_BIN="${PYTHON_BIN:-/opt/homebrew/bin/python3.14}"
 RUN_DIR="${RUN_DIR:-/private/tmp/openmc2donjon_c5g7_acceptance}"
+C5G7_SCATTER_ROW_BALANCE_FAIL="${OPENMC2DONJON_C5G7_SCATTER_ROW_BALANCE_FAIL:-1e-8}"
 
 RUN_DONJON=1
 RUN_CONVERTER=1
@@ -93,6 +94,7 @@ export PYTHONPATH="$PACKAGE_SRC${PYTHONPATH:+:$PYTHONPATH}"
 MGXS="$DATA_DIR/c5g7_assembly_p1_adf_production.h5"
 TMP_MCO="$RUN_DIR/c5g7_acceptance_smoke.mco"
 TMP_MACROLIB="$RUN_DIR/c5g7_acceptance_smoke.macrolib.txt"
+CHECK_JSON="$RUN_DIR/c5g7_acceptance_check_summary.json"
 
 echo "== C5G7 OpenMC-to-DONJON acceptance =="
 echo "root: $ROOT"
@@ -107,6 +109,16 @@ for required in "$PYTHON_BIN" "$MGXS" "$PACKAGE_SRC/openmc2donjon/cli.py"; do
 done
 
 if [[ "$RUN_CONVERTER" -eq 1 ]]; then
+  echo
+  echo "== C5G7 HDF5 preflight =="
+  "$PYTHON_BIN" -m openmc2donjon.cli check "$MGXS" \
+    --summary-json "$CHECK_JSON" \
+    --require-adf \
+    --expected-adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
+    --require-volume \
+    --require-transport-dataset \
+    --scatter-row-balance-fail "$C5G7_SCATTER_ROW_BALANCE_FAIL"
+
   echo
   echo "== Converter CLI smoke =="
   "$PYTHON_BIN" -m openmc2donjon.cli "$MGXS" -o "$TMP_MCO"

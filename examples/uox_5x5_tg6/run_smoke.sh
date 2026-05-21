@@ -6,6 +6,12 @@ PACKAGE_SRC="${OPENMC2DONJON_SRC:-$REPO_ROOT/src}"
 DRAGON_ROOT="${OPENMC2DONJON_ROOT:-/Users/wen/dragon-5.1}"
 SOURCE_H5="${SOURCE_H5:-$DRAGON_ROOT/Dragon/data/UOX_5x5_TG6_sym8_multiDom_proc/UOX_5x5_TG6_sym8_multiDom.h5}"
 RUN_DIR="${RUN_DIR:-/private/tmp/openmc2donjon_uox_5x5_tg6}"
+SCATTER_ROW_BALANCE_WARN="${OPENMC2DONJON_SCATTER_ROW_BALANCE_WARN:-5e-2}"
+SCATTER_ROW_BALANCE_FAIL="${OPENMC2DONJON_SCATTER_ROW_BALANCE_FAIL:-}"
+SCATTER_ROW_BALANCE_ARGS=(--scatter-row-balance-warn "$SCATTER_ROW_BALANCE_WARN")
+if [[ -n "$SCATTER_ROW_BALANCE_FAIL" ]]; then
+  SCATTER_ROW_BALANCE_ARGS+=(--scatter-row-balance-fail "$SCATTER_ROW_BALANCE_FAIL")
+fi
 
 if [[ -z "${PYTHON_BIN:-}" ]]; then
   if [[ -x /Users/wen/miniforge3/envs/openmc-dev/bin/python ]]; then
@@ -43,7 +49,8 @@ echo "== Preflight =="
 PYTHONPATH="$PACKAGE_SRC" "$PYTHON_BIN" -m openmc2donjon.cli check "$MGXS_H5" \
   --summary-json "$CHECK_JSON" \
   --require-volume \
-  --require-transport-dataset
+  --require-transport-dataset \
+  "${SCATTER_ROW_BALANCE_ARGS[@]}"
 
 echo
 echo "== Convert =="
@@ -51,13 +58,15 @@ PYTHONPATH="$PACKAGE_SRC" "$PYTHON_BIN" -m openmc2donjon.cli "$MGXS_H5" \
   -o "$MCOMPO_TXT" \
   --check \
   --require-volume \
-  --require-transport-dataset
+  --require-transport-dataset \
+  "${SCATTER_ROW_BALANCE_ARGS[@]}"
 PYTHONPATH="$PACKAGE_SRC" "$PYTHON_BIN" -m openmc2donjon.cli "$MGXS_H5" \
   --format macrolib \
   -o "$MACROLIB_TXT" \
   --check \
   --require-volume \
-  --require-transport-dataset
+  --require-transport-dataset \
+  "${SCATTER_ROW_BALANCE_ARGS[@]}"
 
 echo
 echo "== Readback =="

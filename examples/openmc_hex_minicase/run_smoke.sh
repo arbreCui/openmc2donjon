@@ -10,6 +10,12 @@ OPENMC_THREADS="${OPENMC_THREADS:-2}"
 HEX_MINICASE_PARTICLES="${HEX_MINICASE_PARTICLES:-300}"
 HEX_MINICASE_BATCHES="${HEX_MINICASE_BATCHES:-10}"
 HEX_MINICASE_INACTIVE="${HEX_MINICASE_INACTIVE:-4}"
+SCATTER_ROW_BALANCE_WARN="${OPENMC2DONJON_SCATTER_ROW_BALANCE_WARN:-5e-2}"
+SCATTER_ROW_BALANCE_FAIL="${OPENMC2DONJON_SCATTER_ROW_BALANCE_FAIL:-}"
+SCATTER_ROW_BALANCE_ARGS=(--scatter-row-balance-warn "$SCATTER_ROW_BALANCE_WARN")
+if [[ -n "$SCATTER_ROW_BALANCE_FAIL" ]]; then
+  SCATTER_ROW_BALANCE_ARGS+=(--scatter-row-balance-fail "$SCATTER_ROW_BALANCE_FAIL")
+fi
 
 if [[ -z "$PYTHON_BIN" ]]; then
   if [[ -x /Users/wen/miniforge3/envs/openmc-dev/bin/python ]]; then
@@ -102,7 +108,8 @@ OPENMC2DONJON_HEX_MINICASE_DIR="$CASE_DIR" \
   --run-dir "$CONVERT_RUN_DIR" \
   --check \
   --require-volume \
-  --require-transport-dataset
+  --require-transport-dataset \
+  "${SCATTER_ROW_BALANCE_ARGS[@]}"
 
 echo
 echo "== MACROLIB convert =="
@@ -111,7 +118,8 @@ echo "== MACROLIB convert =="
   -o "$MACROLIB" \
   --check \
   --require-volume \
-  --require-transport-dataset
+  --require-transport-dataset \
+  "${SCATTER_ROW_BALANCE_ARGS[@]}"
 
 echo
 echo "== Readback =="

@@ -5,6 +5,12 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PACKAGE_SRC="${OPENMC2DONJON_SRC:-$REPO_ROOT/src}"
 RUN_DIR="${RUN_DIR:-/private/tmp/openmc2donjon_recipe_export_smoke}"
 PYTHON_BIN="${PYTHON_BIN:-}"
+SCATTER_ROW_BALANCE_WARN="${OPENMC2DONJON_SCATTER_ROW_BALANCE_WARN:-2e-2}"
+SCATTER_ROW_BALANCE_FAIL="${OPENMC2DONJON_SCATTER_ROW_BALANCE_FAIL:-2e-1}"
+SCATTER_ROW_BALANCE_ARGS=(
+  --scatter-row-balance-warn "$SCATTER_ROW_BALANCE_WARN"
+  --scatter-row-balance-fail "$SCATTER_ROW_BALANCE_FAIL"
+)
 
 if [[ -z "$PYTHON_BIN" ]]; then
   if [[ -x /Users/wen/miniforge3/envs/openmc-dev/bin/python ]]; then
@@ -126,18 +132,21 @@ echo "== HDF5 preflight =="
   --require-transport-dataset \
   --format multicompo \
   --output "$MCO" \
-  --check
+  --check \
+  "${SCATTER_ROW_BALANCE_ARGS[@]}"
 
 echo
 echo "== Converter readback =="
 "$PYTHON_BIN" -m openmc2donjon.cli "$MGXS" -o "$MCO" \
   --check \
   --require-volume \
-  --require-transport-dataset
+  --require-transport-dataset \
+  "${SCATTER_ROW_BALANCE_ARGS[@]}"
 "$PYTHON_BIN" -m openmc2donjon.cli --format macrolib "$MGXS" -o "$MAC" \
   --check \
   --require-volume \
-  --require-transport-dataset
+  --require-transport-dataset \
+  "${SCATTER_ROW_BALANCE_ARGS[@]}"
 
 echo
 echo "== One-step dry-run =="
@@ -147,7 +156,8 @@ echo "== One-step dry-run =="
   --run-dir "$ONE_STEP_DRY_RUN_DIR" \
   --check \
   --require-volume \
-  --require-transport-dataset
+  --require-transport-dataset \
+  "${SCATTER_ROW_BALANCE_ARGS[@]}"
 if [[ -e "$ONE_STEP_DRY_RUN_DIR" ]]; then
   echo "dry-run unexpectedly wrote $ONE_STEP_DRY_RUN_DIR" >&2
   exit 1
@@ -161,7 +171,8 @@ echo "== One-step managed run directory =="
   --run-dir "$ONE_STEP_RUN_DIR" \
   --check \
   --require-volume \
-  --require-transport-dataset
+  --require-transport-dataset \
+  "${SCATTER_ROW_BALANCE_ARGS[@]}"
 
 echo
 echo "== HDF5 diff =="
@@ -268,7 +279,8 @@ echo "== One-step with ADF sidecar =="
   --check \
   --require-adf \
   --require-volume \
-  --require-transport-dataset
+  --require-transport-dataset \
+  "${SCATTER_ROW_BALANCE_ARGS[@]}"
 
 "$PYTHON_BIN" - "$ADF_H5" "$ADF_MCO" "$ADF_SUMMARY" "$ADF_CHECK_SUMMARY" "$ADF_MANIFEST" <<'PY'
 import json

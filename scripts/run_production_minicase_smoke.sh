@@ -10,6 +10,12 @@ OPENMC_THREADS="${OPENMC_THREADS:-2}"
 MINICASE_PARTICLES="${MINICASE_PARTICLES:-200}"
 MINICASE_BATCHES="${MINICASE_BATCHES:-12}"
 MINICASE_INACTIVE="${MINICASE_INACTIVE:-4}"
+SCATTER_ROW_BALANCE_WARN="${OPENMC2DONJON_SCATTER_ROW_BALANCE_WARN:-5e-2}"
+SCATTER_ROW_BALANCE_FAIL="${OPENMC2DONJON_SCATTER_ROW_BALANCE_FAIL:-}"
+SCATTER_ROW_BALANCE_ARGS=(--scatter-row-balance-warn "$SCATTER_ROW_BALANCE_WARN")
+if [[ -n "$SCATTER_ROW_BALANCE_FAIL" ]]; then
+  SCATTER_ROW_BALANCE_ARGS+=(--scatter-row-balance-fail "$SCATTER_ROW_BALANCE_FAIL")
+fi
 
 if [[ -z "$PYTHON_BIN" ]]; then
   if [[ -x /Users/wen/miniforge3/envs/openmc-dev/bin/python ]]; then
@@ -120,7 +126,8 @@ OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
   --run-dir "$CONVERT_RUN_DIR" \
   --check \
   --require-volume \
-  --require-transport-dataset
+  --require-transport-dataset \
+  "${SCATTER_ROW_BALANCE_ARGS[@]}"
 
 "$PYTHON_BIN" - "$MGXS" "$MCO" "$SUMMARY" "$CHECK_SUMMARY" "$MANIFEST" <<'PY'
 import json
@@ -251,7 +258,8 @@ OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
   --extra-artifact "low-order-raw=$LOW_ORDER_RAW" \
   --check \
   --require-volume \
-  --require-transport-dataset
+  --require-transport-dataset \
+  "${SCATTER_ROW_BALANCE_ARGS[@]}"
 
 "$PYTHON_BIN" - "$SURFACE_FLUX" "$SURFACE_FLUX_SUMMARY" "$LOW_ORDER_DRIVER" "$LOW_ORDER_DRIVER_SUMMARY" "$LOW_ORDER_DRIVER_CHECK_SUMMARY" "$HOMOGENEOUS_FACE_FLUX" "$HOMOGENEOUS_FACE_FLUX_SUMMARY" "$ADF_SIDECAR" "$ADF_SIDECAR_SUMMARY" "$ADF_H5" "$ADF_MCO" "$ADF_RUN_SUMMARY" "$ADF_CHECK_SUMMARY" "$ADF_INJECT_SUMMARY" "$ADF_MANIFEST" <<'PY'
 import json
