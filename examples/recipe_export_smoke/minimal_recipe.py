@@ -42,14 +42,14 @@ class TinyLibrary:
         ]
         self.loaded_statepoint = None
         self.data = {
-            (1, "total"): [0.50, 0.70],
+            (1, "total"): [0.48, 0.65],
             (1, "absorption"): [0.05, 0.08],
             (1, "fission"): [0.010, 0.020],
             (1, "nu-fission"): [0.025, 0.050],
             (1, "chi"): [1.0, 0.0],
             (1, "scatter matrix"): [[0.40, 0.03], [0.02, 0.55]],
             (1, "transport"): [0.45, 0.63],
-            (2, "total"): [0.30, 0.60],
+            (2, "total"): [0.30, 0.57],
             (2, "absorption"): [0.01, 0.03],
             (2, "scatter matrix"): [[0.28, 0.01], [0.02, 0.52]],
             (2, "transport"): [0.29, 0.57],

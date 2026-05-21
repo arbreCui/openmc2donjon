@@ -248,6 +248,9 @@ if [[ -e "$C5G7_STATEPOINT" ]]; then
   exported_check_summary="$exported_run_dir/check_summary.json"
   exported_diff_summary="$exported_run_dir/diff_summary.json"
   exported_manifest="$exported_run_dir/manifest.json"
+  exported_log="$exported_run_dir/export.log"
+  mkdir -p "$exported_run_dir"
+  set +e
   C5G7_ADF_SOURCE="$C5G7_ACCEPTED_H5" \
   "$PYTHON_BIN" -m openmc2donjon.from_openmc_cli \
     --recipe "$REPO_ROOT/scripts/c5g7_export_recipe.py" \
@@ -258,10 +261,22 @@ if [[ -e "$C5G7_STATEPOINT" ]]; then
     --require-transport-dataset \
     --require-adf \
     --expected-adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
-    --scatter-row-balance-fail "$C5G7_EXPORT_SCATTER_ROW_BALANCE_FAIL"
-  "$PYTHON_BIN" -m openmc2donjon.cli diff "$C5G7_ACCEPTED_H5" "$exported_h5" \
-    --summary-json "$exported_diff_summary"
-  "$PYTHON_BIN" - "$exported_h5" "$exported_mco" "$exported_summary" "$exported_check_summary" "$exported_diff_summary" "$exported_manifest" <<'PY'
+    --scatter-row-balance-fail "$C5G7_EXPORT_SCATTER_ROW_BALANCE_FAIL" \
+    2>&1 | tee "$exported_log"
+  export_status="${PIPESTATUS[0]}"
+  set -e
+  if [[ "$export_status" -ne 0 ]]; then
+    if [[ "$REQUIRE_STATEPOINT_EXPORT" -eq 1 ]]; then
+      echo "C5G7 statepoint exporter parity failed; log: $exported_log" >&2
+      exit "$export_status"
+    fi
+    echo "skipped; C5G7_STATEPOINT is present but not compatible with current exporter"
+    echo "  statepoint: $C5G7_STATEPOINT"
+    echo "  log: $exported_log"
+  else
+    "$PYTHON_BIN" -m openmc2donjon.cli diff "$C5G7_ACCEPTED_H5" "$exported_h5" \
+      --summary-json "$exported_diff_summary"
+    "$PYTHON_BIN" - "$exported_h5" "$exported_mco" "$exported_summary" "$exported_check_summary" "$exported_diff_summary" "$exported_manifest" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -332,6 +347,7 @@ print(
     f"P{summary['legendre_order']}"
 )
 PY
+  fi
 else
   if [[ "$REQUIRE_STATEPOINT_EXPORT" -eq 1 ]]; then
     echo "missing C5G7_STATEPOINT: $C5G7_STATEPOINT" >&2

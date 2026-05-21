@@ -81,7 +81,6 @@ def _write_mixture(parent: h5py.Group, index: int, name: str) -> None:
     ring_factor = 1.0 + 0.012 * index
     leakage_factor = 1.0 + 0.004 * (index % 3)
 
-    total = np.asarray([0.48, 0.72, 1.18], dtype=float) * ring_factor
     absorption = np.asarray([0.030, 0.080, 0.210], dtype=float) * ring_factor
     scatter_p0 = np.asarray(
         [
@@ -91,6 +90,7 @@ def _write_mixture(parent: h5py.Group, index: int, name: str) -> None:
         ],
         dtype=float,
     ) * ring_factor
+    total = absorption + scatter_p0.sum(axis=1)
     scatter_p1 = np.asarray(
         [
             [0.045, 0.006, 0.000],

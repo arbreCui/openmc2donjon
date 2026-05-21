@@ -92,6 +92,9 @@
   summary manifest.
 - Wired row-balance preflight checks into production, hex, UOX, recipe, C5G7
   demo, and C5G7 acceptance smoke scripts.
+- Balanced the recipe and synthetic hex smoke MGXS fixtures so deterministic
+  examples can use strict row-balance failure thresholds instead of expected
+  warnings.
 
 ## v0.1.2-openmc-workflow - 2026-05-19
 
