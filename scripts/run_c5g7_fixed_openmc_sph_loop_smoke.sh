@@ -13,6 +13,7 @@ C5G7_SCATTER_ROW_BALANCE_FAIL="${OPENMC2DONJON_C5G7_SCATTER_ROW_BALANCE_FAIL:-1e
 SPH_DAMPING="${SPH_DAMPING:-0.1}"
 RUN_TAG="${RUN_TAG:-c5g7_fixed_openmc_sph_loop}"
 HELPER="$REPO_ROOT/scripts/c5g7_fixed_openmc_sph_loop_donjon.py"
+CONFIG_WRITER="$REPO_ROOT/examples/donjon_openmc2donjon/c5g7_sph_loop/make_config.py"
 
 LOOP_DIR="$RUN_DIR/sph_loop"
 LOOP_CONFIG="$RUN_DIR/c5g7_sph_loop_config.json"
@@ -74,83 +75,16 @@ echo "== Check fixed OpenMC base XS =="
 
 echo
 echo "== Write C5G7 SPH loop config =="
-"$PYTHON_BIN" - "$LOOP_CONFIG" "$C5G7_ACCEPTED_H5" "$C5G7_REFERENCE_FLUX_H5" \
-  "$LOOP_DIR" "$HELPER" "$DONJON_ROOT" "$PYTHON_BIN" "$SPH_DAMPING" "$RUN_TAG" <<'PY'
-import json
-from pathlib import Path
-import sys
-
-(
-    config_path,
-    accepted_h5,
-    reference_flux_h5,
-    loop_dir,
-    helper,
-    donjon_root,
-    python_bin,
-    damping,
-    run_tag,
-) = sys.argv[1:]
-
-payload = {
-    "schema": "openmc2donjon.sph-loop-config.v1",
-    "input_h5": accepted_h5,
-    "output_dir": loop_dir,
-    "reference_flux": f"{reference_flux_h5}::openmc_volume_flux",
-    "iterations": 2,
-    "final_solve": True,
-    "format": "macrolib",
-    "damping": float(damping),
-    "clip_min": 0.5,
-    "clip_max": 2.0,
-    "map_h5": reference_flux_h5,
-    "sph_kind": "c5g7-fixed-openmc-loop",
-    "sph_real": False,
-    "sph_applied": False,
-    "source_label": "C5G7 fixed OpenMC XS SPH loop",
-    "solver": {
-        "command": [
-            python_bin,
-            helper,
-            "solve",
-            "--donjon-root",
-            donjon_root,
-            "--macrolib",
-            "{ascii_input}",
-            "--result",
-            "{result}",
-            "--iteration",
-            "{iteration}",
-            "--run-tag",
-            run_tag,
-        ],
-        "result": "donjon_flux.result",
-    },
-    "postprocess": {
-        "command": [
-            python_bin,
-            helper,
-            "apply",
-            "--donjon-root",
-            donjon_root,
-            "--raw-macrolib",
-            "{workflow_ascii}",
-            "--output",
-            "{output}",
-            "--iteration",
-            "{iteration1}",
-            "--run-tag",
-            run_tag,
-        ],
-        "output": "corrected_pn.macrolib.txt",
-    },
-}
-
-path = Path(config_path)
-path.parent.mkdir(parents=True, exist_ok=True)
-path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-print(path)
-PY
+"$PYTHON_BIN" "$CONFIG_WRITER" \
+  --output "$LOOP_CONFIG" \
+  --output-dir "$LOOP_DIR" \
+  --mgxs "$C5G7_ACCEPTED_H5" \
+  --reference-flux "$C5G7_REFERENCE_FLUX_H5" \
+  --donjon-root "$DONJON_ROOT" \
+  --helper "$HELPER" \
+  --python-bin "$PYTHON_BIN" \
+  --damping "$SPH_DAMPING" \
+  --run-tag "$RUN_TAG"
 
 echo
 echo "== Run configured fixed-OpenMC SPH loop =="

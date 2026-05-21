@@ -79,12 +79,16 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         text = (_repo_root() / "scripts/run_c5g7_fixed_openmc_sph_loop_smoke.sh").read_text(
             encoding="utf-8"
         )
+        config_writer = (
+            _repo_root() / "examples/donjon_openmc2donjon/c5g7_sph_loop/make_config.py"
+        ).read_text(encoding="utf-8")
 
         self.assertIn("fixed OpenMC base XS", text)
         self.assertIn("run-sph-loop", text)
+        self.assertIn("c5g7_sph_loop/make_config.py", text)
         self.assertIn("c5g7_fixed_openmc_sph_loop_donjon.py", text)
-        self.assertIn('"final_solve": True', text)
-        self.assertIn('"postprocess"', text)
+        self.assertIn('"final_solve": True', config_writer)
+        self.assertIn('"postprocess"', config_writer)
         self.assertIn("openmc2donjon_sph_loop_passed", text)
         self.assertIn("ITER1_SIDECAR", text)
         self.assertIn("extract-donjon-volume-flux", text)

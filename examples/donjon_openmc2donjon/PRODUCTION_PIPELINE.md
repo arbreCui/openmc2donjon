@@ -7,6 +7,12 @@ The current production pipeline is C5G7 assembly-wise:
 3. DONJON consumes the generated file through the locked C5G7 decks.
 4. The validation scripts compare k-effective against the accepted baseline.
 
+The config-driven SPH loop example is:
+
+```bash
+bash examples/donjon_openmc2donjon/c5g7_sph_loop/run.sh
+```
+
 Main smoke:
 
 ```bash

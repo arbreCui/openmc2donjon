@@ -1,0 +1,20 @@
+# C5G7 SPH Loop Example
+
+This is the reusable C5G7 fixed-OpenMC SPH loop entrypoint.
+
+It writes a `run-sph-loop` JSON config, runs DONJON solves, applies DONJON
+`DSPH:/MAC:` postprocessing, and leaves the final corrected MACROLIB in the
+configured run directory.
+
+```bash
+PYTHON_BIN=/Users/wen/miniforge3/envs/openmc-dev/bin/python \
+DONJON_ROOT=/Users/wen/dragon-5.1/Donjon \
+RUN_DIR=/private/tmp/openmc2donjon_c5g7_sph_loop_example \
+bash examples/donjon_openmc2donjon/c5g7_sph_loop/run.sh
+```
+
+The generated config is the important artifact:
+
+```bash
+openmc2donjon run-sph-loop --config "$RUN_DIR/c5g7_sph_loop_config.json" --force
+```
