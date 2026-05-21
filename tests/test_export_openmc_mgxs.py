@@ -208,6 +208,43 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
         np.testing.assert_allclose(stored_scatter[0], library.scatter[:, :, 0])
         np.testing.assert_allclose(stored_scatter[1], library.scatter[:, :, 1])
 
+    def test_exports_one_group_vectors_and_scatter_moments(self) -> None:
+        class EnergyGroups1:
+            group_edges = np.array([1.0e-5, 1.0e7])
+
+        class Library1:
+            def __init__(self) -> None:
+                self.energy_groups = EnergyGroups1()
+                self.domain = FakeDomain("fuel", 1, 3.0, True)
+                self.domains = [self.domain]
+                self.scatter = np.array([[[0.45, 0.04]]])
+                self.data = {
+                    "total": np.array([0.5]),
+                    "absorption": np.array([0.05]),
+                    "fission": np.array([0.01]),
+                    "nu-fission": np.array([0.025]),
+                    "chi": np.array([1.0]),
+                    "scatter matrix": self.scatter,
+                }
+
+            def get_mgxs(self, domain: FakeDomain, mgxs_type: str) -> FakeMGXS:
+                if domain is not self.domain or mgxs_type not in self.data:
+                    raise KeyError((domain, mgxs_type))
+                return FakeMGXS(self.data[mgxs_type])
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "mgxs.h5"
+            summary = export_openmc_mgxs_library(Library1(), path)
+            with h5py.File(path, "r") as h5:
+                total = h5["mixtures"]["fuel"]["total"][:]
+                stored_scatter = h5["mixtures"]["fuel"]["scatter_matrix"][:]
+
+        self.assertEqual(summary.energy_groups, 1)
+        self.assertEqual(summary.legendre_order, 1)
+        np.testing.assert_allclose(total, [0.5])
+        self.assertEqual(stored_scatter.shape, (2, 1, 1))
+        np.testing.assert_allclose(stored_scatter[:, 0, 0], [0.45, 0.04])
+
     def test_rejects_nu_scatter_as_default_donjon_scatter(self) -> None:
         class Library:
             def __init__(self) -> None:

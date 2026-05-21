@@ -7,9 +7,10 @@ import unittest
 import h5py
 import numpy as np
 
+from openmc2donjon import lcm_ascii
 from openmc2donjon import mgxs_input_contract as validator
 from openmc2donjon.cli import main as cli_main
-from openmc2donjon.macrolib import read_macrolib_ascii
+from openmc2donjon.macrolib import extract_sph_from_macrolib_ascii, read_macrolib_ascii
 
 
 class SphAugmentTests(unittest.TestCase):
@@ -122,6 +123,37 @@ class SphAugmentTests(unittest.TestCase):
         self.assertFalse(report.ok)
         self.assertTrue(any("SPH data" in issue for issue in report.issues))
 
+    def test_extracts_sph_from_dragon_macrolib_without_energy_block(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            macrolib = root / "dragon_sph.macrolib.txt"
+            sidecar = root / "sph_from_dragon.h5"
+            write_mgxs_fixture(mgxs)
+            write_dragon_sph_macrolib_fixture(macrolib)
+
+            values = extract_sph_from_macrolib_ascii(macrolib)
+            np.testing.assert_allclose(values, [[1.10, 0.90], [0.95, 1.05]])
+
+            self.assertEqual(
+                cli_main(
+                    [
+                        "make-sph-sidecar",
+                        str(mgxs),
+                        "-o",
+                        str(sidecar),
+                        "--mode",
+                        "macrolib",
+                        "--macrolib",
+                        str(macrolib),
+                    ]
+                ),
+                0,
+            )
+            with h5py.File(sidecar, "r") as h5:
+                self.assertEqual(h5.attrs["sph_kind"], "macrolib-nsph")
+                np.testing.assert_allclose(h5["sph"][:], values)
+
 
 def write_mgxs_fixture(path: Path) -> None:
     with h5py.File(path, "w") as h5:
@@ -147,6 +179,28 @@ def write_mgxs_fixture(path: Path) -> None:
             nu_fission=np.zeros(2),
             chi=np.zeros(2),
         )
+
+
+def write_dragon_sph_macrolib_fixture(path: Path) -> None:
+    state = [0] * 40
+    state[0] = 2
+    state[1] = 2
+    state[2] = 1
+    state[3] = 1
+    state[13] = 1
+    blocks = [
+        lcm_ascii.block(1, "GROUP", 10, count=2),
+        lcm_ascii.list_item(2, 1),
+        lcm_ascii.block(3, "NSPH", 2, [1.10, 0.95]),
+        lcm_ascii.control(-3),
+        lcm_ascii.list_item(2, 2),
+        lcm_ascii.block(3, "NSPH", 2, [0.90, 1.05]),
+        lcm_ascii.control(-3),
+        lcm_ascii.block(1, "STATE-VECTOR", 1, state),
+        lcm_ascii.string_block(1, "SIGNATURE", "L_MACROLIB", width=12),
+        lcm_ascii.control(-1),
+    ]
+    lcm_ascii.write_lcm_ascii(blocks, path)
 
 
 def write_mixture(

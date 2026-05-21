@@ -34,6 +34,7 @@ Default:
   - package tests
   - CLI help/version smoke
   - recipe/statepoint exporter smoke
+  - DRAGON SPH macrolib handoff smoke when local DRAGON TCM38 inputs exist
   - external face-flux adapter smoke
   - production minicase and OpenMC hex minicase smokes
   - C5G7 converter readback smoke
@@ -157,6 +158,12 @@ echo "== Recipe export smoke =="
 RUN_DIR="$RUN_DIR/recipe_export_smoke" \
 PYTHON_BIN="$PYTHON_BIN" \
   bash "$REPO_ROOT/scripts/run_recipe_export_smoke.sh"
+
+echo
+echo "== DRAGON SPH macrolib handoff smoke =="
+RUN_DIR="$RUN_DIR/dragon_sph_handoff" \
+PYTHON_BIN="$PYTHON_BIN" \
+  bash "$REPO_ROOT/scripts/run_dragon_sph_handoff_smoke.sh"
 
 echo
 echo "== External low-order handoff smoke =="

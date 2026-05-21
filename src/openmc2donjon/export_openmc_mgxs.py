@@ -427,6 +427,8 @@ def _as_group_vector(
 ) -> np.ndarray:
     arr = np.asarray(values, dtype=float).squeeze()
     if arr.ndim == 0:
+        if ngroups == 1:
+            return np.asarray([float(arr)], dtype=float)
         raise ValueError(f"domain {domain_name}: {field_name} is scalar, expected {ngroups}")
     if arr.ndim > 1:
         ones_removed = np.squeeze(arr)
@@ -441,6 +443,11 @@ def _as_group_vector(
 
 def _as_scatter_moments(values: np.ndarray, ngroups: int, domain_name: str) -> np.ndarray:
     arr = np.asarray(values, dtype=float).squeeze()
+    if ngroups == 1:
+        if arr.ndim == 0:
+            return np.asarray([[[float(arr)]]], dtype=float)
+        if arr.ndim == 1:
+            return arr.reshape((arr.shape[0], 1, 1))
     if arr.shape == (ngroups, ngroups):
         return arr.reshape((1, ngroups, ngroups))
     if arr.ndim != 3:

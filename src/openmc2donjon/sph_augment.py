@@ -124,7 +124,7 @@ def create_macrolib_sph_sidecar(
 
     import h5py
 
-    from .macrolib import read_macrolib_ascii
+    from .macrolib import extract_sph_from_macrolib_ascii
 
     input_h5 = Path(input_h5)
     output_h5 = Path(output_h5)
@@ -140,10 +140,7 @@ def create_macrolib_sph_sidecar(
         mixture_names = _input_mixture_names(h5)
         ngroups = _energy_groups(h5)
 
-    macrolib = read_macrolib_ascii(macrolib_ascii)
-    if macrolib.sph is None:
-        raise ValueError(f"macrolib has no GROUP/*/NSPH payload: {macrolib_ascii}")
-    values = np.asarray(macrolib.sph, dtype=float)
+    values = np.asarray(extract_sph_from_macrolib_ascii(macrolib_ascii), dtype=float)
     expected_shape = (len(mixture_names), ngroups)
     if values.shape != expected_shape:
         raise ValueError(

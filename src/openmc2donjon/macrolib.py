@@ -42,6 +42,39 @@ def read_macrolib_ascii(path: str | Path) -> Macrolib:
     return parse_macrolib_blocks(lcm.read_lcm_ascii(path))
 
 
+def extract_sph_from_macrolib_ascii(path: str | Path) -> np.ndarray:
+    """Extract ``GROUP/*/NSPH`` from a DONJON ``L_MACROLIB`` ASCII listing.
+
+    Some native DRAGON/DONJON macrolib exports carry enough information for
+    SPH handoff but omit optional blocks, such as ``ENERGY``, that the full
+    macrolib reader expects.  This helper intentionally reads only the
+    state-vector dimensions and the per-group ``NSPH`` payload.
+    """
+
+    return extract_sph_from_macrolib_blocks(lcm.read_lcm_ascii(path))
+
+
+def extract_sph_from_macrolib_blocks(blocks: list[lcm.LcmBlock]) -> np.ndarray:
+    """Extract ``GROUP/*/NSPH`` from ordered LCM ASCII blocks."""
+
+    start, base_level, starts_with_group = _find_macrolib_object(blocks)
+    object_blocks = _object_blocks(
+        blocks[start:],
+        base_level,
+        stop_on_base_control=starts_with_group,
+    )
+    state = _find_named(object_blocks, "STATE-VECTOR", level=base_level).data
+    if not isinstance(state, tuple):
+        raise ValueError("L_MACROLIB STATE-VECTOR is missing integer data")
+    ngroups = int(state[0])
+    nmixtures = int(state[1])
+    groups = _group_payloads(object_blocks, ngroups, base_level)
+    sph = _optional_group_matrix(groups, "NSPH", nmixtures, ngroups)
+    if sph is None:
+        raise ValueError("macrolib has no GROUP/*/NSPH payload")
+    return sph
+
+
 def convert_mgxs_hdf5_to_macrolib(
     input_h5: str | Path,
     output_path: str | Path,
