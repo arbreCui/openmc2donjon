@@ -39,6 +39,7 @@ Default:
   - DONJON SPH solver-response smoke when local DONJON is available
   - SPH iteration table smoke
   - DONJON L_FLUX volume-flux extraction CLI smoke
+  - SPH iteration workflow CLI smoke
   - external SPH table handoff smoke
   - external face-flux adapter smoke
   - production minicase and OpenMC hex minicase smokes
@@ -158,6 +159,7 @@ echo "== CLI smoke =="
 "$PYTHON_BIN" -m openmc2donjon.cli make-sph-update-table --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli augment-sph --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli extract-donjon-volume-flux --help >/dev/null
+"$PYTHON_BIN" -m openmc2donjon.cli run-sph-iteration --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.export_cli --version
 "$PYTHON_BIN" -m openmc2donjon.export_cli --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.from_openmc_cli --version

@@ -13,18 +13,20 @@ C5G7_SCATTER_ROW_BALANCE_FAIL="${OPENMC2DONJON_C5G7_SCATTER_ROW_BALANCE_FAIL:-1e
 SPH_DAMPING="${SPH_DAMPING:-0.1}"
 
 BASE_MACROLIB="$RUN_DIR/c5g7_base.macrolib.txt"
-ITER1_TABLE="$RUN_DIR/iter1_sph.csv"
-ITER1_SIDECAR="$RUN_DIR/iter1_sph.sidecar.h5"
-ITER1_H5="$RUN_DIR/iter1_with_sph.h5"
-ITER1_RAW_MACROLIB="$RUN_DIR/iter1_raw_sph.macrolib.txt"
+ITER1_DIR="$RUN_DIR/iter1_workflow"
+ITER1_TABLE="$ITER1_DIR/next_sph.csv"
+ITER1_SIDECAR="$ITER1_DIR/next_sph.sidecar.h5"
+ITER1_H5="$ITER1_DIR/mgxs_with_sph.h5"
+ITER1_RAW_MACROLIB="$ITER1_DIR/out.macrolib.txt"
 ITER1_CORRECTED_MACROLIB="$RUN_DIR/iter1_corrected_pn.macrolib.txt"
-ITER2_TABLE="$RUN_DIR/iter2_sph.csv"
-ITER2_SIDECAR="$RUN_DIR/iter2_sph.sidecar.h5"
-ITER2_H5="$RUN_DIR/iter2_with_sph.h5"
-ITER2_RAW_MACROLIB="$RUN_DIR/iter2_raw_sph.macrolib.txt"
+ITER2_DIR="$RUN_DIR/iter2_workflow"
+ITER2_TABLE="$ITER2_DIR/next_sph.csv"
+ITER2_SIDECAR="$ITER2_DIR/next_sph.sidecar.h5"
+ITER2_H5="$ITER2_DIR/mgxs_with_sph.h5"
+ITER2_RAW_MACROLIB="$ITER2_DIR/out.macrolib.txt"
 ITER2_CORRECTED_MACROLIB="$RUN_DIR/iter2_corrected_pn.macrolib.txt"
-BASE_FLUX_H5="$RUN_DIR/iter0_donjon_volume_flux.h5"
-ITER1_FLUX_H5="$RUN_DIR/iter1_donjon_volume_flux.h5"
+BASE_FLUX_H5="$ITER1_DIR/donjon_volume_flux.h5"
+ITER1_FLUX_H5="$ITER2_DIR/donjon_volume_flux.h5"
 ITER2_FLUX_H5="$RUN_DIR/iter2_donjon_volume_flux.h5"
 SUMMARY_JSON="$RUN_DIR/c5g7_fixed_openmc_sph_loop_summary.json"
 
@@ -144,15 +146,19 @@ END: ;
 PY
 }
 
+solve_result_path() {
+  local iteration="$1"
+  local case_id="${RUN_TAG:-c5g7_fixed_openmc_sph_loop}_iter${iteration}"
+  printf '%s\n' "$DONJON_ROOT/Darwin_arm64/${case_id}_solve.result"
+}
+
 run_solve() {
   local macrolib_path="$1"
   local iteration="$2"
-  local output_flux_h5="$3"
   local case_id="${RUN_TAG:-c5g7_fixed_openmc_sph_loop}_iter${iteration}"
   local data_case_dir="$DONJON_ROOT/data/openmc2donjon/case_runs/c5g7_fixed_openmc_sph_loop"
   local deck_rel="openmc2donjon/case_runs/c5g7_fixed_openmc_sph_loop/${case_id}_solve.x2m"
   local deck_path="$DONJON_ROOT/data/$deck_rel"
-  local result_path="$DONJON_ROOT/Darwin_arm64/${case_id}_solve.result"
   local short_macrolib="/tmp/${case_id}.macrolib.txt"
 
   mkdir -p "$data_case_dir"
@@ -162,11 +168,43 @@ run_solve() {
     cd "$DONJON_ROOT"
     ./rdonjon -q "$deck_rel"
   )
+}
+
+extract_flux() {
+  local result_path="$1"
+  local output_flux_h5="$2"
   "$PYTHON_BIN" -m openmc2donjon.cli extract-donjon-volume-flux "$C5G7_ACCEPTED_H5" \
     --flux-dump "$result_path" \
     --map-h5 "$C5G7_REFERENCE_FLUX_H5" \
     -o "$output_flux_h5" \
     --force
+}
+
+run_iteration_workflow() {
+  local iteration="$1"
+  local result_path="$2"
+  local output_dir="$3"
+  local previous_sph="${4:-}"
+  local args=(
+    -m openmc2donjon.cli run-sph-iteration "$C5G7_ACCEPTED_H5"
+    --output-dir "$output_dir"
+    --reference-flux "$C5G7_REFERENCE_FLUX_H5::openmc_volume_flux"
+    --flux-dump "$result_path"
+    --map-h5 "$C5G7_REFERENCE_FLUX_H5"
+    --damping "$SPH_DAMPING"
+    --clip-min 0.5
+    --clip-max 2.0
+    --format macrolib
+    --sph-kind "c5g7-fixed-openmc-loop-iter${iteration}"
+    --sph-real false
+    --sph-applied false
+    --source-label "C5G7 fixed OpenMC XS SPH loop iteration ${iteration}"
+    --force
+  )
+  if [[ -n "$previous_sph" ]]; then
+    args+=(--previous-sph "$previous_sph")
+  fi
+  "$PYTHON_BIN" "${args[@]}"
 }
 
 apply_sph() {
@@ -193,78 +231,20 @@ apply_sph() {
 
 echo
 echo "== Iteration 0: solve fixed OpenMC base XS =="
-run_solve "$BASE_MACROLIB" 0 "$BASE_FLUX_H5"
+run_solve "$BASE_MACROLIB" 0
 
 echo
 echo "== Iteration 1: update SPH from OpenMC reference / DONJON iter0 flux =="
-"$PYTHON_BIN" -m openmc2donjon.cli make-sph-update-table "$C5G7_ACCEPTED_H5" \
-  -o "$ITER1_TABLE" \
-  --reference-flux "$C5G7_REFERENCE_FLUX_H5::openmc_volume_flux" \
-  --low-order-flux "$BASE_FLUX_H5::donjon_volume_flux" \
-  --damping "$SPH_DAMPING" \
-  --clip-min 0.5 \
-  --clip-max 2.0 \
-  --source-label "C5G7 fixed OpenMC XS SPH loop iteration 1" \
-  --force
-"$PYTHON_BIN" -m openmc2donjon.cli make-sph-sidecar "$C5G7_ACCEPTED_H5" \
-  -o "$ITER1_SIDECAR" \
-  --mode table \
-  --table "$ITER1_TABLE" \
-  --sph-kind c5g7-fixed-openmc-loop-iter1 \
-  --sph-real false \
-  --sph-applied false \
-  --force
-"$PYTHON_BIN" -m openmc2donjon.cli augment-sph "$C5G7_ACCEPTED_H5" \
-  --sph-source "$ITER1_SIDECAR" \
-  -o "$ITER1_H5" \
-  --force
-"$PYTHON_BIN" -m openmc2donjon.cli --format macrolib "$ITER1_H5" \
-  -o "$ITER1_RAW_MACROLIB" \
-  --check \
-  --require-volume \
-  --require-transport-dataset \
-  --require-adf \
-  --expected-adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
-  --require-sph \
-  --scatter-row-balance-fail "$C5G7_SCATTER_ROW_BALANCE_FAIL"
+run_iteration_workflow 1 "$(solve_result_path 0)" "$ITER1_DIR"
 apply_sph "$ITER1_RAW_MACROLIB" "$ITER1_CORRECTED_MACROLIB" 1
-run_solve "$ITER1_CORRECTED_MACROLIB" 1 "$ITER1_FLUX_H5"
+run_solve "$ITER1_CORRECTED_MACROLIB" 1
 
 echo
 echo "== Iteration 2: update cumulative SPH from OpenMC reference / DONJON iter1 flux =="
-"$PYTHON_BIN" -m openmc2donjon.cli make-sph-update-table "$C5G7_ACCEPTED_H5" \
-  -o "$ITER2_TABLE" \
-  --reference-flux "$C5G7_REFERENCE_FLUX_H5::openmc_volume_flux" \
-  --low-order-flux "$ITER1_FLUX_H5::donjon_volume_flux" \
-  --previous-sph "$ITER1_SIDECAR" \
-  --damping "$SPH_DAMPING" \
-  --clip-min 0.5 \
-  --clip-max 2.0 \
-  --source-label "C5G7 fixed OpenMC XS SPH loop iteration 2" \
-  --force
-"$PYTHON_BIN" -m openmc2donjon.cli make-sph-sidecar "$C5G7_ACCEPTED_H5" \
-  -o "$ITER2_SIDECAR" \
-  --mode table \
-  --table "$ITER2_TABLE" \
-  --sph-kind c5g7-fixed-openmc-loop-iter2 \
-  --sph-real false \
-  --sph-applied false \
-  --force
-"$PYTHON_BIN" -m openmc2donjon.cli augment-sph "$C5G7_ACCEPTED_H5" \
-  --sph-source "$ITER2_SIDECAR" \
-  -o "$ITER2_H5" \
-  --force
-"$PYTHON_BIN" -m openmc2donjon.cli --format macrolib "$ITER2_H5" \
-  -o "$ITER2_RAW_MACROLIB" \
-  --check \
-  --require-volume \
-  --require-transport-dataset \
-  --require-adf \
-  --expected-adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
-  --require-sph \
-  --scatter-row-balance-fail "$C5G7_SCATTER_ROW_BALANCE_FAIL"
+run_iteration_workflow 2 "$(solve_result_path 1)" "$ITER2_DIR" "$ITER1_SIDECAR"
 apply_sph "$ITER2_RAW_MACROLIB" "$ITER2_CORRECTED_MACROLIB" 2
-run_solve "$ITER2_CORRECTED_MACROLIB" 2 "$ITER2_FLUX_H5"
+run_solve "$ITER2_CORRECTED_MACROLIB" 2
+extract_flux "$(solve_result_path 2)" "$ITER2_FLUX_H5"
 
 echo
 echo "== Validate fixed-OpenMC SPH loop =="

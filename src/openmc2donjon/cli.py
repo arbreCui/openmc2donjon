@@ -31,6 +31,7 @@ from .sph_augment import (
     create_unity_sph_sidecar,
 )
 from .sph_iteration import create_sph_update_table
+from .sph_workflow import run_sph_iteration_workflow
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -57,6 +58,8 @@ def build_parser() -> argparse.ArgumentParser:
             "to iterate and carry SPH equivalence factors, "
             "'openmc2donjon extract-donjon-volume-flux <input_h5> ...' to "
             "adapt DONJON L_FLUX dumps into canonical low-order volume flux, "
+            "'openmc2donjon run-sph-iteration <input_h5> ...' to run one "
+            "fixed-OpenMC SPH iteration handoff, "
             "'openmc2donjon bundle --output-dir DIR ...' to collect "
             "production artifacts, 'openmc2donjon doctor' for environment checks, or "
             "'openmc2donjon check <input_h5>' for input-contract preflight."
@@ -867,6 +870,121 @@ def build_extract_donjon_volume_flux_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_run_sph_iteration_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="openmc2donjon run-sph-iteration",
+        description=(
+            "Run one fixed-OpenMC SPH iteration from a DONJON L_FLUX dump: "
+            "extract volume flux, compute the next SPH table, write a sidecar, "
+            "inject it into MGXS, and convert the augmented handoff."
+        ),
+    )
+    parser.add_argument("input_h5", type=Path, help="immutable base MGXS HDF5 handoff")
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        required=True,
+        help="directory for generated flux, SPH, augmented MGXS, ASCII, and summary artifacts",
+    )
+    parser.add_argument(
+        "--reference-flux",
+        required=True,
+        help="reference OpenMC flux CSV or HDF5 source, optionally PATH::DATASET",
+    )
+    parser.add_argument(
+        "--flux-dump",
+        type=Path,
+        required=True,
+        help="DONJON result containing a UTL L_FLUX dump",
+    )
+    parser.add_argument(
+        "--map-h5",
+        type=Path,
+        default=None,
+        help=(
+            "HDF5 map containing /scalar_flux_ids, or /kn plus /mixture_names; "
+            "mutually exclusive with --scalar-flux-map"
+        ),
+    )
+    parser.add_argument(
+        "--scalar-flux-map",
+        default=None,
+        help="comma-separated one-based DONJON scalar flux IDs, for example fuel=1,mod=2",
+    )
+    parser.add_argument(
+        "--kn-column",
+        type=int,
+        default=1,
+        help="one-based /kn column containing scalar flux IDs when --map-h5 uses /kn (default: 1)",
+    )
+    parser.add_argument(
+        "--list-offset",
+        type=int,
+        default=0,
+        help="number of unnamed real list vectors to skip before group 1 (default: 0)",
+    )
+    parser.add_argument(
+        "--previous-sph",
+        default=None,
+        help="previous SPH CSV or HDF5 sidecar/source; defaults to unity",
+    )
+    parser.add_argument(
+        "--damping",
+        type=float,
+        default=1.0,
+        help="multiplicative update damping in 0..1 (default: 1.0)",
+    )
+    parser.add_argument("--clip-min", type=float, default=None, help="minimum SPH value")
+    parser.add_argument("--clip-max", type=float, default=None, help="maximum SPH value")
+    parser.add_argument(
+        "--format",
+        choices=("macrolib", "multicompo"),
+        default="macrolib",
+        help="final DONJON ASCII output format (default: macrolib)",
+    )
+    parser.add_argument(
+        "--root-name",
+        default=DEFAULT_ROOT_NAME,
+        help=f"top-level LCM directory name for --format multicompo (default: {DEFAULT_ROOT_NAME})",
+    )
+    parser.add_argument(
+        "--h-factor-default",
+        type=float,
+        default=None,
+        help="write this constant H-FACTOR when the input HDF5 does not provide one",
+    )
+    parser.add_argument(
+        "--sph-kind",
+        default="sph-iteration",
+        help="root sph_kind provenance attribute for the sidecar and augmented HDF5",
+    )
+    parser.add_argument(
+        "--sph-real",
+        choices=("true", "false"),
+        default="true",
+        help="root sph_real provenance attribute (default: true)",
+    )
+    parser.add_argument(
+        "--sph-applied",
+        choices=("true", "false"),
+        default="false",
+        help="root sph_applied provenance attribute (default: false)",
+    )
+    parser.add_argument(
+        "--source-label",
+        default="DONJON low-order SPH iteration workflow",
+        help="provenance label stored in generated summaries and SPH metadata",
+    )
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        default=None,
+        help="workflow summary JSON path (default: OUTPUT_DIR/sph_iteration_workflow_summary.json)",
+    )
+    parser.add_argument("--force", action="store_true", help="overwrite generated artifacts")
+    return parser
+
+
 def build_export_surface_flux_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="openmc2donjon export-surface-flux",
@@ -1156,6 +1274,8 @@ def main(argv: list[str] | None = None) -> int:
         return _augment_sph_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "extract-donjon-volume-flux":
         return _extract_donjon_volume_flux_main(raw_argv[1:])
+    if raw_argv and raw_argv[0] == "run-sph-iteration":
+        return _run_sph_iteration_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "bundle":
         return _bundle_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "doctor":
@@ -1466,6 +1586,43 @@ def _extract_donjon_volume_flux_main(argv: list[str]) -> int:
         )
     except Exception as exc:
         parser.exit(1, f"openmc2donjon extract-donjon-volume-flux: error: {exc}\n")
+    return 0
+
+
+def _run_sph_iteration_main(argv: list[str]) -> int:
+    parser = build_run_sph_iteration_parser()
+    args = parser.parse_args(argv)
+    try:
+        if args.map_h5 is not None and args.scalar_flux_map is not None:
+            parser.error("--map-h5 and --scalar-flux-map are mutually exclusive")
+        scalar_flux_ids = (
+            None if args.scalar_flux_map is None else _parse_scalar_flux_map(args.scalar_flux_map)
+        )
+        run_sph_iteration_workflow(
+            args.input_h5,
+            args.output_dir,
+            reference_flux=args.reference_flux,
+            flux_dump=args.flux_dump,
+            map_h5=args.map_h5,
+            scalar_flux_ids=scalar_flux_ids,
+            scalar_flux_column=args.kn_column - 1,
+            list_offset=args.list_offset,
+            previous_sph=args.previous_sph,
+            damping=args.damping,
+            clip_min=args.clip_min,
+            clip_max=args.clip_max,
+            output_format=args.format,
+            root_name=args.root_name,
+            h_factor_default=args.h_factor_default,
+            sph_kind=args.sph_kind,
+            sph_real=args.sph_real == "true",
+            sph_applied=args.sph_applied == "true",
+            source_label=args.source_label,
+            force=args.force,
+            summary_json=args.summary_json,
+        )
+    except Exception as exc:
+        parser.exit(1, f"openmc2donjon run-sph-iteration: error: {exc}\n")
     return 0
 
 

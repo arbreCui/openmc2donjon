@@ -28,6 +28,7 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertIn("scripts/run_donjon_sph_solver_response_smoke.sh", default_section)
         self.assertIn("make-sph-update-table --help", default_section)
         self.assertIn("extract-donjon-volume-flux --help", default_section)
+        self.assertIn("run-sph-iteration --help", default_section)
         self.assertIn("== SPH iteration loop smoke ==", default_section)
         self.assertIn("examples/sph_iteration_loop/run_smoke.sh", default_section)
         self.assertIn("== External SPH handoff smoke ==", default_section)
@@ -79,7 +80,9 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         )
 
         self.assertIn("fixed OpenMC base XS", text)
-        self.assertIn("--previous-sph \"$ITER1_SIDECAR\"", text)
+        self.assertIn("run-sph-iteration", text)
+        self.assertIn("--previous-sph", text)
+        self.assertIn("ITER1_SIDECAR", text)
         self.assertIn("extract-donjon-volume-flux", text)
         self.assertIn("mesh_donjon_volume_flux", text)
         self.assertIn("openmc2donjon_c5g7_fixed_openmc_sph_loop_passed", text)
