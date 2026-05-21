@@ -26,6 +26,7 @@ from .openmc_surface_flux import (
 from .sph_augment import (
     augment_hdf5_with_sph,
     create_macrolib_sph_sidecar,
+    create_table_sph_sidecar,
     create_unity_sph_sidecar,
 )
 
@@ -668,7 +669,8 @@ def build_make_sph_sidecar_parser() -> argparse.ArgumentParser:
         description=(
             "Create an SPH sidecar HDF5 from an MGXS handoff. Unity SPH is "
             "useful for plumbing; macrolib mode extracts DONJON/DRAGON NSPH "
-            "factors from an L_MACROLIB ASCII dump."
+            "factors from an L_MACROLIB ASCII dump; table mode canonicalizes "
+            "external SPH factors from CSV."
         ),
     )
     parser.add_argument("input_h5", type=Path, help="MGXS HDF5 file used for mixture/group metadata")
@@ -681,7 +683,7 @@ def build_make_sph_sidecar_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--mode",
-        choices=("unity", "macrolib"),
+        choices=("unity", "macrolib", "table"),
         default="unity",
         help="sidecar source mode (default: unity)",
     )
@@ -690,6 +692,15 @@ def build_make_sph_sidecar_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help="for --mode macrolib, L_MACROLIB ASCII file containing GROUP/*/NSPH",
+    )
+    parser.add_argument(
+        "--table",
+        type=Path,
+        default=None,
+        help=(
+            "for --mode table, CSV with either long columns mixture,group,sph "
+            "or wide columns mixture,g1,g2,..."
+        ),
     )
     parser.add_argument(
         "--value",
@@ -1254,6 +1265,19 @@ def _make_sph_sidecar_main(argv: list[str]) -> int:
                 macrolib_ascii=args.macrolib,
                 force=args.force,
                 sph_kind=args.sph_kind or "macrolib-nsph",
+                sph_real=True if args.sph_real is None else args.sph_real == "true",
+                sph_applied=False if args.sph_applied is None else args.sph_applied == "true",
+                summary_json=args.summary_json,
+            )
+        elif args.mode == "table":
+            if args.table is None:
+                parser.error("--mode table requires --table")
+            create_table_sph_sidecar(
+                args.input_h5,
+                args.output,
+                table=args.table,
+                force=args.force,
+                sph_kind=args.sph_kind or "external-table",
                 sph_real=True if args.sph_real is None else args.sph_real == "true",
                 sph_applied=False if args.sph_applied is None else args.sph_applied == "true",
                 summary_json=args.summary_json,

@@ -37,6 +37,7 @@ Default:
   - DRAGON SPH macrolib handoff smoke when local DRAGON TCM38 inputs exist
   - DONJON DSPH consume smoke when local DONJON is available
   - DONJON SPH solver-response smoke when local DONJON is available
+  - external SPH table handoff smoke
   - external face-flux adapter smoke
   - production minicase and OpenMC hex minicase smokes
   - C5G7 converter readback smoke
@@ -188,6 +189,12 @@ echo "== External low-order handoff smoke =="
 RUN_DIR="$RUN_DIR/external_low_order_handoff" \
 PYTHON_BIN="$PYTHON_BIN" \
   bash "$REPO_ROOT/examples/external_low_order_handoff/run_smoke.sh"
+
+echo
+echo "== External SPH handoff smoke =="
+RUN_DIR="$RUN_DIR/external_sph_handoff" \
+PYTHON_BIN="$PYTHON_BIN" \
+  bash "$REPO_ROOT/examples/external_sph_handoff/run_smoke.sh"
 
 echo
 echo "== External face-flux adapter smoke =="

@@ -26,6 +26,8 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertIn("scripts/run_donjon_sph_consume_smoke.sh", default_section)
         self.assertIn("== DONJON SPH solver response smoke ==", default_section)
         self.assertIn("scripts/run_donjon_sph_solver_response_smoke.sh", default_section)
+        self.assertIn("== External SPH handoff smoke ==", default_section)
+        self.assertIn("examples/external_sph_handoff/run_smoke.sh", default_section)
         self.assertIn("== C5G7 ADF source reconstruction smoke ==", accepted_section)
         self.assertIn("scripts/run_c5g7_adf_source_smoke.sh", accepted_section)
         self.assertIn("== C5G7 DONJON face-flux regeneration smoke ==", accepted_section)

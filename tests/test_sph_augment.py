@@ -11,6 +11,7 @@ from openmc2donjon import lcm_ascii
 from openmc2donjon import mgxs_input_contract as validator
 from openmc2donjon.cli import main as cli_main
 from openmc2donjon.macrolib import extract_sph_from_macrolib_ascii, read_macrolib_ascii
+from openmc2donjon.sph_augment import create_table_sph_sidecar
 
 
 class SphAugmentTests(unittest.TestCase):
@@ -153,6 +154,100 @@ class SphAugmentTests(unittest.TestCase):
             with h5py.File(sidecar, "r") as h5:
                 self.assertEqual(h5.attrs["sph_kind"], "macrolib-nsph")
                 np.testing.assert_allclose(h5["sph"][:], values)
+
+    def test_cli_creates_sph_sidecar_from_external_table(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            long_table = root / "sph_long.csv"
+            wide_table = root / "sph_wide.csv"
+            long_sidecar = root / "sph_long.h5"
+            wide_sidecar = root / "sph_wide.h5"
+            summary = root / "sph_table.summary.json"
+            write_mgxs_fixture(mgxs)
+            long_table.write_text(
+                "\n".join(
+                    [
+                        "mixture,group,sph",
+                        "moderator,2,1.05",
+                        "fuel,1,1.10",
+                        "moderator,1,0.95",
+                        "fuel,2,0.90",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            wide_table.write_text(
+                "mixture,g1,g2\nfuel,1.10,0.90\nmoderator,0.95,1.05\n",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                cli_main(
+                    [
+                        "make-sph-sidecar",
+                        str(mgxs),
+                        "-o",
+                        str(long_sidecar),
+                        "--mode",
+                        "table",
+                        "--table",
+                        str(long_table),
+                        "--sph-kind",
+                        "external-sph",
+                        "--summary-json",
+                        str(summary),
+                    ]
+                ),
+                0,
+            )
+            self.assertEqual(
+                cli_main(
+                    [
+                        "make-sph-sidecar",
+                        str(mgxs),
+                        "-o",
+                        str(wide_sidecar),
+                        "--mode",
+                        "table",
+                        "--table",
+                        str(wide_table),
+                    ]
+                ),
+                0,
+            )
+
+            expected = np.array([[1.10, 0.90], [0.95, 1.05]])
+            for path in (long_sidecar, wide_sidecar):
+                with h5py.File(path, "r") as h5:
+                    np.testing.assert_allclose(h5["sph"][:], expected)
+                    expected_source = long_table if path == long_sidecar else wide_table
+                    self.assertEqual(h5.attrs["source_table"], str(expected_source))
+            with h5py.File(long_sidecar, "r") as h5:
+                self.assertEqual(h5.attrs["sph_kind"], "external-sph")
+                self.assertTrue(bool(h5.attrs["sph_real"]))
+                self.assertFalse(bool(h5.attrs["sph_applied"]))
+            self.assertIn("openmc2donjon_sph_sidecar_passed", summary.read_text(encoding="utf-8"))
+
+    def test_external_sph_wide_table_requires_contiguous_groups(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            table = root / "sph_bad.csv"
+            sidecar = root / "sph_bad.h5"
+            write_mgxs_fixture(mgxs)
+            table.write_text(
+                "mixture,g2,g3\nfuel,1.10,0.90\nmoderator,0.95,1.05\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "contiguous group columns"):
+                create_table_sph_sidecar(
+                    input_h5=mgxs,
+                    output_h5=sidecar,
+                    table=table,
+                )
 
 
 def write_mgxs_fixture(path: Path) -> None:

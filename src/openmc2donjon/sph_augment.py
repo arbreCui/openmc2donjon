@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass
 import json
+import re
 import shutil
 from pathlib import Path
 from typing import Any
@@ -172,6 +174,74 @@ def create_macrolib_sph_sidecar(
         energy_groups=ngroups,
         value=None,
         source=macrolib_ascii,
+        sph_min=float(np.min(values)),
+        sph_max=float(np.max(values)),
+        sph_kind=sph_kind,
+        sph_real=bool(sph_real),
+        sph_applied=bool(sph_applied),
+    )
+    print_sidecar_report(report)
+    if summary_json is not None:
+        write_sidecar_summary(summary_json, report)
+    return report
+
+
+def create_table_sph_sidecar(
+    input_h5: Path,
+    output_h5: Path,
+    *,
+    table: Path,
+    force: bool = False,
+    sph_kind: str = "external-table",
+    sph_real: bool = True,
+    sph_applied: bool = False,
+    summary_json: Path | None = None,
+) -> SphSidecarReport:
+    """Create an SPH sidecar from an external CSV table.
+
+    Supported CSV layouts are either long form with ``mixture,group,sph``
+    columns or wide form with ``mixture,g1,g2,...`` columns.
+    """
+
+    import h5py
+
+    input_h5 = Path(input_h5)
+    output_h5 = Path(output_h5)
+    table = Path(table)
+    if not input_h5.exists():
+        raise FileNotFoundError(f"input HDF5 does not exist: {input_h5}")
+    if not table.exists():
+        raise FileNotFoundError(f"SPH table does not exist: {table}")
+    if output_h5.exists() and not force:
+        raise FileExistsError(f"output already exists; use --force to overwrite: {output_h5}")
+
+    with h5py.File(input_h5, "r") as h5:
+        mixture_names = _input_mixture_names(h5)
+        ngroups = _energy_groups(h5)
+
+    sph = _load_from_table(table, mixture_names=mixture_names, energy_groups=ngroups)
+    _validate_sph(sph, mixture_names=mixture_names, energy_groups=ngroups)
+    values = np.stack([sph[name] for name in mixture_names])
+
+    _write_sidecar_file(
+        output_h5,
+        input_h5=input_h5,
+        values=values,
+        mixture_names=mixture_names,
+        sph_kind=sph_kind,
+        sph_real=sph_real,
+        sph_applied=sph_applied,
+        source=table,
+        source_attr="source_table",
+    )
+
+    report = SphSidecarReport(
+        input_h5=input_h5,
+        output_h5=output_h5,
+        mixture_names=mixture_names,
+        energy_groups=ngroups,
+        value=None,
+        source=table,
         sph_min=float(np.min(values)),
         sph_max=float(np.max(values)),
         sph_kind=sph_kind,
@@ -453,6 +523,182 @@ def _load_from_sph_root(
     }
 
 
+def _load_from_table(
+    path: Path,
+    *,
+    mixture_names: tuple[str, ...],
+    energy_groups: int,
+) -> dict[str, np.ndarray]:
+    with path.open("r", encoding="utf-8", newline="") as stream:
+        reader = csv.DictReader(stream)
+        if reader.fieldnames is None:
+            raise ValueError("SPH table must have a header row")
+        fieldnames = [str(name).strip() for name in reader.fieldnames]
+        rows = [
+            {str(key).strip(): value for key, value in row.items()}
+            for row in reader
+            if any(str(value or "").strip() for value in row.values())
+        ]
+
+    if not rows:
+        raise ValueError("SPH table contains no data rows")
+
+    mixture_column = _find_column(fieldnames, ("mixture", "mixture_name", "name"))
+    if mixture_column is None:
+        raise ValueError("SPH table must define a mixture, mixture_name, or name column")
+
+    group_column = _find_column(fieldnames, ("group", "energy_group", "g"))
+    value_column = _find_column(fieldnames, ("sph", "nsph", "value"))
+    if group_column is not None and value_column is not None:
+        return _load_long_table(
+            rows,
+            mixture_names=mixture_names,
+            energy_groups=energy_groups,
+            mixture_column=mixture_column,
+            group_column=group_column,
+            value_column=value_column,
+        )
+
+    group_columns = _group_columns(fieldnames, mixture_column)
+    group_indices = [index for index, _column in group_columns]
+    if len(set(group_indices)) != len(group_indices):
+        raise ValueError("SPH table wide form contains duplicate group columns")
+    if group_indices and group_indices != list(range(energy_groups)):
+        raise ValueError(
+            "SPH table wide form must define contiguous group columns "
+            f"1..{energy_groups}"
+        )
+    if len(group_columns) == energy_groups:
+        return _load_wide_table(
+            rows,
+            mixture_names=mixture_names,
+            energy_groups=energy_groups,
+            mixture_column=mixture_column,
+            group_columns=group_columns,
+        )
+
+    raise ValueError(
+        "SPH table must be long form (mixture,group,sph) or wide form "
+        f"(mixture plus {energy_groups} group columns)"
+    )
+
+
+def _load_long_table(
+    rows: list[dict[str, str]],
+    *,
+    mixture_names: tuple[str, ...],
+    energy_groups: int,
+    mixture_column: str,
+    group_column: str,
+    value_column: str,
+) -> dict[str, np.ndarray]:
+    values = {name: np.full(energy_groups, np.nan, dtype=float) for name in mixture_names}
+    seen: set[tuple[str, int]] = set()
+    valid_mixtures = set(mixture_names)
+    for row_index, row in enumerate(rows, start=2):
+        mixture = str(row.get(mixture_column, "")).strip()
+        if mixture not in valid_mixtures:
+            raise ValueError(f"SPH table row {row_index}: unknown mixture {mixture!r}")
+        group = _parse_group_index(str(row.get(group_column, "")).strip(), energy_groups, row_index)
+        key = (mixture, group)
+        if key in seen:
+            raise ValueError(
+                f"SPH table row {row_index}: duplicate value for {mixture} group {group + 1}"
+            )
+        seen.add(key)
+        values[mixture][group] = _parse_float(row.get(value_column, ""), row_index, value_column)
+    _require_complete_table(values)
+    return values
+
+
+def _load_wide_table(
+    rows: list[dict[str, str]],
+    *,
+    mixture_names: tuple[str, ...],
+    energy_groups: int,
+    mixture_column: str,
+    group_columns: list[tuple[int, str]],
+) -> dict[str, np.ndarray]:
+    values: dict[str, np.ndarray] = {}
+    valid_mixtures = set(mixture_names)
+    for row_index, row in enumerate(rows, start=2):
+        mixture = str(row.get(mixture_column, "")).strip()
+        if mixture not in valid_mixtures:
+            raise ValueError(f"SPH table row {row_index}: unknown mixture {mixture!r}")
+        if mixture in values:
+            raise ValueError(f"SPH table row {row_index}: duplicate mixture {mixture!r}")
+        vector = np.empty(energy_groups, dtype=float)
+        for group_index, column in group_columns:
+            vector[group_index] = _parse_float(row.get(column, ""), row_index, column)
+        values[mixture] = vector
+    missing = [name for name in mixture_names if name not in values]
+    if missing:
+        raise ValueError(f"SPH table is missing mixture(s): {', '.join(missing)}")
+    return values
+
+
+def _find_column(fieldnames: list[str], candidates: tuple[str, ...]) -> str | None:
+    normalized = {_normalize_column(name): name for name in fieldnames}
+    for candidate in candidates:
+        if candidate in normalized:
+            return normalized[candidate]
+    return None
+
+
+def _group_columns(fieldnames: list[str], mixture_column: str) -> list[tuple[int, str]]:
+    out: list[tuple[int, str]] = []
+    for name in fieldnames:
+        if name == mixture_column:
+            continue
+        match = re.fullmatch(r"(?:sph|nsph|group|g)?_?(\d+)", _normalize_column(name))
+        if match is None:
+            continue
+        out.append((int(match.group(1)) - 1, name))
+    out.sort(key=lambda item: item[0])
+    return out
+
+
+def _normalize_column(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", str(name).strip().lower()).strip("_")
+
+
+def _parse_group_index(raw: str, energy_groups: int, row_index: int) -> int:
+    try:
+        group = int(raw)
+    except ValueError as exc:
+        raise ValueError(f"SPH table row {row_index}: group must be an integer") from exc
+    if group < 1 or group > energy_groups:
+        raise ValueError(
+            f"SPH table row {row_index}: group {group} outside 1..{energy_groups}"
+        )
+    return group - 1
+
+
+def _parse_float(raw: Any, row_index: int, column: str) -> float:
+    text = str(raw or "").strip()
+    if not text:
+        raise ValueError(f"SPH table row {row_index}: missing value in {column}")
+    try:
+        return float(text)
+    except ValueError as exc:
+        raise ValueError(
+            f"SPH table row {row_index}: {column} must be a floating-point value"
+        ) from exc
+
+
+def _require_complete_table(values: dict[str, np.ndarray]) -> None:
+    missing: list[str] = []
+    for mixture, vector in values.items():
+        missing_groups = np.flatnonzero(~np.isfinite(vector)) + 1
+        if missing_groups.size:
+            rendered = ",".join(str(int(group)) for group in missing_groups[:8])
+            if missing_groups.size > 8:
+                rendered += ",..."
+            missing.append(f"{mixture}: groups {rendered}")
+    if missing:
+        raise ValueError("SPH table is incomplete: " + "; ".join(missing))
+
+
 def _write_sph_payload(
     h5,
     sph: dict[str, np.ndarray],
@@ -538,6 +784,7 @@ def _write_sidecar_file(
     sph_real: bool,
     sph_applied: bool,
     source: Path | None,
+    source_attr: str = "source_macrolib",
 ) -> None:
     import h5py
 
@@ -550,7 +797,7 @@ def _write_sidecar_file(
         h5.attrs["sph_applied"] = bool(sph_applied)
         h5.attrs["source_mgxs"] = str(input_h5)
         if source is not None:
-            h5.attrs["source_macrolib"] = str(source)
+            h5.attrs[source_attr] = str(source)
         dataset = h5.create_dataset("sph", data=np.asarray(values, dtype=float))
         _write_string_attr(dataset.attrs, "mixture_names", mixture_names)
 
