@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 import tempfile
 from pathlib import Path
 
@@ -21,7 +22,11 @@ from .openmc_surface_flux import (
     DEFAULT_TALLY_NAME as DEFAULT_SURFACE_FLUX_TALLY_NAME,
     export_openmc_surface_flux,
 )
-from .openmc_statepoint import dry_run_openmc_statepoint_recipe, export_openmc_statepoint_recipe
+from .openmc_statepoint import (
+    StatepointLoadError,
+    dry_run_openmc_statepoint_recipe,
+    export_openmc_statepoint_recipe,
+)
 from .recipe_dry_run_report import (
     print_recipe_dry_run_summary,
     print_strict_dry_run_decision,
@@ -376,19 +381,28 @@ def main(argv: list[str] | None = None) -> int:
     _validate_flux_ratio_adf_args(args, parser)
     if args.strict_dry_run and not args.dry_run:
         parser.error("--strict-dry-run requires --dry-run")
-    if args.dry_run:
-        return 0 if _run_dry_run(args) else 1
-    if args.statepoint is None and not args.no_load_statepoint:
-        parser.error("--statepoint is required unless --no-load-statepoint is set")
+    try:
+        if args.dry_run:
+            return 0 if _run_dry_run(args) else 1
+        if args.statepoint is None and not args.no_load_statepoint:
+            parser.error("--statepoint is required unless --no-load-statepoint is set")
 
-    output_path = _output_path(args.output, args.format)
-    _prepare_run_dir(args, output_path, parser)
-    if args.keep_hdf5 is not None:
-        return 0 if _run_pipeline(args, args.keep_hdf5, output_path, hdf5_kept=True) else 1
-    else:
-        with tempfile.TemporaryDirectory(prefix="openmc2donjon_") as tmpdir:
-            ok = _run_pipeline(args, Path(tmpdir) / "mgxs_library.h5", output_path, hdf5_kept=False)
-            return 0 if ok else 1
+        output_path = _output_path(args.output, args.format)
+        _prepare_run_dir(args, output_path, parser)
+        if args.keep_hdf5 is not None:
+            return 0 if _run_pipeline(args, args.keep_hdf5, output_path, hdf5_kept=True) else 1
+        else:
+            with tempfile.TemporaryDirectory(prefix="openmc2donjon_") as tmpdir:
+                ok = _run_pipeline(
+                    args,
+                    Path(tmpdir) / "mgxs_library.h5",
+                    output_path,
+                    hdf5_kept=False,
+                )
+                return 0 if ok else 1
+    except StatepointLoadError as exc:
+        print(f"{parser.prog}: error: {exc}", file=sys.stderr)
+        return 1
 
 
 def _run_dry_run(args: argparse.Namespace) -> bool:

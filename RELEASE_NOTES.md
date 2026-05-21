@@ -74,6 +74,8 @@
   `transport_total`.
 - Added `openmc2donjon-from-openmc --adf-source` so the one-step OpenMC export
   path can inject ADF before checked DONJON conversion.
+- Report missing MGXS tallies in recipe/statepoint exports as actionable CLI
+  errors instead of raw OpenMC `LookupError` tracebacks.
 - Added `examples/production_minicase` plus a smoke script for a fresh
   continuous-energy OpenMC MGXS case that does not rely on the C5G7 snapshot.
 - Hardened the production minicase recipe with explicit `DomainExportSpec`

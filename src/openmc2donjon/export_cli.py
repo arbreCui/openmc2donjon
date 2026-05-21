@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import argparse
 import pickle
+import sys
 from pathlib import Path
 
 from . import __version__
 from .export_openmc_mgxs import export_openmc_mgxs_library
-from .openmc_statepoint import export_openmc_statepoint_recipe
-from .openmc_statepoint import dry_run_openmc_statepoint_recipe
+from .openmc_statepoint import (
+    StatepointLoadError,
+    dry_run_openmc_statepoint_recipe,
+    export_openmc_statepoint_recipe,
+)
 from .recipe_dry_run_report import (
     print_recipe_dry_run_summary,
     print_strict_dry_run_decision,
@@ -96,36 +100,40 @@ def main(argv: list[str] | None = None) -> int:
     if not args.dry_run and args.output is None:
         parser.error("-o/--output is required unless --dry-run is set")
 
-    if args.recipe is not None:
-        if args.dry_run:
-            summary = dry_run_openmc_statepoint_recipe(
+    try:
+        if args.recipe is not None:
+            if args.dry_run:
+                summary = dry_run_openmc_statepoint_recipe(
+                    args.recipe,
+                    statepoint_path=args.statepoint,
+                    load_statepoint=args.statepoint is not None and not args.no_load_statepoint,
+                    output_path=args.output,
+                    scatter_mgxs_type=args.scatter_mgxs_type,
+                )
+                print_recipe_dry_run_summary(summary)
+                if args.strict_dry_run:
+                    return 0 if print_strict_dry_run_decision(summary) else 1
+                return 0
+            if args.statepoint is None and not args.no_load_statepoint:
+                parser.error("--recipe requires --statepoint unless --no-load-statepoint is set")
+            recipe_summary = export_openmc_statepoint_recipe(
                 args.recipe,
+                args.output,
                 statepoint_path=args.statepoint,
-                load_statepoint=args.statepoint is not None and not args.no_load_statepoint,
-                output_path=args.output,
+                load_statepoint=not args.no_load_statepoint,
                 scatter_mgxs_type=args.scatter_mgxs_type,
+                overwrite=not args.no_overwrite,
             )
-            print_recipe_dry_run_summary(summary)
-            if args.strict_dry_run:
-                return 0 if print_strict_dry_run_decision(summary) else 1
+            summary = recipe_summary.output
+            print(
+                f"exported {len(summary.domains)} domains, "
+                f"{summary.energy_groups} groups, P{summary.legendre_order} "
+                f"from recipe {recipe_summary.recipe_path} to {summary.output_path}"
+            )
             return 0
-        if args.statepoint is None and not args.no_load_statepoint:
-            parser.error("--recipe requires --statepoint unless --no-load-statepoint is set")
-        recipe_summary = export_openmc_statepoint_recipe(
-            args.recipe,
-            args.output,
-            statepoint_path=args.statepoint,
-            load_statepoint=not args.no_load_statepoint,
-            scatter_mgxs_type=args.scatter_mgxs_type,
-            overwrite=not args.no_overwrite,
-        )
-        summary = recipe_summary.output
-        print(
-            f"exported {len(summary.domains)} domains, "
-            f"{summary.energy_groups} groups, P{summary.legendre_order} "
-            f"from recipe {recipe_summary.recipe_path} to {summary.output_path}"
-        )
-        return 0
+    except StatepointLoadError as exc:
+        print(f"{parser.prog}: error: {exc}", file=sys.stderr)
+        return 1
 
     with Path(args.library_pickle).open("rb") as fh:
         library = pickle.load(fh)
