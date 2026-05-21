@@ -30,3 +30,19 @@ bash examples/openmc_hex_minicase/run_smoke.sh
 ```
 
 The smoke writes all generated files under `/private/tmp` by default.
+
+## DONJON k-eff Comparison
+
+On a machine with the local DRAGON/DONJON checkout available, run:
+
+```sh
+bash examples/openmc_hex_minicase/run_keff_comparison.sh
+```
+
+This performs the same OpenMC export, writes the generated case under
+`Donjon/data/openmc2donjon/openmc_hex_minicase_keff_runs/<timestamp>`, consumes
+the fresh `out.mcompo.txt` through `NCR:` and TRIVAC diffusion, and writes
+`keff_comparison.json`. The default comparison settings are intentionally
+higher-statistics than `run_smoke.sh`; override `HEX_MINICASE_PARTICLES`,
+`HEX_MINICASE_BATCHES`, `HEX_MINICASE_INACTIVE`, or
+`OPENMC2DONJON_HEX_MAX_DELTA_PCM` for faster local checks.

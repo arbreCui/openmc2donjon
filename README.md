@@ -171,6 +171,13 @@ For the same production-facing workflow on a tiny hex lattice, see
 bash examples/openmc_hex_minicase/run_smoke.sh
 ```
 
+To include the local DONJON NCR + diffusion k-eff sanity comparison for that
+hex case:
+
+```sh
+bash examples/openmc_hex_minicase/run_keff_comparison.sh
+```
+
 Check a recipe before writing an HDF5 handoff:
 
 ```sh
