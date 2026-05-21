@@ -9,7 +9,7 @@ import sys
 from . import __version__
 from .adf_augment import augment_hdf5_with_adf, parse_faces
 from .adf_sidecar import create_flux_ratio_adf_sidecar, create_unity_adf_sidecar
-from .bundle import ArtifactSpec, bundle_artifacts, parse_extra_artifact
+from .bundle import ArtifactSpec, bundle_artifacts, parse_extra_artifact, validate_bundle
 from .doctor import run_doctor
 from .donjon_flux import extract_donjon_volume_flux
 from .donjon_sph_config import write_donjon_sph_loop_config
@@ -67,7 +67,8 @@ def build_parser() -> argparse.ArgumentParser:
             "'openmc2donjon make-donjon-sph-loop-config ...' to write a "
             "generic DONJON-backed loop config, "
             "'openmc2donjon bundle --output-dir DIR ...' to collect "
-            "production artifacts, 'openmc2donjon doctor' for environment checks, or "
+            "production artifacts, 'openmc2donjon validate-bundle manifest.json' "
+            "to validate a bundle, 'openmc2donjon doctor' for environment checks, or "
             "'openmc2donjon check <input_h5>' for input-contract preflight."
         ),
     )
@@ -458,6 +459,32 @@ def build_bundle_parser() -> argparse.ArgumentParser:
         "--force",
         action="store_true",
         help="overwrite existing bundled files and manifest",
+    )
+    return parser
+
+
+def build_validate_bundle_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="openmc2donjon validate-bundle",
+        description="Validate a manifest-backed production handoff bundle.",
+    )
+    parser.add_argument(
+        "manifest",
+        type=Path,
+        nargs="?",
+        default=Path("manifest.json"),
+        help="bundle manifest JSON to validate (default: manifest.json)",
+    )
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        default=None,
+        help="write a machine-readable bundle validation summary JSON",
+    )
+    parser.add_argument(
+        "--no-fail",
+        action="store_true",
+        help="always return zero after printing the validation report",
     )
     return parser
 
@@ -1501,6 +1528,8 @@ def main(argv: list[str] | None = None) -> int:
         return _make_donjon_sph_loop_config_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "bundle":
         return _bundle_main(raw_argv[1:])
+    if raw_argv and raw_argv[0] in {"validate-bundle", "check-bundle"}:
+        return _validate_bundle_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "doctor":
         return _doctor_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "diff":
@@ -1632,6 +1661,12 @@ def _bundle_main(argv: list[str]) -> int:
     except Exception as exc:
         parser.exit(1, f"openmc2donjon bundle: error: {exc}\n")
     return 0
+
+
+def _validate_bundle_main(argv: list[str]) -> int:
+    args = build_validate_bundle_parser().parse_args(argv)
+    report = validate_bundle(args.manifest, summary_json=args.summary_json)
+    return 0 if report.ok or args.no_fail else 1
 
 
 def _augment_adf_main(argv: list[str]) -> int:

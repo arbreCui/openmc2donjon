@@ -23,4 +23,6 @@ openmc2donjon run-sph-loop \
   --config "$RUN_DIR/c5g7_sph_loop_config.json" \
   --bundle-dir "$RUN_DIR/sph_loop/bundle" \
   --force
+
+openmc2donjon validate-bundle "$RUN_DIR/sph_loop/bundle/manifest.json"
 ```

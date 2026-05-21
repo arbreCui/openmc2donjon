@@ -236,14 +236,30 @@ class CliTests(unittest.TestCase):
             manifest = json.loads(
                 (bundle_dir / "manifest.json").read_text(encoding="utf-8")
             )
+            validation_summary = tmp / "bundle_validation.json"
+            validation_stream = io.StringIO()
+            with contextlib.redirect_stdout(validation_stream):
+                validation_rc = cli_main(
+                    [
+                        "validate-bundle",
+                        str(bundle_dir / "manifest.json"),
+                        "--summary-json",
+                        str(validation_summary),
+                    ]
+                )
+            validation_payload = json.loads(validation_summary.read_text(encoding="utf-8"))
             bundled_paths_exist = [
                 (bundle_dir / artifact["bundled_path"]).exists()
                 for artifact in manifest["artifacts"]
             ]
 
         self.assertEqual(rc, 0)
+        self.assertEqual(validation_rc, 0)
         self.assertIn("OpenMC-to-DONJON bundle", stream.getvalue())
+        self.assertIn("openmc2donjon_bundle_validation_passed", validation_stream.getvalue())
         self.assertEqual(manifest["schema"], "openmc2donjon.bundle.v1")
+        self.assertEqual(validation_payload["decision"], "openmc2donjon_bundle_validation_passed")
+        self.assertTrue(validation_payload["ok"])
         self.assertEqual(manifest["artifact_count"], 4)
         labels = {artifact["label"]: artifact for artifact in manifest["artifacts"]}
         self.assertEqual(set(labels), {"mgxs", "mcompo", "run-summary", "notes"})
@@ -290,6 +306,47 @@ class CliTests(unittest.TestCase):
         labels = {artifact["label"]: artifact for artifact in manifest["artifacts"]}
         self.assertEqual(labels["run-summary"]["bundled_path"], "summary.json")
         self.assertEqual(labels["run-summary"]["summary_decision"], "passed")
+
+    def test_validate_bundle_fails_on_failed_summary_decision(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            summary = tmp / "run_summary.json"
+            bundle_dir = tmp / "bundle"
+            summary.write_text(
+                json.dumps(
+                    {
+                        "schema": "example.summary.v1",
+                        "decision": "example_failed",
+                        "ok": False,
+                        "acceptance_enabled": True,
+                        "acceptance_passed": False,
+                        "acceptance_decision": "example_acceptance_failed",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with contextlib.redirect_stdout(io.StringIO()):
+                bundle_rc = cli_main(
+                    [
+                        "bundle",
+                        "--output-dir",
+                        str(bundle_dir),
+                        "--run-summary",
+                        str(summary),
+                    ]
+                )
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                validation_rc = cli_main(
+                    ["validate-bundle", str(bundle_dir / "manifest.json")]
+                )
+
+        self.assertEqual(bundle_rc, 0)
+        self.assertEqual(validation_rc, 1)
+        self.assertIn("openmc2donjon_bundle_validation_failed", stream.getvalue())
+        self.assertIn("summary payload reports ok=false", stream.getvalue())
+        self.assertIn("example_acceptance_failed", stream.getvalue())
 
     def test_convert_check_writes_output_for_valid_hdf5(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

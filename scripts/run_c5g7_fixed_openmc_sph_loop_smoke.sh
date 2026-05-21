@@ -98,6 +98,11 @@ echo "== Run configured fixed-OpenMC SPH loop =="
   --force
 
 echo
+echo "== Validate SPH loop bundle =="
+"$PYTHON_BIN" -m openmc2donjon.cli validate-bundle \
+  "$LOOP_BUNDLE_DIR/manifest.json"
+
+echo
 echo "== Extract final post-SPH DONJON flux =="
 "$PYTHON_BIN" -m openmc2donjon.cli extract-donjon-volume-flux "$C5G7_ACCEPTED_H5" \
   --flux-dump "$RESULT2" \
