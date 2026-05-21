@@ -285,7 +285,7 @@ def _json_summary_fields(path: Path) -> dict[str, Any]:
         return {}
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return {"summary_json_readable": False}
     if not isinstance(payload, dict):
         return {"summary_json_readable": True}
@@ -311,7 +311,7 @@ def _load_manifest_for_validation(path: Path) -> tuple[dict[str, Any], list[str]
         return {}, [f"manifest is not a file: {path}"]
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except Exception as exc:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         return {}, [f"manifest JSON is unreadable: {exc}"]
     if not isinstance(payload, dict):
         return {}, ["manifest JSON root must be an object"]
@@ -407,7 +407,7 @@ def _validate_json_artifact(
     messages: list[str] = []
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except Exception as exc:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         return [f"JSON artifact is unreadable: {exc}"], None, None, None
     if not isinstance(payload, dict):
         return messages, None, None, None

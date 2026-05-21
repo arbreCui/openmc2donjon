@@ -20,6 +20,7 @@ from .adf_sidecar import (
 SCHEMA = "openmc2donjon.face-flux-contract.v1"
 PASS_DECISION = "openmc2donjon_face_flux_contract_passed"
 FAIL_DECISION = "openmc2donjon_face_flux_contract_failed"
+CHECK_EXCEPTIONS = (OSError, ValueError, KeyError, RuntimeError)
 
 
 @dataclass(frozen=True)
@@ -128,7 +129,7 @@ def check_face_flux(
             warnings.append(
                 f"filled {invalid_count} invalid flux-ratio bin(s) with {invalid_fill:g}"
             )
-    except Exception as exc:
+    except CHECK_EXCEPTIONS as exc:
         errors.append(str(exc))
 
     ok = not errors

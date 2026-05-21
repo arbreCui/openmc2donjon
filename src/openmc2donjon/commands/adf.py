@@ -5,7 +5,12 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from .base import CommandSpec, parser_from_args
+from .base import (
+    USER_FACING_EXCEPTIONS,
+    CommandSpec,
+    exit_with_command_error,
+    parser_from_args,
+)
 from ..adf_augment import augment_hdf5_with_adf, parse_faces
 from ..adf_sidecar import create_flux_ratio_adf_sidecar, create_unity_adf_sidecar
 from ..face_flux_check import check_face_flux
@@ -501,8 +506,8 @@ def augment_adf_handler(args: argparse.Namespace) -> int:
             adf_source_label=args.adf_source_label,
             summary_json=args.summary_json,
         )
-    except Exception as exc:
-        parser.exit(1, f"openmc2donjon augment-adf: error: {exc}\n")
+    except USER_FACING_EXCEPTIONS as exc:
+        exit_with_command_error(parser, "augment-adf", exc)
     return 0
 
 
@@ -541,8 +546,8 @@ def make_adf_sidecar_handler(args: argparse.Namespace) -> int:
             )
         else:
             parser.error(f"unsupported --mode: {args.mode}")
-    except Exception as exc:
-        parser.exit(1, f"openmc2donjon make-adf-sidecar: error: {exc}\n")
+    except USER_FACING_EXCEPTIONS as exc:
+        exit_with_command_error(parser, "make-adf-sidecar", exc)
     return 0
 
 
@@ -563,8 +568,8 @@ def export_surface_flux_handler(args: argparse.Namespace) -> int:
             force=args.force,
             summary_json=args.summary_json,
         )
-    except Exception as exc:
-        parser.exit(1, f"openmc2donjon export-surface-flux: error: {exc}\n")
+    except USER_FACING_EXCEPTIONS as exc:
+        exit_with_command_error(parser, "export-surface-flux", exc)
     return 0
 
 
@@ -581,8 +586,8 @@ def check_face_flux_handler(args: argparse.Namespace) -> int:
             clip_max=args.clip_max,
             summary_json=args.summary_json,
         )
-    except Exception as exc:
-        parser.exit(1, f"openmc2donjon check-face-flux: error: {exc}\n")
+    except USER_FACING_EXCEPTIONS as exc:
+        exit_with_command_error(parser, "check-face-flux", exc)
     return 0 if report.ok or args.no_fail else 1
 
 
@@ -601,8 +606,8 @@ def make_low_order_driver_handler(args: argparse.Namespace) -> int:
             force=args.force,
             summary_json=args.summary_json,
         )
-    except Exception as exc:
-        parser.exit(1, f"openmc2donjon make-low-order-driver: error: {exc}\n")
+    except USER_FACING_EXCEPTIONS as exc:
+        exit_with_command_error(parser, "make-low-order-driver", exc)
     return 0
 
 
@@ -620,8 +625,8 @@ def check_low_order_driver_handler(args: argparse.Namespace) -> int:
             ),
             summary_json=args.summary_json,
         )
-    except Exception as exc:
-        parser.exit(1, f"openmc2donjon check-low-order-driver: error: {exc}\n")
+    except USER_FACING_EXCEPTIONS as exc:
+        exit_with_command_error(parser, "check-low-order-driver", exc)
     return 0 if report.ok or args.no_fail else 1
 
 
@@ -639,8 +644,8 @@ def make_homogeneous_face_flux_handler(args: argparse.Namespace) -> int:
             force=args.force,
             summary_json=args.summary_json,
         )
-    except Exception as exc:
-        parser.exit(1, f"openmc2donjon make-homogeneous-face-flux: error: {exc}\n")
+    except USER_FACING_EXCEPTIONS as exc:
+        exit_with_command_error(parser, "make-homogeneous-face-flux", exc)
     return 0
 
 
@@ -682,4 +687,3 @@ def _parse_optional_str_tuple(raw: str | None) -> tuple[str, ...] | None:
     if not values:
         raise ValueError("--mixture-names must list at least one name")
     return values
-

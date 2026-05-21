@@ -111,7 +111,7 @@ def handoff_summary_payload(
 def _read_json_object(path: Path) -> dict[str, Any] | None:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return None
     return payload if isinstance(payload, dict) else None
 

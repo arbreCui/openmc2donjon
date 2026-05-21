@@ -7,6 +7,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 
+USER_FACING_EXCEPTIONS = (OSError, ValueError, KeyError, RuntimeError)
+
+
 @dataclass(frozen=True, slots=True)
 class CommandSpec:
     name: str
@@ -19,3 +22,10 @@ class CommandSpec:
 def parser_from_args(args: argparse.Namespace) -> argparse.ArgumentParser:
     return getattr(args, "_parser")
 
+
+def exit_with_command_error(
+    parser: argparse.ArgumentParser,
+    command: str,
+    exc: BaseException,
+) -> None:
+    parser.exit(1, f"openmc2donjon {command}: error: {exc}\n")

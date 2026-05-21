@@ -6,7 +6,12 @@ import argparse
 from pathlib import Path
 import sys
 
-from .base import CommandSpec, parser_from_args
+from .base import (
+    USER_FACING_EXCEPTIONS,
+    CommandSpec,
+    exit_with_command_error,
+    parser_from_args,
+)
 from ..donjon_flux import extract_donjon_volume_flux
 from ..donjon_sph_config import write_donjon_sph_loop_config
 from ..multicompo import DEFAULT_ROOT_NAME
@@ -667,8 +672,8 @@ def augment_sph_handler(args: argparse.Namespace) -> int:
             sph_source_label=args.sph_source_label,
             summary_json=args.summary_json,
         )
-    except Exception as exc:
-        parser.exit(1, f"openmc2donjon augment-sph: error: {exc}\n")
+    except USER_FACING_EXCEPTIONS as exc:
+        exit_with_command_error(parser, "augment-sph", exc)
     return 0
 
 
@@ -714,8 +719,8 @@ def make_sph_sidecar_handler(args: argparse.Namespace) -> int:
             )
         else:
             parser.error(f"unsupported --mode: {args.mode}")
-    except Exception as exc:
-        parser.exit(1, f"openmc2donjon make-sph-sidecar: error: {exc}\n")
+    except USER_FACING_EXCEPTIONS as exc:
+        exit_with_command_error(parser, "make-sph-sidecar", exc)
     return 0
 
 
@@ -735,8 +740,8 @@ def make_sph_update_table_handler(args: argparse.Namespace) -> int:
             force=args.force,
             summary_json=args.summary_json,
         )
-    except Exception as exc:
-        parser.exit(1, f"openmc2donjon make-sph-update-table: error: {exc}\n")
+    except USER_FACING_EXCEPTIONS as exc:
+        exit_with_command_error(parser, "make-sph-update-table", exc)
     return 0
 
 
@@ -760,8 +765,8 @@ def extract_donjon_volume_flux_handler(args: argparse.Namespace) -> int:
             force=args.force,
             summary_json=args.summary_json,
         )
-    except Exception as exc:
-        parser.exit(1, f"openmc2donjon extract-donjon-volume-flux: error: {exc}\n")
+    except USER_FACING_EXCEPTIONS as exc:
+        exit_with_command_error(parser, "extract-donjon-volume-flux", exc)
     return 0
 
 
@@ -796,8 +801,8 @@ def run_sph_iteration_handler(args: argparse.Namespace) -> int:
             force=args.force,
             summary_json=args.summary_json,
         )
-    except Exception as exc:
-        parser.exit(1, f"openmc2donjon run-sph-iteration: error: {exc}\n")
+    except USER_FACING_EXCEPTIONS as exc:
+        exit_with_command_error(parser, "run-sph-iteration", exc)
     return 0
 
 
@@ -812,8 +817,8 @@ def run_sph_loop_handler(args: argparse.Namespace) -> int:
             bundle_dir=args.bundle_dir,
             bundle_manifest_name=args.bundle_manifest_name,
         )
-    except Exception as exc:
-        parser.exit(1, f"openmc2donjon run-sph-loop: error: {exc}\n")
+    except USER_FACING_EXCEPTIONS as exc:
+        exit_with_command_error(parser, "run-sph-loop", exc)
     return 0
 
 
@@ -852,8 +857,8 @@ def make_donjon_sph_loop_config_handler(args: argparse.Namespace) -> int:
             h_factor_default=args.h_factor_default,
             acceptance=_sph_loop_acceptance_from_args(args),
         )
-    except Exception as exc:
-        parser.exit(1, f"openmc2donjon make-donjon-sph-loop-config: error: {exc}\n")
+    except USER_FACING_EXCEPTIONS as exc:
+        exit_with_command_error(parser, "make-donjon-sph-loop-config", exc)
     print(f"DONJON SPH loop config: {path}")
     return 0
 
@@ -903,4 +908,3 @@ def _parse_scalar_flux_map(raw: str) -> dict[str, int]:
     if not out:
         raise ValueError("--scalar-flux-map must list at least one mixture=id entry")
     return out
-

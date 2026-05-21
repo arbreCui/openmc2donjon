@@ -26,6 +26,7 @@ PASS_DECISION = "openmc2donjon_low_order_driver_passed"
 CHECK_SCHEMA = "openmc2donjon.low-order-driver-contract.v1"
 CHECK_PASS_DECISION = "openmc2donjon_low_order_driver_contract_passed"
 CHECK_FAIL_DECISION = "openmc2donjon_low_order_driver_contract_failed"
+CHECK_EXCEPTIONS = (OSError, ValueError, KeyError, RuntimeError)
 
 
 @dataclass(frozen=True)
@@ -252,7 +253,7 @@ def check_low_order_driver(
             )
             if np.any(homogeneous <= 0.0):
                 errors.append("reconstructed homogeneous face flux has non-positive bins")
-    except Exception as exc:
+    except CHECK_EXCEPTIONS as exc:
         errors.append(str(exc))
 
     ok = not errors

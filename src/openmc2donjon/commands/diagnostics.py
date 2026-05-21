@@ -5,7 +5,12 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from .base import CommandSpec, parser_from_args
+from .base import (
+    USER_FACING_EXCEPTIONS,
+    CommandSpec,
+    exit_with_command_error,
+    parser_from_args,
+)
 from ..bundle import ArtifactSpec, bundle_artifacts, parse_extra_artifact, validate_bundle
 from ..doctor import run_doctor
 from ..mgxs_diff import diff_hdf5_files
@@ -422,8 +427,8 @@ def bundle_handler(args: argparse.Namespace) -> int:
             manifest_name=args.manifest_name,
             force=args.force,
         )
-    except Exception as exc:
-        parser.exit(1, f"openmc2donjon bundle: error: {exc}\n")
+    except USER_FACING_EXCEPTIONS as exc:
+        exit_with_command_error(parser, "bundle", exc)
     return 0
 
 
@@ -456,4 +461,3 @@ def _bundle_artifacts_from_args(
     if not artifacts:
         parser.error("at least one artifact option is required")
     return artifacts
-
