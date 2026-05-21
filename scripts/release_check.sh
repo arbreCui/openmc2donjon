@@ -36,6 +36,7 @@ Default:
   - recipe/statepoint exporter smoke
   - DRAGON SPH macrolib handoff smoke when local DRAGON TCM38 inputs exist
   - DONJON DSPH consume smoke when local DONJON is available
+  - DONJON SPH solver-response smoke when local DONJON is available
   - external face-flux adapter smoke
   - production minicase and OpenMC hex minicase smokes
   - C5G7 converter readback smoke
@@ -173,6 +174,13 @@ RUN_DIR="$RUN_DIR/donjon_sph_consume" \
 PYTHON_BIN="$PYTHON_BIN" \
 MACROLIB_ASCII="$DRAGON_SPH_RUN_DIR/from_openmc_sph/out.macrolib.txt" \
   bash "$REPO_ROOT/scripts/run_donjon_sph_consume_smoke.sh"
+
+echo
+echo "== DONJON SPH solver response smoke =="
+RUN_DIR="$RUN_DIR/donjon_sph_solver_response" \
+PYTHON_BIN="$PYTHON_BIN" \
+MACROLIB_ASCII="$DRAGON_SPH_RUN_DIR/from_openmc_sph/out.macrolib.txt" \
+  bash "$REPO_ROOT/scripts/run_donjon_sph_solver_response_smoke.sh"
 
 echo
 echo "== External low-order handoff smoke =="
