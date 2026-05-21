@@ -53,6 +53,10 @@ HEX_DOMAIN_IDS = {
     "HEX_SE": 207,
 }
 DOMAIN_NAME_BY_ID = {cell_id: name for name, cell_id in HEX_DOMAIN_IDS.items()}
+DOMAIN_VOLUME_BY_ID = {
+    cell_id: HEX_CELL_VOLUME_CM3
+    for cell_id in HEX_DOMAIN_IDS.values()
+}
 RING_ORDER = ("HEX_E", "HEX_NE", "HEX_NW", "HEX_W", "HEX_SW", "HEX_SE")
 
 
@@ -159,7 +163,7 @@ def selected_domains(geometry: openmc.Geometry) -> list[openmc.Cell]:
     cells = geometry.get_all_cells()
     domains = [cells[HEX_DOMAIN_IDS[name]] for name in ("HEX_C", *RING_ORDER)]
     for cell in domains:
-        cell.volume = HEX_CELL_VOLUME_CM3
+        cell.volume = DOMAIN_VOLUME_BY_ID[cell.id]
     return domains
 
 
@@ -229,6 +233,8 @@ def root_attrs() -> dict[str, object]:
         "case": CASE_NAME,
         "domain_mode": DOMAIN_MODE,
         "domain_type": DOMAIN_TYPE,
+        "energy_group_count": len(ENERGY_BOUNDS_EV) - 1,
+        "legendre_order": LEGENDRE_ORDER,
         "geometry_kind": "hexagonal",
         "spatial_mapping": "one OpenMC hex cell domain -> one DONJON mixture",
         "hex_pitch_cm": HEX_PITCH_CM,

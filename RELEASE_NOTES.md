@@ -88,6 +88,9 @@
 - Added `examples/openmc_hex_minicase`, a real continuous-energy OpenMC hex
   lattice recipe/statepoint smoke with seven hex cell-domain mixtures and
   checked `L_MULTICOMPO`/`L_MACROLIB` readback.
+- Hardened the OpenMC hex minicase recipe with explicit `DomainExportSpec`
+  mapping, production metadata, strict dry-run gating, and repeatable managed
+  run-directory overwrites.
 - Added `examples/uox_5x5_tg6`, a candidate non-C5G7 adapter/smoke for a local
   DRAGON/APEX UOX 5x5 TG6 HDF5 source, producing checked `L_MULTICOMPO` and
   `L_MACROLIB` outputs.

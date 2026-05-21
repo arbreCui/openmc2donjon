@@ -16,9 +16,10 @@ HEX_SW
 HEX_SE
 ```
 
-Each cell domain becomes one DONJON mixture. The smoke checks 2 energy groups,
-P1 scattering, positive volumes, explicit `transport_total`, checked
-`L_MULTICOMPO`, and checked `L_MACROLIB` readback.
+Each cell domain becomes one DONJON mixture through explicit `DomainExportSpec`
+mapping with positive volumes. The smoke checks strict recipe dry-run, 2 energy
+groups, P1 scattering, explicit `transport_total`, checked `L_MULTICOMPO`, and
+checked `L_MACROLIB` readback.
 
 This example is a production-workflow capability smoke, not an accepted physics
 benchmark. It deliberately does not claim a reference hex `k-eff`.
