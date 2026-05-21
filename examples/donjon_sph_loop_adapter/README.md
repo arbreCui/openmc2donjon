@@ -22,23 +22,27 @@ The generated config demonstrates the production contract:
   `{ascii_input}`, `{result}`, `{previous_sph}`, `{workflow_ascii}`,
   `{sph_sidecar}`, `{augmented_h5}`, and `{output}`.
 
-For a real case, keep `make_config.py` as the pattern and replace the fake
-driver command with the DONJON card runner that dumps scalar volume fluxes.
+For a real case, write the config with the package CLI and provide the
+case-specific DONJON solve deck that dumps scalar volume fluxes.
 
 ## Real DONJON Runner
 
-For production wiring, start from `make_real_config.py` instead.  It writes a
-`run-sph-loop` config that calls `donjon_deck_runner.py` for both phases:
+For production wiring, use `make-donjon-sph-loop-config`.  It writes a
+`run-sph-loop` config that calls the packaged `openmc2donjon.donjon_deck_runner`
+for both phases:
 
 ```sh
-python examples/donjon_sph_loop_adapter/make_real_config.py \
+openmc2donjon make-donjon-sph-loop-config \
   --output loop.json \
   --output-dir runs/sph_loop \
   --mgxs mgxs_library.h5 \
-  --reference-flux reference_flux.h5 \
   --flux-map flux_map.h5 \
+  --solve-template solve_lflux_dump.x2m.in \
   --donjon-root /path/to/dragon-5.1/Donjon
 ```
+
+If the reference flux is not stored in `flux_map.h5::openmc_volume_flux`, add
+`--reference-flux reference_flux.h5::dataset`.
 
 The runner stages the current ASCII macrolib under a short `/tmp` path, renders
 an `.x2m` deck under
@@ -52,5 +56,7 @@ Templates:
   solve-side template.  Replace the geometry/tracking/solve body with the real
   DONJON model and keep
   `UTL: FLUX :: IMPR STATE-VECTOR * DUMP ;`.
-- `templates/apply_nsph_mac.x2m.in` is a generic `DSPH`/`MAC` postprocess deck
-  for applying `NSPH` factors written by the loop.
+- the default apply template is packaged at
+  `src/openmc2donjon/templates/apply_nsph_mac.x2m.in`; override it with
+  `--apply-template` only when your DONJON workflow needs custom `DSPH`/`MAC`
+  postprocessing.

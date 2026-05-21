@@ -18,6 +18,7 @@ FLUX_MAP="$INPUT_DIR/flux_map.h5"
 EXPECTED="$INPUT_DIR/reference_expected.h5"
 CONFIG="$RUN_DIR/donjon_sph_loop_config.json"
 REAL_CONFIG="$RUN_DIR/donjon_sph_loop_real_config.json"
+CLI_REAL_CONFIG="$RUN_DIR/donjon_sph_loop_cli_real_config.json"
 LOOP_DIR="$RUN_DIR/sph_loop"
 SUMMARY="$LOOP_DIR/sph_loop_summary.json"
 TEMPLATE_DIR="$SCRIPT_DIR/templates"
@@ -52,6 +53,16 @@ echo "== openmc2donjon DONJON SPH loop adapter smoke =="
   --apply-template "$TEMPLATE_DIR/apply_nsph_mac.x2m.in" \
   --python-bin "$PYTHON_BIN"
 
+"$PYTHON_BIN" -m openmc2donjon.cli make-donjon-sph-loop-config \
+  --output "$CLI_REAL_CONFIG" \
+  --output-dir "$LOOP_DIR" \
+  --mgxs "$MGXS" \
+  --reference-flux "$REFERENCE_FLUX" \
+  --flux-map "$FLUX_MAP" \
+  --solve-template "$TEMPLATE_DIR/solve_lflux_dump.x2m.in" \
+  --donjon-root "$DONJON_ROOT" \
+  --python-bin "$PYTHON_BIN"
+
 "$PYTHON_BIN" - "$REAL_CONFIG" <<'PY'
 from __future__ import annotations
 
@@ -67,6 +78,26 @@ assert "solve_lflux_dump.x2m.in" in " ".join(config["solver"]["command"])
 assert "apply_nsph_mac.x2m.in" in " ".join(config["postprocess"]["command"])
 assert any(part.startswith("/tmp/") for part in config["solver"]["command"])
 assert any(part.startswith("/tmp/") for part in config["postprocess"]["command"])
+PY
+
+"$PYTHON_BIN" - "$CLI_REAL_CONFIG" <<'PY'
+from __future__ import annotations
+
+import json
+from pathlib import Path
+import sys
+
+
+config = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+solver = config["solver"]["command"]
+postprocess = config["postprocess"]["command"]
+assert config["schema"] == "openmc2donjon.sph-loop-config.v1"
+assert "-m" in solver
+assert "openmc2donjon.donjon_deck_runner" in solver
+assert "openmc2donjon.donjon_deck_runner" in postprocess
+assert "solve_lflux_dump.x2m.in" in " ".join(solver)
+assert "apply_nsph_mac.x2m.in" in " ".join(postprocess)
+print(f"DONJON SPH loop package config OK: {Path(sys.argv[1])}")
 PY
 
 "$PYTHON_BIN" -m openmc2donjon.cli run-sph-loop \

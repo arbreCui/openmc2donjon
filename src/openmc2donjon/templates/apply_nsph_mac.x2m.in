@@ -1,6 +1,4 @@
-* Copy of the packaged generic DONJON DSPH/MAC application deck.
-* The canonical template lives at:
-*   src/openmc2donjon/templates/apply_nsph_mac.x2m.in
+* Generic DONJON DSPH/MAC application deck.
 * case_id: {case_id}
 * iteration: {iteration}
 MODULE DSPH: MAC: END: ABORT: ;

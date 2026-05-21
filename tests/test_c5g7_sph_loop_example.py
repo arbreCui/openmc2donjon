@@ -89,7 +89,6 @@ class C5G7SphLoopExampleTests(unittest.TestCase):
         text = run_sh.read_text(encoding="utf-8")
         self.assertIn("make_config.py", text)
         self.assertIn("run-sph-loop", text)
-        self.assertIn("donjon_deck_runner.py", text)
         self.assertIn("solve_lflux_dump.x2m.in", text)
         self.assertIn("sph_loop_summary.json", text)
 

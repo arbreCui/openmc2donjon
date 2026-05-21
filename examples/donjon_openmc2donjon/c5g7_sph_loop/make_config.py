@@ -30,8 +30,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--driver",
         type=Path,
-        default=repo_root / "examples/donjon_sph_loop_adapter/donjon_deck_runner.py",
-        help="generic DONJON deck runner script",
+        default=None,
+        help="optional DONJON deck runner script; default uses the packaged module",
     )
     parser.add_argument(
         "--solve-template",
@@ -65,6 +65,11 @@ def main(argv: list[str] | None = None) -> int:
         help="DONJON data-relative directory where rendered decks are written",
     )
     args = parser.parse_args(argv)
+    driver_prefix = (
+        [args.python_bin, str(args.driver)]
+        if args.driver is not None
+        else [args.python_bin, "-m", "openmc2donjon.donjon_deck_runner"]
+    )
 
     payload = {
         "schema": "openmc2donjon.sph-loop-config.v1",
@@ -84,8 +89,7 @@ def main(argv: list[str] | None = None) -> int:
         "source_label": "C5G7 fixed OpenMC XS SPH loop",
         "solver": {
             "command": [
-                args.python_bin,
-                str(args.driver),
+                *driver_prefix,
                 "solve",
                 "--donjon-root",
                 str(args.donjon_root),
@@ -108,8 +112,7 @@ def main(argv: list[str] | None = None) -> int:
         },
         "postprocess": {
             "command": [
-                args.python_bin,
-                str(args.driver),
+                *driver_prefix,
                 "apply",
                 "--donjon-root",
                 str(args.donjon_root),

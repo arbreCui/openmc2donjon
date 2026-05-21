@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 import sys
+
+from openmc2donjon.donjon_sph_config import write_donjon_sph_loop_config
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -48,69 +49,26 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    config = {
-        "schema": "openmc2donjon.sph-loop-config.v1",
-        "input_h5": str(args.mgxs),
-        "output_dir": str(args.output_dir),
-        "reference_flux": f"{args.reference_flux}::openmc_volume_flux",
-        "map_h5": str(args.flux_map),
-        "iterations": args.iterations,
-        "format": "macrolib",
-        "final_solve": True,
-        "damping": args.damping,
-        "clip_min": args.clip_min,
-        "clip_max": args.clip_max,
-        "sph_kind": "donjon-sph-loop-real-adapter",
-        "sph_real": False,
-        "sph_applied": False,
-        "source_label": "Generic DONJON SPH loop real deck adapter",
-        "solver": {
-            "command": [
-                args.python_bin,
-                str(args.driver),
-                "solve",
-                "--donjon-root",
-                str(args.donjon_root),
-                "--deck-template",
-                str(args.solve_template),
-                "--macrolib",
-                "{ascii_input}",
-                "--result",
-                "{result}",
-                "--iteration",
-                "{iteration}",
-                "--case-id",
-                f"{args.case_id_prefix}_solve_iter{{iteration}}",
-                "--work-dir",
-                f"/tmp/{args.stage_prefix}_solve_iter{{iteration}}",
-            ],
-            "result": "donjon_flux.result",
-        },
-        "postprocess": {
-            "command": [
-                args.python_bin,
-                str(args.driver),
-                "apply",
-                "--donjon-root",
-                str(args.donjon_root),
-                "--deck-template",
-                str(args.apply_template),
-                "--macrolib",
-                "{workflow_ascii}",
-                "--output",
-                "{output}",
-                "--iteration",
-                "{iteration1}",
-                "--case-id",
-                f"{args.case_id_prefix}_apply_iter{{iteration1}}",
-                "--work-dir",
-                f"/tmp/{args.stage_prefix}_apply_iter{{iteration1}}",
-            ],
-            "output": "corrected.macrolib.txt",
-        },
-    }
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(config, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    write_donjon_sph_loop_config(
+        args.output,
+        input_h5=args.mgxs,
+        output_dir=args.output_dir,
+        solve_template=args.solve_template,
+        apply_template=args.apply_template,
+        driver=args.driver,
+        flux_map=args.flux_map,
+        reference_flux=args.reference_flux,
+        donjon_root=args.donjon_root,
+        python_bin=args.python_bin,
+        iterations=args.iterations,
+        damping=args.damping,
+        clip_min=args.clip_min,
+        clip_max=args.clip_max,
+        case_id_prefix=args.case_id_prefix,
+        stage_prefix=args.stage_prefix,
+        sph_kind="donjon-sph-loop-real-adapter",
+        source_label="Generic DONJON SPH loop real deck adapter",
+    )
     print(f"DONJON real deck SPH loop config: {args.output}")
     return 0
 

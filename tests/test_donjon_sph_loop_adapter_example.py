@@ -201,6 +201,8 @@ class DonjonSphLoopAdapterExampleTests(unittest.TestCase):
         self.assertIn("corrected.macrolib.txt", text)
         self.assertIn("scalar_flux_ids", text)
         self.assertIn("make_real_config.py", text)
+        self.assertIn("make-donjon-sph-loop-config", text)
+        self.assertIn("openmc2donjon.donjon_deck_runner", text)
         self.assertIn("donjon_deck_runner.py", text)
         self.assertIn("--dry-run", text)
         self.assertIn("extract-donjon-volume-flux", text)

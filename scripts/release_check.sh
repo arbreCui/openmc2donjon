@@ -163,6 +163,8 @@ echo "== CLI smoke =="
 "$PYTHON_BIN" -m openmc2donjon.cli extract-donjon-volume-flux --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli run-sph-iteration --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli run-sph-loop --help >/dev/null
+"$PYTHON_BIN" -m openmc2donjon.cli make-donjon-sph-loop-config --help >/dev/null
+"$PYTHON_BIN" -m openmc2donjon.donjon_deck_runner --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.export_cli --version
 "$PYTHON_BIN" -m openmc2donjon.export_cli --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.from_openmc_cli --version
