@@ -122,6 +122,22 @@ def _run_dry_run(args: argparse.Namespace) -> bool:
     )
     print_recipe_dry_run_summary(summary)
     print("one-step conversion dry-run OK")
+    _print_dry_run_output(args, output_path, hdf5_path)
+    _print_dry_run_adf(args)
+    _print_dry_run_sph(args)
+    _print_dry_run_artifacts(args)
+    _print_dry_run_checks(args)
+    _print_dry_run_run_dir(args)
+    if args.strict_dry_run:
+        return print_strict_dry_run_decision(summary)
+    return True
+
+
+def _print_dry_run_output(
+    args: argparse.Namespace,
+    output_path: Path,
+    hdf5_path: Path | None,
+) -> None:
     print(f"  format: {args.format}")
     print(f"  ascii_output: {output_path} (not written)")
     if hdf5_path is None:
@@ -136,6 +152,9 @@ def _run_dry_run(args: argparse.Namespace) -> bool:
     print(f"  single_point_burnup: {_render_optional_value(args.burnup)}")
     print(f"  h_factor_default: {_render_optional_value(args.h_factor_default)}")
     print(f"  scatter_mgxs_type: {args.scatter_mgxs_type or 'scatter matrix'}")
+
+
+def _print_dry_run_adf(args: argparse.Namespace) -> None:
     if args.adf_source is None:
         print("  adf_source: none")
     else:
@@ -186,6 +205,9 @@ def _run_dry_run(args: argparse.Namespace) -> bool:
         print(f"    adf_sidecar_summary: {paths['adf_sidecar_summary']} (not written)")
     else:
         print("  flux_ratio_adf: disabled")
+
+
+def _print_dry_run_sph(args: argparse.Namespace) -> None:
     if args.sph_source is not None:
         print(f"  sph_source: {args.sph_source} (not read)")
         if args.sph_summary_json is None:
@@ -203,6 +225,9 @@ def _run_dry_run(args: argparse.Namespace) -> bool:
             print(f"  sph_summary_json: {args.sph_summary_json} (not written)")
     else:
         print("  sph_source: none")
+
+
+def _print_dry_run_artifacts(args: argparse.Namespace) -> None:
     if args.extra_artifact:
         print("  extra_artifacts:")
         for artifact in _extra_artifacts_from_args(args):
@@ -213,6 +238,9 @@ def _run_dry_run(args: argparse.Namespace) -> bool:
         print("  summary_json: none")
     else:
         print(f"  summary_json: {args.summary_json} (not written)")
+
+
+def _print_dry_run_checks(args: argparse.Namespace) -> None:
     if args.check:
         print("  check: enabled after HDF5 export")
         print(f"    require_volume: {_yes_no(args.require_volume)}")
@@ -234,6 +262,9 @@ def _run_dry_run(args: argparse.Namespace) -> bool:
             print(f"    check_summary_json: {args.check_summary_json} (not written)")
     else:
         print("  check: disabled")
+
+
+def _print_dry_run_run_dir(args: argparse.Namespace) -> None:
     if args.run_dir is not None:
         if args.no_validate_bundle:
             print("  bundle_validation_summary_json: disabled")
@@ -246,9 +277,6 @@ def _run_dry_run(args: argparse.Namespace) -> bool:
             print("  handoff_summary_json: disabled")
         else:
             print(f"  handoff_summary_json: {args.handoff_summary_json} (not written)")
-    if args.strict_dry_run:
-        return print_strict_dry_run_decision(summary)
-    return True
 
 
 def _run_pipeline(
@@ -555,24 +583,13 @@ def _build_flux_ratio_adf(
     generated_artifacts: list[ArtifactSpec] = []
 
     if args.export_surface_flux:
-        if statepoint_path is None:
-            raise ValueError("--export-surface-flux requires a statepoint")
-        export_openmc_surface_flux(
-            statepoint_path,
-            paths["surface_flux"],
-            mgxs_h5=hdf5_path,
-            tally_name=args.surface_flux_tally_name,
-            mesh_shape=_parse_optional_int_pair(
-                args.surface_flux_mesh_shape,
-                "--surface-flux-mesh-shape",
-            ),
-            mu_edges=_parse_float_tuple(args.surface_flux_mu_edges, "--surface-flux-mu-edges"),
-            face_area=args.surface_flux_face_area,
-            face_names=faces,
-            force=True,
-            summary_json=paths["surface_flux_summary"],
+        surface_flux = _export_surface_flux_for_adf(
+            args,
+            paths,
+            hdf5_path,
+            statepoint_path=statepoint_path,
+            faces=faces,
         )
-        surface_flux = paths["surface_flux"]
         generated_artifacts.extend(
             [
                 ArtifactSpec(label="surface-flux", source=paths["surface_flux"]),
@@ -586,72 +603,23 @@ def _build_flux_ratio_adf(
         )
 
     if args.homogeneous_face_flux is None:
-        create_low_order_driver(
+        homogeneous_face_flux = _build_homogeneous_face_flux_for_adf(
+            args,
+            paths,
             hdf5_path,
-            paths["low_order_driver"],
-            raw_driver=args.low_order_raw_driver,
-            volume_flux=args.low_order_volume_flux,
-            net_current=args.low_order_net_current,
-            faces=faces,
-            net_current_sign_convention=args.low_order_net_current_sign_convention,
-            source_label=args.low_order_source_label,
-            force=True,
-            summary_json=paths["low_order_driver_summary"],
-        )
-        low_order_check = check_low_order_driver(
-            hdf5_path,
-            paths["low_order_driver"],
             faces=faces,
             face_widths=face_widths,
-            summary_json=paths["low_order_driver_check_summary"],
         )
-        if not low_order_check.ok:
-            raise ValueError("low-order driver contract check failed")
-
-        create_homogeneous_face_flux(
-            hdf5_path,
-            paths["homogeneous_face_flux"],
-            volume_flux=paths["low_order_driver"],
-            net_current=paths["low_order_driver"],
-            faces=faces,
-            face_widths=face_widths,
-            force=True,
-            summary_json=paths["homogeneous_face_flux_summary"],
-        )
-        homogeneous_face_flux = paths["homogeneous_face_flux"]
     else:
         homogeneous_face_flux = args.homogeneous_face_flux
 
-    face_flux_check = check_face_flux(
+    _check_and_create_flux_ratio_adf(
+        args,
+        paths,
         hdf5_path,
         surface_flux=surface_flux,
         homogeneous_face_flux=homogeneous_face_flux,
         faces=faces,
-        invalid_fill=args.adf_invalid_fill,
-        clip_min=args.adf_clip_min,
-        clip_max=args.adf_clip_max,
-        summary_json=paths["face_flux_check_summary"],
-    )
-    if not face_flux_check.ok:
-        raise ValueError("face-flux contract check failed")
-
-    create_flux_ratio_adf_sidecar(
-        hdf5_path,
-        paths["adf_sidecar"],
-        surface_flux=surface_flux,
-        homogeneous_face_flux=homogeneous_face_flux,
-        faces=faces,
-        force=True,
-        summary_json=paths["adf_sidecar_summary"],
-        invalid_fill=args.adf_invalid_fill,
-        clip_min=args.adf_clip_min,
-        clip_max=args.adf_clip_max,
-        adf_kind=args.adf_kind or "flux-ratio",
-        adf_real=_optional_bool(args.adf_real, default=True),
-        adf_source_label=(
-            args.adf_source_label
-            or "openmc2donjon-from-openmc flux-ratio ADF workflow"
-        ),
     )
 
     if args.homogeneous_face_flux is None:
@@ -690,6 +658,119 @@ def _build_flux_ratio_adf(
         ArtifactSpec(label="adf-sidecar-summary", source=paths["adf_sidecar_summary"])
     )
     return paths["adf_sidecar"], generated_artifacts
+
+
+def _export_surface_flux_for_adf(
+    args: argparse.Namespace,
+    paths: dict[str, Path],
+    hdf5_path: Path,
+    *,
+    statepoint_path: Path | None,
+    faces: tuple[str, ...],
+) -> Path:
+    if statepoint_path is None:
+        raise ValueError("--export-surface-flux requires a statepoint")
+    export_openmc_surface_flux(
+        statepoint_path,
+        paths["surface_flux"],
+        mgxs_h5=hdf5_path,
+        tally_name=args.surface_flux_tally_name,
+        mesh_shape=_parse_optional_int_pair(
+            args.surface_flux_mesh_shape,
+            "--surface-flux-mesh-shape",
+        ),
+        mu_edges=_parse_float_tuple(args.surface_flux_mu_edges, "--surface-flux-mu-edges"),
+        face_area=args.surface_flux_face_area,
+        face_names=faces,
+        force=True,
+        summary_json=paths["surface_flux_summary"],
+    )
+    return paths["surface_flux"]
+
+
+def _build_homogeneous_face_flux_for_adf(
+    args: argparse.Namespace,
+    paths: dict[str, Path],
+    hdf5_path: Path,
+    *,
+    faces: tuple[str, ...],
+    face_widths: tuple[float, ...],
+) -> Path:
+    create_low_order_driver(
+        hdf5_path,
+        paths["low_order_driver"],
+        raw_driver=args.low_order_raw_driver,
+        volume_flux=args.low_order_volume_flux,
+        net_current=args.low_order_net_current,
+        faces=faces,
+        net_current_sign_convention=args.low_order_net_current_sign_convention,
+        source_label=args.low_order_source_label,
+        force=True,
+        summary_json=paths["low_order_driver_summary"],
+    )
+    low_order_check = check_low_order_driver(
+        hdf5_path,
+        paths["low_order_driver"],
+        faces=faces,
+        face_widths=face_widths,
+        summary_json=paths["low_order_driver_check_summary"],
+    )
+    if not low_order_check.ok:
+        raise ValueError("low-order driver contract check failed")
+
+    create_homogeneous_face_flux(
+        hdf5_path,
+        paths["homogeneous_face_flux"],
+        volume_flux=paths["low_order_driver"],
+        net_current=paths["low_order_driver"],
+        faces=faces,
+        face_widths=face_widths,
+        force=True,
+        summary_json=paths["homogeneous_face_flux_summary"],
+    )
+    return paths["homogeneous_face_flux"]
+
+
+def _check_and_create_flux_ratio_adf(
+    args: argparse.Namespace,
+    paths: dict[str, Path],
+    hdf5_path: Path,
+    *,
+    surface_flux: Path | str,
+    homogeneous_face_flux: Path | str,
+    faces: tuple[str, ...],
+) -> None:
+    face_flux_check = check_face_flux(
+        hdf5_path,
+        surface_flux=surface_flux,
+        homogeneous_face_flux=homogeneous_face_flux,
+        faces=faces,
+        invalid_fill=args.adf_invalid_fill,
+        clip_min=args.adf_clip_min,
+        clip_max=args.adf_clip_max,
+        summary_json=paths["face_flux_check_summary"],
+    )
+    if not face_flux_check.ok:
+        raise ValueError("face-flux contract check failed")
+
+    create_flux_ratio_adf_sidecar(
+        hdf5_path,
+        paths["adf_sidecar"],
+        surface_flux=surface_flux,
+        homogeneous_face_flux=homogeneous_face_flux,
+        faces=faces,
+        force=True,
+        summary_json=paths["adf_sidecar_summary"],
+        invalid_fill=args.adf_invalid_fill,
+        clip_min=args.adf_clip_min,
+        clip_max=args.adf_clip_max,
+        adf_kind=args.adf_kind or "flux-ratio",
+        adf_real=_optional_bool(args.adf_real, default=True),
+        adf_source_label=(
+            args.adf_source_label
+            or "openmc2donjon-from-openmc flux-ratio ADF workflow"
+        ),
+    )
 
 
 def _flux_ratio_adf_paths(args: argparse.Namespace) -> dict[str, Path]:
