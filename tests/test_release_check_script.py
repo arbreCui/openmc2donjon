@@ -38,6 +38,16 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertIn("scripts/run_c5g7_sph_solver_response_smoke.sh", accepted_section)
         self.assertNotIn("examples/openmc_hex_minicase/run_smoke.sh", candidate_section)
 
+    def test_c5g7_sph_solver_response_uses_external_table_entrypoint(self) -> None:
+        text = (_repo_root() / "scripts/run_c5g7_sph_solver_response_smoke.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("c5g7_external_sph_table.csv", text)
+        self.assertIn("--mode table", text)
+        self.assertIn("--table \"$SPH_TABLE\"", text)
+        self.assertIn("source_table", text)
+
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]

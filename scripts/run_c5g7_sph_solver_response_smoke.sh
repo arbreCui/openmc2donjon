@@ -38,25 +38,25 @@ if [[ ! -x "$DONJON_RUNNER" ]]; then
   exit 0
 fi
 
-SPH_SIDECAR="$RUN_DIR/c5g7_nonunity_sph_sidecar.h5"
+SPH_TABLE="$RUN_DIR/c5g7_external_sph_table.csv"
+SPH_SIDECAR="$RUN_DIR/c5g7_external_sph_sidecar.h5"
 SPH_AUGMENTED="$RUN_DIR/c5g7_with_nonunity_sph.h5"
 BASE_MACROLIB="$RUN_DIR/c5g7_base.macrolib.txt"
 SPH_MACROLIB="$RUN_DIR/c5g7_with_nonunity_sph.macrolib.txt"
 CHECK_JSON="$RUN_DIR/c5g7_sph_check_summary.json"
+SPH_SIDECAR_JSON="$RUN_DIR/c5g7_sph_sidecar_summary.json"
 
 echo
-echo "== Build non-unity SPH sidecar =="
-"$PYTHON_BIN" - "$MGXS" "$SPH_SIDECAR" <<'PY'
+echo "== Build external C5G7 SPH table =="
+"$PYTHON_BIN" - "$MGXS" "$SPH_TABLE" <<'PY'
 from pathlib import Path
 import sys
 
 import h5py
 import numpy as np
 
-from openmc2donjon import __version__
-
 source = Path(sys.argv[1])
-sidecar = Path(sys.argv[2])
+table = Path(sys.argv[2])
 with h5py.File(source, "r") as h5:
     mixture_names = tuple(str(name) for name in h5["mixtures"].keys())
     ngroups = int(h5.attrs["energy_groups"])
@@ -72,28 +72,68 @@ for mixture_index in range(len(mixture_names)):
         )
 
 if np.allclose(values, 1.0):
-    raise SystemExit("constructed SPH sidecar is unexpectedly unity")
+    raise SystemExit("constructed SPH table is unexpectedly unity")
 if float(np.min(values)) <= 0.0:
-    raise SystemExit("constructed SPH sidecar contains non-positive values")
+    raise SystemExit("constructed SPH table contains non-positive values")
 
-sidecar.parent.mkdir(parents=True, exist_ok=True)
-with h5py.File(sidecar, "w") as h5:
-    h5.attrs["schema"] = "openmc2donjon.sph-sidecar.v1"
-    h5.attrs["package_version"] = __version__
-    h5.attrs["sph_kind"] = "c5g7-nonunity-smoke"
-    h5.attrs["sph_real"] = False
-    h5.attrs["sph_applied"] = False
-    h5.attrs["source_mgxs"] = str(source)
-    dataset = h5.create_dataset("sph", data=values)
-    dataset.attrs.create(
-        "mixture_names",
-        np.asarray(mixture_names, dtype=h5py.string_dtype("utf-8")),
-    )
+table.parent.mkdir(parents=True, exist_ok=True)
+lines = ["mixture,group,sph"]
+for mixture_index, mixture in enumerate(mixture_names):
+    for group_index, value in enumerate(values[mixture_index], start=1):
+        lines.append(f"{mixture},{group_index},{value:.12g}")
+table.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 print(
-    "C5G7 non-unity SPH sidecar: "
+    "C5G7 external SPH table: "
     f"mixtures={len(mixture_names)} groups={ngroups} "
     f"range={float(np.min(values)):.6g}..{float(np.max(values)):.6g}"
+)
+PY
+
+echo
+echo "== Canonicalize C5G7 SPH table =="
+"$PYTHON_BIN" -m openmc2donjon.cli make-sph-sidecar "$MGXS" \
+  -o "$SPH_SIDECAR" \
+  --mode table \
+  --table "$SPH_TABLE" \
+  --sph-kind c5g7-external-table-smoke \
+  --sph-real false \
+  --sph-applied false \
+  --summary-json "$SPH_SIDECAR_JSON" \
+  --force
+
+"$PYTHON_BIN" - "$SPH_SIDECAR" "$SPH_TABLE" "$SPH_SIDECAR_JSON" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+import h5py
+import numpy as np
+
+sidecar = Path(sys.argv[1])
+table = Path(sys.argv[2])
+summary = Path(sys.argv[3])
+
+with h5py.File(sidecar, "r") as h5:
+    if h5.attrs["sph_kind"] != "c5g7-external-table-smoke":
+        raise SystemExit("C5G7 SPH sidecar kind mismatch")
+    if bool(h5.attrs["sph_real"]):
+        raise SystemExit("synthetic C5G7 SPH smoke should not be marked real")
+    if bool(h5.attrs["sph_applied"]):
+        raise SystemExit("C5G7 SPH sidecar should be marked unapplied")
+    if h5.attrs.get("source_table") != str(table):
+        raise SystemExit("C5G7 SPH sidecar did not preserve table provenance")
+    values = h5["sph"][:]
+if np.allclose(values, 1.0):
+    raise SystemExit("C5G7 SPH sidecar is unexpectedly unity")
+
+payload = json.loads(summary.read_text(encoding="utf-8"))
+if payload["decision"] != "openmc2donjon_sph_sidecar_passed":
+    raise SystemExit("C5G7 SPH sidecar summary did not pass")
+
+print(
+    "C5G7 SPH table canonicalized: "
+    f"shape={values.shape} range={float(np.min(values)):.6g}..{float(np.max(values)):.6g}"
 )
 PY
 
@@ -102,7 +142,7 @@ echo "== Convert base and SPH macrolibs =="
 "$PYTHON_BIN" -m openmc2donjon.cli augment-sph "$MGXS" \
   --sph-source "$SPH_SIDECAR" \
   -o "$SPH_AUGMENTED" \
-  --sph-kind c5g7-nonunity-smoke \
+  --sph-kind c5g7-external-table-smoke \
   --sph-real false \
   --sph-applied false \
   --force
