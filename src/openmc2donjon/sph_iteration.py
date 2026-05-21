@@ -488,23 +488,74 @@ def _normalize_matrix(
     label: str,
 ) -> np.ndarray:
     values = np.asarray(values, dtype=float)
-    if values.shape != (len(mixture_names), energy_groups):
-        raise ValueError(
-            f"{label}: shape {values.shape} is not compatible with "
-            f"({len(mixture_names)}, {energy_groups})"
+    expected_shape = (len(mixture_names), energy_groups)
+    if values.shape == expected_shape:
+        if declared_mixtures is None:
+            return values
+        declared = tuple(_flatten_names(declared_mixtures))
+        if not declared:
+            return values
+        if set(declared) != set(mixture_names):
+            raise ValueError(
+                f"{label}: declared mixture names {declared!r} do not match "
+                f"{mixture_names!r}"
+            )
+        order = [declared.index(name) for name in mixture_names]
+        return values[order, :]
+
+    if values.ndim >= 3 and values.shape[-1] == energy_groups:
+        return _mesh_values_to_mixture_order(
+            values,
+            declared_mixtures,
+            mixture_names=mixture_names,
+            energy_groups=energy_groups,
+            label=label,
         )
+
+    raise ValueError(
+        f"{label}: shape {values.shape} is not compatible with "
+        f"({len(mixture_names)}, {energy_groups}) or mesh-shaped "
+        f"(..., {energy_groups})"
+    )
+
+
+def _mesh_values_to_mixture_order(
+    values: np.ndarray,
+    declared_mixtures: Any,
+    *,
+    mixture_names: tuple[str, ...],
+    energy_groups: int,
+    label: str,
+) -> np.ndarray:
     if declared_mixtures is None:
-        return values
-    declared = tuple(_flatten_names(declared_mixtures))
-    if not declared:
-        return values
-    if set(declared) != set(mixture_names):
         raise ValueError(
-            f"{label}: declared mixture names {declared!r} do not match "
-            f"{mixture_names!r}"
+            f"{label}: mesh-shaped HDF5 datasets must declare mixture_names, "
+            "mixtures, or domain_names"
         )
-    order = [declared.index(name) for name in mixture_names]
-    return values[order, :]
+    declared = _decode_name_array(declared_mixtures)
+    spatial_shape = values.shape[:-1]
+    if declared.shape != spatial_shape:
+        if declared.size != int(np.prod(spatial_shape)):
+            raise ValueError(
+                f"{label}: declared mixture name shape {declared.shape} does not "
+                f"match mesh shape {spatial_shape}"
+            )
+        declared = declared.reshape(spatial_shape)
+
+    flat_names = declared.reshape(-1)
+    flat_values = values.reshape((-1, energy_groups))
+    ordered = np.empty((len(mixture_names), energy_groups), dtype=float)
+    for mixture_index, mixture in enumerate(mixture_names):
+        matches = np.flatnonzero(flat_names == mixture)
+        if matches.size == 0:
+            raise ValueError(f"{label}: mesh is missing mixture {mixture!r}")
+        if matches.size > 1:
+            raise ValueError(
+                f"{label}: mesh contains mixture {mixture!r} more than once; "
+                "SPH iteration tables require one flux vector per mixture"
+            )
+        ordered[mixture_index, :] = flat_values[int(matches[0]), :]
+    return ordered
 
 
 def _validate_update_options(
@@ -574,6 +625,17 @@ def _flatten_names(raw: Any) -> tuple[str, ...]:
         else:
             out.append(str(item))
     return tuple(out)
+
+
+def _decode_name_array(raw: Any) -> np.ndarray:
+    arr = np.asarray(raw)
+    out = np.empty(arr.shape, dtype=object)
+    for index, item in np.ndenumerate(arr):
+        if isinstance(item, bytes):
+            out[index] = item.decode("utf-8")
+        else:
+            out[index] = str(item)
+    return out
 
 
 def _find_column(fieldnames: list[str], candidates: tuple[str, ...]) -> str | None:

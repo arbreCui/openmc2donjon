@@ -39,6 +39,11 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertIn("scripts/run_c5g7_from_openmc_adf_smoke.sh", accepted_section)
         self.assertIn("== C5G7 SPH solver response smoke ==", accepted_section)
         self.assertIn("scripts/run_c5g7_sph_solver_response_smoke.sh", accepted_section)
+        self.assertIn("== C5G7 SPH iteration from DONJON flux smoke ==", accepted_section)
+        self.assertIn(
+            "scripts/run_c5g7_sph_iteration_from_donjon_flux_smoke.sh",
+            accepted_section,
+        )
         self.assertNotIn("examples/openmc_hex_minicase/run_smoke.sh", candidate_section)
 
     def test_c5g7_sph_solver_response_uses_external_table_entrypoint(self) -> None:
@@ -50,6 +55,17 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertIn("--mode table", text)
         self.assertIn("--table \"$SPH_TABLE\"", text)
         self.assertIn("source_table", text)
+
+    def test_c5g7_sph_iteration_smoke_uses_real_flux_datasets(self) -> None:
+        text = (
+            _repo_root() / "scripts/run_c5g7_sph_iteration_from_donjon_flux_smoke.sh"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("openmc_volume_flux", text)
+        self.assertIn("donjon_volume_flux", text)
+        self.assertIn("make-sph-update-table", text)
+        self.assertIn("--mode table", text)
+        self.assertIn("c5g7-donjon-flux-iteration-smoke", text)
 
 
 def _repo_root() -> Path:

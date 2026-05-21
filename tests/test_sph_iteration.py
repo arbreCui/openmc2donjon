@@ -122,6 +122,63 @@ class SphIterationTests(unittest.TestCase):
                     low_order_flux=low_order_flux,
                 )
 
+    def test_cli_accepts_mesh_shaped_hdf5_flux(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            flux = root / "mesh_flux.h5"
+            table = root / "next_sph.csv"
+            sidecar = root / "next_sph.h5"
+            write_mgxs(mgxs)
+            with h5py.File(flux, "w") as h5:
+                names = np.asarray([["moderator", "fuel"]], dtype="S")
+                h5.create_dataset("mixture_names", data=names)
+                h5.create_dataset(
+                    "reference_flux",
+                    data=np.asarray([[[4.0, 9.0], [16.0, 25.0]]]),
+                )
+                h5.create_dataset(
+                    "low_order_flux",
+                    data=np.asarray([[[1.0, 1.0], [1.0, 1.0]]]),
+                )
+
+            self.assertEqual(
+                cli_main(
+                    [
+                        "make-sph-update-table",
+                        str(mgxs),
+                        "-o",
+                        str(table),
+                        "--reference-flux",
+                        f"{flux}::reference_flux",
+                        "--low-order-flux",
+                        f"{flux}::low_order_flux",
+                        "--damping",
+                        "0.5",
+                    ]
+                ),
+                0,
+            )
+            self.assertEqual(
+                cli_main(
+                    [
+                        "make-sph-sidecar",
+                        str(mgxs),
+                        "-o",
+                        str(sidecar),
+                        "--mode",
+                        "table",
+                        "--table",
+                        str(table),
+                    ]
+                ),
+                0,
+            )
+
+            expected = np.asarray([[4.0, 5.0], [2.0, 3.0]])
+            with h5py.File(sidecar, "r") as h5:
+                np.testing.assert_allclose(h5["sph"][:], expected)
+
 
 def write_mgxs(path: Path) -> None:
     with h5py.File(path, "w") as h5:

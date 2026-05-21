@@ -44,6 +44,7 @@ Default:
   - C5G7 converter readback smoke
   - accepted baseline manifest validation
   - C5G7 SPH solver-response smoke when local DONJON is available
+  - C5G7 SPH iteration from accepted DONJON/OpenMC volume-flux artifact
   - C5G7 DONJON face-flux regeneration smoke when local DONJON dumps exist
   - C5G7 production ADF source reconstruction smoke
   - C5G7 from-OpenMC flux-ratio ADF smoke when C5G7_STATEPOINT exists
@@ -366,6 +367,13 @@ RUN_DIR="$RUN_DIR/c5g7_sph_solver_response" \
 PYTHON_BIN="$PYTHON_BIN" \
 C5G7_ACCEPTED_H5="$C5G7_ACCEPTED_H5" \
   bash "$REPO_ROOT/scripts/run_c5g7_sph_solver_response_smoke.sh"
+
+echo
+echo "== C5G7 SPH iteration from DONJON flux smoke =="
+RUN_DIR="$RUN_DIR/c5g7_sph_iteration_flux" \
+PYTHON_BIN="$PYTHON_BIN" \
+C5G7_ACCEPTED_H5="$C5G7_ACCEPTED_H5" \
+  bash "$REPO_ROOT/scripts/run_c5g7_sph_iteration_from_donjon_flux_smoke.sh"
 
 echo
 echo "== C5G7 DONJON face-flux regeneration smoke =="
