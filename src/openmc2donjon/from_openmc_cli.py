@@ -83,6 +83,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="write the intermediate MGXS HDF5 to PATH instead of a temporary file",
     )
     parser.add_argument(
+        "--scatter-mgxs-type",
+        default=None,
+        help=(
+            "explicit OpenMC MGXS type to export as DONJON scattering. "
+            "Default accepts only ordinary 'scatter matrix'."
+        ),
+    )
+    parser.add_argument(
         "--run-dir",
         type=Path,
         default=None,
@@ -359,6 +367,7 @@ def _run_dry_run(args: argparse.Namespace) -> None:
         statepoint_path=args.statepoint,
         load_statepoint=args.statepoint is not None and not args.no_load_statepoint,
         output_path=hdf5_path,
+        scatter_mgxs_type=args.scatter_mgxs_type,
     )
     print_recipe_dry_run_summary(summary)
     print("one-step conversion dry-run OK")
@@ -375,6 +384,7 @@ def _run_dry_run(args: argparse.Namespace) -> None:
     print(f"  selected_mixtures: {_render_optional_list(args.mixture)}")
     print(f"  single_point_burnup: {_render_optional_value(args.burnup)}")
     print(f"  h_factor_default: {_render_optional_value(args.h_factor_default)}")
+    print(f"  scatter_mgxs_type: {args.scatter_mgxs_type or 'scatter matrix'}")
     if args.adf_source is None:
         print("  adf_source: none")
     else:
@@ -454,6 +464,7 @@ def _run_pipeline(
         hdf5_path,
         statepoint_path=args.statepoint,
         load_statepoint=not args.no_load_statepoint,
+        scatter_mgxs_type=args.scatter_mgxs_type,
         overwrite=not args.no_overwrite_hdf5,
     )
     export_summary = recipe_summary.output

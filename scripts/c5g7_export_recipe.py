@@ -51,7 +51,7 @@ def build_library():
             "fission",
             "nu-fission",
             "chi",
-            "consistent nu-scatter matrix",
+            "scatter matrix",
         ]
         if _domain_mode() == "material":
             library.domain_type = "material"

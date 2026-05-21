@@ -111,7 +111,7 @@ class SubdomainFakeLibrary:
                 (1, 1, 1): np.array([1.0, 0.0, 0.0]),
                 (2, 1, 1): np.array([0.0, 0.0, 0.0]),
             },
-            "consistent nu-scatter matrix": {
+            "scatter matrix": {
                 (1, 1, 1): np.eye(3),
                 (2, 1, 1): np.eye(3) * 2.0,
             },
@@ -207,6 +207,59 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
         self.assertEqual(stored_scatter.shape, (2, 2, 2))
         np.testing.assert_allclose(stored_scatter[0], library.scatter[:, :, 0])
         np.testing.assert_allclose(stored_scatter[1], library.scatter[:, :, 1])
+
+    def test_rejects_nu_scatter_as_default_donjon_scatter(self) -> None:
+        class Library:
+            def __init__(self) -> None:
+                self.energy_groups = FakeEnergyGroups()
+                self.domain = FakeDomain("fuel", 1, 3.0, True)
+                self.domains = [self.domain]
+                self.data = {
+                    "total": np.array([0.5, 0.6, 0.7]),
+                    "absorption": np.array([0.05, 0.06, 0.07]),
+                    "consistent nu-scatter matrix": np.eye(3),
+                }
+
+            def get_mgxs(self, domain: FakeDomain, mgxs_type: str) -> FakeMGXS:
+                if domain is not self.domain or mgxs_type not in self.data:
+                    raise KeyError((domain, mgxs_type))
+                return FakeMGXS(self.data[mgxs_type])
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaisesRegex(ValueError, "missing ordinary OpenMC MGXS"):
+                export_openmc_mgxs_library(Library(), Path(tmpdir) / "mgxs.h5")
+
+    def test_exports_nu_scatter_only_when_explicit(self) -> None:
+        class Library:
+            def __init__(self) -> None:
+                self.energy_groups = FakeEnergyGroups()
+                self.domain = FakeDomain("fuel", 1, 3.0, True)
+                self.domains = [self.domain]
+                self.data = {
+                    "total": np.array([0.5, 0.6, 0.7]),
+                    "absorption": np.array([0.05, 0.06, 0.07]),
+                    "consistent nu-scatter matrix": np.eye(3),
+                }
+
+            def get_mgxs(self, domain: FakeDomain, mgxs_type: str) -> FakeMGXS:
+                if domain is not self.domain or mgxs_type not in self.data:
+                    raise KeyError((domain, mgxs_type))
+                return FakeMGXS(self.data[mgxs_type])
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "mgxs.h5"
+            summary = export_openmc_mgxs_library(
+                Library(),
+                path,
+                scatter_mgxs_type="consistent nu-scatter matrix",
+            )
+            with h5py.File(path, "r") as h5:
+                root_type = h5.attrs["openmc_scatter_mgxs_type"]
+                group_type = h5["mixtures"]["fuel"].attrs["openmc_scatter_mgxs_type"]
+
+        self.assertEqual(summary.scatter_mgxs_type, "consistent nu-scatter matrix")
+        self.assertEqual(root_type, "consistent nu-scatter matrix")
+        self.assertEqual(group_type, "consistent nu-scatter matrix")
 
     def test_export_cli_reads_pickled_library(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -341,7 +394,7 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
                     self.mgxs_types = [
                         "total",
                         "absorption",
-                        "consistent nu-scatter matrix",
+                        "scatter matrix",
                         "transport",
                     ]
                     self.domains = [
@@ -374,6 +427,7 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
         self.assertIn("energy_groups: 2", output)
         self.assertIn("legendre_order: 1", output)
         self.assertIn("domain_type: cell", output)
+        self.assertIn("scatter_mgxs_type: scatter matrix", output)
         self.assertIn("mixtures: 2", output)
         self.assertIn("production_checklist:", output)
         self.assertIn(
@@ -391,6 +445,50 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
         self.assertIn("ASM_1", output)
         self.assertIn("volume_source=domain", output)
         self.assertIn("duplicate name 'ASM_1' written as 'ASM_1_2'", output)
+
+    def test_export_cli_recipe_dry_run_flags_nu_scatter_without_explicit_selection(self) -> None:
+        recipe = """
+            from dataclasses import dataclass
+
+            import numpy as np
+
+            class EnergyGroups:
+                group_edges = np.array([1.0e-5, 1.0, 1.0e7])
+
+            @dataclass(frozen=True)
+            class Domain:
+                name: str
+                id: int
+                volume: float
+
+            class Library:
+                def __init__(self):
+                    self.energy_groups = EnergyGroups()
+                    self.domain_type = "cell"
+                    self.legendre_order = 1
+                    self.mgxs_types = [
+                        "total",
+                        "absorption",
+                        "consistent nu-scatter matrix",
+                    ]
+                    self.domains = [Domain("fuel", 1, 10.0)]
+
+            def build_library():
+                return Library()
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            recipe_path = Path(tmpdir) / "recipe.py"
+            recipe_path.write_text(textwrap.dedent(recipe), encoding="utf-8")
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = export_cli_main(["--recipe", str(recipe_path), "--dry-run"])
+
+        output = stream.getvalue()
+        self.assertEqual(rc, 0)
+        self.assertIn("FAIL mgxs-required: ordinary scatter matrix is missing", output)
+        self.assertIn("nu-scatter MGXS is not used as DONJON scattering", output)
+        self.assertIn("mgxs_types declares nu-scatter", output)
 
     def test_export_cli_recipe_dry_run_flags_missing_required_mgxs_types(self) -> None:
         recipe = """

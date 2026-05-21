@@ -23,6 +23,11 @@ Edit these values in `export_recipe.py`:
 | `LEGENDRE_ORDER` | Highest scattering Legendre order to tally/export. |
 | `MGXS_TYPES` | Required MGXS set for DONJON output. |
 
+`MGXS_TYPES` should include ordinary OpenMC `"scatter matrix"` for DONJON
+scattering. The exporter does not silently substitute `"nu-scatter matrix"` or
+`"consistent nu-scatter matrix"`; those require an explicit
+`--scatter-mgxs-type` override or a recipe `scatter_mgxs_type()` hook.
+
 The key mapping is:
 
 ```text

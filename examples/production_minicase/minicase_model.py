@@ -43,7 +43,7 @@ MGXS_TYPES = [
     "fission",
     "nu-fission",
     "chi",
-    "consistent nu-scatter matrix",
+    "scatter matrix",
     "transport",
 ]
 SURFACE_FLUX_TALLY_NAME = "openmc2donjon_surface_current_mu"

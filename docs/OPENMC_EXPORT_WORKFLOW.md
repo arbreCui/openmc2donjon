@@ -222,7 +222,7 @@ def build_library():
         "fission",
         "nu-fission",
         "chi",
-        "consistent nu-scatter matrix",
+        "scatter matrix",
         "transport",
     ]
     library.domain_type = "cell"
@@ -239,6 +239,16 @@ def domain_names(library):
 
 def root_attrs():
     return {"domain_mode": "cell"}
+```
+
+Use ordinary OpenMC `"scatter matrix"` for the DONJON scattering payload. The
+exporter does not silently fall back to `"nu-scatter matrix"` or
+`"consistent nu-scatter matrix"`. If a nonstandard scattering MGXS is
+intentional, select it explicitly with `--scatter-mgxs-type` or a recipe hook:
+
+```python
+def scatter_mgxs_type():
+    return "consistent nu-scatter matrix"
 ```
 
 For mesh or other subdomain exports, return explicit `DomainExportSpec` objects:
@@ -281,6 +291,7 @@ Optional recipe hooks:
 | `domain_specs(library)` | Optional. Return explicit spatial subdomain specs. |
 | `domain_names(library)` | Optional. Return stable names keyed by domain object, id, or name. |
 | `root_attrs(library)` | Optional. Return root HDF5 attributes such as `domain_mode`. |
+| `scatter_mgxs_type(library)` | Optional. Explicitly select a non-default scattering MGXS type. |
 | `load_statepoint(library, statepoint_path)` | Optional. Override default OpenMC statepoint loading. |
 | `postprocess_hdf5(output_path, library)` | Optional. Add case-specific payloads such as ADF. |
 

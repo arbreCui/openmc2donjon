@@ -25,15 +25,11 @@ MGXS_TYPE_ALIASES: dict[str, tuple[str, ...]] = {
     "fission": ("fission",),
     "nu_fission": ("nu-fission", "nu_fission"),
     "chi": ("chi",),
-    "scatter_matrix": (
-        "scatter matrix",
-        "scatter_matrix",
-        "consistent nu-scatter matrix",
-        "nu-scatter matrix",
-    ),
+    "scatter_matrix": ("scatter matrix", "scatter_matrix"),
     "transport_total": ("transport", "transport_total"),
     "inverse_velocity": ("inverse-velocity", "inverse_velocity"),
 }
+NU_SCATTER_MGXS_TYPES = ("consistent nu-scatter matrix", "nu-scatter matrix")
 
 
 @dataclass(frozen=True)
@@ -43,6 +39,7 @@ class ExportedDomain:
     name: str
     source: Any
     xs_kwargs: Mapping[str, Any] | None = None
+    scatter_mgxs_type: str = "scatter matrix"
 
 
 @dataclass(frozen=True)
@@ -64,6 +61,7 @@ class ExportSummary:
     energy_groups: int
     legendre_order: int
     domains: tuple[ExportedDomain, ...]
+    scatter_mgxs_type: str = "scatter matrix"
 
 
 def export_openmc_mgxs_library(
@@ -73,6 +71,7 @@ def export_openmc_mgxs_library(
     domain_specs: Sequence[DomainExportSpec | Mapping[str, Any]] | None = None,
     domain_names: Mapping[Any, str] | None = None,
     root_attrs: Mapping[str, Any] | None = None,
+    scatter_mgxs_type: str | None = None,
     overwrite: bool = True,
 ) -> ExportSummary:
     """Write an OpenMC MGXS-like library to the HDF5 input contract.
@@ -91,6 +90,11 @@ def export_openmc_mgxs_library(
         stable output name.
     root_attrs:
         Optional HDF5 root attributes to copy into the output file.
+    scatter_mgxs_type:
+        Optional explicit OpenMC MGXS type to use for DONJON scattering. When
+        omitted, only ordinary ``scatter matrix`` MGXS is accepted. ``nu`` or
+        ``consistent nu`` scattering can be exported only by explicitly naming
+        that MGXS type here.
     overwrite:
         If ``False``, fail when the output file already exists.
     """
@@ -109,13 +113,20 @@ def export_openmc_mgxs_library(
     specs = _export_specs_from_library(library, domain_specs)
     if not specs:
         raise ValueError("library contains no domains")
+    scatter_type_label = _scatter_mgxs_type_label(scatter_mgxs_type)
 
     exported: list[tuple[ExportedDomain, dict[str, Any]]] = []
     legendre_order = 0
     used_names: set[str] = set()
     for index, spec in enumerate(specs, start=1):
         name = _domain_name(spec.domain, index, domain_names, used_names, spec.name)
-        data = _domain_data(library, spec.domain, ngroups, xs_kwargs=spec.xs_kwargs)
+        data = _domain_data(
+            library,
+            spec.domain,
+            ngroups,
+            xs_kwargs=spec.xs_kwargs,
+            scatter_mgxs_type=scatter_mgxs_type,
+        )
         if spec.volume is not None:
             data["volume"] = float(spec.volume)
         legendre_order = max(legendre_order, data["scatter_matrix"].shape[0] - 1)
@@ -125,6 +136,7 @@ def export_openmc_mgxs_library(
                     name=name,
                     source=spec.domain,
                     xs_kwargs=spec.xs_kwargs,
+                    scatter_mgxs_type=str(data["scatter_mgxs_type"]),
                 ),
                 data | {"attrs": spec.attrs or {}},
             )
@@ -135,6 +147,7 @@ def export_openmc_mgxs_library(
         h5.attrs["energy_groups"] = ngroups
         h5.attrs["legendre_order"] = legendre_order
         h5.attrs["source"] = "OpenMC mgxs.Library"
+        h5.attrs["openmc_scatter_mgxs_type"] = scatter_type_label
         for attr_key, attr_value in (root_attrs or {}).items():
             _write_hdf5_attr(h5, str(attr_key), attr_value)
         h5.create_dataset("energy_bounds", data=energy_bounds)
@@ -144,6 +157,7 @@ def export_openmc_mgxs_library(
             group.attrs["fissionable"] = bool(data["fissionable"])
             group.attrs["scatter_format"] = "legendre"
             group.attrs["scatter_axes"] = "moment,from,to"
+            group.attrs["openmc_scatter_mgxs_type"] = str(data["scatter_mgxs_type"])
             group.attrs["volume"] = float(data["volume"])
             for attr_key, attr_value in data["attrs"].items():
                 _write_hdf5_attr(group, str(attr_key), attr_value)
@@ -169,6 +183,7 @@ def export_openmc_mgxs_library(
         energy_groups=ngroups,
         legendre_order=legendre_order,
         domains=tuple(domain for domain, _data in exported),
+        scatter_mgxs_type=scatter_type_label,
     )
 
 
@@ -196,6 +211,7 @@ def _domain_data(
     ngroups: int,
     *,
     xs_kwargs: Mapping[str, Any] | None,
+    scatter_mgxs_type: str | None,
 ) -> dict[str, Any]:
     total = _required_vector(library, domain, "total", ngroups, xs_kwargs=xs_kwargs)
     absorption = _required_vector(
@@ -205,7 +221,13 @@ def _domain_data(
         ngroups,
         xs_kwargs=xs_kwargs,
     )
-    scatter = _required_scatter(library, domain, ngroups, xs_kwargs=xs_kwargs)
+    scatter, actual_scatter_mgxs_type = _required_scatter(
+        library,
+        domain,
+        ngroups,
+        xs_kwargs=xs_kwargs,
+        scatter_mgxs_type=scatter_mgxs_type,
+    )
 
     fission = _optional_vector(library, domain, "fission", ngroups, xs_kwargs=xs_kwargs)
     nu_fission = _optional_vector(library, domain, "nu_fission", ngroups, xs_kwargs=xs_kwargs)
@@ -230,6 +252,7 @@ def _domain_data(
         "nu_fission": nu_fission,
         "chi": chi,
         "scatter_matrix": scatter,
+        "scatter_mgxs_type": actual_scatter_mgxs_type,
         "transport_total": _optional_vector(
             library,
             domain,
@@ -288,31 +311,90 @@ def _required_scatter(
     ngroups: int,
     *,
     xs_kwargs: Mapping[str, Any] | None,
-) -> np.ndarray:
-    mgxs = _get_mgxs_optional(library, domain, "scatter_matrix")
+    scatter_mgxs_type: str | None,
+) -> tuple[np.ndarray, str]:
+    mgxs_type_names = _scatter_mgxs_type_candidates(scatter_mgxs_type)
+    mgxs, actual_type = _get_mgxs_optional_with_type(
+        library,
+        domain,
+        "scatter_matrix",
+        mgxs_type_names=mgxs_type_names,
+    )
     if mgxs is None:
+        if scatter_mgxs_type is None:
+            nu_type = _find_available_mgxs_type(library, domain, NU_SCATTER_MGXS_TYPES)
+            if nu_type is not None:
+                raise ValueError(
+                    f"domain {_domain_label(domain)}: missing ordinary OpenMC MGXS "
+                    f"'scatter matrix'; found {nu_type!r}. DONJON scattering "
+                    "expects ordinary scattering by default. Add 'scatter matrix' "
+                    "to library.mgxs_types, or explicitly pass "
+                    f"scatter_mgxs_type={nu_type!r} if nu-scatter is intentional."
+                )
         raise ValueError(
-            f"domain {_domain_label(domain)}: missing required MGXS 'scatter matrix'"
+            f"domain {_domain_label(domain)}: missing required MGXS "
+            f"{' / '.join(mgxs_type_names)}"
         )
-    return _as_scatter_moments(
-        _mgxs_values(mgxs, xs_kwargs=xs_kwargs),
-        ngroups,
-        _domain_label(domain),
+    return (
+        _as_scatter_moments(
+            _mgxs_values(mgxs, xs_kwargs=xs_kwargs),
+            ngroups,
+            _domain_label(domain),
+        ),
+        actual_type or _scatter_mgxs_type_label(scatter_mgxs_type),
     )
 
 
 def _get_mgxs_optional(library: Any, domain: Any, key: str) -> Any | None:
-    for mgxs_type in MGXS_TYPE_ALIASES[key]:
+    mgxs, _mgxs_type = _get_mgxs_optional_with_type(library, domain, key)
+    return mgxs
+
+
+def _get_mgxs_optional_with_type(
+    library: Any,
+    domain: Any,
+    key: str,
+    *,
+    mgxs_type_names: Sequence[str] | None = None,
+) -> tuple[Any | None, str | None]:
+    for mgxs_type in mgxs_type_names or MGXS_TYPE_ALIASES[key]:
         try:
-            return library.get_mgxs(domain, mgxs_type)
+            return library.get_mgxs(domain, mgxs_type), mgxs_type
         except (KeyError, ValueError, LookupError, AttributeError):
             continue
         except TypeError:
             try:
-                return library.get_mgxs(domain=domain, mgxs_type=mgxs_type)
+                return library.get_mgxs(domain=domain, mgxs_type=mgxs_type), mgxs_type
             except (KeyError, ValueError, LookupError, AttributeError):
                 continue
-    return None
+    return None, None
+
+
+def _find_available_mgxs_type(
+    library: Any,
+    domain: Any,
+    mgxs_type_names: Sequence[str],
+) -> str | None:
+    _mgxs, mgxs_type = _get_mgxs_optional_with_type(
+        library,
+        domain,
+        "scatter_matrix",
+        mgxs_type_names=mgxs_type_names,
+    )
+    return mgxs_type
+
+
+def _scatter_mgxs_type_candidates(scatter_mgxs_type: str | None) -> tuple[str, ...]:
+    if scatter_mgxs_type is None:
+        return MGXS_TYPE_ALIASES["scatter_matrix"]
+    value = str(scatter_mgxs_type).strip()
+    if not value:
+        raise ValueError("scatter_mgxs_type must not be empty")
+    return (value,)
+
+
+def _scatter_mgxs_type_label(scatter_mgxs_type: str | None) -> str:
+    return _scatter_mgxs_type_candidates(scatter_mgxs_type)[0]
 
 
 def _mgxs_values(mgxs: Any, *, xs_kwargs: Mapping[str, Any] | None) -> np.ndarray:

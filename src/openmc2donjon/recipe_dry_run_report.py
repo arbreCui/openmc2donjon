@@ -23,6 +23,7 @@ def print_recipe_dry_run_summary(summary: RecipeDryRunSummary) -> None:
     print(f"  legendre_order: {summary.legendre_order}")
     print(f"  domain_type: {summary.domain_type or 'unknown'}")
     print(f"  mgxs_types: {_render_list(summary.mgxs_types)}")
+    print(f"  scatter_mgxs_type: {summary.scatter_mgxs_type or 'scatter matrix'}")
     print(f"  mixtures: {len(summary.domains)}")
     print(f"  root_attrs: {_render_list(summary.root_attr_keys)}")
     print("  production_checklist:")

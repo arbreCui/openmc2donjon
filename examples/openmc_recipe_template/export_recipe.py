@@ -42,7 +42,7 @@ MGXS_TYPES = [
     "fission",
     "nu-fission",
     "chi",
-    "consistent nu-scatter matrix",
+    "scatter matrix",
     "transport",
 ]
 

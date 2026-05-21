@@ -58,6 +58,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="fail if the output HDF5 already exists",
     )
+    parser.add_argument(
+        "--scatter-mgxs-type",
+        default=None,
+        help=(
+            "explicit OpenMC MGXS type to export as DONJON scattering. "
+            "Default accepts only ordinary 'scatter matrix'."
+        ),
+    )
     return parser
 
 
@@ -82,6 +90,7 @@ def main(argv: list[str] | None = None) -> int:
                 statepoint_path=args.statepoint,
                 load_statepoint=args.statepoint is not None and not args.no_load_statepoint,
                 output_path=args.output,
+                scatter_mgxs_type=args.scatter_mgxs_type,
             )
             print_recipe_dry_run_summary(summary)
             return 0
@@ -92,6 +101,7 @@ def main(argv: list[str] | None = None) -> int:
             args.output,
             statepoint_path=args.statepoint,
             load_statepoint=not args.no_load_statepoint,
+            scatter_mgxs_type=args.scatter_mgxs_type,
             overwrite=not args.no_overwrite,
         )
         summary = recipe_summary.output
@@ -107,6 +117,7 @@ def main(argv: list[str] | None = None) -> int:
     summary = export_openmc_mgxs_library(
         library,
         args.output,
+        scatter_mgxs_type=args.scatter_mgxs_type,
         overwrite=not args.no_overwrite,
     )
     print(

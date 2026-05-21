@@ -17,6 +17,7 @@ from typing import Any, Mapping
 
 from .export_openmc_mgxs import (
     MGXS_TYPE_ALIASES,
+    NU_SCATTER_MGXS_TYPES,
     ExportSummary,
     _domain_name,
     _domain_volume,
@@ -73,6 +74,7 @@ class RecipeDryRunSummary:
     legendre_order: int
     domain_type: str | None
     mgxs_types: tuple[str, ...]
+    scatter_mgxs_type: str | None
     domains: tuple[RecipeDryRunDomain, ...]
     root_attr_keys: tuple[str, ...]
     production_checks: tuple[RecipeProductionCheck, ...]
@@ -85,14 +87,16 @@ def export_openmc_statepoint_recipe(
     *,
     statepoint_path: str | Path | None = None,
     load_statepoint: bool = True,
+    scatter_mgxs_type: str | None = None,
     overwrite: bool = True,
 ) -> RecipeExportSummary:
     """Export an OpenMC MGXS recipe and statepoint to the HDF5 contract.
 
     The recipe is a Python file with a required ``build_library`` function and
     optional ``domain_specs``, ``domain_names``, ``root_attrs``,
-    ``load_statepoint``, and ``postprocess_hdf5`` functions.  Optional recipe
-    functions may declare any subset of these keyword arguments:
+    ``scatter_mgxs_type``, ``load_statepoint``, and ``postprocess_hdf5``
+    functions.  Optional recipe functions may declare any subset of these
+    keyword arguments:
     ``library``, ``recipe_path``, ``statepoint_path``, ``output_path``, and
     ``summary``.
     """
@@ -141,6 +145,19 @@ def export_openmc_statepoint_recipe(
         statepoint_path=statepoint_file,
         output_path=output_file,
     )
+    recipe_scatter_mgxs_type = _call_optional(
+        recipe,
+        ("scatter_mgxs_type", "get_scatter_mgxs_type"),
+        library=library,
+        recipe_path=recipe_file,
+        statepoint_path=statepoint_file,
+        output_path=output_file,
+    )
+    selected_scatter_mgxs_type = (
+        scatter_mgxs_type
+        if scatter_mgxs_type is not None
+        else recipe_scatter_mgxs_type
+    )
 
     summary = export_openmc_mgxs_library(
         library,
@@ -148,6 +165,7 @@ def export_openmc_statepoint_recipe(
         domain_specs=domain_specs,
         domain_names=domain_names,
         root_attrs=root_attrs,
+        scatter_mgxs_type=selected_scatter_mgxs_type,
         overwrite=overwrite,
     )
 
@@ -175,6 +193,7 @@ def dry_run_openmc_statepoint_recipe(
     statepoint_path: str | Path | None = None,
     load_statepoint: bool = False,
     output_path: str | Path | None = None,
+    scatter_mgxs_type: str | None = None,
 ) -> RecipeDryRunSummary:
     """Inspect a recipe without writing the HDF5 handoff or reading MGXS values."""
 
@@ -223,6 +242,19 @@ def dry_run_openmc_statepoint_recipe(
         statepoint_path=statepoint_file,
         output_path=hook_output,
     )
+    recipe_scatter_mgxs_type = _call_optional(
+        recipe,
+        ("scatter_mgxs_type", "get_scatter_mgxs_type"),
+        library=library,
+        recipe_path=recipe_file,
+        statepoint_path=statepoint_file,
+        output_path=hook_output,
+    )
+    selected_scatter_mgxs_type = (
+        scatter_mgxs_type
+        if scatter_mgxs_type is not None
+        else recipe_scatter_mgxs_type
+    )
 
     energy_bounds = _energy_bounds_from_library(library)
     specs = _export_specs_from_library(library, domain_specs)
@@ -257,7 +289,7 @@ def dry_run_openmc_statepoint_recipe(
         )
 
     mgxs_types = _library_mgxs_types(library)
-    warnings.extend(_mgxs_type_warnings(mgxs_types))
+    warnings.extend(_mgxs_type_warnings(mgxs_types, selected_scatter_mgxs_type))
     root_attr_keys = tuple(sorted((root_attrs or {}).keys()))
     domain_type = _optional_string_attr(library, "domain_type")
     legendre_order = _library_legendre_order(library)
@@ -266,6 +298,7 @@ def dry_run_openmc_statepoint_recipe(
         legendre_order=legendre_order,
         domain_type=domain_type,
         mgxs_types=mgxs_types,
+        scatter_mgxs_type=selected_scatter_mgxs_type,
         domains=tuple(domains),
         root_attr_keys=root_attr_keys,
     )
@@ -278,6 +311,9 @@ def dry_run_openmc_statepoint_recipe(
         legendre_order=legendre_order,
         domain_type=domain_type,
         mgxs_types=mgxs_types,
+        scatter_mgxs_type=(
+            None if selected_scatter_mgxs_type is None else str(selected_scatter_mgxs_type)
+        ),
         domains=tuple(domains),
         root_attr_keys=root_attr_keys,
         production_checks=production_checks,
@@ -337,6 +373,7 @@ def _production_checks(
     legendre_order: int,
     domain_type: str | None,
     mgxs_types: tuple[str, ...],
+    scatter_mgxs_type: str | None,
     domains: tuple[RecipeDryRunDomain, ...],
     root_attr_keys: tuple[str, ...],
 ) -> tuple[RecipeProductionCheck, ...]:
@@ -348,7 +385,7 @@ def _production_checks(
             f"{energy_groups} group(s) from recipe energy bounds",
         )
     )
-    checks.append(_mgxs_required_check(mgxs_types))
+    checks.append(_mgxs_required_check(mgxs_types, scatter_mgxs_type))
     checks.append(_mgxs_transport_check(mgxs_types))
     checks.append(_fission_source_check(mgxs_types))
     checks.append(
@@ -386,7 +423,10 @@ def _production_checks(
     return tuple(checks)
 
 
-def _mgxs_required_check(mgxs_types: tuple[str, ...]) -> RecipeProductionCheck:
+def _mgxs_required_check(
+    mgxs_types: tuple[str, ...],
+    scatter_mgxs_type: str | None,
+) -> RecipeProductionCheck:
     if not mgxs_types:
         return RecipeProductionCheck(
             "mgxs-required",
@@ -394,9 +434,21 @@ def _mgxs_required_check(mgxs_types: tuple[str, ...]) -> RecipeProductionCheck:
             "library has no mgxs_types list; required XS availability cannot be checked early",
         )
     missing: list[str] = []
-    for required in ("total", "absorption", "scatter_matrix"):
+    for required in ("total", "absorption"):
         if not _has_mgxs_alias(mgxs_types, required):
             missing.append("/".join(MGXS_TYPE_ALIASES[required]))
+    if scatter_mgxs_type is None:
+        if not _has_mgxs_alias(mgxs_types, "scatter_matrix"):
+            missing.append("/".join(MGXS_TYPE_ALIASES["scatter_matrix"]))
+        if _has_any_mgxs_type(mgxs_types, NU_SCATTER_MGXS_TYPES):
+            return RecipeProductionCheck(
+                "mgxs-required",
+                "FAIL",
+                "ordinary scatter matrix is missing or not selected; nu-scatter MGXS "
+                "is not used as DONJON scattering unless scatter_mgxs_type is explicit",
+            )
+    elif not _has_any_mgxs_type(mgxs_types, (str(scatter_mgxs_type),)):
+        missing.append(str(scatter_mgxs_type))
     if missing:
         return RecipeProductionCheck(
             "mgxs-required",
@@ -406,7 +458,11 @@ def _mgxs_required_check(mgxs_types: tuple[str, ...]) -> RecipeProductionCheck:
     return RecipeProductionCheck(
         "mgxs-required",
         "PASS",
-        "total, absorption, and scatter matrix MGXS are declared",
+        (
+            "total, absorption, and scatter matrix MGXS are declared"
+            if scatter_mgxs_type is None
+            else f"total, absorption, and explicit scatter MGXS {scatter_mgxs_type!r} are declared"
+        ),
     )
 
 
@@ -487,6 +543,12 @@ def _has_mgxs_alias(mgxs_types: tuple[str, ...], key: str) -> bool:
     return not normalized.isdisjoint(aliases)
 
 
+def _has_any_mgxs_type(mgxs_types: tuple[str, ...], candidates: tuple[str, ...]) -> bool:
+    normalized = {_normalize_mgxs_type(value) for value in mgxs_types}
+    candidate_set = {_normalize_mgxs_type(value) for value in candidates}
+    return not normalized.isdisjoint(candidate_set)
+
+
 def _normalize_mgxs_type(value: str) -> str:
     return str(value).lower().replace("_", "-")
 
@@ -515,17 +577,35 @@ def _optional_string_attr(obj: Any, name: str) -> str | None:
     return str(value)
 
 
-def _mgxs_type_warnings(mgxs_types: tuple[str, ...]) -> list[str]:
+def _mgxs_type_warnings(
+    mgxs_types: tuple[str, ...],
+    scatter_mgxs_type: str | None,
+) -> list[str]:
     if not mgxs_types:
         return ["library has no mgxs_types list; required MGXS availability is unchecked"]
 
     normalized = {value.lower().replace("_", "-") for value in mgxs_types}
     warnings: list[str] = []
-    for required in ("total", "absorption", "scatter_matrix"):
+    for required in ("total", "absorption"):
         aliases = {alias.lower().replace("_", "-") for alias in MGXS_TYPE_ALIASES[required]}
         if normalized.isdisjoint(aliases):
             rendered = "/".join(MGXS_TYPE_ALIASES[required])
             warnings.append(f"mgxs_types missing required {rendered}")
+    scatter_candidates = (
+        (str(scatter_mgxs_type),)
+        if scatter_mgxs_type is not None
+        else MGXS_TYPE_ALIASES["scatter_matrix"]
+    )
+    scatter_aliases = {alias.lower().replace("_", "-") for alias in scatter_candidates}
+    if normalized.isdisjoint(scatter_aliases):
+        rendered = "/".join(scatter_candidates)
+        warnings.append(f"mgxs_types missing required {rendered}")
+    if scatter_mgxs_type is None:
+        nu_aliases = {alias.lower().replace("_", "-") for alias in NU_SCATTER_MGXS_TYPES}
+        if not normalized.isdisjoint(nu_aliases):
+            warnings.append(
+                "mgxs_types declares nu-scatter, but default export requires ordinary scatter matrix"
+            )
     transport_aliases = {
         alias.lower().replace("_", "-")
         for alias in MGXS_TYPE_ALIASES["transport_total"]
