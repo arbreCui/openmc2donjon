@@ -66,6 +66,9 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertIn("make-sph-update-table", text)
         self.assertIn("--mode table", text)
         self.assertIn("c5g7-donjon-flux-iteration-smoke", text)
+        self.assertIn("DSPH:", text)
+        self.assertIn("TRIVAA:", text)
+        self.assertIn("openmc2donjon_c5g7_sph_iteration_solver_response_passed", text)
 
 
 def _repo_root() -> Path:
