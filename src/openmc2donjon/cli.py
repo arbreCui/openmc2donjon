@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 import sys
 
@@ -34,6 +36,15 @@ from .sph_augment import (
 from .sph_iteration import create_sph_update_table
 from .sph_loop import run_sph_loop
 from .sph_workflow import run_sph_iteration_workflow
+
+
+@dataclass(frozen=True, slots=True)
+class CommandSpec:
+    name: str
+    parser_builder: Callable[[], argparse.ArgumentParser]
+    handler: Callable[[argparse.Namespace], int]
+    help: str
+    aliases: tuple[str, ...] = ()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1496,50 +1507,179 @@ def build_check_low_order_driver_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_command_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="openmc2donjon",
+        description="Run an openmc2donjon utility command.",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+        help="show package version and exit",
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    for spec in _command_specs():
+        parent = spec.parser_builder()
+        command_parser = subparsers.add_parser(
+            spec.name,
+            aliases=list(spec.aliases),
+            parents=[parent],
+            add_help=False,
+            help=spec.help,
+            description=parent.description,
+        )
+        command_parser.set_defaults(func=spec.handler, _parser=command_parser)
+    return parser
+
+
+def _command_specs() -> tuple[CommandSpec, ...]:
+    return (
+        CommandSpec(
+            "export-surface-flux",
+            build_export_surface_flux_parser,
+            _export_surface_flux_handler,
+            "export OpenMC surface flux from a statepoint",
+        ),
+        CommandSpec(
+            "check-face-flux",
+            build_check_face_flux_parser,
+            _check_face_flux_handler,
+            "validate heterogeneous/homogeneous face-flux inputs",
+        ),
+        CommandSpec(
+            "make-low-order-driver",
+            build_make_low_order_driver_parser,
+            _make_low_order_driver_handler,
+            "canonicalize low-order flux/current inputs",
+        ),
+        CommandSpec(
+            "check-low-order-driver",
+            build_check_low_order_driver_parser,
+            _check_low_order_driver_handler,
+            "validate a low-order driver handoff",
+        ),
+        CommandSpec(
+            "make-homogeneous-face-flux",
+            build_make_homogeneous_face_flux_parser,
+            _make_homogeneous_face_flux_handler,
+            "reconstruct homogeneous face fluxes",
+        ),
+        CommandSpec(
+            "make-adf-sidecar",
+            build_make_adf_sidecar_parser,
+            _make_adf_sidecar_handler,
+            "create an ADF/DF sidecar",
+        ),
+        CommandSpec(
+            "augment-adf",
+            build_augment_adf_parser,
+            _augment_adf_handler,
+            "inject ADF/DF values into an MGXS HDF5 handoff",
+        ),
+        CommandSpec(
+            "make-sph-sidecar",
+            build_make_sph_sidecar_parser,
+            _make_sph_sidecar_handler,
+            "create an SPH sidecar",
+        ),
+        CommandSpec(
+            "make-sph-update-table",
+            build_make_sph_update_table_parser,
+            _make_sph_update_table_handler,
+            "compute the next SPH update table",
+        ),
+        CommandSpec(
+            "augment-sph",
+            build_augment_sph_parser,
+            _augment_sph_handler,
+            "inject SPH factors into an MGXS HDF5 handoff",
+        ),
+        CommandSpec(
+            "extract-donjon-volume-flux",
+            build_extract_donjon_volume_flux_parser,
+            _extract_donjon_volume_flux_handler,
+            "extract DONJON L_FLUX scalar unknowns",
+        ),
+        CommandSpec(
+            "run-sph-iteration",
+            build_run_sph_iteration_parser,
+            _run_sph_iteration_handler,
+            "run one fixed-OpenMC SPH iteration",
+        ),
+        CommandSpec(
+            "run-sph-loop",
+            build_run_sph_loop_parser,
+            _run_sph_loop_handler,
+            "run a DONJON-backed fixed-OpenMC SPH loop",
+        ),
+        CommandSpec(
+            "make-donjon-sph-loop-config",
+            build_make_donjon_sph_loop_config_parser,
+            _make_donjon_sph_loop_config_handler,
+            "write a generic DONJON-backed SPH loop config",
+        ),
+        CommandSpec(
+            "bundle",
+            build_bundle_parser,
+            _bundle_handler,
+            "collect production artifacts into a manifest-backed directory",
+        ),
+        CommandSpec(
+            "validate-bundle",
+            build_validate_bundle_parser,
+            _validate_bundle_handler,
+            "validate a manifest-backed production bundle",
+            aliases=("check-bundle",),
+        ),
+        CommandSpec(
+            "doctor",
+            build_doctor_parser,
+            _doctor_handler,
+            "check the local runtime environment",
+        ),
+        CommandSpec(
+            "diff",
+            build_diff_parser,
+            _diff_handler,
+            "compare two MGXS HDF5 handoff files",
+        ),
+        CommandSpec(
+            "inspect",
+            build_inspect_parser,
+            _inspect_handler,
+            "inspect MGXS HDF5 handoff files",
+        ),
+        CommandSpec(
+            "check",
+            build_check_parser,
+            _check_handler,
+            "validate MGXS HDF5 files against the input contract",
+        ),
+    )
+
+
+def _command_names() -> set[str]:
+    names: set[str] = set()
+    for spec in _command_specs():
+        names.add(spec.name)
+        names.update(spec.aliases)
+    return names
+
+
+def _parser_from_args(args: argparse.Namespace) -> argparse.ArgumentParser:
+    return getattr(args, "_parser")
+
+
 def main(argv: list[str] | None = None) -> int:
     raw_argv = sys.argv[1:] if argv is None else list(argv)
-    if raw_argv and raw_argv[0] == "export-surface-flux":
-        return _export_surface_flux_main(raw_argv[1:])
-    if raw_argv and raw_argv[0] == "check-face-flux":
-        return _check_face_flux_main(raw_argv[1:])
-    if raw_argv and raw_argv[0] == "make-low-order-driver":
-        return _make_low_order_driver_main(raw_argv[1:])
-    if raw_argv and raw_argv[0] == "check-low-order-driver":
-        return _check_low_order_driver_main(raw_argv[1:])
-    if raw_argv and raw_argv[0] == "make-homogeneous-face-flux":
-        return _make_homogeneous_face_flux_main(raw_argv[1:])
-    if raw_argv and raw_argv[0] == "make-adf-sidecar":
-        return _make_adf_sidecar_main(raw_argv[1:])
-    if raw_argv and raw_argv[0] == "augment-adf":
-        return _augment_adf_main(raw_argv[1:])
-    if raw_argv and raw_argv[0] == "make-sph-sidecar":
-        return _make_sph_sidecar_main(raw_argv[1:])
-    if raw_argv and raw_argv[0] == "make-sph-update-table":
-        return _make_sph_update_table_main(raw_argv[1:])
-    if raw_argv and raw_argv[0] == "augment-sph":
-        return _augment_sph_main(raw_argv[1:])
-    if raw_argv and raw_argv[0] == "extract-donjon-volume-flux":
-        return _extract_donjon_volume_flux_main(raw_argv[1:])
-    if raw_argv and raw_argv[0] == "run-sph-iteration":
-        return _run_sph_iteration_main(raw_argv[1:])
-    if raw_argv and raw_argv[0] == "run-sph-loop":
-        return _run_sph_loop_main(raw_argv[1:])
-    if raw_argv and raw_argv[0] == "make-donjon-sph-loop-config":
-        return _make_donjon_sph_loop_config_main(raw_argv[1:])
-    if raw_argv and raw_argv[0] == "bundle":
-        return _bundle_main(raw_argv[1:])
-    if raw_argv and raw_argv[0] in {"validate-bundle", "check-bundle"}:
-        return _validate_bundle_main(raw_argv[1:])
-    if raw_argv and raw_argv[0] == "doctor":
-        return _doctor_main(raw_argv[1:])
-    if raw_argv and raw_argv[0] == "diff":
-        return _diff_main(raw_argv[1:])
-    if raw_argv and raw_argv[0] == "inspect":
-        return _inspect_main(raw_argv[1:])
-    if raw_argv and raw_argv[0] == "check":
-        return _check_main(raw_argv[1:])
+    if raw_argv and raw_argv[0] in _command_names():
+        args = build_command_parser().parse_args(raw_argv)
+        return args.func(args)
+    return _convert_handler(build_parser().parse_args(raw_argv))
 
-    args = build_parser().parse_args(raw_argv)
+
+def _convert_handler(args: argparse.Namespace) -> int:
     input_path = Path(args.input_h5)
     if args.output:
         output_path = Path(args.output)
@@ -1585,8 +1725,7 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _check_main(argv: list[str]) -> int:
-    args = build_check_parser().parse_args(argv)
+def _check_handler(args: argparse.Namespace) -> int:
     ok = run_preflight(
         args.input_h5,
         output_format=args.format,
@@ -1603,8 +1742,7 @@ def _check_main(argv: list[str]) -> int:
     return 0 if ok or args.no_fail else 1
 
 
-def _inspect_main(argv: list[str]) -> int:
-    args = build_inspect_parser().parse_args(argv)
+def _inspect_handler(args: argparse.Namespace) -> int:
     reports = inspect_files(
         args.input_h5,
         limit=args.limit,
@@ -1614,8 +1752,7 @@ def _inspect_main(argv: list[str]) -> int:
     return 0 if all(report.ok for report in reports) else 1
 
 
-def _diff_main(argv: list[str]) -> int:
-    args = build_diff_parser().parse_args(argv)
+def _diff_handler(args: argparse.Namespace) -> int:
     report = diff_hdf5_files(
         args.reference_h5,
         args.candidate_h5,
@@ -1629,9 +1766,8 @@ def _diff_main(argv: list[str]) -> int:
     return 0 if report.ok or args.no_fail else 1
 
 
-def _doctor_main(argv: list[str]) -> int:
-    parser = build_doctor_parser()
-    args = parser.parse_args(argv)
+def _doctor_handler(args: argparse.Namespace) -> int:
+    parser = _parser_from_args(args)
     if args.statepoint is not None and args.recipe is None:
         parser.error("--statepoint can only be used with --recipe")
     if args.load_statepoint and args.recipe is None:
@@ -1647,9 +1783,8 @@ def _doctor_main(argv: list[str]) -> int:
     return 0 if report.ok or args.no_fail else 1
 
 
-def _bundle_main(argv: list[str]) -> int:
-    parser = build_bundle_parser()
-    args = parser.parse_args(argv)
+def _bundle_handler(args: argparse.Namespace) -> int:
+    parser = _parser_from_args(args)
     artifacts = _bundle_artifacts_from_args(args, parser)
     try:
         bundle_artifacts(
@@ -1663,15 +1798,13 @@ def _bundle_main(argv: list[str]) -> int:
     return 0
 
 
-def _validate_bundle_main(argv: list[str]) -> int:
-    args = build_validate_bundle_parser().parse_args(argv)
+def _validate_bundle_handler(args: argparse.Namespace) -> int:
     report = validate_bundle(args.manifest, summary_json=args.summary_json)
     return 0 if report.ok or args.no_fail else 1
 
 
-def _augment_adf_main(argv: list[str]) -> int:
-    parser = build_augment_adf_parser()
-    args = parser.parse_args(argv)
+def _augment_adf_handler(args: argparse.Namespace) -> int:
+    parser = _parser_from_args(args)
     try:
         faces = parse_faces(args.faces)
         augment_hdf5_with_adf(
@@ -1690,9 +1823,8 @@ def _augment_adf_main(argv: list[str]) -> int:
     return 0
 
 
-def _make_adf_sidecar_main(argv: list[str]) -> int:
-    parser = build_make_adf_sidecar_parser()
-    args = parser.parse_args(argv)
+def _make_adf_sidecar_handler(args: argparse.Namespace) -> int:
+    parser = _parser_from_args(args)
     try:
         faces = parse_faces(args.faces)
         if args.mode == "unity":
@@ -1731,9 +1863,8 @@ def _make_adf_sidecar_main(argv: list[str]) -> int:
     return 0
 
 
-def _augment_sph_main(argv: list[str]) -> int:
-    parser = build_augment_sph_parser()
-    args = parser.parse_args(argv)
+def _augment_sph_handler(args: argparse.Namespace) -> int:
+    parser = _parser_from_args(args)
     try:
         augment_hdf5_with_sph(
             args.input_h5,
@@ -1751,9 +1882,8 @@ def _augment_sph_main(argv: list[str]) -> int:
     return 0
 
 
-def _make_sph_sidecar_main(argv: list[str]) -> int:
-    parser = build_make_sph_sidecar_parser()
-    args = parser.parse_args(argv)
+def _make_sph_sidecar_handler(args: argparse.Namespace) -> int:
+    parser = _parser_from_args(args)
     try:
         if args.mode == "unity":
             create_unity_sph_sidecar(
@@ -1799,9 +1929,8 @@ def _make_sph_sidecar_main(argv: list[str]) -> int:
     return 0
 
 
-def _make_sph_update_table_main(argv: list[str]) -> int:
-    parser = build_make_sph_update_table_parser()
-    args = parser.parse_args(argv)
+def _make_sph_update_table_handler(args: argparse.Namespace) -> int:
+    parser = _parser_from_args(args)
     try:
         create_sph_update_table(
             args.input_h5,
@@ -1821,9 +1950,8 @@ def _make_sph_update_table_main(argv: list[str]) -> int:
     return 0
 
 
-def _extract_donjon_volume_flux_main(argv: list[str]) -> int:
-    parser = build_extract_donjon_volume_flux_parser()
-    args = parser.parse_args(argv)
+def _extract_donjon_volume_flux_handler(args: argparse.Namespace) -> int:
+    parser = _parser_from_args(args)
     try:
         if args.map_h5 is not None and args.scalar_flux_map is not None:
             parser.error("--map-h5 and --scalar-flux-map are mutually exclusive")
@@ -1847,9 +1975,8 @@ def _extract_donjon_volume_flux_main(argv: list[str]) -> int:
     return 0
 
 
-def _run_sph_iteration_main(argv: list[str]) -> int:
-    parser = build_run_sph_iteration_parser()
-    args = parser.parse_args(argv)
+def _run_sph_iteration_handler(args: argparse.Namespace) -> int:
+    parser = _parser_from_args(args)
     try:
         if args.map_h5 is not None and args.scalar_flux_map is not None:
             parser.error("--map-h5 and --scalar-flux-map are mutually exclusive")
@@ -1884,9 +2011,8 @@ def _run_sph_iteration_main(argv: list[str]) -> int:
     return 0
 
 
-def _run_sph_loop_main(argv: list[str]) -> int:
-    parser = build_run_sph_loop_parser()
-    args = parser.parse_args(argv)
+def _run_sph_loop_handler(args: argparse.Namespace) -> int:
+    parser = _parser_from_args(args)
     try:
         run_sph_loop(
             args.config,
@@ -1901,9 +2027,8 @@ def _run_sph_loop_main(argv: list[str]) -> int:
     return 0
 
 
-def _make_donjon_sph_loop_config_main(argv: list[str]) -> int:
-    parser = build_make_donjon_sph_loop_config_parser()
-    args = parser.parse_args(argv)
+def _make_donjon_sph_loop_config_handler(args: argparse.Namespace) -> int:
+    parser = _parser_from_args(args)
     try:
         path = write_donjon_sph_loop_config(
             args.output,
@@ -1966,9 +2091,8 @@ def _sph_loop_acceptance_from_args(args: argparse.Namespace) -> dict[str, object
     return acceptance or None
 
 
-def _export_surface_flux_main(argv: list[str]) -> int:
-    parser = build_export_surface_flux_parser()
-    args = parser.parse_args(argv)
+def _export_surface_flux_handler(args: argparse.Namespace) -> int:
+    parser = _parser_from_args(args)
     try:
         export_openmc_surface_flux(
             args.statepoint,
@@ -1989,9 +2113,8 @@ def _export_surface_flux_main(argv: list[str]) -> int:
     return 0
 
 
-def _check_face_flux_main(argv: list[str]) -> int:
-    parser = build_check_face_flux_parser()
-    args = parser.parse_args(argv)
+def _check_face_flux_handler(args: argparse.Namespace) -> int:
+    parser = _parser_from_args(args)
     try:
         report = check_face_flux(
             args.input_h5,
@@ -2008,9 +2131,8 @@ def _check_face_flux_main(argv: list[str]) -> int:
     return 0 if report.ok or args.no_fail else 1
 
 
-def _make_low_order_driver_main(argv: list[str]) -> int:
-    parser = build_make_low_order_driver_parser()
-    args = parser.parse_args(argv)
+def _make_low_order_driver_handler(args: argparse.Namespace) -> int:
+    parser = _parser_from_args(args)
     try:
         create_low_order_driver(
             args.input_h5,
@@ -2029,9 +2151,8 @@ def _make_low_order_driver_main(argv: list[str]) -> int:
     return 0
 
 
-def _check_low_order_driver_main(argv: list[str]) -> int:
-    parser = build_check_low_order_driver_parser()
-    args = parser.parse_args(argv)
+def _check_low_order_driver_handler(args: argparse.Namespace) -> int:
+    parser = _parser_from_args(args)
     try:
         report = check_low_order_driver(
             args.input_h5,
@@ -2049,9 +2170,8 @@ def _check_low_order_driver_main(argv: list[str]) -> int:
     return 0 if report.ok or args.no_fail else 1
 
 
-def _make_homogeneous_face_flux_main(argv: list[str]) -> int:
-    parser = build_make_homogeneous_face_flux_parser()
-    args = parser.parse_args(argv)
+def _make_homogeneous_face_flux_handler(args: argparse.Namespace) -> int:
+    parser = _parser_from_args(args)
     try:
         create_homogeneous_face_flux(
             args.input_h5,
