@@ -51,30 +51,43 @@ DECK_REL="openmc2donjon/case_runs/donjon_sph_consume_smoke/${CASE_ID}.x2m"
 DECK_PATH="$DONJON_ROOT/data/$DECK_REL"
 RESULT_PATH="$DONJON_ROOT/Darwin_arm64/${CASE_ID}.result"
 SHORT_MACROLIB="/tmp/${CASE_ID}.macrolib.txt"
+CORRECTED_PN="/tmp/${CASE_ID}.sph_pn.macrolib.txt"
+CORRECTED_SN="/tmp/${CASE_ID}.sph_sn.macrolib.txt"
 
 mkdir -p "$DATA_CASE_DIR"
 cp "$MACROLIB_ASCII" "$SHORT_MACROLIB"
+rm -f "$CORRECTED_PN" "$CORRECTED_SN"
 
-"$PYTHON_BIN" - "$DECK_PATH" "$SHORT_MACROLIB" <<'PY'
+"$PYTHON_BIN" - "$DECK_PATH" "$SHORT_MACROLIB" "$CORRECTED_PN" "$CORRECTED_SN" <<'PY'
 from pathlib import Path
 import sys
 
 deck = Path(sys.argv[1])
 macrolib = Path(sys.argv[2])
+corrected_pn = Path(sys.argv[3])
+corrected_sn = Path(sys.argv[4])
 deck.write_text(
-    f"""* DONJON DSPH consumption of an L_MACROLIB NSPH payload.
-MODULE DSPH: GREP: END: ABORT: ;
-LINKED_LIST MACRO DMACROPN OPTIMPN DMACROSN OPTIMSN ;
+    f"""* DONJON DSPH consumption and MAC update of an L_MACROLIB NSPH payload.
+MODULE DSPH: MAC: GREP: END: ABORT: ;
+LINKED_LIST MACRO DMACROPN OPTIMPN DMACROSN OPTIMSN CORRPN CORRSN ;
 DOUBLE sph3pn sph3sn ;
 SEQ_ASCII MACRO_ASC :: FILE '{macrolib}' ;
+SEQ_ASCII CORRPN_ASC :: FILE '{corrected_pn}' ;
+SEQ_ASCII CORRSN_ASC :: FILE '{corrected_sn}' ;
 
 MACRO := MACRO_ASC ;
 DMACROPN OPTIMPN := DSPH: MACRO :: EDIT 1 SPH PN ;
 GREP: OPTIMPN :: GETVAL 'VAR-VALUE' 3 NVAL 1 >>sph3pn<< ;
 ECHO 'OPENMC2DONJON DONJON DSPH PN NSPH VAR-VALUE 3' sph3pn ;
+CORRPN := MACRO ;
+CORRPN := MAC: CORRPN OPTIMPN ;
+CORRPN_ASC := CORRPN ;
 DMACROSN OPTIMSN := DSPH: MACRO :: EDIT 1 SPH SN ;
 GREP: OPTIMSN :: GETVAL 'VAR-VALUE' 3 NVAL 1 >>sph3sn<< ;
 ECHO 'OPENMC2DONJON DONJON DSPH SN NSPH VAR-VALUE 3' sph3sn ;
+CORRSN := MACRO ;
+CORRSN := MAC: CORRSN OPTIMSN ;
+CORRSN_ASC := CORRSN ;
 END: ;
 """,
     encoding="utf-8",
@@ -86,17 +99,19 @@ PY
   ./rdonjon -q "$DECK_REL"
 )
 
-"$PYTHON_BIN" - "$MACROLIB_ASCII" "$RESULT_PATH" <<'PY'
+"$PYTHON_BIN" - "$MACROLIB_ASCII" "$RESULT_PATH" "$CORRECTED_PN" "$CORRECTED_SN" <<'PY'
 from pathlib import Path
 import re
 import sys
 
 import numpy as np
 
-from openmc2donjon.macrolib import extract_sph_from_macrolib_ascii
+from openmc2donjon.macrolib import extract_sph_from_macrolib_ascii, read_macrolib_ascii
 
 macrolib = Path(sys.argv[1])
 result = Path(sys.argv[2])
+corrected_pn_path = Path(sys.argv[3])
+corrected_sn_path = Path(sys.argv[4])
 expected = extract_sph_from_macrolib_ascii(macrolib)
 if expected.shape[0] < 3 or expected.shape[1] < 1:
     raise SystemExit(f"expected at least three mixtures and one group, got {expected.shape}")
@@ -119,9 +134,32 @@ for label in ("PN", "SN"):
     values[label] = float(match.group(1))
     np.testing.assert_allclose(values[label], target, rtol=1.0e-7, atol=1.0e-7)
 
+base = read_macrolib_ascii(macrolib)
+corrected_pn = read_macrolib_ascii(corrected_pn_path)
+corrected_sn = read_macrolib_ascii(corrected_sn_path)
+if corrected_pn.state_vector[13] != 1:
+    raise SystemExit("PN-corrected macrolib SPH state-vector flag is not set")
+if corrected_sn.state_vector[13] != 1:
+    raise SystemExit("SN-corrected macrolib SPH state-vector flag is not set")
+if corrected_pn.sph is None or corrected_sn.sph is None:
+    raise SystemExit("corrected macrolib is missing GROUP/*/NSPH payload")
+np.testing.assert_allclose(corrected_pn.sph[2, 0], target, rtol=1.0e-7, atol=1.0e-7)
+np.testing.assert_allclose(corrected_sn.sph[2, 0], target, rtol=1.0e-7, atol=1.0e-7)
+
+base_ntot0 = float(base.ntot0[2, 0])
+pn_ntot0 = float(corrected_pn.ntot0[2, 0])
+sn_ntot0 = float(corrected_sn.ntot0[2, 0])
+np.testing.assert_allclose(pn_ntot0, base_ntot0 * target, rtol=1.0e-6, atol=1.0e-7)
+np.testing.assert_allclose(sn_ntot0, base_ntot0, rtol=1.0e-6, atol=1.0e-7)
+
 print(
     "DONJON DSPH consumed NSPH: "
     f"expected_mix3_g1={target:.9g} pn={values['PN']:.9g} sn={values['SN']:.9g}"
+)
+print(
+    "DONJON MAC applied SPH: "
+    f"pn_ntot0_ratio={pn_ntot0 / base_ntot0:.9g} "
+    f"sn_ntot0_ratio={sn_ntot0 / base_ntot0:.9g}"
 )
 PY
 
