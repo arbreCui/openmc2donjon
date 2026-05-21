@@ -309,6 +309,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="with --check, require positive volume attributes",
     )
     parser.add_argument(
+        "--scatter-row-balance-warn",
+        type=float,
+        default=None,
+        metavar="REL",
+        help=(
+            "with --check, warn if max |total - absorption - sum(P0 scatter out)| "
+            "/ |total| exceeds REL"
+        ),
+    )
+    parser.add_argument(
+        "--scatter-row-balance-fail",
+        type=float,
+        default=None,
+        metavar="REL",
+        help=(
+            "with --check, fail if max |total - absorption - sum(P0 scatter out)| "
+            "/ |total| exceeds REL"
+        ),
+    )
+    parser.add_argument(
         "--check-summary-json",
         type=Path,
         default=None,
@@ -444,6 +464,14 @@ def _run_dry_run(args: argparse.Namespace) -> None:
         print(f"    require_transport_dataset: {_yes_no(args.require_transport_dataset)}")
         print(f"    require_adf: {_yes_no(args.require_adf)}")
         print(f"    expected_adf_faces: {_render_optional_value(args.expected_adf_faces)}")
+        print(
+            "    scatter_row_balance_warn: "
+            f"{_render_optional_value(args.scatter_row_balance_warn)}"
+        )
+        print(
+            "    scatter_row_balance_fail: "
+            f"{_render_optional_value(args.scatter_row_balance_fail)}"
+        )
         if args.check_summary_json is None:
             print("    check_summary_json: none")
         else:
@@ -494,6 +522,8 @@ def _run_pipeline(
             expected_adf_faces=args.expected_adf_faces,
             require_transport_dataset=args.require_transport_dataset,
             require_volume=args.require_volume,
+            scatter_row_balance_warn=args.scatter_row_balance_warn,
+            scatter_row_balance_fail=args.scatter_row_balance_fail,
             summary_json=args.check_summary_json,
         )
         if not ok:

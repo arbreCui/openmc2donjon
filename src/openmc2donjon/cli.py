@@ -131,6 +131,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="with --check, require positive volume attributes",
     )
     parser.add_argument(
+        "--scatter-row-balance-warn",
+        type=float,
+        default=None,
+        metavar="REL",
+        help=(
+            "with --check, warn if max |total - absorption - sum(P0 scatter out)| "
+            "/ |total| exceeds REL"
+        ),
+    )
+    parser.add_argument(
+        "--scatter-row-balance-fail",
+        type=float,
+        default=None,
+        metavar="REL",
+        help=(
+            "with --check, fail if max |total - absorption - sum(P0 scatter out)| "
+            "/ |total| exceeds REL"
+        ),
+    )
+    parser.add_argument(
         "--check-summary-json",
         type=Path,
         default=None,
@@ -176,6 +196,26 @@ def build_check_parser() -> argparse.ArgumentParser:
         "--require-volume",
         action="store_true",
         help="require a positive volume attribute on every mixture",
+    )
+    parser.add_argument(
+        "--scatter-row-balance-warn",
+        type=float,
+        default=None,
+        metavar="REL",
+        help=(
+            "warn if max |total - absorption - sum(P0 scatter out)| / |total| "
+            "exceeds REL"
+        ),
+    )
+    parser.add_argument(
+        "--scatter-row-balance-fail",
+        type=float,
+        default=None,
+        metavar="REL",
+        help=(
+            "fail if max |total - absorption - sum(P0 scatter out)| / |total| "
+            "exceeds REL"
+        ),
     )
     parser.add_argument(
         "--summary-json",
@@ -796,6 +836,8 @@ def main(argv: list[str] | None = None) -> int:
             expected_adf_faces=args.expected_adf_faces,
             require_transport_dataset=args.require_transport_dataset,
             require_volume=args.require_volume,
+            scatter_row_balance_warn=args.scatter_row_balance_warn,
+            scatter_row_balance_fail=args.scatter_row_balance_fail,
             summary_json=args.check_summary_json,
         )
         if not ok:
@@ -831,6 +873,8 @@ def _check_main(argv: list[str]) -> int:
         expected_adf_faces=args.expected_adf_faces,
         require_transport_dataset=args.require_transport_dataset,
         require_volume=args.require_volume,
+        scatter_row_balance_warn=args.scatter_row_balance_warn,
+        scatter_row_balance_fail=args.scatter_row_balance_fail,
         summary_json=args.summary_json,
     )
     return 0 if ok or args.no_fail else 1

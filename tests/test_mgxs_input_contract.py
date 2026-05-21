@@ -132,6 +132,96 @@ class MgxsInputContractTests(unittest.TestCase):
             report.issues,
         )
 
+    def test_scatter_row_balance_records_balanced_input(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "balanced.h5"
+            write_single_state_fixture(path, total=[0.29, 0.38])
+
+            report = validator.validate_input(
+                path,
+                require_adf=False,
+                require_transport_dataset=False,
+                require_volume=False,
+                expected_adf_faces=None,
+                scatter_row_balance_warn=1.0e-6,
+                scatter_row_balance_fail=1.0e-3,
+            )
+
+        self.assertTrue(report.ok, report.issues)
+        self.assertEqual(report.warnings, [])
+        self.assertIsNotNone(report.scatter_row_balance_max_abs)
+        self.assertIsNotNone(report.scatter_row_balance_max_rel)
+        self.assertLess(float(report.scatter_row_balance_max_abs), 1.0e-15)
+        self.assertLess(float(report.scatter_row_balance_max_rel), 1.0e-15)
+        self.assertTrue((report.scatter_row_balance_worst or "").startswith("fuel: group="))
+
+    def test_scatter_row_balance_warns_above_warn_threshold(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "noisy.h5"
+            write_single_state_fixture(path, total=[0.5, 0.7])
+
+            report = validator.validate_input(
+                path,
+                require_adf=False,
+                require_transport_dataset=False,
+                require_volume=False,
+                expected_adf_faces=None,
+                scatter_row_balance_warn=0.1,
+            )
+
+        self.assertTrue(report.ok, report.issues)
+        self.assertAlmostEqual(report.scatter_row_balance_max_rel or 0.0, 0.457142857)
+        self.assertTrue(
+            any("scatter row-balance max relative residual" in item for item in report.warnings)
+        )
+
+    def test_scatter_row_balance_fails_above_fail_threshold(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "bad_balance.h5"
+            write_single_state_fixture(path, total=[0.5, 0.7])
+
+            report = validator.validate_input(
+                path,
+                require_adf=False,
+                require_transport_dataset=False,
+                require_volume=False,
+                expected_adf_faces=None,
+                scatter_row_balance_fail=0.1,
+            )
+
+        self.assertFalse(report.ok)
+        self.assertTrue(
+            any("exceeds fail threshold" in item for item in report.issues)
+        )
+
+    def test_scatter_row_balance_uses_declared_moment_last_axes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "moment_last.h5"
+            p0 = np.array([[0.2, 0.04], [0.0, 0.3]])
+            p1 = np.array([[0.01, 0.0], [0.0, 0.02]])
+            scatter = np.stack((p0, p1), axis=2)
+            write_single_state_fixture(
+                path,
+                total=[0.29, 0.38],
+                legendre_order=1,
+                scatter_axes="G_in,G_out,moment",
+                scatter=scatter,
+            )
+
+            report = validator.validate_input(
+                path,
+                require_adf=False,
+                require_transport_dataset=False,
+                require_volume=False,
+                expected_adf_faces=None,
+                scatter_row_balance_fail=1.0e-12,
+            )
+
+        self.assertTrue(report.ok, report.issues)
+        self.assertEqual(report.scatter_axes, ["G_in,G_out,moment"])
+        self.assertIsNotNone(report.scatter_row_balance_max_rel)
+        self.assertLess(float(report.scatter_row_balance_max_rel), 1.0e-15)
+
 
 def write_multistate_fixture(
     path: Path,
@@ -157,14 +247,42 @@ def write_multistate_fixture(
             write_one_state_payload(state, total=total, fissionable=True)
 
 
+def write_single_state_fixture(
+    path: Path,
+    *,
+    total: list[float],
+    legendre_order: int = 0,
+    scatter_axes: str = "moment,from,to",
+    scatter: np.ndarray | None = None,
+) -> None:
+    with h5py.File(path, "w") as h5:
+        h5.attrs["energy_groups"] = 2
+        h5.attrs["legendre_order"] = legendre_order
+        h5.create_dataset("energy_bounds", data=np.array([1.0e-5, 1.0, 1.0e7]))
+        mixtures = h5.create_group("mixtures")
+        fuel = mixtures.create_group("fuel")
+        fuel.attrs["fissionable"] = True
+        fuel.attrs["scatter_axes"] = scatter_axes
+        fuel.attrs["volume"] = 1.0
+        write_one_state_payload(
+            fuel,
+            total=total,
+            fissionable=True,
+            scatter_axes=scatter_axes,
+            scatter=scatter,
+        )
+
+
 def write_one_state_payload(
     group: h5py.Group,
     *,
     total: list[float],
     fissionable: bool,
+    scatter_axes: str = "moment,from,to",
+    scatter: np.ndarray | None = None,
 ) -> None:
     group.attrs["fissionable"] = fissionable
-    group.attrs["scatter_axes"] = "moment,from,to"
+    group.attrs["scatter_axes"] = scatter_axes
     group.attrs["volume"] = 1.0
     group.create_dataset("total", data=np.array(total))
     group.create_dataset("absorption", data=np.array([0.05, 0.08]))
@@ -174,7 +292,11 @@ def write_one_state_payload(
     group.create_dataset("transport_total", data=np.array(total))
     group.create_dataset(
         "scatter_matrix",
-        data=np.array([[[0.2, 0.04], [0.0, 0.3]]]),
+        data=(
+            np.array([[[0.2, 0.04], [0.0, 0.3]]])
+            if scatter is None
+            else scatter
+        ),
     )
 
 

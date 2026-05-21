@@ -184,6 +184,33 @@ use the same state count, the `BURN` axis must exist for multi-state inputs, and
 its length must match the state count. It also rejects unsupported branch axes
 instead of silently ignoring them.
 
+## Scatter Row-Balance Check
+
+For production handoffs, the preflight validator can check the P0 removal
+balance in every mixture and state:
+
+```text
+residual[g] = total[g] - absorption[g] - sum_to(scatter_P0[g, to])
+relative[g] = abs(residual[g]) / max(abs(total[g]), 1e-30)
+```
+
+This catches common handoff mistakes such as exporting a nu-scatter matrix as
+ordinary scattering, transposing scattering axes, or carrying too much Monte
+Carlo noise in low-statistics MGXS tallies.
+
+Example:
+
+```sh
+openmc2donjon check mgxs_library.h5 \
+  --scatter-row-balance-warn 1e-3 \
+  --scatter-row-balance-fail 1e-2
+```
+
+The same options are available with `openmc2donjon ... --check` and
+`openmc2donjon-from-openmc ... --check`. When enabled, the text report and
+summary JSON include the maximum absolute and relative residual and the worst
+mixture/group location.
+
 ## Optional ADF Payload
 
 Assembly discontinuity factors are stored under each mixture:

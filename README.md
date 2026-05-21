@@ -54,6 +54,9 @@ HDF5 input preflight:
 
 ```sh
 openmc2donjon check mgxs_library.h5
+openmc2donjon check mgxs_library.h5 \
+  --scatter-row-balance-warn 1e-3 \
+  --scatter-row-balance-fail 1e-2
 ```
 
 ## Data Flow
@@ -197,7 +200,9 @@ Convert with input-contract preflight:
 
 ```sh
 openmc2donjon inspect mgxs_library.h5
-openmc2donjon mgxs_library.h5 -o out.mcompo.txt --check
+openmc2donjon mgxs_library.h5 -o out.mcompo.txt --check \
+  --scatter-row-balance-warn 1e-3 \
+  --scatter-row-balance-fail 1e-2
 ```
 
 Compare a regenerated HDF5 handoff against a locked baseline:
@@ -458,7 +463,7 @@ The HDF5 handoff schema is documented in
 - Optional `OVERV`, `H-FACTOR`, ADF/HADF, single-mixture filtering, and
   single-point `BURN` helper metadata are supported.
 - The preflight validator checks both one-state and experimental `BURN`-axis
-  multi-state HDF5 layouts.
+  multi-state HDF5 layouts, with optional P0 scatter row-balance thresholds.
 
 ## Tests
 

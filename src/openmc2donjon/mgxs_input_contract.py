@@ -29,6 +29,20 @@ OPTIONAL_VECTOR_DATASETS = (
     "kappa_fission_xs",
     "kappa_fission_cross_section",
 )
+MOMENT_FIRST_SCATTER_AXES = {
+    "moment,from,to",
+    "moment,in,out",
+    "moment,gin,gout",
+    "legendre,from,to",
+    "legendre,gin,gout",
+}
+MOMENT_LAST_SCATTER_AXES = {
+    "from,to,moment",
+    "in,out,moment",
+    "gin,gout,moment",
+    "from,to,legendre",
+    "gin,gout,legendre",
+}
 
 
 @dataclass
@@ -49,6 +63,12 @@ class InputReport:
     transport_total_derivable: int = 0
     adf_mixtures: int = 0
     adf_faces: list[str] = field(default_factory=list)
+    scatter_row_balance_checked: bool = False
+    scatter_row_balance_warn_threshold: float | None = None
+    scatter_row_balance_fail_threshold: float | None = None
+    scatter_row_balance_max_abs: float | None = None
+    scatter_row_balance_max_rel: float | None = None
+    scatter_row_balance_worst: str | None = None
     issues: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -70,6 +90,8 @@ def main() -> int:
             require_transport_dataset=args.require_transport_dataset,
             require_volume=args.require_volume,
             expected_adf_faces=expected_faces,
+            scatter_row_balance_warn=args.scatter_row_balance_warn,
+            scatter_row_balance_fail=args.scatter_row_balance_fail,
         )
         for path in args.input_h5
     ]
@@ -135,6 +157,26 @@ def parse_args() -> argparse.Namespace:
         help="require a positive volume attribute on every mixture",
     )
     parser.add_argument(
+        "--scatter-row-balance-warn",
+        type=float,
+        default=None,
+        metavar="REL",
+        help=(
+            "warn if max |total - absorption - sum(P0 scatter out)| / |total| "
+            "exceeds REL"
+        ),
+    )
+    parser.add_argument(
+        "--scatter-row-balance-fail",
+        type=float,
+        default=None,
+        metavar="REL",
+        help=(
+            "fail if max |total - absorption - sum(P0 scatter out)| / |total| "
+            "exceeds REL"
+        ),
+    )
+    parser.add_argument(
         "--summary-json",
         type=Path,
         default=None,
@@ -155,8 +197,15 @@ def validate_input(
     require_transport_dataset: bool,
     require_volume: bool,
     expected_adf_faces: list[str] | None,
+    scatter_row_balance_warn: float | None = None,
+    scatter_row_balance_fail: float | None = None,
 ) -> InputReport:
     report = InputReport(path=str(path))
+    configure_scatter_row_balance(
+        report,
+        warn_threshold=scatter_row_balance_warn,
+        fail_threshold=scatter_row_balance_fail,
+    )
     if not path.is_file():
         report.fail(f"input file does not exist: {path}")
         return report
@@ -243,6 +292,8 @@ def validate_open_h5(
     validate_state_layout(report, state_counts, burnup_axis)
 
     validate_adf_layout(report, adf_names_by_mix, require_adf, expected_adf_faces)
+
+    finalize_scatter_row_balance(report)
 
 
 def burnup_axis_from_hdf5(h5: h5py.File, report: InputReport) -> np.ndarray | None:
@@ -468,16 +519,27 @@ def validate_calculation(
         validate_vector(group[field], ngroups, report, f"mixture {name}: {field}")
 
     scatter = np.asarray(group["scatter_matrix"][:], dtype=float)
+    axes = scatter_axes(group, h5, parent_group)
     moments = validate_scatter(
         scatter,
         ngroups,
         legendre_order,
-        scatter_axes(group, h5, parent_group),
+        axes,
         report,
         name,
     )
     if not np.all(np.isfinite(scatter)):
         report.fail(f"mixture {name}: scatter_matrix contains non-finite values")
+    if report.scatter_row_balance_checked:
+        update_scatter_row_balance(
+            group,
+            scatter,
+            axes,
+            ngroups,
+            legendre_order,
+            report,
+            name,
+        )
 
     for field in OPTIONAL_VECTOR_DATASETS:
         if field in group:
@@ -546,22 +608,10 @@ def validate_scatter(
         return None
 
     normalized = normalize_axes(axes)
-    if normalized in {
-        "moment,from,to",
-        "moment,in,out",
-        "moment,gin,gout",
-        "legendre,from,to",
-        "legendre,gin,gout",
-    }:
+    if normalized in MOMENT_FIRST_SCATTER_AXES:
         shape = values.shape
         expected = (expected_moments, ngroups, ngroups)
-    elif normalized in {
-        "from,to,moment",
-        "in,out,moment",
-        "gin,gout,moment",
-        "from,to,legendre",
-        "gin,gout,legendre",
-    }:
+    elif normalized in MOMENT_LAST_SCATTER_AXES:
         shape = values.shape
         expected = (ngroups, ngroups, expected_moments)
     elif axes is not None:
@@ -599,6 +649,119 @@ def validate_scatter(
         report.fail(f"mixture {mix_name}: scatter_matrix shape {shape} expected {expected}")
         return None
     return expected_moments
+
+
+def configure_scatter_row_balance(
+    report: InputReport,
+    *,
+    warn_threshold: float | None,
+    fail_threshold: float | None,
+) -> None:
+    report.scatter_row_balance_checked = (
+        warn_threshold is not None or fail_threshold is not None
+    )
+    report.scatter_row_balance_warn_threshold = warn_threshold
+    report.scatter_row_balance_fail_threshold = fail_threshold
+    if warn_threshold is not None and warn_threshold < 0.0:
+        report.fail("--scatter-row-balance-warn must be non-negative")
+    if fail_threshold is not None and fail_threshold < 0.0:
+        report.fail("--scatter-row-balance-fail must be non-negative")
+
+
+def update_scatter_row_balance(
+    group: h5py.Group,
+    scatter: np.ndarray,
+    axes: str | None,
+    ngroups: int,
+    legendre_order: int,
+    report: InputReport,
+    mix_name: str,
+) -> None:
+    total = vector_values_for_balance(group["total"], ngroups)
+    absorption = vector_values_for_balance(group["absorption"], ngroups)
+    p0 = p0_scatter_matrix(scatter, axes, ngroups, legendre_order)
+    if total is None or absorption is None or p0 is None:
+        return
+    if not (
+        np.all(np.isfinite(total))
+        and np.all(np.isfinite(absorption))
+        and np.all(np.isfinite(p0))
+    ):
+        return
+
+    residual = total - absorption - p0.sum(axis=1)
+    abs_residual = np.abs(residual)
+    relative = abs_residual / np.maximum(np.abs(total), 1.0e-30)
+    group_index = int(np.argmax(relative))
+    max_rel = float(relative[group_index])
+    max_abs = float(abs_residual[group_index])
+    if report.scatter_row_balance_max_rel is not None:
+        if max_rel <= report.scatter_row_balance_max_rel:
+            return
+    report.scatter_row_balance_max_rel = max_rel
+    report.scatter_row_balance_max_abs = max_abs
+    report.scatter_row_balance_worst = (
+        f"{mix_name}: group={group_index + 1} "
+        f"residual={float(residual[group_index]):.6e}"
+    )
+
+
+def vector_values_for_balance(dataset: h5py.Dataset, ngroups: int) -> np.ndarray | None:
+    values = np.asarray(dataset[:], dtype=float).reshape(-1)
+    if values.shape != (ngroups,):
+        return None
+    return values
+
+
+def p0_scatter_matrix(
+    values: np.ndarray,
+    axes: str | None,
+    ngroups: int,
+    legendre_order: int,
+) -> np.ndarray | None:
+    expected_moments = legendre_order + 1
+    if values.ndim == 2:
+        if values.shape != (ngroups, ngroups) or expected_moments != 1:
+            return None
+        return values
+    if values.ndim != 3:
+        return None
+
+    normalized = normalize_axes(axes)
+    moment_first = values.shape == (expected_moments, ngroups, ngroups)
+    moment_last = values.shape == (ngroups, ngroups, expected_moments)
+    if normalized in MOMENT_FIRST_SCATTER_AXES and moment_first:
+        return values[0]
+    if normalized in MOMENT_LAST_SCATTER_AXES and moment_last:
+        return values[:, :, 0]
+    if axes is not None:
+        return None
+    if moment_first and not moment_last:
+        return values[0]
+    if moment_last and not moment_first:
+        return values[:, :, 0]
+    return None
+
+
+def finalize_scatter_row_balance(report: InputReport) -> None:
+    if not report.scatter_row_balance_checked:
+        return
+    if report.scatter_row_balance_max_rel is None:
+        return
+
+    max_rel = report.scatter_row_balance_max_rel
+    max_abs = report.scatter_row_balance_max_abs or 0.0
+    worst = report.scatter_row_balance_worst or "<unknown>"
+    detail = (
+        "scatter row-balance max relative residual "
+        f"{max_rel:.6e} (abs {max_abs:.6e}) at {worst}"
+    )
+    fail_threshold = report.scatter_row_balance_fail_threshold
+    warn_threshold = report.scatter_row_balance_warn_threshold
+    if fail_threshold is not None and max_rel > fail_threshold:
+        report.fail(f"{detail} exceeds fail threshold {fail_threshold:.6e}")
+    elif warn_threshold is not None and max_rel > warn_threshold:
+        report.warn(f"{detail} exceeds warn threshold {warn_threshold:.6e}")
 
 
 def adf_names_for_group(
@@ -814,6 +977,8 @@ def run_preflight(
     expected_adf_faces: str | list[str] | None = None,
     require_transport_dataset: bool = False,
     require_volume: bool = False,
+    scatter_row_balance_warn: float | None = None,
+    scatter_row_balance_fail: float | None = None,
     summary_json: Path | None = None,
 ) -> bool:
     expected_faces = (
@@ -828,6 +993,8 @@ def run_preflight(
             require_transport_dataset=require_transport_dataset,
             require_volume=require_volume,
             expected_adf_faces=expected_faces,
+            scatter_row_balance_warn=scatter_row_balance_warn,
+            scatter_row_balance_fail=scatter_row_balance_fail,
         )
         for path in input_paths
     ]
@@ -880,6 +1047,16 @@ def print_report(report: InputReport) -> None:
     )
     axes = ",".join(report.scatter_axes) if report.scatter_axes else "<inferred>"
     print(f"        scatter_axes={axes}")
+    if report.scatter_row_balance_checked:
+        if report.scatter_row_balance_max_rel is None:
+            print("        scatter_row_balance=not evaluated")
+        else:
+            print(
+                "        scatter_row_balance="
+                f"max_rel={report.scatter_row_balance_max_rel:.6e} "
+                f"max_abs={(report.scatter_row_balance_max_abs or 0.0):.6e} "
+                f"worst={report.scatter_row_balance_worst}"
+            )
     if report.adf_mixtures:
         print(
             "        adf="
@@ -922,6 +1099,14 @@ def write_summary(
                 "burnup_axis_values": report.burnup_axis_values,
                 "fissionable_mixtures": report.fissionable_mixtures,
                 "scatter_axes": report.scatter_axes,
+                "scatter_row_balance": {
+                    "checked": report.scatter_row_balance_checked,
+                    "warn_threshold": report.scatter_row_balance_warn_threshold,
+                    "fail_threshold": report.scatter_row_balance_fail_threshold,
+                    "max_abs": report.scatter_row_balance_max_abs,
+                    "max_rel": report.scatter_row_balance_max_rel,
+                    "worst": report.scatter_row_balance_worst,
+                },
                 "transport_total_datasets": report.transport_total_datasets,
                 "transport_total_derivable": report.transport_total_derivable,
                 "adf_mixtures": report.adf_mixtures,
