@@ -32,6 +32,7 @@ from .openmc_surface_flux import (
     export_openmc_surface_flux,
 )
 from .openmc_statepoint import (
+    RecipeExportSummary,
     StatepointLoadError,
     dry_run_openmc_statepoint_recipe,
     export_openmc_statepoint_recipe,
@@ -287,6 +288,48 @@ def _run_pipeline(
     hdf5_kept: bool,
 ) -> bool:
     generated = GeneratedArtifacts()
+    recipe_summary = _export_pipeline_hdf5(args, hdf5_path)
+    export_summary = recipe_summary.output
+
+    _apply_pipeline_corrections(args, hdf5_path, recipe_summary, generated)
+    if not _run_pipeline_preflight(args, hdf5_path, output_path, hdf5_kept=hdf5_kept):
+        return False
+
+    histories, _energy_bounds, burnup_values = read_mgxs_hdf5_histories(
+        hdf5_path,
+        h_factor_default=args.h_factor_default,
+    )
+    nstates = histories[0].nstates if histories else 0
+    _print_pipeline_readiness(histories, nstates, burnup_values)
+    _convert_pipeline_hdf5(args, hdf5_path, output_path)
+    summary = _write_pipeline_summary(
+        args,
+        recipe_path=recipe_summary.recipe_path,
+        statepoint_path=recipe_summary.statepoint_path,
+        hdf5_path=hdf5_path,
+        hdf5_kept=hdf5_kept,
+        output_path=output_path,
+        mixture_names=[history.name for history in histories],
+        nstates=nstates,
+        burnup_values=burnup_values,
+        energy_groups=export_summary.energy_groups,
+        legendre_order=export_summary.legendre_order,
+    )
+    return _finalize_run_dir(
+        args,
+        hdf5_path=hdf5_path,
+        output_path=output_path,
+        recipe_path=recipe_summary.recipe_path,
+        statepoint_path=recipe_summary.statepoint_path,
+        summary=summary,
+        generated=generated,
+    )
+
+
+def _export_pipeline_hdf5(
+    args: argparse.Namespace,
+    hdf5_path: Path,
+) -> RecipeExportSummary:
     recipe_summary = export_openmc_statepoint_recipe(
         args.recipe,
         hdf5_path,
@@ -301,7 +344,15 @@ def _run_pipeline(
         f"{export_summary.energy_groups} groups, P{export_summary.legendre_order} "
         f"from recipe {recipe_summary.recipe_path}"
     )
+    return recipe_summary
 
+
+def _apply_pipeline_corrections(
+    args: argparse.Namespace,
+    hdf5_path: Path,
+    recipe_summary: RecipeExportSummary,
+    generated: GeneratedArtifacts,
+) -> None:
     if args.build_flux_ratio_adf:
         generated.adf_source, generated.adf_artifacts = _build_flux_ratio_adf(
             args,
@@ -322,36 +373,47 @@ def _run_pipeline(
     if sph_source is not None:
         _inject_sph(args, hdf5_path, sph_source=sph_source)
 
-    if args.check:
-        ok = run_preflight(
-            [hdf5_path],
-            output_format=args.format,
-            output_path=output_path,
-            require_adf=args.require_adf,
-            require_sph=args.require_sph,
-            expected_adf_faces=args.expected_adf_faces,
-            require_transport_dataset=args.require_transport_dataset,
-            require_volume=args.require_volume,
-            scatter_row_balance_warn=args.scatter_row_balance_warn,
-            scatter_row_balance_fail=args.scatter_row_balance_fail,
-            summary_json=args.check_summary_json,
-        )
-        if not ok:
-            if hdf5_kept:
-                print(f"kept HDF5: {hdf5_path}")
-            return False
 
-    histories, _energy_bounds, burnup_values = read_mgxs_hdf5_histories(
-        hdf5_path,
-        h_factor_default=args.h_factor_default,
+def _run_pipeline_preflight(
+    args: argparse.Namespace,
+    hdf5_path: Path,
+    output_path: Path,
+    *,
+    hdf5_kept: bool,
+) -> bool:
+    if not args.check:
+        return True
+    ok = run_preflight(
+        [hdf5_path],
+        output_format=args.format,
+        output_path=output_path,
+        require_adf=args.require_adf,
+        require_sph=args.require_sph,
+        expected_adf_faces=args.expected_adf_faces,
+        require_transport_dataset=args.require_transport_dataset,
+        require_volume=args.require_volume,
+        scatter_row_balance_warn=args.scatter_row_balance_warn,
+        scatter_row_balance_fail=args.scatter_row_balance_fail,
+        summary_json=args.check_summary_json,
     )
-    nstates = histories[0].nstates if histories else 0
+    if not ok and hdf5_kept:
+        print(f"kept HDF5: {hdf5_path}")
+    return ok
+
+
+def _print_pipeline_readiness(histories, nstates: int, burnup_values) -> None:
     burnup_detail = "none" if burnup_values is None else str(len(burnup_values))
     print(
         f"preflight OK: mixtures={len(histories)} "
         f"state_points={nstates} burnup_axis={burnup_detail}"
     )
 
+
+def _convert_pipeline_hdf5(
+    args: argparse.Namespace,
+    hdf5_path: Path,
+    output_path: Path,
+) -> None:
     if args.format == "macrolib":
         convert_mgxs_hdf5_to_macrolib(
             hdf5_path,
@@ -372,31 +434,39 @@ def _run_pipeline(
     if args.keep_hdf5 is not None:
         print(f"kept HDF5: {hdf5_path}")
     print(f"wrote {args.format}: {output_path}")
+
+
+def _write_pipeline_summary(
+    args: argparse.Namespace,
+    *,
+    recipe_path: Path,
+    statepoint_path: Path | None,
+    hdf5_path: Path,
+    hdf5_kept: bool,
+    output_path: Path,
+    mixture_names: list[str],
+    nstates: int,
+    burnup_values,
+    energy_groups: int,
+    legendre_order: int,
+) -> dict[str, object]:
     summary = _summary_payload(
         args,
-        recipe_path=recipe_summary.recipe_path,
-        statepoint_path=recipe_summary.statepoint_path,
+        recipe_path=recipe_path,
+        statepoint_path=statepoint_path,
         hdf5_path=hdf5_path,
         hdf5_kept=hdf5_kept,
         output_path=output_path,
-        mixture_names=[history.name for history in histories],
+        mixture_names=mixture_names,
         nstates=nstates,
         burnup_values=burnup_values,
-        energy_groups=export_summary.energy_groups,
-        legendre_order=export_summary.legendre_order,
+        energy_groups=energy_groups,
+        legendre_order=legendre_order,
     )
     if args.summary_json is not None:
         _write_json(args.summary_json, summary)
         print(f"wrote summary: {args.summary_json}")
-    return _finalize_run_dir(
-        args,
-        hdf5_path=hdf5_path,
-        output_path=output_path,
-        recipe_path=recipe_summary.recipe_path,
-        statepoint_path=recipe_summary.statepoint_path,
-        summary=summary,
-        generated=generated,
-    )
+    return summary
 
 
 def _apply_run_dir_defaults(args: argparse.Namespace) -> None:
