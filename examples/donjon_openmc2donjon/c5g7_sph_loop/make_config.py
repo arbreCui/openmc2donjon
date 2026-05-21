@@ -9,6 +9,8 @@ import sys
 
 
 def main(argv: list[str] | None = None) -> int:
+    repo_root = _repo_root()
+    example_dir = Path(__file__).resolve().parent
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True, help="config JSON to write")
     parser.add_argument("--output-dir", type=Path, required=True, help="SPH loop run directory")
@@ -26,10 +28,22 @@ def main(argv: list[str] | None = None) -> int:
         help="DONJON installation root containing rdonjon",
     )
     parser.add_argument(
-        "--helper",
+        "--driver",
         type=Path,
-        default=None,
-        help="DONJON solve/apply helper script; default resolves from the repo root",
+        default=repo_root / "examples/donjon_sph_loop_adapter/donjon_deck_runner.py",
+        help="generic DONJON deck runner script",
+    )
+    parser.add_argument(
+        "--solve-template",
+        type=Path,
+        default=example_dir / "templates/solve_lflux_dump.x2m.in",
+        help="C5G7 DONJON solve deck template",
+    )
+    parser.add_argument(
+        "--apply-template",
+        type=Path,
+        default=repo_root / "examples/donjon_sph_loop_adapter/templates/apply_nsph_mac.x2m.in",
+        help="DONJON DSPH/MAC apply deck template",
     )
     parser.add_argument(
         "--python-bin",
@@ -40,11 +54,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--clip-min", type=float, default=0.5)
     parser.add_argument("--clip-max", type=float, default=2.0)
     parser.add_argument("--run-tag", default="c5g7_fixed_openmc_sph_loop")
+    parser.add_argument(
+        "--stage-prefix",
+        default="odj_c5g7_sph",
+        help="short /tmp staging prefix used to avoid DONJON 120-column path limits",
+    )
+    parser.add_argument(
+        "--case-dir",
+        default="openmc2donjon/case_runs/c5g7_fixed_openmc_sph_loop",
+        help="DONJON data-relative directory where rendered decks are written",
+    )
     args = parser.parse_args(argv)
 
-    helper = args.helper if args.helper is not None else _repo_root() / "scripts" / (
-        "c5g7_fixed_openmc_sph_loop_donjon.py"
-    )
     payload = {
         "schema": "openmc2donjon.sph-loop-config.v1",
         "input_h5": str(args.mgxs),
@@ -64,36 +85,48 @@ def main(argv: list[str] | None = None) -> int:
         "solver": {
             "command": [
                 args.python_bin,
-                str(helper),
+                str(args.driver),
                 "solve",
                 "--donjon-root",
                 str(args.donjon_root),
+                "--deck-template",
+                str(args.solve_template),
                 "--macrolib",
                 "{ascii_input}",
                 "--result",
                 "{result}",
                 "--iteration",
                 "{iteration}",
-                "--run-tag",
-                args.run_tag,
+                "--case-id",
+                f"{args.run_tag}_iter{{iteration}}_solve",
+                "--case-dir",
+                args.case_dir,
+                "--work-dir",
+                f"/tmp/{args.stage_prefix}_solve_iter{{iteration}}",
             ],
             "result": "donjon_flux.result",
         },
         "postprocess": {
             "command": [
                 args.python_bin,
-                str(helper),
+                str(args.driver),
                 "apply",
                 "--donjon-root",
                 str(args.donjon_root),
-                "--raw-macrolib",
+                "--deck-template",
+                str(args.apply_template),
+                "--macrolib",
                 "{workflow_ascii}",
                 "--output",
                 "{output}",
                 "--iteration",
                 "{iteration1}",
-                "--run-tag",
-                args.run_tag,
+                "--case-id",
+                f"{args.run_tag}_iter{{iteration1}}_apply",
+                "--case-dir",
+                args.case_dir,
+                "--work-dir",
+                f"/tmp/{args.stage_prefix}_apply_iter{{iteration1}}",
             ],
             "output": "corrected_pn.macrolib.txt",
         },

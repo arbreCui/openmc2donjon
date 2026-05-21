@@ -12,8 +12,10 @@ C5G7_REFERENCE_FLUX_H5="${C5G7_REFERENCE_FLUX_H5:-$REPO_ROOT/examples/donjon_ope
 C5G7_SCATTER_ROW_BALANCE_FAIL="${OPENMC2DONJON_C5G7_SCATTER_ROW_BALANCE_FAIL:-1e-8}"
 SPH_DAMPING="${SPH_DAMPING:-0.1}"
 RUN_TAG="${RUN_TAG:-c5g7_fixed_openmc_sph_loop}"
-HELPER="$REPO_ROOT/scripts/c5g7_fixed_openmc_sph_loop_donjon.py"
+DRIVER="$REPO_ROOT/examples/donjon_sph_loop_adapter/donjon_deck_runner.py"
 CONFIG_WRITER="$REPO_ROOT/examples/donjon_openmc2donjon/c5g7_sph_loop/make_config.py"
+SOLVE_TEMPLATE="$REPO_ROOT/examples/donjon_openmc2donjon/c5g7_sph_loop/templates/solve_lflux_dump.x2m.in"
+APPLY_TEMPLATE="$REPO_ROOT/examples/donjon_sph_loop_adapter/templates/apply_nsph_mac.x2m.in"
 
 LOOP_DIR="$RUN_DIR/sph_loop"
 LOOP_CONFIG="$RUN_DIR/c5g7_sph_loop_config.json"
@@ -81,7 +83,9 @@ echo "== Write C5G7 SPH loop config =="
   --mgxs "$C5G7_ACCEPTED_H5" \
   --reference-flux "$C5G7_REFERENCE_FLUX_H5" \
   --donjon-root "$DONJON_ROOT" \
-  --helper "$HELPER" \
+  --driver "$DRIVER" \
+  --solve-template "$SOLVE_TEMPLATE" \
+  --apply-template "$APPLY_TEMPLATE" \
   --python-bin "$PYTHON_BIN" \
   --damping "$SPH_DAMPING" \
   --run-tag "$RUN_TAG"
