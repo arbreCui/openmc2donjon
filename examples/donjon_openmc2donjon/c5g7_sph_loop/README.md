@@ -14,8 +14,13 @@ RUN_DIR=/private/tmp/openmc2donjon_c5g7_sph_loop_example \
 bash examples/donjon_openmc2donjon/c5g7_sph_loop/run.sh
 ```
 
-The generated config is the important artifact:
+The generated config is the important artifact.  A production run can also
+write a manifest-backed bundle containing the fixed OpenMC HDF5, final ASCII
+handoff, SPH sidecar, summary JSON, and audit files:
 
 ```bash
-openmc2donjon run-sph-loop --config "$RUN_DIR/c5g7_sph_loop_config.json" --force
+openmc2donjon run-sph-loop \
+  --config "$RUN_DIR/c5g7_sph_loop_config.json" \
+  --bundle-dir "$RUN_DIR/sph_loop/bundle" \
+  --force
 ```

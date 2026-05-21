@@ -19,6 +19,7 @@ APPLY_TEMPLATE="$REPO_ROOT/examples/donjon_sph_loop_adapter/templates/apply_nsph
 LOOP_DIR="$RUN_DIR/sph_loop"
 LOOP_CONFIG="$RUN_DIR/c5g7_sph_loop_config.json"
 LOOP_SUMMARY_JSON="$LOOP_DIR/sph_loop_summary.json"
+LOOP_BUNDLE_DIR="$LOOP_DIR/bundle"
 BASE_MACROLIB="$LOOP_DIR/iter00_initial/out.macrolib.txt"
 ITER1_DIR="$LOOP_DIR/iter01_sph"
 ITER1_TABLE="$ITER1_DIR/next_sph.csv"
@@ -93,6 +94,7 @@ echo "== Run configured fixed-OpenMC SPH loop =="
 "$PYTHON_BIN" -m openmc2donjon.cli run-sph-loop \
   --config "$LOOP_CONFIG" \
   --summary-json "$LOOP_SUMMARY_JSON" \
+  --bundle-dir "$LOOP_BUNDLE_DIR" \
   --force
 
 echo
@@ -109,7 +111,7 @@ echo "== Validate fixed-OpenMC SPH loop =="
   "$BASE_FLUX_H5" "$ITER1_FLUX_H5" "$ITER2_FLUX_H5" \
   "$ITER1_SIDECAR" "$ITER2_SIDECAR" \
   "$BASE_MACROLIB" "$ITER1_CORRECTED_MACROLIB" "$ITER2_CORRECTED_MACROLIB" \
-  "$RESULT0" "$RESULT1" "$RESULT2" <<'PY'
+  "$RESULT0" "$RESULT1" "$RESULT2" "$LOOP_BUNDLE_DIR/manifest.json" <<'PY'
 import csv
 import json
 from pathlib import Path
@@ -135,6 +137,7 @@ from openmc2donjon.macrolib import read_macrolib_ascii
     result0_path,
     result1_path,
     result2_path,
+    bundle_manifest_path,
 ) = [Path(value) for value in sys.argv[1:]]
 
 
@@ -185,6 +188,7 @@ keff1 = read_keff(result1_path, 1)
 keff2 = read_keff(result2_path, 2)
 loop_summary = json.loads(loop_summary_path.read_text(encoding="utf-8"))
 audit_csv = Path(loop_summary["audit_csv"])
+bundle_manifest = json.loads(bundle_manifest_path.read_text(encoding="utf-8"))
 
 if loop_summary.get("decision") != "openmc2donjon_sph_loop_passed":
     raise SystemExit(f"SPH loop summary did not pass: {loop_summary_path}")
@@ -198,6 +202,27 @@ if len(loop_summary.get("audit_rows", [])) != 3:
     raise SystemExit("configured SPH loop summary is missing audit rows")
 if not audit_csv.exists():
     raise SystemExit(f"configured SPH loop audit CSV is missing: {audit_csv}")
+if loop_summary.get("bundle_manifest") != str(bundle_manifest_path):
+    raise SystemExit(f"SPH loop summary did not record bundle manifest: {loop_summary_path}")
+labels = {artifact["label"]: artifact for artifact in bundle_manifest["artifacts"]}
+expected_labels = {
+    "sph-loop-config",
+    "sph-input-h5",
+    "sph-loop-final-ascii",
+    "sph-loop-final-sph-sidecar",
+    "sph-loop-summary",
+    "sph-loop-audit-csv",
+    "sph-loop-audit-text",
+}
+if set(labels) != expected_labels:
+    raise SystemExit(f"unexpected SPH loop bundle labels: {sorted(labels)}")
+summary_artifact = labels["sph-loop-summary"]
+if summary_artifact.get("summary_decision") != "openmc2donjon_sph_loop_passed":
+    raise SystemExit(f"SPH loop bundle summary decision failed: {summary_artifact}")
+if summary_artifact.get("acceptance_decision") != "openmc2donjon_sph_loop_acceptance_passed":
+    raise SystemExit(f"SPH loop bundle acceptance decision failed: {summary_artifact}")
+if not summary_artifact.get("acceptance_passed"):
+    raise SystemExit(f"SPH loop bundle acceptance flag failed: {summary_artifact}")
 with audit_csv.open(encoding="utf-8", newline="") as stream:
     audit_rows = list(csv.DictReader(stream))
 if [row["stage"] for row in audit_rows] != ["iteration", "iteration", "final"]:

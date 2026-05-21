@@ -15,6 +15,7 @@ from typing import Any
 import numpy as np
 
 from . import __version__
+from .bundle import ArtifactSpec, bundle_artifacts
 from .macrolib import convert_mgxs_hdf5_to_macrolib
 from .multicompo import DEFAULT_ROOT_NAME, convert_mgxs_hdf5
 from .sph_augment import load_sph_source
@@ -112,6 +113,7 @@ class SphLoopReport:
     summary_json: Path
     audit_csv: Path
     audit_text: Path
+    bundle_manifest: Path | None
     convergence_enabled: bool
     converged: bool
     stop_reason: str
@@ -133,6 +135,8 @@ def run_sph_loop(
     output_dir: str | Path | None = None,
     force: bool = False,
     summary_json: str | Path | None = None,
+    bundle_dir: str | Path | None = None,
+    bundle_manifest_name: str = "manifest.json",
 ) -> SphLoopReport:
     """Run a fixed-OpenMC SPH loop using a JSON configuration file.
 
@@ -202,6 +206,14 @@ def run_sph_loop(
     )
     audit_csv = summary_path.with_name("sph_loop_audit.csv")
     audit_text = summary_path.with_name("sph_loop_audit.txt")
+    resolved_bundle_dir = (
+        None if bundle_dir is None else _resolve_path(bundle_dir, base_dir)
+    )
+    bundle_manifest = (
+        None
+        if resolved_bundle_dir is None
+        else resolved_bundle_dir / bundle_manifest_name
+    )
 
     initial_ascii = _write_initial_ascii(
         input_h5,
@@ -338,6 +350,7 @@ def run_sph_loop(
         summary_json=summary_path,
         audit_csv=audit_csv,
         audit_text=audit_text,
+        bundle_manifest=bundle_manifest,
         convergence_enabled=convergence_enabled,
         converged=converged,
         stop_reason=stop_reason,
@@ -352,10 +365,17 @@ def run_sph_loop(
         audit_rows=audit_rows,
         acceptance=acceptance,
     )
-    print_report(report)
     write_audit_csv(audit_csv, report.audit_rows)
     write_audit_text(audit_text, report.audit_rows)
     write_summary(summary_path, report)
+    if resolved_bundle_dir is not None:
+        _write_bundle(
+            report,
+            output_dir=resolved_bundle_dir,
+            manifest_name=bundle_manifest_name,
+            force=force,
+        )
+    print_report(report)
     if (
         convergence_enabled
         and fail_on_nonconvergence
@@ -386,6 +406,8 @@ def print_report(report: SphLoopReport) -> None:
     print(f"  final_ascii: {report.final_ascii}")
     print(f"  audit_csv: {report.audit_csv}")
     print(f"  audit_text: {report.audit_text}")
+    if report.bundle_manifest is not None:
+        print(f"  bundle_manifest: {report.bundle_manifest}")
     if report.final_sph_sidecar is not None:
         print(f"  final_sph_sidecar: {report.final_sph_sidecar}")
     for solve in report.solves:
@@ -435,6 +457,9 @@ def write_summary(path: Path, report: SphLoopReport) -> None:
         "final_ascii": str(report.final_ascii),
         "audit_csv": str(report.audit_csv),
         "audit_text": str(report.audit_text),
+        "bundle_manifest": (
+            None if report.bundle_manifest is None else str(report.bundle_manifest)
+        ),
         "acceptance_enabled": report.acceptance.enabled,
         "acceptance_passed": report.acceptance.passed,
         "acceptance_decision": report.acceptance.decision,
@@ -548,6 +573,37 @@ def write_summary(path: Path, report: SphLoopReport) -> None:
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _write_bundle(
+    report: SphLoopReport,
+    *,
+    output_dir: Path,
+    manifest_name: str,
+    force: bool,
+) -> None:
+    artifacts = [
+        ArtifactSpec(label="sph-loop-config", source=report.config_path),
+        ArtifactSpec(label="sph-input-h5", source=report.input_h5),
+        ArtifactSpec(label="sph-loop-final-ascii", source=report.final_ascii),
+        ArtifactSpec(label="sph-loop-summary", source=report.summary_json),
+        ArtifactSpec(label="sph-loop-audit-csv", source=report.audit_csv),
+        ArtifactSpec(label="sph-loop-audit-text", source=report.audit_text),
+    ]
+    if report.final_sph_sidecar is not None:
+        artifacts.insert(
+            3,
+            ArtifactSpec(
+                label="sph-loop-final-sph-sidecar",
+                source=report.final_sph_sidecar,
+            ),
+        )
+    bundle_artifacts(
+        output_dir=output_dir,
+        artifacts=artifacts,
+        manifest_name=manifest_name,
+        force=force,
+    )
 
 
 def write_audit_csv(path: Path, rows: tuple[SphLoopAuditRow, ...]) -> None:

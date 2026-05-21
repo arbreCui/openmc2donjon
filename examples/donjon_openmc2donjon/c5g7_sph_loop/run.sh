@@ -17,6 +17,7 @@ APPLY_TEMPLATE="${DONJON_APPLY_TEMPLATE:-$REPO_ROOT/examples/donjon_sph_loop_ada
 CONFIG="$RUN_DIR/c5g7_sph_loop_config.json"
 LOOP_DIR="$RUN_DIR/sph_loop"
 SUMMARY="$LOOP_DIR/sph_loop_summary.json"
+BUNDLE_DIR="$LOOP_DIR/bundle"
 
 mkdir -p "$RUN_DIR"
 export PYTHONDONTWRITEBYTECODE=1
@@ -42,6 +43,7 @@ fi
 "$PYTHON_BIN" -m openmc2donjon.cli run-sph-loop \
   --config "$CONFIG" \
   --summary-json "$SUMMARY" \
+  --bundle-dir "$BUNDLE_DIR" \
   --force
 
 "$PYTHON_BIN" - "$SUMMARY" <<'PY'
@@ -54,6 +56,7 @@ print(
     "C5G7 SPH loop example OK: "
     f"solves={len(summary['solves'])} "
     f"postprocesses={len(summary['postprocesses'])} "
-    f"final_ascii={summary['final_ascii']}"
+    f"final_ascii={summary['final_ascii']} "
+    f"bundle_manifest={summary['bundle_manifest']}"
 )
 PY

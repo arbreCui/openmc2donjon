@@ -1018,6 +1018,17 @@ def build_run_sph_loop_parser() -> argparse.ArgumentParser:
         default=None,
         help="override summary JSON path (default: OUTPUT_DIR/sph_loop_summary.json)",
     )
+    parser.add_argument(
+        "--bundle-dir",
+        type=Path,
+        default=None,
+        help="write a manifest-backed SPH loop delivery bundle in this directory",
+    )
+    parser.add_argument(
+        "--bundle-manifest-name",
+        default="manifest.json",
+        help="SPH loop bundle manifest filename (default: manifest.json)",
+    )
     parser.add_argument("--force", action="store_true", help="overwrite generated artifacts")
     return parser
 
@@ -1847,6 +1858,8 @@ def _run_sph_loop_main(argv: list[str]) -> int:
             output_dir=args.output_dir,
             force=args.force,
             summary_json=args.summary_json,
+            bundle_dir=args.bundle_dir,
+            bundle_manifest_name=args.bundle_manifest_name,
         )
     except Exception as exc:
         parser.exit(1, f"openmc2donjon run-sph-loop: error: {exc}\n")

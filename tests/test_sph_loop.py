@@ -27,6 +27,7 @@ class SphLoopTests(unittest.TestCase):
             postprocess = root / "fake_postprocess.py"
             config = root / "loop.json"
             summary = root / "loop_summary.json"
+            bundle_dir = root / "sph_loop_bundle"
             _write_mgxs(mgxs)
             _write_reference_flux(reference)
             _write_fake_solver(solver)
@@ -98,6 +99,8 @@ class SphLoopTests(unittest.TestCase):
                         str(config),
                         "--summary-json",
                         str(summary),
+                        "--bundle-dir",
+                        str(bundle_dir),
                     ]
                 )
 
@@ -138,6 +141,7 @@ class SphLoopTests(unittest.TestCase):
             audit_text = root / "sph_loop_audit.txt"
             self.assertEqual(Path(payload["audit_csv"]), audit_csv)
             self.assertEqual(Path(payload["audit_text"]), audit_text)
+            self.assertEqual(Path(payload["bundle_manifest"]), bundle_dir / "manifest.json")
             self.assertTrue(audit_csv.exists())
             self.assertTrue(audit_text.exists())
             with audit_csv.open(encoding="utf-8", newline="") as stream:
@@ -145,6 +149,28 @@ class SphLoopTests(unittest.TestCase):
             self.assertEqual([row["stage"] for row in rows], ["iteration", "iteration", "final"])
             self.assertEqual(rows[2]["keff"], "1.002")
             self.assertIn("OpenMC-to-DONJON SPH loop audit", audit_text.read_text(encoding="utf-8"))
+            manifest = json.loads((bundle_dir / "manifest.json").read_text(encoding="utf-8"))
+            labels = {artifact["label"]: artifact for artifact in manifest["artifacts"]}
+            self.assertEqual(
+                set(labels),
+                {
+                    "sph-loop-config",
+                    "sph-input-h5",
+                    "sph-loop-final-ascii",
+                    "sph-loop-final-sph-sidecar",
+                    "sph-loop-summary",
+                    "sph-loop-audit-csv",
+                    "sph-loop-audit-text",
+                },
+            )
+            self.assertEqual(labels["sph-loop-summary"]["summary_schema"], "openmc2donjon.sph-loop.v1")
+            self.assertEqual(labels["sph-loop-summary"]["summary_decision"], PASS_DECISION)
+            self.assertTrue(labels["sph-loop-summary"]["acceptance_passed"])
+            self.assertEqual(
+                labels["sph-loop-summary"]["acceptance_decision"],
+                "openmc2donjon_sph_loop_acceptance_passed",
+            )
+            self.assertTrue((bundle_dir / labels["sph-loop-audit-csv"]["bundled_path"]).exists())
 
             final_sph = root / "loop_run/iter02_sph/next_sph.sidecar.h5"
             expected = np.asarray([[2.0, 2.0], [2.0, 2.0]])

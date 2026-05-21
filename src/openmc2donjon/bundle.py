@@ -54,7 +54,7 @@ def bundle_artifacts(
     manifest_path = output_dir / manifest_name
     _validate_sources(artifacts)
     destinations = _plan_destinations(output_dir, artifacts)
-    _validate_overwrite(destinations, manifest_path, force=force)
+    _validate_overwrite(artifacts, destinations, manifest_path, force=force)
 
     output_dir.mkdir(parents=True, exist_ok=True)
     manifest_artifacts: list[dict[str, Any]] = []
@@ -91,6 +91,8 @@ def print_report(manifest: dict[str, Any], manifest_path: Path) -> None:
             summary = f" schema={artifact['summary_schema']}"
         if artifact.get("summary_decision") is not None:
             summary += f" decision={artifact['summary_decision']}"
+        if artifact.get("acceptance_decision") is not None:
+            summary += f" acceptance={artifact['acceptance_decision']}"
         print(
             f"  {artifact['label']}: {artifact['bundled_path']} "
             f"size={artifact['size_bytes']} sha256={artifact['sha256'][:12]}{summary}"
@@ -137,11 +139,22 @@ def _unique_filename(label: str, source: Path, used: set[str]) -> str:
         index += 1
 
 
-def _validate_overwrite(destinations: list[Path], manifest_path: Path, *, force: bool) -> None:
+def _validate_overwrite(
+    artifacts: list[ArtifactSpec],
+    destinations: list[Path],
+    manifest_path: Path,
+    *,
+    force: bool,
+) -> None:
     existing: list[Path] = []
-    for path in [*destinations, manifest_path]:
-        if path.exists():
-            existing.append(path)
+    for artifact, path in zip(artifacts, destinations, strict=True):
+        if not path.exists():
+            continue
+        if artifact.source.resolve() == path.resolve():
+            continue
+        existing.append(path)
+    if manifest_path.exists():
+        existing.append(manifest_path)
     if existing and not force:
         names = ", ".join(str(path) for path in existing)
         raise FileExistsError(f"bundle output already exists; use --force to overwrite: {names}")
@@ -176,6 +189,9 @@ def _json_summary_fields(path: Path) -> dict[str, Any]:
         ("schema", "summary_schema"),
         ("decision", "summary_decision"),
         ("ok", "summary_ok"),
+        ("acceptance_enabled", "acceptance_enabled"),
+        ("acceptance_passed", "acceptance_passed"),
+        ("acceptance_decision", "acceptance_decision"),
     ):
         if key in payload:
             fields[manifest_key] = payload[key]

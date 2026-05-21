@@ -206,6 +206,9 @@ class CliTests(unittest.TestCase):
                         "schema": "openmc2donjon.from-openmc-summary.v2",
                         "decision": "example_passed",
                         "ok": True,
+                        "acceptance_enabled": True,
+                        "acceptance_passed": True,
+                        "acceptance_decision": "example_acceptance_passed",
                     }
                 ),
                 encoding="utf-8",
@@ -251,9 +254,42 @@ class CliTests(unittest.TestCase):
         )
         self.assertEqual(labels["run-summary"]["summary_decision"], "example_passed")
         self.assertTrue(labels["run-summary"]["summary_ok"])
+        self.assertTrue(labels["run-summary"]["acceptance_enabled"])
+        self.assertTrue(labels["run-summary"]["acceptance_passed"])
+        self.assertEqual(
+            labels["run-summary"]["acceptance_decision"],
+            "example_acceptance_passed",
+        )
         for artifact in labels.values():
             self.assertEqual(len(artifact["sha256"]), 64)
         self.assertTrue(all(bundled_paths_exist))
+
+    def test_bundle_command_can_manifest_sources_already_in_output_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            summary = tmp / "summary.json"
+            summary.write_text(
+                json.dumps({"schema": "example.v1", "decision": "passed"}),
+                encoding="utf-8",
+            )
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                rc = cli_main(
+                    [
+                        "bundle",
+                        "--output-dir",
+                        str(tmp),
+                        "--run-summary",
+                        str(summary),
+                    ]
+                )
+
+            manifest = json.loads((tmp / "manifest.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(rc, 0)
+        labels = {artifact["label"]: artifact for artifact in manifest["artifacts"]}
+        self.assertEqual(labels["run-summary"]["bundled_path"], "summary.json")
+        self.assertEqual(labels["run-summary"]["summary_decision"], "passed")
 
     def test_convert_check_writes_output_for_valid_hdf5(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
