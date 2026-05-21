@@ -518,6 +518,87 @@ def build_library():
             "openmc2donjon_adf_sidecar_passed",
         )
 
+    def test_run_dir_builds_flux_ratio_adf_with_external_homogeneous_flux(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        recipe = repo_root / "examples/recipe_export_smoke/minimal_recipe.py"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            statepoint = tmp / "statepoint.fake.h5"
+            surface_flux = tmp / "surface_flux.h5"
+            homogeneous_flux = tmp / "homogeneous_face_flux.h5"
+            run_dir = tmp / "production_run"
+            statepoint.write_text("fake statepoint\n", encoding="utf-8")
+            _write_surface_flux(surface_flux)
+            _write_homogeneous_face_flux(homogeneous_flux)
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = from_openmc_main(
+                    [
+                        "--recipe",
+                        str(recipe),
+                        "--statepoint",
+                        str(statepoint),
+                        "--run-dir",
+                        str(run_dir),
+                        "--build-flux-ratio-adf",
+                        "--adf-surface-flux",
+                        str(surface_flux),
+                        "--homogeneous-face-flux",
+                        str(homogeneous_flux),
+                        "--adf-faces",
+                        "FD_XMIN,FD_XMAX",
+                        "--adf-kind",
+                        "flux-ratio-external-hom",
+                        "--adf-real",
+                        "true",
+                        "--require-volume",
+                        "--require-transport-dataset",
+                    ]
+                )
+
+            hdf5 = run_dir / "mgxs_library.h5"
+            sidecar_summary = run_dir / "adf_sidecar_summary.json"
+            low_order_driver = run_dir / "low_order_driver.h5"
+            generated_homogeneous_summary = run_dir / "homogeneous_face_flux_summary.json"
+            manifest = run_dir / "manifest.json"
+            with h5py.File(hdf5, "r") as h5:
+                fuel_xmin = h5["mixtures/FUEL_A/adf/FD_XMIN"][:]
+                mod_xmax = h5["mixtures/MOD_A/adf/FD_XMAX"][:]
+                attrs = dict(h5.attrs)
+            sidecar_payload = json.loads(sidecar_summary.read_text(encoding="utf-8"))
+            manifest_payload = json.loads(manifest.read_text(encoding="utf-8"))
+            labels = {artifact["label"]: artifact for artifact in manifest_payload["artifacts"]}
+
+        self.assertEqual(rc, 0)
+        self.assertIn("openmc2donjon_adf_sidecar_passed", stream.getvalue())
+        self.assertFalse(low_order_driver.exists())
+        self.assertFalse(generated_homogeneous_summary.exists())
+        np.testing.assert_allclose(fuel_xmin, [1.1, 1.1])
+        np.testing.assert_allclose(mod_xmax, [1.0, 0.9])
+        self.assertEqual(attrs["adf_kind"], "flux-ratio-external-hom")
+        self.assertEqual(attrs["adf_real"], "true")
+        self.assertEqual(sidecar_payload["adf_homogeneous_face_flux"], str(homogeneous_flux))
+        required_labels = {
+            "mgxs",
+            "mcompo",
+            "run-summary",
+            "check-summary",
+            "adf-source",
+            "adf-summary",
+            "surface-flux",
+            "homogeneous-face-flux",
+            "adf-sidecar-summary",
+            "recipe",
+        }
+        self.assertEqual(set(labels), required_labels)
+        self.assertEqual(
+            labels["adf-sidecar-summary"]["summary_decision"],
+            "openmc2donjon_adf_sidecar_passed",
+        )
+        self.assertEqual(labels["homogeneous-face-flux"]["source"], str(homogeneous_flux))
+
     def test_run_dir_dry_run_uses_standard_paths_without_writing(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         recipe = repo_root / "examples/recipe_export_smoke/minimal_recipe.py"
@@ -744,6 +825,20 @@ def _write_low_order_raw(path: Path) -> None:
         names = np.asarray(["FUEL_A", "MOD_A"], dtype="S")
         volume.attrs["mixture_names"] = names
         current.attrs["mixture_names"] = names
+
+
+def _write_homogeneous_face_flux(path: Path) -> None:
+    values = np.array(
+        [
+            [[10.0, 20.0], [9.0, 20.0]],
+            [[30.0, 40.0], [30.0, 40.0]],
+        ],
+        dtype=float,
+    )
+    with h5py.File(path, "w") as h5:
+        dataset = h5.create_dataset("homogeneous_face_flux", data=values)
+        dataset.attrs["mixture_names"] = np.asarray(["FUEL_A", "MOD_A"], dtype="S")
+        dataset.attrs["face_names"] = np.asarray(["FD_XMIN", "FD_XMAX"], dtype="S")
 
 
 if __name__ == "__main__":

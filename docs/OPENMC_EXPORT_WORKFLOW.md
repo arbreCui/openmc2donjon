@@ -180,6 +180,29 @@ openmc2donjon-from-openmc \
   --require-transport-dataset
 ```
 
+If a trusted low-order or nodal solve has already written the homogeneous
+face-flux denominator, the same one-step path can consume it directly. In that
+mode the run directory bundles the external denominator and skips the
+low-order-driver and homogeneous-face-flux reconstruction artifacts:
+
+```sh
+openmc2donjon-from-openmc \
+  --recipe export_recipe.py \
+  --statepoint statepoint.120.h5 \
+  --run-dir runs/case1 \
+  --build-flux-ratio-adf \
+  --export-surface-flux \
+  --surface-flux-tally-name openmc2donjon_surface_current_mu \
+  --surface-flux-mesh-shape 1,2 \
+  --surface-flux-mu-edges 0.0,0.25,0.5,0.75,1.0 \
+  --surface-flux-face-area 4.0 \
+  --homogeneous-face-flux runs/case1/homogeneous_face_flux.h5 \
+  --adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
+  --adf-invalid-fill 1.0 \
+  --require-volume \
+  --require-transport-dataset
+```
+
 If the ADF sidecar was produced separately, pass it directly:
 
 ```sh

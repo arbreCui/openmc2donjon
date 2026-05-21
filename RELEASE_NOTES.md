@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added `openmc2donjon-from-openmc --homogeneous-face-flux` so one-step
+  flux-ratio ADF production runs can consume an existing homogeneous face-flux
+  denominator directly instead of rebuilding it from low-order driver inputs.
 - Added a C5G7 production ADF source reconstruction smoke that rebuilds the
   accepted ADF sidecar from OpenMC surface flux over DONJON homogeneous face
   flux and checks exact payload equality.

@@ -117,6 +117,23 @@ openmc2donjon-from-openmc \
   --require-transport-dataset
 ```
 
+When the homogeneous face flux has already been computed, pass it directly as
+the denominator and skip low-order reconstruction:
+
+```sh
+openmc2donjon-from-openmc \
+  --recipe export_recipe.py \
+  --statepoint statepoint.120.h5 \
+  --run-dir runs/case1 \
+  --build-flux-ratio-adf \
+  --export-surface-flux \
+  --surface-flux-mu-edges 0.0,0.25,0.5,0.75,1.0 \
+  --homogeneous-face-flux homogeneous_face_flux.h5 \
+  --adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
+  --require-volume \
+  --require-transport-dataset
+```
+
 To keep explicit paths instead of using a managed run directory:
 
 ```sh

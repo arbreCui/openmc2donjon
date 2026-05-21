@@ -222,6 +222,14 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--homogeneous-face-flux",
+        default=None,
+        help=(
+            "with --build-flux-ratio-adf, existing homogeneous face-flux HDF5 "
+            "or FILE::DATASET denominator; skips low-order driver reconstruction"
+        ),
+    )
+    parser.add_argument(
         "--low-order-volume-flux",
         default=None,
         help=(
@@ -456,20 +464,23 @@ def _run_dry_run(args: argparse.Namespace) -> bool:
             "    low_order_raw_driver: "
             f"{_render_optional_value(args.low_order_raw_driver)}"
         )
-        print(
-            "    low_order_volume_flux: "
-            f"{_render_optional_value(args.low_order_volume_flux)}"
-        )
-        print(
-            "    low_order_net_current: "
-            f"{_render_optional_value(args.low_order_net_current)}"
-        )
-        print(f"    low_order_driver: {paths['low_order_driver']} (not written)")
-        print(
-            f"    low_order_driver_check_summary: "
-            f"{paths['low_order_driver_check_summary']} (not written)"
-        )
-        print(f"    homogeneous_face_flux: {paths['homogeneous_face_flux']} (not written)")
+        if args.homogeneous_face_flux is not None:
+            print(f"    homogeneous_face_flux: {args.homogeneous_face_flux} (not read)")
+        else:
+            print(
+                "    low_order_volume_flux: "
+                f"{_render_optional_value(args.low_order_volume_flux)}"
+            )
+            print(
+                "    low_order_net_current: "
+                f"{_render_optional_value(args.low_order_net_current)}"
+            )
+            print(f"    low_order_driver: {paths['low_order_driver']} (not written)")
+            print(
+                f"    low_order_driver_check_summary: "
+                f"{paths['low_order_driver_check_summary']} (not written)"
+            )
+            print(f"    homogeneous_face_flux: {paths['homogeneous_face_flux']} (not written)")
         print(f"    adf_sidecar: {paths['adf_sidecar']} (not written)")
         print(f"    adf_sidecar_summary: {paths['adf_sidecar_summary']} (not written)")
     else:
@@ -656,17 +667,22 @@ def _prepare_run_dir(
         paths = _flux_ratio_adf_paths(args)
         if args.export_surface_flux:
             managed_paths.extend([paths["surface_flux"], paths["surface_flux_summary"]])
-        managed_paths.extend(
-            [
-                paths["low_order_driver"],
-                paths["low_order_driver_summary"],
-                paths["low_order_driver_check_summary"],
-                paths["homogeneous_face_flux"],
-                paths["homogeneous_face_flux_summary"],
-                paths["adf_sidecar"],
-                paths["adf_sidecar_summary"],
-            ]
-        )
+        if args.homogeneous_face_flux is None:
+            managed_paths.extend(
+                [
+                    paths["low_order_driver"],
+                    paths["low_order_driver_summary"],
+                    paths["low_order_driver_check_summary"],
+                    paths["homogeneous_face_flux"],
+                    paths["homogeneous_face_flux_summary"],
+                ]
+            )
+        else:
+            homogeneous_source = _hdf5_reference_file(args.homogeneous_face_flux)
+            homogeneous_destination = run_dir / homogeneous_source.name
+            if not _same_path(homogeneous_source, homogeneous_destination):
+                managed_paths.append(homogeneous_destination)
+        managed_paths.extend([paths["adf_sidecar"], paths["adf_sidecar_summary"]])
         if args.adf_summary_json is not None:
             managed_paths.append(args.adf_summary_json)
         if args.adf_surface_flux is not None:
@@ -764,43 +780,48 @@ def _build_flux_ratio_adf(
         surface_flux = args.adf_surface_flux
         generated_artifacts.append(ArtifactSpec(label="surface-flux", source=surface_flux))
 
-    create_low_order_driver(
-        hdf5_path,
-        paths["low_order_driver"],
-        raw_driver=args.low_order_raw_driver,
-        volume_flux=args.low_order_volume_flux,
-        net_current=args.low_order_net_current,
-        faces=faces,
-        net_current_sign_convention=args.low_order_net_current_sign_convention,
-        source_label=args.low_order_source_label,
-        force=True,
-        summary_json=paths["low_order_driver_summary"],
-    )
-    low_order_check = check_low_order_driver(
-        hdf5_path,
-        paths["low_order_driver"],
-        faces=faces,
-        face_widths=face_widths,
-        summary_json=paths["low_order_driver_check_summary"],
-    )
-    if not low_order_check.ok:
-        raise ValueError("low-order driver contract check failed")
+    if args.homogeneous_face_flux is None:
+        create_low_order_driver(
+            hdf5_path,
+            paths["low_order_driver"],
+            raw_driver=args.low_order_raw_driver,
+            volume_flux=args.low_order_volume_flux,
+            net_current=args.low_order_net_current,
+            faces=faces,
+            net_current_sign_convention=args.low_order_net_current_sign_convention,
+            source_label=args.low_order_source_label,
+            force=True,
+            summary_json=paths["low_order_driver_summary"],
+        )
+        low_order_check = check_low_order_driver(
+            hdf5_path,
+            paths["low_order_driver"],
+            faces=faces,
+            face_widths=face_widths,
+            summary_json=paths["low_order_driver_check_summary"],
+        )
+        if not low_order_check.ok:
+            raise ValueError("low-order driver contract check failed")
 
-    create_homogeneous_face_flux(
-        hdf5_path,
-        paths["homogeneous_face_flux"],
-        volume_flux=paths["low_order_driver"],
-        net_current=paths["low_order_driver"],
-        faces=faces,
-        face_widths=face_widths,
-        force=True,
-        summary_json=paths["homogeneous_face_flux_summary"],
-    )
+        create_homogeneous_face_flux(
+            hdf5_path,
+            paths["homogeneous_face_flux"],
+            volume_flux=paths["low_order_driver"],
+            net_current=paths["low_order_driver"],
+            faces=faces,
+            face_widths=face_widths,
+            force=True,
+            summary_json=paths["homogeneous_face_flux_summary"],
+        )
+        homogeneous_face_flux = paths["homogeneous_face_flux"]
+    else:
+        homogeneous_face_flux = args.homogeneous_face_flux
+
     create_flux_ratio_adf_sidecar(
         hdf5_path,
         paths["adf_sidecar"],
         surface_flux=surface_flux,
-        homogeneous_face_flux=paths["homogeneous_face_flux"],
+        homogeneous_face_flux=homogeneous_face_flux,
         faces=faces,
         force=True,
         summary_json=paths["adf_sidecar_summary"],
@@ -815,24 +836,34 @@ def _build_flux_ratio_adf(
         ),
     )
 
-    generated_artifacts.extend(
-        [
-            ArtifactSpec(label="low-order-driver", source=paths["low_order_driver"]),
+    if args.homogeneous_face_flux is None:
+        generated_artifacts.extend(
+            [
+                ArtifactSpec(label="low-order-driver", source=paths["low_order_driver"]),
+                ArtifactSpec(
+                    label="low-order-driver-summary",
+                    source=paths["low_order_driver_summary"],
+                ),
+                ArtifactSpec(
+                    label="low-order-driver-check-summary",
+                    source=paths["low_order_driver_check_summary"],
+                ),
+                ArtifactSpec(label="homogeneous-face-flux", source=paths["homogeneous_face_flux"]),
+                ArtifactSpec(
+                    label="homogeneous-face-flux-summary",
+                    source=paths["homogeneous_face_flux_summary"],
+                ),
+            ]
+        )
+    else:
+        generated_artifacts.append(
             ArtifactSpec(
-                label="low-order-driver-summary",
-                source=paths["low_order_driver_summary"],
-            ),
-            ArtifactSpec(
-                label="low-order-driver-check-summary",
-                source=paths["low_order_driver_check_summary"],
-            ),
-            ArtifactSpec(label="homogeneous-face-flux", source=paths["homogeneous_face_flux"]),
-            ArtifactSpec(
-                label="homogeneous-face-flux-summary",
-                source=paths["homogeneous_face_flux_summary"],
-            ),
-            ArtifactSpec(label="adf-sidecar-summary", source=paths["adf_sidecar_summary"]),
-        ]
+                label="homogeneous-face-flux",
+                source=_hdf5_reference_file(args.homogeneous_face_flux),
+            )
+        )
+    generated_artifacts.append(
+        ArtifactSpec(label="adf-sidecar-summary", source=paths["adf_sidecar_summary"])
     )
     return paths["adf_sidecar"], generated_artifacts
 
@@ -913,6 +944,7 @@ def _validate_flux_ratio_adf_args(
         or args.surface_flux_mesh_shape is not None
         or args.surface_flux_mu_edges is not None
         or args.surface_flux_face_area != 1.0
+        or args.homogeneous_face_flux is not None
         or args.low_order_raw_driver is not None
         or args.low_order_volume_flux is not None
         or args.low_order_net_current is not None
@@ -955,10 +987,24 @@ def _validate_flux_ratio_adf_args(
     has_explicit_low_order = (
         args.low_order_volume_flux is not None and args.low_order_net_current is not None
     )
-    if not (has_raw_low_order or has_explicit_low_order):
+    has_homogeneous_face_flux = args.homogeneous_face_flux is not None
+    if has_homogeneous_face_flux and (has_raw_low_order or has_explicit_low_order):
         parser.error(
-            "--build-flux-ratio-adf requires --low-order-raw-driver or both "
-            "--low-order-volume-flux and --low-order-net-current"
+            "--homogeneous-face-flux cannot be combined with low-order driver inputs"
+        )
+    if has_homogeneous_face_flux and args.low_order_net_current_sign_convention is not None:
+        parser.error(
+            "--low-order-net-current-sign-convention requires low-order driver inputs"
+        )
+    if has_homogeneous_face_flux and args.low_order_source_label != "external low-order driver":
+        parser.error("--low-order-source-label requires low-order driver inputs")
+    if has_homogeneous_face_flux and args.adf_face_widths != "1.0":
+        parser.error("--adf-face-widths requires low-order driver inputs")
+    if not (has_homogeneous_face_flux or has_raw_low_order or has_explicit_low_order):
+        parser.error(
+            "--build-flux-ratio-adf requires --homogeneous-face-flux, "
+            "--low-order-raw-driver, or both --low-order-volume-flux and "
+            "--low-order-net-current"
         )
     if args.low_order_volume_flux is None and args.low_order_net_current is not None:
         parser.error("--low-order-net-current also requires --low-order-volume-flux")
@@ -978,6 +1024,14 @@ def _validate_flux_ratio_adf_args(
             parser.error("--adf-clip-min must be <= --adf-clip-max")
     if args.adf_invalid_fill is not None and args.adf_invalid_fill <= 0.0:
         parser.error("--adf-invalid-fill must be positive")
+
+
+def _hdf5_reference_file(reference: str | Path) -> Path:
+    raw = str(reference)
+    path = raw.split("::", 1)[0]
+    if not path:
+        raise ValueError(f"empty HDF5 reference path: {reference}")
+    return Path(path)
 
 
 def _flux_ratio_faces(args: argparse.Namespace) -> tuple[str, ...]:
