@@ -29,6 +29,7 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertIn("make-sph-update-table --help", default_section)
         self.assertIn("extract-donjon-volume-flux --help", default_section)
         self.assertIn("run-sph-iteration --help", default_section)
+        self.assertIn("run-sph-loop --help", default_section)
         self.assertIn("== SPH iteration loop smoke ==", default_section)
         self.assertIn("examples/sph_iteration_loop/run_smoke.sh", default_section)
         self.assertIn("== External SPH handoff smoke ==", default_section)

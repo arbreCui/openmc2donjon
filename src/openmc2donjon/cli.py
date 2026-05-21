@@ -31,6 +31,7 @@ from .sph_augment import (
     create_unity_sph_sidecar,
 )
 from .sph_iteration import create_sph_update_table
+from .sph_loop import run_sph_loop
 from .sph_workflow import run_sph_iteration_workflow
 
 
@@ -60,6 +61,8 @@ def build_parser() -> argparse.ArgumentParser:
             "adapt DONJON L_FLUX dumps into canonical low-order volume flux, "
             "'openmc2donjon run-sph-iteration <input_h5> ...' to run one "
             "fixed-OpenMC SPH iteration handoff, "
+            "'openmc2donjon run-sph-loop --config loop.json' to iterate "
+            "DONJON solves and SPH handoffs, "
             "'openmc2donjon bundle --output-dir DIR ...' to collect "
             "production artifacts, 'openmc2donjon doctor' for environment checks, or "
             "'openmc2donjon check <input_h5>' for input-contract preflight."
@@ -985,6 +988,37 @@ def build_run_sph_iteration_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_run_sph_loop_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="openmc2donjon run-sph-loop",
+        description=(
+            "Run a fixed-OpenMC SPH loop from a JSON config: write the initial "
+            "ASCII handoff, call a user-supplied DONJON solve command each "
+            "cycle, extract L_FLUX, update SPH, and write the next handoff."
+        ),
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        required=True,
+        help="JSON loop config using schema openmc2donjon.sph-loop-config.v1",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="override output_dir from the config",
+    )
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        default=None,
+        help="override summary JSON path (default: OUTPUT_DIR/sph_loop_summary.json)",
+    )
+    parser.add_argument("--force", action="store_true", help="overwrite generated artifacts")
+    return parser
+
+
 def build_export_surface_flux_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="openmc2donjon export-surface-flux",
@@ -1276,6 +1310,8 @@ def main(argv: list[str] | None = None) -> int:
         return _extract_donjon_volume_flux_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "run-sph-iteration":
         return _run_sph_iteration_main(raw_argv[1:])
+    if raw_argv and raw_argv[0] == "run-sph-loop":
+        return _run_sph_loop_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "bundle":
         return _bundle_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "doctor":
@@ -1623,6 +1659,21 @@ def _run_sph_iteration_main(argv: list[str]) -> int:
         )
     except Exception as exc:
         parser.exit(1, f"openmc2donjon run-sph-iteration: error: {exc}\n")
+    return 0
+
+
+def _run_sph_loop_main(argv: list[str]) -> int:
+    parser = build_run_sph_loop_parser()
+    args = parser.parse_args(argv)
+    try:
+        run_sph_loop(
+            args.config,
+            output_dir=args.output_dir,
+            force=args.force,
+            summary_json=args.summary_json,
+        )
+    except Exception as exc:
+        parser.exit(1, f"openmc2donjon run-sph-loop: error: {exc}\n")
     return 0
 
 
