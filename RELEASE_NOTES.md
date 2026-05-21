@@ -76,6 +76,9 @@
   path can inject ADF before checked DONJON conversion.
 - Added `examples/production_minicase` plus a smoke script for a fresh
   continuous-energy OpenMC MGXS case that does not rely on the C5G7 snapshot.
+- Hardened the production minicase recipe with explicit `DomainExportSpec`
+  mapping, production metadata, a strict dry-run gate, and repeatable managed
+  run-directory overwrites for smoke automation.
 - Extended the production minicase smoke to run the OpenMC statepoint ->
   surface flux -> low-order driver handoff -> homogeneous face flux ->
   flux-ratio ADF sidecar -> checked MULTICOMPO path.

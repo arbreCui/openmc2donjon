@@ -222,5 +222,7 @@ def root_attrs() -> dict[str, object]:
         "case": CASE_NAME,
         "domain_mode": DOMAIN_MODE,
         "domain_type": DOMAIN_TYPE,
+        "energy_group_count": len(ENERGY_BOUNDS_EV) - 1,
+        "legendre_order": LEGENDRE_ORDER,
         "spatial_mapping": "one OpenMC cell domain -> one DONJON mixture",
     }

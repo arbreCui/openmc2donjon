@@ -39,6 +39,7 @@ export PYTHONPATH="$PACKAGE_SRC${PYTHONPATH:+:$PYTHONPATH}"
 
 EXAMPLE_DIR="$REPO_ROOT/examples/production_minicase"
 CASE_DIR="$RUN_DIR/openmc_case"
+DRY_RUN_DIR="$RUN_DIR/openmc2donjon_dry_run"
 CONVERT_RUN_DIR="$RUN_DIR/openmc2donjon_run"
 STATEPOINT="$CASE_DIR/statepoint.${MINICASE_BATCHES}.h5"
 MGXS="$CONVERT_RUN_DIR/mgxs_library.h5"
@@ -107,6 +108,20 @@ echo "== Build OpenMC XML =="
   --inactive "$MINICASE_INACTIVE"
 
 echo
+echo "== Strict production dry-run =="
+OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
+"$PYTHON_BIN" -m openmc2donjon.from_openmc_cli \
+  --recipe "$EXAMPLE_DIR/export_recipe.py" \
+  --no-load-statepoint \
+  --dry-run \
+  --strict-dry-run \
+  --run-dir "$DRY_RUN_DIR" \
+  --check \
+  --require-volume \
+  --require-transport-dataset \
+  "${SCATTER_ROW_BALANCE_ARGS[@]}"
+
+echo
 echo "== Run OpenMC =="
 (
   cd "$CASE_DIR"
@@ -124,6 +139,7 @@ OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
   --recipe "$EXAMPLE_DIR/export_recipe.py" \
   --statepoint "$STATEPOINT" \
   --run-dir "$CONVERT_RUN_DIR" \
+  --force-run-dir \
   --check \
   --require-volume \
   --require-transport-dataset \
@@ -242,6 +258,7 @@ OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
   --recipe "$EXAMPLE_DIR/export_recipe.py" \
   --statepoint "$STATEPOINT" \
   --run-dir "$ADF_RUN_DIR" \
+  --force-run-dir \
   --build-flux-ratio-adf \
   --export-surface-flux \
   --surface-flux-tally-name openmc2donjon_surface_current_mu \

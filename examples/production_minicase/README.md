@@ -27,6 +27,17 @@ python examples/production_minicase/build_model.py \
   --batches 12 \
   --inactive 4
 
+OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
+openmc2donjon-from-openmc \
+  --recipe examples/production_minicase/export_recipe.py \
+  --no-load-statepoint \
+  --dry-run \
+  --strict-dry-run \
+  --run-dir "$RUN_DIR" \
+  --check \
+  --require-volume \
+  --require-transport-dataset
+
 openmc -s 2 "$CASE_DIR"
 
 OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
@@ -34,6 +45,7 @@ openmc2donjon-from-openmc \
   --recipe examples/production_minicase/export_recipe.py \
   --statepoint "$CASE_DIR/statepoint.12.h5" \
   --run-dir "$RUN_DIR" \
+  --force-run-dir \
   --check \
   --require-volume \
   --require-transport-dataset
@@ -62,6 +74,7 @@ openmc2donjon-from-openmc \
   --recipe examples/production_minicase/export_recipe.py \
   --statepoint "$CASE_DIR/statepoint.12.h5" \
   --run-dir /tmp/openmc2donjon_minicase/output_adf \
+  --force-run-dir \
   --build-flux-ratio-adf \
   --export-surface-flux \
   --surface-flux-tally-name openmc2donjon_surface_current_mu \

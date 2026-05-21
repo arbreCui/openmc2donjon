@@ -10,6 +10,8 @@ import importlib.util
 from pathlib import Path
 import sys
 
+from openmc2donjon import DomainExportSpec
+
 
 def _load_minicase_module():
     path = Path(__file__).with_name("minicase_model.py")
@@ -27,6 +29,22 @@ _minicase = _load_minicase_module()
 
 def build_library():
     return _minicase.build_library(case_dir=_minicase.default_case_dir())
+
+
+def domain_specs(library):
+    names = _minicase.domain_names(library)
+    return [
+        DomainExportSpec(
+            domain=domain,
+            name=names[int(domain.id)],
+            volume=float(_minicase.DOMAIN_VOLUME_BY_ID[int(domain.id)]),
+            attrs={
+                "source_domain_id": int(domain.id),
+                "source_domain_type": _minicase.DOMAIN_TYPE,
+            },
+        )
+        for domain in library.domains
+    ]
 
 
 def domain_names(library):
