@@ -20,6 +20,8 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertIn("examples/openmc_hex_minicase/run_smoke.sh", default_section)
         self.assertIn("== C5G7 ADF source reconstruction smoke ==", accepted_section)
         self.assertIn("scripts/run_c5g7_adf_source_smoke.sh", accepted_section)
+        self.assertIn("== C5G7 DONJON face-flux regeneration smoke ==", accepted_section)
+        self.assertIn("scripts/run_c5g7_donjon_face_flux_smoke.sh", accepted_section)
         self.assertIn("== C5G7 from-OpenMC flux-ratio ADF smoke ==", accepted_section)
         self.assertIn("scripts/run_c5g7_from_openmc_adf_smoke.sh", accepted_section)
         self.assertNotIn("examples/openmc_hex_minicase/run_smoke.sh", candidate_section)

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added `scripts/run_c5g7_donjon_face_flux_smoke.sh`, which regenerates the
+  accepted C5G7 homogeneous face-flux denominator from real DONJON
+  `L_FLUX`/`L_TRACK` dumps, checks exact HDF5 payload parity with the accepted
+  artifact, and rebuilds the production ADF sidecar from that regenerated
+  source.
 - Added `examples/external_low_order_handoff`, a deterministic production-facing
   example for external low-order/nodal driver handoffs with case-specific HDF5
   paths, mixture/face reordering, positive-inward current conversion,

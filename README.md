@@ -45,6 +45,13 @@ bash scripts/run_c5g7_demo.sh
 bash scripts/release_check.sh
 ```
 
+On the local C5G7/DONJON validation machine, this additional smoke regenerates
+the accepted homogeneous face-flux denominator from the real DONJON dumps:
+
+```sh
+bash scripts/run_c5g7_donjon_face_flux_smoke.sh
+```
+
 Full local acceptance with DONJON decks:
 
 ```sh

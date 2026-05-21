@@ -74,8 +74,9 @@ bash scripts/release_check.sh --run-donjon
 ```
 
 The full check covers package tests, CLI smoke, C5G7 converter readback,
-accepted baseline validation, OpenMC statepoint exporter parity, and DONJON
-locked decks.
+accepted baseline validation, C5G7 DONJON face-flux regeneration when local
+dumps are available, OpenMC statepoint exporter parity, and DONJON locked
+decks.
 
 ## Scope
 

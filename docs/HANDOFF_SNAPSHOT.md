@@ -80,7 +80,9 @@ The default gate covers:
 - real OpenMC hex minicase;
 - C5G7 converter readback to `L_MULTICOMPO` and `L_MACROLIB`;
 - accepted baseline manifest validation;
-- C5G7 ADF augment smoke.
+- C5G7 ADF augment smoke;
+- C5G7 DONJON face-flux regeneration from local `L_FLUX`/`L_TRACK` dumps when
+  those files are present;
 - C5G7 production ADF source reconstruction from OpenMC surface flux over
   DONJON homogeneous face flux.
 

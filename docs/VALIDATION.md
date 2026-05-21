@@ -86,6 +86,22 @@ The accepted production HDF5 snapshot has been regenerated through this exporter
 path, with the existing production ADF payload copied forward. The top-level
 acceptance run remains green.
 
+## ADF Denominator Regeneration
+
+The accepted C5G7 production ADF denominator is not only a static HDF5 fixture.
+When the local DONJON dump files are available,
+`scripts/run_c5g7_donjon_face_flux_smoke.sh` regenerates
+`c5g7_homogeneous_face_flux_donjon.h5` from the real DONJON `L_FLUX` and
+`L_TRACK` ASCII dumps, checks exact dataset parity with the accepted artifact,
+runs the face-flux contract preflight, and rebuilds the accepted ADF payload
+from the regenerated denominator.
+
+Local reproduction command:
+
+```sh
+bash scripts/run_c5g7_donjon_face_flux_smoke.sh
+```
+
 ## Reproduce Converter-Side Smoke
 
 ```sh

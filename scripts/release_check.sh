@@ -37,6 +37,7 @@ Default:
   - production minicase and OpenMC hex minicase smokes
   - C5G7 converter readback smoke
   - accepted baseline manifest validation
+  - C5G7 DONJON face-flux regeneration smoke when local DONJON dumps exist
   - C5G7 production ADF source reconstruction smoke
   - C5G7 from-OpenMC flux-ratio ADF smoke when C5G7_STATEPOINT exists
   - C5G7 statepoint exporter parity check when C5G7_STATEPOINT exists
@@ -250,6 +251,12 @@ with h5py.File(source, "r") as src, h5py.File(augmented, "r") as out:
         raise SystemExit("ADF augment payload differs from C5G7 production source")
 print("C5G7 ADF augment OK")
 PY
+
+echo
+echo "== C5G7 DONJON face-flux regeneration smoke =="
+RUN_DIR="$RUN_DIR/c5g7_donjon_face_flux" \
+PYTHON_BIN="$PYTHON_BIN" \
+  bash "$REPO_ROOT/scripts/run_c5g7_donjon_face_flux_smoke.sh"
 
 echo
 echo "== C5G7 ADF source reconstruction smoke =="
