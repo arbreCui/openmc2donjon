@@ -212,6 +212,10 @@ import openmc.mgxs as mgxs
 
 from openmc2donjon import DomainExportSpec
 
+CELL_VOLUMES_CM3 = {
+    101: 1.0,
+}
+
 
 def build_library():
     materials = openmc.Materials.from_xml("materials.xml")
@@ -238,6 +242,18 @@ def build_library():
 
 def domain_names(library):
     return {cell.id: f"CELL_{cell.id}" for cell in library.domains}
+
+
+def domain_specs(library):
+    return [
+        DomainExportSpec(
+            domain=cell,
+            name=f"CELL_{cell.id}",
+            volume=CELL_VOLUMES_CM3[cell.id],
+            attrs={"source_domain_id": int(cell.id)},
+        )
+        for cell in library.domains
+    ]
 
 
 def root_attrs():

@@ -12,6 +12,8 @@
   automation and handoff checks.
 - Added shared summary schema validation for unittest and smoke-script checks.
 - Added an editable OpenMC recipe template for user production cases.
+- Hardened the OpenMC recipe template with explicit `DomainExportSpec`
+  mapping, volume hooks, production metadata, and strict-dry-run guidance.
 - Added `openmc2donjon-export --dry-run` for recipe/domain preflight checks.
 - Added `--strict-dry-run` to recipe dry-run entry points so production
   checklist warnings/failures can return non-zero in automation.

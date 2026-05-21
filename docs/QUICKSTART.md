@@ -64,11 +64,14 @@ openmc2donjon-from-openmc \
   --recipe export_recipe.py \
   --dry-run \
   --run-dir runs/case1 \
-  --check
+  --check \
+  --strict-dry-run
 ```
 
 The dry-run output includes a production checklist for MGXS coverage,
 transport/STRD readiness, domain-to-mixture mapping, volumes, and `domain_mode`.
+Strict dry-run returns non-zero if that checklist still has warnings or
+failures.
 
 ```sh
 openmc2donjon-from-openmc \

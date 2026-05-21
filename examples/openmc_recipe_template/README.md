@@ -20,6 +20,7 @@ Edit these values in `export_recipe.py`:
 | `DOMAIN_TYPE` | OpenMC MGXS domain type, usually `cell` or `material`. |
 | `DOMAIN_ID_WHITELIST` | Optional subset of OpenMC domain ids to export. |
 | `DOMAIN_MODE` | Metadata label such as `assembly`, `cell`, or `pin`. |
+| `DOMAIN_VOLUME_BY_ID_CM3` / `DEFAULT_DOMAIN_VOLUME_CM3` | Explicit homogenized domain volumes used by strict production checks and DONJON mixture volumes. |
 | `LEGENDRE_ORDER` | Highest scattering Legendre order to tally/export. |
 | `MGXS_TYPES` | Required MGXS set for DONJON output. |
 
@@ -49,10 +50,13 @@ Dry-run the recipe before generating tallies:
 
 ```sh
 openmc2donjon-export --recipe export_recipe.py --no-load-statepoint --dry-run
+openmc2donjon-export --recipe export_recipe.py --no-load-statepoint --dry-run --strict-dry-run
 ```
 
 Check that the reported mixture count and names match the intended spatial
-homogenization map.
+homogenization map. Use `--strict-dry-run` as the production gate once the
+recipe declares ordinary `"scatter matrix"`, P1, transport, stable domain
+mapping, `domain_mode`, and explicit volumes.
 
 Dry-run the full one-step conversion plan before writing artifacts:
 
@@ -61,7 +65,8 @@ openmc2donjon-from-openmc \
   --recipe export_recipe.py \
   --dry-run \
   --run-dir runs/case1 \
-  --check
+  --check \
+  --strict-dry-run
 ```
 
 Use the same recipe to add MGXS tallies before running OpenMC:
@@ -114,6 +119,7 @@ openmc2donjon-from-openmc \
 ```sh
 openmc2donjon inspect mgxs_library.h5
 openmc2donjon check mgxs_library.h5
+openmc2donjon check mgxs_library.h5 --scatter-row-balance-warn 1e-3 --scatter-row-balance-fail 1e-2
 ```
 
 If you keep an accepted handoff, compare regenerated output with:
