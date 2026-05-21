@@ -23,11 +23,22 @@ class DonjonVolumeFluxReport:
     flux_dump: Path
     output_h5: Path
     map_h5: Path | None
+    map_kind: str
     mixture_names: tuple[str, ...]
     energy_groups: int
     flux_vector_count: int
     flux_unknown_count: int
+    list_offset: int
     scalar_flux_ids: tuple[int, ...]
+    mixture_minimums: tuple[float, ...]
+    mixture_maximums: tuple[float, ...]
+    duplicate_scalar_flux_ids: tuple[tuple[int, tuple[str, ...]], ...]
+    mesh_shape: tuple[int, ...] | None
+    mesh_cell_count: int | None
+    mesh_zero_or_negative_id_count: int | None
+    mesh_unknown_mixture_names: tuple[str, ...]
+    mesh_mixture_cell_counts: tuple[tuple[str, int], ...]
+    warnings: tuple[str, ...]
     minimum: float
     maximum: float
     source_label: str
@@ -83,7 +94,7 @@ def extract_donjon_volume_flux(
         list_offset=list_offset,
     )
     if map_path is not None:
-        ids, mesh_payload = _load_ids_from_map_h5(
+        ids, mesh_payload, map_kind = _load_ids_from_map_h5(
             map_path,
             mixture_names=mixture_names,
             scalar_flux_column=scalar_flux_column,
@@ -91,25 +102,32 @@ def extract_donjon_volume_flux(
     else:
         ids = _normalize_scalar_flux_ids(scalar_flux_ids or {}, mixture_names=mixture_names)
         mesh_payload = None
+        map_kind = "scalar_flux_map"
 
     values = _values_from_ids(flux_vectors, ids)
     if mesh_payload is not None:
         mesh_ids = np.asarray(mesh_payload["scalar_flux_ids"], dtype=int)
         mesh_payload = dict(mesh_payload)
-        mesh_payload["volume_flux"] = _values_from_ids(
-            flux_vectors,
-            mesh_ids.reshape(-1),
-        ).reshape(mesh_ids.shape + (energy_groups,))
+        mesh_payload["volume_flux"] = _mesh_values_from_ids(flux_vectors, mesh_ids)
+    map_diagnostics = _map_diagnostics(
+        mixture_names=mixture_names,
+        scalar_flux_ids=ids,
+        flux_unknown_count=int(flux_vectors.shape[1]),
+        mesh_payload=mesh_payload,
+    )
+    warnings = _diagnostic_warnings(map_diagnostics)
     _write_output(
         output_path,
         input_h5=input_path,
         flux_dump=flux_path,
         map_h5=map_path,
+        map_kind=map_kind,
         energy_bounds=energy_bounds,
         mixture_names=mixture_names,
         scalar_flux_ids=ids,
         volume_flux=values,
         mesh_payload=mesh_payload,
+        map_diagnostics=map_diagnostics,
         source_label=source_label,
     )
     report = DonjonVolumeFluxReport(
@@ -117,11 +135,22 @@ def extract_donjon_volume_flux(
         flux_dump=flux_path,
         output_h5=output_path,
         map_h5=map_path,
+        map_kind=map_kind,
         mixture_names=mixture_names,
         energy_groups=energy_groups,
         flux_vector_count=int(flux_vectors.shape[0]),
         flux_unknown_count=int(flux_vectors.shape[1]),
+        list_offset=int(list_offset),
         scalar_flux_ids=tuple(int(value) for value in ids),
+        mixture_minimums=tuple(float(value) for value in np.min(values, axis=1)),
+        mixture_maximums=tuple(float(value) for value in np.max(values, axis=1)),
+        duplicate_scalar_flux_ids=map_diagnostics["duplicate_scalar_flux_ids"],
+        mesh_shape=map_diagnostics["mesh_shape"],
+        mesh_cell_count=map_diagnostics["mesh_cell_count"],
+        mesh_zero_or_negative_id_count=map_diagnostics["mesh_zero_or_negative_id_count"],
+        mesh_unknown_mixture_names=map_diagnostics["mesh_unknown_mixture_names"],
+        mesh_mixture_cell_counts=map_diagnostics["mesh_mixture_cell_counts"],
+        warnings=warnings,
         minimum=float(np.min(values)),
         maximum=float(np.max(values)),
         source_label=source_label,
@@ -140,14 +169,22 @@ def print_report(report: DonjonVolumeFluxReport) -> None:
     print(f"  output: {report.output_h5}")
     if report.map_h5 is not None:
         print(f"  map_h5: {report.map_h5}")
+    print(f"  map_kind: {report.map_kind}")
     print(
         f"  mixtures={len(report.mixture_names)} groups={report.energy_groups} "
-        f"unknowns={report.flux_unknown_count}"
+        f"vectors={report.flux_vector_count} unknowns={report.flux_unknown_count} "
+        f"list_offset={report.list_offset}"
     )
     print(
         f"  scalar_flux_ids={','.join(str(value) for value in report.scalar_flux_ids)} "
         f"range={report.minimum:g}..{report.maximum:g}"
     )
+    if report.mesh_shape is not None:
+        shape = "x".join(str(value) for value in report.mesh_shape)
+        zero_count = int(report.mesh_zero_or_negative_id_count or 0)
+        print(f"  mesh_shape={shape} cells={report.mesh_cell_count} zero_or_negative_ids={zero_count}")
+    for warning in report.warnings:
+        print(f"  WARN: {warning}")
     print()
     print("DONJON volume flux extraction decision")
     print(f"  {PASS_DECISION}")
@@ -162,12 +199,42 @@ def write_summary(path: Path, report: DonjonVolumeFluxReport) -> None:
         "flux_dump": str(report.flux_dump),
         "output_h5": str(report.output_h5),
         "map_h5": None if report.map_h5 is None else str(report.map_h5),
+        "map_kind": report.map_kind,
         "mixture_count": len(report.mixture_names),
         "mixture_names": list(report.mixture_names),
         "energy_groups": report.energy_groups,
         "flux_vector_count": report.flux_vector_count,
         "flux_unknown_count": report.flux_unknown_count,
+        "list_offset": report.list_offset,
         "scalar_flux_ids": list(report.scalar_flux_ids),
+        "mixture_flux": [
+            {
+                "mixture": mixture,
+                "scalar_flux_id": scalar_id,
+                "minimum": minimum,
+                "maximum": maximum,
+            }
+            for mixture, scalar_id, minimum, maximum in zip(
+                report.mixture_names,
+                report.scalar_flux_ids,
+                report.mixture_minimums,
+                report.mixture_maximums,
+                strict=True,
+            )
+        ],
+        "duplicate_scalar_flux_ids": [
+            {"scalar_flux_id": scalar_id, "mixtures": list(mixtures)}
+            for scalar_id, mixtures in report.duplicate_scalar_flux_ids
+        ],
+        "mesh_shape": None if report.mesh_shape is None else list(report.mesh_shape),
+        "mesh_cell_count": report.mesh_cell_count,
+        "mesh_zero_or_negative_id_count": report.mesh_zero_or_negative_id_count,
+        "mesh_unknown_mixture_names": list(report.mesh_unknown_mixture_names),
+        "mesh_mixture_cell_counts": [
+            {"mixture": mixture, "cell_count": count}
+            for mixture, count in report.mesh_mixture_cell_counts
+        ],
+        "warnings": list(report.warnings),
         "minimum": report.minimum,
         "maximum": report.maximum,
         "source_label": report.source_label,
@@ -221,7 +288,7 @@ def _load_ids_from_map_h5(
     *,
     mixture_names: tuple[str, ...],
     scalar_flux_column: int,
-) -> tuple[np.ndarray, dict[str, np.ndarray] | None]:
+) -> tuple[np.ndarray, dict[str, np.ndarray] | None, str]:
     import h5py
 
     with h5py.File(path, "r") as h5:
@@ -233,7 +300,11 @@ def _load_ids_from_map_h5(
                 h5,
                 ("mixture_names", "mixtures", "domain_names"),
             )
-            return _normalize_id_vector(values, declared, mixture_names), None
+            return (
+                _normalize_id_vector(values, declared, mixture_names),
+                None,
+                "map_h5:/scalar_flux_ids",
+            )
         if "kn" not in h5:
             raise ValueError(f"{path}: expected /scalar_flux_ids or /kn")
         if "mixture_names" not in h5:
@@ -265,7 +336,7 @@ def _load_ids_from_map_h5(
         "mixture_names": names,
         "scalar_flux_ids": flat_ids.reshape(mesh_shape),
     }
-    return ids, mesh_payload
+    return ids, mesh_payload, "map_h5:/kn"
 
 
 def _normalize_scalar_flux_ids(
@@ -343,6 +414,100 @@ def _values_from_ids(flux_vectors: np.ndarray, scalar_flux_ids: np.ndarray) -> n
     return values
 
 
+def _mesh_values_from_ids(flux_vectors: np.ndarray, scalar_flux_ids: np.ndarray) -> np.ndarray:
+    ids = np.asarray(scalar_flux_ids, dtype=int)
+    values = np.full(ids.shape + (flux_vectors.shape[0],), np.nan, dtype=float)
+    active = ids > 0
+    if not np.any(active):
+        return values
+    active_ids = ids[active]
+    max_id = int(np.max(active_ids))
+    if max_id > flux_vectors.shape[1]:
+        raise ValueError(
+            f"mesh scalar flux id {max_id} exceeds DONJON vector length "
+            f"{flux_vectors.shape[1]}"
+        )
+    values[active] = flux_vectors[:, active_ids - 1].T
+    if not np.all(np.isfinite(values[active])):
+        raise ValueError("extracted mesh flux values must be finite for active ids")
+    if np.any(values[active] <= 0.0):
+        raise ValueError("extracted mesh flux values must be positive for active ids")
+    return values
+
+
+def _map_diagnostics(
+    *,
+    mixture_names: tuple[str, ...],
+    scalar_flux_ids: np.ndarray,
+    flux_unknown_count: int,
+    mesh_payload: dict[str, np.ndarray] | None,
+) -> dict[str, Any]:
+    ids = np.asarray(scalar_flux_ids, dtype=int).reshape(-1)
+    by_id: dict[int, list[str]] = {}
+    for mixture, scalar_id in zip(mixture_names, ids, strict=True):
+        by_id.setdefault(int(scalar_id), []).append(mixture)
+    duplicates = tuple(
+        (scalar_id, tuple(names))
+        for scalar_id, names in sorted(by_id.items())
+        if len(names) > 1
+    )
+
+    mesh_shape = None
+    mesh_cell_count = None
+    mesh_zero_or_negative_id_count = None
+    mesh_unknown_names: tuple[str, ...] = ()
+    mesh_counts: tuple[tuple[str, int], ...] = ()
+    if mesh_payload is not None:
+        mesh_ids = np.asarray(mesh_payload["scalar_flux_ids"], dtype=int)
+        mesh_names = np.asarray(mesh_payload["mixture_names"], dtype=object)
+        mesh_shape = tuple(int(value) for value in mesh_ids.shape)
+        mesh_cell_count = int(mesh_ids.size)
+        mesh_zero_or_negative_id_count = int(np.count_nonzero(mesh_ids <= 0))
+        valid_mixtures = set(mixture_names)
+        flat_names = tuple(str(value) for value in mesh_names.reshape(-1))
+        mesh_unknown_names = tuple(
+            sorted({name for name in flat_names if name and name not in valid_mixtures})
+        )
+        mesh_counts = tuple(
+            (mixture, int(sum(1 for name in flat_names if name == mixture)))
+            for mixture in mixture_names
+        )
+
+    return {
+        "duplicate_scalar_flux_ids": duplicates,
+        "flux_unknown_count": int(flux_unknown_count),
+        "mesh_shape": mesh_shape,
+        "mesh_cell_count": mesh_cell_count,
+        "mesh_zero_or_negative_id_count": mesh_zero_or_negative_id_count,
+        "mesh_unknown_mixture_names": mesh_unknown_names,
+        "mesh_mixture_cell_counts": mesh_counts,
+    }
+
+
+def _diagnostic_warnings(map_diagnostics: dict[str, Any]) -> tuple[str, ...]:
+    warnings: list[str] = []
+    duplicates = map_diagnostics["duplicate_scalar_flux_ids"]
+    if duplicates:
+        rendered = "; ".join(
+            f"id {scalar_id}: {','.join(mixtures)}"
+            for scalar_id, mixtures in duplicates
+        )
+        warnings.append(f"duplicate scalar flux id mapping ({rendered})")
+    zero_count = map_diagnostics["mesh_zero_or_negative_id_count"]
+    if zero_count:
+        warnings.append(
+            f"mesh map contains {zero_count} nonpositive scalar flux id cell(s); "
+            "mesh flux is NaN there"
+        )
+    unknown = map_diagnostics["mesh_unknown_mixture_names"]
+    if unknown:
+        warnings.append(
+            "mesh map contains name(s) not present in the MGXS mixtures: "
+            + ", ".join(unknown)
+        )
+    return tuple(warnings)
+
+
 def _validate_ids(values: np.ndarray) -> None:
     if values.size == 0:
         raise ValueError("scalar flux map is empty")
@@ -356,11 +521,13 @@ def _write_output(
     input_h5: Path,
     flux_dump: Path,
     map_h5: Path | None,
+    map_kind: str,
     energy_bounds: np.ndarray,
     mixture_names: tuple[str, ...],
     scalar_flux_ids: np.ndarray,
     volume_flux: np.ndarray,
     mesh_payload: dict[str, np.ndarray] | None,
+    map_diagnostics: dict[str, Any],
     source_label: str,
 ) -> None:
     import h5py
@@ -372,6 +539,11 @@ def _write_output(
         h5.attrs["source"] = source_label
         h5.attrs["input_h5"] = str(input_h5)
         h5.attrs["flux_dump"] = str(flux_dump)
+        h5.attrs["flux_map_kind"] = map_kind
+        h5.attrs["flux_map_diagnostics_json"] = json.dumps(
+            _json_safe_diagnostics(map_diagnostics),
+            sort_keys=True,
+        )
         if map_h5 is not None:
             h5.attrs["map_h5"] = str(map_h5)
         h5.create_dataset("energy_bounds", data=np.asarray(energy_bounds, dtype=float))
@@ -382,6 +554,16 @@ def _write_output(
         volume.attrs["mixture_names"] = np.asarray(mixture_names, dtype="S")
         donjon = h5.create_dataset("donjon_volume_flux", data=np.asarray(volume_flux, dtype=float))
         donjon.attrs["mixture_names"] = np.asarray(mixture_names, dtype="S")
+        min_dataset = h5.create_dataset(
+            "mixture_flux_minimum",
+            data=np.min(np.asarray(volume_flux, dtype=float), axis=1),
+        )
+        min_dataset.attrs["mixture_names"] = np.asarray(mixture_names, dtype="S")
+        max_dataset = h5.create_dataset(
+            "mixture_flux_maximum",
+            data=np.max(np.asarray(volume_flux, dtype=float), axis=1),
+        )
+        max_dataset.attrs["mixture_names"] = np.asarray(mixture_names, dtype="S")
         if mesh_payload is not None:
             h5.create_dataset(
                 "mesh_mixture_names",
@@ -407,6 +589,32 @@ def _write_output(
                 mesh_payload["mixture_names"],
                 dtype="S",
             )
+
+
+def _json_safe_diagnostics(map_diagnostics: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "duplicate_scalar_flux_ids": [
+            {"scalar_flux_id": scalar_id, "mixtures": list(mixtures)}
+            for scalar_id, mixtures in map_diagnostics["duplicate_scalar_flux_ids"]
+        ],
+        "flux_unknown_count": map_diagnostics["flux_unknown_count"],
+        "mesh_shape": (
+            None
+            if map_diagnostics["mesh_shape"] is None
+            else list(map_diagnostics["mesh_shape"])
+        ),
+        "mesh_cell_count": map_diagnostics["mesh_cell_count"],
+        "mesh_zero_or_negative_id_count": map_diagnostics[
+            "mesh_zero_or_negative_id_count"
+        ],
+        "mesh_unknown_mixture_names": list(
+            map_diagnostics["mesh_unknown_mixture_names"]
+        ),
+        "mesh_mixture_cell_counts": [
+            {"mixture": mixture, "cell_count": count}
+            for mixture, count in map_diagnostics["mesh_mixture_cell_counts"]
+        ],
+    }
 
 
 def _names_from_hdf5(obj: Any, root: Any, candidates: tuple[str, ...]) -> Any:

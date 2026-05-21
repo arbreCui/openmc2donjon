@@ -56,6 +56,11 @@ an `.x2m` deck under
 `rdonjon -q`, then copies the DONJON listing or corrected macrolib back to the
 path requested by `run-sph-loop`.
 
+Each `donjon_volume_flux_summary.json` records the flux map kind, selected
+scalar IDs, per-mixture flux ranges, duplicate-ID warnings, and mesh coverage
+diagnostics.  For `/kn` maps, nonpositive mesh IDs are allowed for inactive
+cells and are written as `NaN` in `mesh_volume_flux`.
+
 Templates:
 
 - `templates/solve_lflux_dump.x2m.in` is a minimal runnable 1x2 Cartesian
