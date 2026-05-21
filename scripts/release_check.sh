@@ -145,6 +145,8 @@ echo "== CLI smoke =="
 "$PYTHON_BIN" -m openmc2donjon.cli make-homogeneous-face-flux --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli make-adf-sidecar --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli augment-adf --help >/dev/null
+"$PYTHON_BIN" -m openmc2donjon.cli make-sph-sidecar --help >/dev/null
+"$PYTHON_BIN" -m openmc2donjon.cli augment-sph --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.export_cli --version
 "$PYTHON_BIN" -m openmc2donjon.export_cli --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.from_openmc_cli --version
@@ -257,6 +259,46 @@ with h5py.File(source, "r") as src, h5py.File(augmented, "r") as out:
     if not np.allclose(actual, expected, rtol=0.0, atol=0.0):
         raise SystemExit("ADF augment payload differs from C5G7 production source")
 print("C5G7 ADF augment OK")
+PY
+
+echo
+echo "== C5G7 SPH augment smoke =="
+sph_sidecar="$RUN_DIR/c5g7_sph.sidecar.h5"
+sph_augmented="$RUN_DIR/c5g7_sph.with_sph.h5"
+sph_macrolib="$RUN_DIR/c5g7_sph.macrolib.txt"
+sph_summary="$RUN_DIR/c5g7_sph.summary.json"
+"$PYTHON_BIN" -m openmc2donjon.cli make-sph-sidecar "$C5G7_ACCEPTED_H5" \
+  -o "$sph_sidecar" \
+  --value 1.0
+"$PYTHON_BIN" -m openmc2donjon.cli augment-sph "$C5G7_ACCEPTED_H5" \
+  --sph-source "$sph_sidecar" \
+  -o "$sph_augmented" \
+  --summary-json "$sph_summary"
+"$PYTHON_BIN" -m openmc2donjon.cli "$sph_augmented" \
+  --format macrolib \
+  -o "$sph_macrolib" \
+  --check \
+  --require-sph \
+  --require-volume \
+  --require-transport-dataset
+"$PYTHON_BIN" - "$sph_macrolib" "$sph_summary" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+import numpy as np
+
+from openmc2donjon.macrolib import read_macrolib_ascii
+
+macrolib = read_macrolib_ascii(Path(sys.argv[1]))
+summary = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+if summary.get("decision") != "openmc2donjon_sph_augment_passed":
+    raise SystemExit(f"SPH augment summary failed: {summary}")
+if macrolib.state_vector[13] != 1:
+    raise SystemExit("macrolib SPH state-vector flag is not set")
+if macrolib.sph is None or not np.allclose(macrolib.sph, 1.0, rtol=0.0, atol=0.0):
+    raise SystemExit("macrolib NSPH payload is not unity")
+print("C5G7 SPH augment OK")
 PY
 
 echo

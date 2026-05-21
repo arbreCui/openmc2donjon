@@ -33,6 +33,8 @@ remain separate mixtures when their spectra or leakage environments differ.
 - ADF/DF sidecar injection, OpenMC surface-flux export, low-order driver
   canonicalization, face-flux contract checks, and flux-ratio ADF workflow
   plumbing.
+- SPH sidecar injection and DONJON `NSPH` carry-through for routes where the
+  downstream solver uses SPH equivalence factors instead of ADF/DF.
 - External homogeneous face-flux adapter pattern for low-order, nodal, SPN, or
   diffusion solvers that already compute the ADF denominator directly.
 - Managed run directories with `mgxs_library.h5`, DONJON ASCII output,
@@ -84,6 +86,7 @@ The default gate covers:
 - C5G7 converter readback to `L_MULTICOMPO` and `L_MACROLIB`;
 - accepted baseline manifest validation;
 - C5G7 ADF augment smoke;
+- C5G7 SPH augment and `L_MACROLIB/NSPH` readback smoke;
 - C5G7 DONJON face-flux regeneration from local `L_FLUX`/`L_TRACK` dumps when
   those files are present;
 - C5G7 production ADF source reconstruction from OpenMC surface flux over
@@ -115,8 +118,9 @@ All passed.
 - Hex is implemented as converter/modeling capability and is covered by real
   OpenMC workflow smoke, but no accepted hex benchmark is included yet.
 - DRAGON/DONJON equivalence effects such as `SPH` or `LEAK B2` are not
-  inferred from plain OpenMC MGXS handoffs. They need explicit matching
-  handoff data.
+  inferred from plain OpenMC MGXS handoffs. Explicit SPH vectors can now be
+  carried through as `NSPH`; physical SPH generation still belongs to the
+  matching deterministic/equivalence workflow.
 - The accepted C5G7 statepoint/exporter parity path is locked to the OpenMC
   `consistent nu-scatter matrix` tally definition that produced the baseline.
   New user recipes should still use ordinary `scatter matrix` unless they

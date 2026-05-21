@@ -24,6 +24,7 @@ class Macrolib:
     nusigf: np.ndarray
     chi: np.ndarray
     h_factor: np.ndarray | None
+    sph: np.ndarray | None
     adf: dict[str, np.ndarray]
 
     @property
@@ -83,7 +84,7 @@ def build_macrolib_blocks(
 ) -> list[lcm.LcmBlock]:
     """Build root ``L_MACROLIB`` records from converter-facing MGXS mixtures."""
 
-    from .multicompo import _validate_adf_layout, _validate_mixture
+    from .multicompo import _validate_adf_layout, _validate_mixture, _validate_sph_layout
 
     if not mixtures:
         raise ValueError("at least one mixture is required")
@@ -94,6 +95,7 @@ def build_macrolib_blocks(
         _validate_mixture(mix, ngroups)
         _validate_macrolib_vectors(mix, ngroups)
     _validate_adf_layout(mixtures)
+    _validate_sph_layout(mixtures)
 
     nmoments = max(mix.nmoments for mix in mixtures)
     if any(mix.nmoments != nmoments for mix in mixtures):
@@ -174,6 +176,16 @@ def _macrolib_group_blocks(
                 "H-FACTOR",
                 2,
                 _group_optional_vector(mixtures, "h_factor", group_index, 0.0),
+            )
+        )
+
+    if any(mix.sph is not None for mix in mixtures):
+        blocks.append(
+            lcm.block(
+                3,
+                "NSPH",
+                2,
+                _group_optional_vector(mixtures, "sph", group_index, 1.0),
             )
         )
 
@@ -318,6 +330,7 @@ def _macrolib_state_vector(mixtures: list["MixtureXS"]) -> list[int]:
     state[3] = 1 if any(mix.fissionable for mix in mixtures) else 0
     state[8] = 1
     state[11] = 3 if any(mix.adf for mix in mixtures) else 0
+    state[13] = 1 if any(mix.sph is not None for mix in mixtures) else 0
     return state
 
 
@@ -340,7 +353,7 @@ def _macrolib_adf_blocks(mixtures: list["MixtureXS"]) -> list[lcm.LcmBlock]:
 
 
 def _validate_macrolib_vectors(mix: "MixtureXS", ngroups: int) -> None:
-    for field in ("inverse_velocity", "transport_total", "flux_weight", "h_factor"):
+    for field in ("inverse_velocity", "transport_total", "flux_weight", "h_factor", "sph"):
         vector = getattr(mix, field)
         if vector is None:
             continue
@@ -385,6 +398,7 @@ def parse_macrolib_blocks(blocks: list[lcm.LcmBlock]) -> Macrolib:
     nusigf = _group_matrix(groups, "NUSIGF", nmixtures, ngroups, default=0.0)
     chi = _group_matrix(groups, "CHI", nmixtures, ngroups, default=0.0)
     h_factor = _optional_group_matrix(groups, "H-FACTOR", nmixtures, ngroups)
+    sph = _optional_group_matrix(groups, "NSPH", nmixtures, ngroups)
     adf = _adf_payload(object_blocks, nmixtures, ngroups, base_level)
 
     moments = _scatter_moments(groups)
@@ -408,6 +422,7 @@ def parse_macrolib_blocks(blocks: list[lcm.LcmBlock]) -> Macrolib:
         nusigf=nusigf,
         chi=chi,
         h_factor=h_factor,
+        sph=sph,
         adf=adf,
     )
 

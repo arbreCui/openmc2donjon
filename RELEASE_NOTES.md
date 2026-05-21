@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added SPH sidecar/augmentation support: `make-sph-sidecar`,
+  `augment-sph`, `check --require-sph`, HDF5 `sph/NSPH` carry-through, and
+  DONJON `L_MACROLIB` `GROUP/*/NSPH` read/write with `STATE-VECTOR(14)` set.
 - Added `docs/EXTERNAL_FACE_FLUX_CONTRACT.md` and
   `examples/external_face_flux_adapter`, a runnable template for adapting
   external nodal/SPN/diffusion homogeneous face fluxes into the canonical

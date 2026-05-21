@@ -29,6 +29,7 @@ OPTIONAL_VECTOR_DATASETS = (
     "kappa_fission_xs",
     "kappa_fission_cross_section",
 )
+SPH_DATASETS = ("sph", "SPH", "NSPH")
 MOMENT_FIRST_SCATTER_AXES = {
     "moment,from,to",
     "moment,in,out",
@@ -63,6 +64,7 @@ class InputReport:
     transport_total_derivable: int = 0
     adf_mixtures: int = 0
     adf_faces: list[str] = field(default_factory=list)
+    sph_calculations: int = 0
     scatter_row_balance_checked: bool = False
     scatter_row_balance_warn_threshold: float | None = None
     scatter_row_balance_fail_threshold: float | None = None
@@ -87,6 +89,7 @@ def main() -> int:
         validate_input(
             path,
             require_adf=args.require_adf,
+            require_sph=args.require_sph,
             require_transport_dataset=args.require_transport_dataset,
             require_volume=args.require_volume,
             expected_adf_faces=expected_faces,
@@ -142,6 +145,11 @@ def parse_args() -> argparse.Namespace:
         help="require ADF data for every mixture",
     )
     parser.add_argument(
+        "--require-sph",
+        action="store_true",
+        help="require SPH data for every calculation",
+    )
+    parser.add_argument(
         "--expected-adf-faces",
         default=None,
         help="comma-separated ADF face names expected on every ADF-bearing mixture",
@@ -193,10 +201,11 @@ def parse_args() -> argparse.Namespace:
 def validate_input(
     path: Path,
     *,
-    require_adf: bool,
-    require_transport_dataset: bool,
-    require_volume: bool,
-    expected_adf_faces: list[str] | None,
+    require_adf: bool = False,
+    require_sph: bool = False,
+    require_transport_dataset: bool = False,
+    require_volume: bool = False,
+    expected_adf_faces: list[str] | None = None,
     scatter_row_balance_warn: float | None = None,
     scatter_row_balance_fail: float | None = None,
 ) -> InputReport:
@@ -216,6 +225,7 @@ def validate_input(
                 h5,
                 report,
                 require_adf=require_adf,
+                require_sph=require_sph,
                 require_transport_dataset=require_transport_dataset,
                 require_volume=require_volume,
                 expected_adf_faces=expected_adf_faces,
@@ -230,6 +240,7 @@ def validate_open_h5(
     report: InputReport,
     *,
     require_adf: bool,
+    require_sph: bool,
     require_transport_dataset: bool,
     require_volume: bool,
     expected_adf_faces: list[str] | None,
@@ -270,6 +281,7 @@ def validate_open_h5(
 
     burnup_axis = burnup_axis_from_hdf5(h5, report)
     adf_names_by_mix: list[tuple[str, ...]] = []
+    sph_present_by_calc: list[bool] = []
     state_counts: list[int] = []
     for name, group in mixtures.items():
         if not isinstance(group, h5py.Group):
@@ -284,6 +296,7 @@ def validate_open_h5(
                 legendre_order,
                 report,
                 adf_names_by_mix,
+                sph_present_by_calc,
                 require_transport_dataset=require_transport_dataset,
                 require_volume=require_volume,
             )
@@ -292,6 +305,7 @@ def validate_open_h5(
     validate_state_layout(report, state_counts, burnup_axis)
 
     validate_adf_layout(report, adf_names_by_mix, require_adf, expected_adf_faces)
+    validate_sph_layout(report, sph_present_by_calc, require_sph)
 
     finalize_scatter_row_balance(report)
 
@@ -401,6 +415,7 @@ def validate_mixture(
     legendre_order: int,
     report: InputReport,
     adf_names_by_mix: list[tuple[str, ...]],
+    sph_present_by_calc: list[bool],
     *,
     require_transport_dataset: bool,
     require_volume: bool,
@@ -414,6 +429,7 @@ def validate_mixture(
             legendre_order,
             report,
             adf_names_by_mix,
+            sph_present_by_calc,
             require_transport_dataset=require_transport_dataset,
             require_volume=require_volume,
         )
@@ -426,6 +442,7 @@ def validate_mixture(
         legendre_order,
         report,
         adf_names_by_mix,
+        sph_present_by_calc,
         parent_group=None,
         count_fissionable=True,
         require_transport_dataset=require_transport_dataset,
@@ -443,6 +460,7 @@ def validate_mixture_states(
     legendre_order: int,
     report: InputReport,
     adf_names_by_mix: list[tuple[str, ...]],
+    sph_present_by_calc: list[bool],
     *,
     require_transport_dataset: bool,
     require_volume: bool,
@@ -477,6 +495,7 @@ def validate_mixture_states(
             legendre_order,
             report,
             adf_names_by_mix,
+            sph_present_by_calc,
             parent_group=mixture_group,
             count_fissionable=index == 0,
             require_transport_dataset=require_transport_dataset,
@@ -493,6 +512,7 @@ def validate_calculation(
     legendre_order: int,
     report: InputReport,
     adf_names_by_mix: list[tuple[str, ...]],
+    sph_present_by_calc: list[bool],
     *,
     parent_group: h5py.Group | None,
     count_fissionable: bool,
@@ -566,6 +586,11 @@ def validate_calculation(
     adf_names_by_mix.append(tuple(adf_names))
     if adf_names:
         report.adf_mixtures += 1
+
+    sph_present = sph_present_for_group(group, ngroups, report, name)
+    sph_present_by_calc.append(sph_present)
+    if sph_present:
+        report.sph_calculations += 1
 
 
 def validate_vector(dataset: h5py.Dataset, ngroups: int, report: InputReport, label: str) -> None:
@@ -873,6 +898,40 @@ def validate_adf_layout(
         )
 
 
+def sph_present_for_group(
+    group: h5py.Group,
+    ngroups: int,
+    report: InputReport,
+    mix_name: str,
+) -> bool:
+    present = [dataset_name for dataset_name in SPH_DATASETS if dataset_name in group]
+    if len(present) > 1:
+        report.fail(f"mixture {mix_name}: multiple SPH datasets found: {present}")
+        return bool(present)
+    if not present:
+        return False
+
+    dataset_name = present[0]
+    validate_vector(group[dataset_name], ngroups, report, f"mixture {mix_name}: {dataset_name}")
+    values = np.asarray(group[dataset_name][:], dtype=float).reshape(-1)
+    if values.shape == (ngroups,) and np.any(values <= 0.0):
+        report.fail(f"mixture {mix_name}: {dataset_name} must be positive")
+    return True
+
+
+def validate_sph_layout(
+    report: InputReport,
+    sph_present_by_calc: list[bool],
+    require_sph: bool,
+) -> None:
+    if not sph_present_by_calc:
+        return
+    if require_sph and not all(sph_present_by_calc):
+        report.fail("SPH data is required but at least one calculation has none")
+    if any(sph_present_by_calc) and not all(sph_present_by_calc):
+        report.fail("SPH data must be present for either all calculations or none")
+
+
 def adf_names_from_attrs(dataset: h5py.Dataset, values: np.ndarray) -> list[str]:
     for key in ("names", "face_names", "adf_names"):
         if key not in dataset.attrs:
@@ -974,6 +1033,7 @@ def run_preflight(
     output_format: str = "any",
     output_path: Path | None = None,
     require_adf: bool = False,
+    require_sph: bool = False,
     expected_adf_faces: str | list[str] | None = None,
     require_transport_dataset: bool = False,
     require_volume: bool = False,
@@ -990,6 +1050,7 @@ def run_preflight(
         validate_input(
             path,
             require_adf=require_adf,
+            require_sph=require_sph,
             require_transport_dataset=require_transport_dataset,
             require_volume=require_volume,
             expected_adf_faces=expected_faces,
@@ -1064,6 +1125,10 @@ def print_report(report: InputReport) -> None:
         )
     else:
         print("        adf=none")
+    if report.sph_calculations:
+        print(f"        sph={report.sph_calculations}/{calculation_count}")
+    else:
+        print("        sph=none")
     for issue in report.issues[:12]:
         print(f"        FAIL: {issue}")
     if len(report.issues) > 12:
@@ -1111,6 +1176,7 @@ def write_summary(
                 "transport_total_derivable": report.transport_total_derivable,
                 "adf_mixtures": report.adf_mixtures,
                 "adf_faces": report.adf_faces,
+                "sph_calculations": report.sph_calculations,
                 "issues": report.issues,
                 "warnings": report.warnings,
             }

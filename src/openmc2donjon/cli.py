@@ -23,6 +23,7 @@ from .openmc_surface_flux import (
     DEFAULT_TALLY_NAME as DEFAULT_SURFACE_FLUX_TALLY_NAME,
     export_openmc_surface_flux,
 )
+from .sph_augment import augment_hdf5_with_sph, create_unity_sph_sidecar
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -43,7 +44,9 @@ def build_parser() -> argparse.ArgumentParser:
             "reconstruct homogeneous face fluxes, 'openmc2donjon "
             "make-adf-sidecar <input_h5> ...' to create an ADF "
             "sidecar, 'openmc2donjon augment-adf <input_h5> ...' to inject "
-            "computed discontinuity factors, "
+            "computed discontinuity factors, 'openmc2donjon make-sph-sidecar "
+            "<input_h5> ...' and 'openmc2donjon augment-sph <input_h5> ...' "
+            "to carry SPH equivalence factors, "
             "'openmc2donjon bundle --output-dir DIR ...' to collect "
             "production artifacts, 'openmc2donjon doctor' for environment checks, or "
             "'openmc2donjon check <input_h5>' for input-contract preflight."
@@ -119,6 +122,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="with --check, require ADF data for every mixture",
     )
     parser.add_argument(
+        "--require-sph",
+        action="store_true",
+        help="with --check, require SPH data for every calculation",
+    )
+    parser.add_argument(
         "--expected-adf-faces",
         default=None,
         help="with --check, comma-separated ADF face names expected on every ADF-bearing mixture",
@@ -184,6 +192,11 @@ def build_check_parser() -> argparse.ArgumentParser:
         "--require-adf",
         action="store_true",
         help="require ADF data for every mixture",
+    )
+    parser.add_argument(
+        "--require-sph",
+        action="store_true",
+        help="require SPH data for every calculation",
     )
     parser.add_argument(
         "--expected-adf-faces",
@@ -587,6 +600,118 @@ def build_make_adf_sidecar_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_augment_sph_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="openmc2donjon augment-sph",
+        description="Inject SPH equivalence factors into an MGXS HDF5 handoff.",
+    )
+    parser.add_argument("input_h5", type=Path, help="MGXS HDF5 file to augment")
+    parser.add_argument(
+        "--sph-source",
+        type=Path,
+        required=True,
+        help="HDF5 sidecar containing SPH vectors",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        required=True,
+        help="augmented MGXS HDF5 output path",
+    )
+    parser.add_argument(
+        "--sph-kind",
+        default=None,
+        help="override root sph_kind provenance attribute",
+    )
+    parser.add_argument(
+        "--sph-real",
+        choices=("true", "false"),
+        default=None,
+        help="override root sph_real provenance attribute",
+    )
+    parser.add_argument(
+        "--sph-applied",
+        choices=("true", "false"),
+        default=None,
+        help=(
+            "mark whether the XS payload has already been SPH-corrected; "
+            "the converter records factors but does not apply them"
+        ),
+    )
+    parser.add_argument(
+        "--sph-source-label",
+        default=None,
+        help="override root sph_source provenance attribute",
+    )
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        default=None,
+        help="write a machine-readable SPH augmentation summary JSON",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="overwrite the augmented output HDF5 if it already exists",
+    )
+    return parser
+
+
+def build_make_sph_sidecar_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="openmc2donjon make-sph-sidecar",
+        description=(
+            "Create a constant SPH sidecar HDF5 from an MGXS handoff. "
+            "Unity SPH is useful for plumbing; replace it with transport "
+            "equivalence factors for production neutronics."
+        ),
+    )
+    parser.add_argument("input_h5", type=Path, help="MGXS HDF5 file used for mixture/group metadata")
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        required=True,
+        help="SPH sidecar HDF5 output path",
+    )
+    parser.add_argument(
+        "--value",
+        type=float,
+        default=1.0,
+        help="constant SPH value to write (default: 1.0)",
+    )
+    parser.add_argument(
+        "--sph-kind",
+        default="unity",
+        help="root sph_kind provenance attribute (default: unity)",
+    )
+    parser.add_argument(
+        "--sph-real",
+        choices=("true", "false"),
+        default="false",
+        help="root sph_real provenance attribute (default: false)",
+    )
+    parser.add_argument(
+        "--sph-applied",
+        choices=("true", "false"),
+        default="false",
+        help="root sph_applied provenance attribute (default: false)",
+    )
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        default=None,
+        help="write a machine-readable SPH sidecar summary JSON",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="overwrite the sidecar HDF5 if it already exists",
+    )
+    return parser
+
+
 def build_export_surface_flux_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="openmc2donjon export-surface-flux",
@@ -868,6 +993,10 @@ def main(argv: list[str] | None = None) -> int:
         return _make_adf_sidecar_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "augment-adf":
         return _augment_adf_main(raw_argv[1:])
+    if raw_argv and raw_argv[0] == "make-sph-sidecar":
+        return _make_sph_sidecar_main(raw_argv[1:])
+    if raw_argv and raw_argv[0] == "augment-sph":
+        return _augment_sph_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "bundle":
         return _bundle_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "doctor":
@@ -894,6 +1023,7 @@ def main(argv: list[str] | None = None) -> int:
             output_format=args.format,
             output_path=output_path,
             require_adf=args.require_adf,
+            require_sph=args.require_sph,
             expected_adf_faces=args.expected_adf_faces,
             require_transport_dataset=args.require_transport_dataset,
             require_volume=args.require_volume,
@@ -931,6 +1061,7 @@ def _check_main(argv: list[str]) -> int:
         output_format=args.format,
         output_path=args.output,
         require_adf=args.require_adf,
+        require_sph=args.require_sph,
         expected_adf_faces=args.expected_adf_faces,
         require_transport_dataset=args.require_transport_dataset,
         require_volume=args.require_volume,
@@ -1060,6 +1191,45 @@ def _make_adf_sidecar_main(argv: list[str]) -> int:
             parser.error(f"unsupported --mode: {args.mode}")
     except Exception as exc:
         parser.exit(1, f"openmc2donjon make-adf-sidecar: error: {exc}\n")
+    return 0
+
+
+def _augment_sph_main(argv: list[str]) -> int:
+    parser = build_augment_sph_parser()
+    args = parser.parse_args(argv)
+    try:
+        augment_hdf5_with_sph(
+            args.input_h5,
+            sph_source=args.sph_source,
+            output_h5=args.output,
+            force=args.force,
+            sph_kind=args.sph_kind,
+            sph_real=args.sph_real,
+            sph_applied=args.sph_applied,
+            sph_source_label=args.sph_source_label,
+            summary_json=args.summary_json,
+        )
+    except Exception as exc:
+        parser.exit(1, f"openmc2donjon augment-sph: error: {exc}\n")
+    return 0
+
+
+def _make_sph_sidecar_main(argv: list[str]) -> int:
+    parser = build_make_sph_sidecar_parser()
+    args = parser.parse_args(argv)
+    try:
+        create_unity_sph_sidecar(
+            args.input_h5,
+            args.output,
+            value=args.value,
+            force=args.force,
+            sph_kind=args.sph_kind,
+            sph_real=args.sph_real == "true",
+            sph_applied=args.sph_applied == "true",
+            summary_json=args.summary_json,
+        )
+    except Exception as exc:
+        parser.exit(1, f"openmc2donjon make-sph-sidecar: error: {exc}\n")
     return 0
 
 

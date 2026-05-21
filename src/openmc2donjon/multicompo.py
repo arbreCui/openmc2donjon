@@ -32,6 +32,7 @@ class MixtureXS:
     flux_weight: np.ndarray | None = None
     h_factor: np.ndarray | None = None
     adf: dict[str, np.ndarray] | None = None
+    sph: np.ndarray | None = None
 
     @property
     def ngroups(self) -> int:
@@ -216,6 +217,7 @@ def write_multicompo(
     for mix in mix_list:
         _validate_mixture(mix, ngroups)
     _validate_adf_layout(mix_list)
+    _validate_sph_layout(mix_list)
 
     blocks = build_multicompo_blocks(
         mix_list,
@@ -297,6 +299,7 @@ def build_multicompo_history_blocks(
     for mix in all_calculations:
         _validate_mixture(mix, ngroups)
     _validate_adf_layout(all_calculations)
+    _validate_sph_layout(all_calculations)
     _validate_histories(histories, None if burnup_values is None else np.asarray(burnup_values))
     nstates = histories[0].nstates
     maxcal = nstates
@@ -471,6 +474,9 @@ def _isotope_blocks(level: int, mix: MixtureXS) -> list[lcm.LcmBlock]:
     if mix.h_factor is not None:
         blocks.append(lcm.block(level, "H-FACTOR", 2, mix.h_factor))
 
+    if mix.sph is not None:
+        blocks.append(lcm.block(level, "NSPH", 2, mix.sph))
+
     for ell, triplet in enumerate(dense_moments_to_triplets(mix.scatter_matrix)):
         tag = f"{ell:02d}"
         sigs = np.asarray(mix.scatter_matrix[ell], dtype=float).sum(axis=1)
@@ -623,6 +629,7 @@ def _mixture_from_hdf5_group(
             default=h_factor_default,
         ),
         adf=_adf_from_hdf5(group, ngroups, mix_name),
+        sph=_sph_from_hdf5(group, ngroups, mix_name),
     )
 
 
@@ -792,6 +799,13 @@ def _h_factor_from_hdf5(
     return np.full(ngroups, float(default), dtype=float)
 
 
+def _sph_from_hdf5(group, ngroups: int, mix_name: str) -> np.ndarray | None:
+    for name in ("sph", "SPH", "NSPH"):
+        if name in group:
+            return _vector(group[name][:], ngroups, mix_name, name)
+    return None
+
+
 def _adf_names_from_attrs(dataset, values: np.ndarray) -> list[str]:
     for key in ("names", "face_names", "adf_names"):
         if key in dataset.attrs:
@@ -829,6 +843,12 @@ def _validate_adf_layout(mixtures: list[MixtureXS]) -> None:
                 f"mixture {mix.name}: ADF names {names!r} do not match "
                 f"the first mixture ADF names {first!r}"
             )
+
+
+def _validate_sph_layout(mixtures: list[MixtureXS]) -> None:
+    has_sph = [mix.sph is not None for mix in mixtures]
+    if any(has_sph) and not all(has_sph):
+        raise ValueError("SPH data must be present for either all mixtures or none")
 
 
 def _scatter_matrix_from_hdf5(
@@ -969,3 +989,11 @@ def _validate_mixture(mix: MixtureXS, ngroups: int) -> None:
             raise ValueError(
                 f"mixture {mix.name}: h_factor must have {ngroups} values"
             )
+    if mix.sph is not None:
+        values = np.asarray(mix.sph, dtype=float).reshape(-1)
+        if values.shape != (ngroups,):
+            raise ValueError(f"mixture {mix.name}: sph must have {ngroups} values")
+        if not np.all(np.isfinite(values)):
+            raise ValueError(f"mixture {mix.name}: sph must be finite")
+        if np.any(values <= 0.0):
+            raise ValueError(f"mixture {mix.name}: sph must be positive")

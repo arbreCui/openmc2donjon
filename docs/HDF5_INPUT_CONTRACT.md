@@ -132,6 +132,7 @@ Recommended mixture attributes:
 | `volume` | scalar | mixture volume |
 | `flux` or `flux_integral` | `(G,)` | `FLUX-INTG` when writing root `L_MACROLIB` |
 | `h_factor`, `H-FACTOR`, `H_FACTOR`, `kappa_fission`, `kappa_fission_xs`, or `kappa_fission_cross_section` | `(G,)` | `H-FACTOR` |
+| `sph`, `SPH`, or `NSPH` | `(G,)` | `NSPH` |
 
 If `transport_total` is absent and P1 scattering is present, the converter
 derives:
@@ -141,6 +142,45 @@ STRD = NTOT0 - sum_out(SCAT01)
 ```
 
 If neither is available, `STRD` falls back to `NTOT0`.
+
+## Optional SPH Payload
+
+SPH equivalence factors are stored as one positive vector per mixture:
+
+```text
+/mixtures/<domain_name>/sph  shape=(G,)
+```
+
+All calculations must either provide SPH or omit it. When present, the root
+`L_MACROLIB` writer emits one `NSPH` record per energy-group directory and sets
+the macrolib `STATE-VECTOR(14)` flag. The MULTICOMPO writer also carries the
+per-mixture `NSPH` vector inside the calculation payload.
+
+The converter does not apply SPH factors to cross sections. It carries the
+factors and provenance metadata so a DONJON/DRAGON workflow that expects SPH
+can consume them, or so an upstream equivalence step can mark that the XS were
+already corrected with `sph_applied=true`.
+
+A compact sidecar layout can be injected:
+
+```text
+/sph                 shape=(M, G)
+  attrs: mixture_names
+```
+
+Example:
+
+```sh
+openmc2donjon make-sph-sidecar mgxs_library.h5 \
+  -o sph_sidecar.h5 \
+  --value 1.0
+
+openmc2donjon augment-sph mgxs_library.h5 \
+  --sph-source sph_sidecar.h5 \
+  -o mgxs_with_sph.h5
+
+openmc2donjon check mgxs_with_sph.h5 --require-sph
+```
 
 ## Experimental Multi-State Burnup Axis
 

@@ -253,6 +253,30 @@ openmc2donjon augment-adf mgxs_library.h5 \
 `adf_real=false`. It is a plumbing check for the ADF/DF workflow; replace the
 sidecar with case-specific physics values for production neutronics.
 
+Carry external SPH equivalence factors when the downstream DONJON route needs
+SPH rather than ADF/DF:
+
+```sh
+openmc2donjon make-sph-sidecar mgxs_library.h5 \
+  -o sph_sidecar.h5 \
+  --value 1.0
+
+openmc2donjon augment-sph mgxs_library.h5 \
+  --sph-source sph_sidecar.h5 \
+  -o mgxs_with_sph.h5
+
+openmc2donjon mgxs_with_sph.h5 \
+  --format macrolib \
+  -o out.macrolib.txt \
+  --check \
+  --require-sph
+```
+
+The converter records SPH factors as DONJON `NSPH` data and sets the
+`L_MACROLIB` SPH state-vector flag. It does not apply SPH factors to the XS
+payload; use the `sph_applied` provenance attribute to mark files whose
+macroscopic data have already been corrected upstream.
+
 To build a physics sidecar from face-flux data, use the flux-ratio mode:
 
 ```sh
@@ -514,7 +538,7 @@ The HDF5 handoff schema is documented in
 - Multiple Legendre moments are supported.
 - `STRD` is read from `transport_total` when available, or derived from P1
   scattering when possible.
-- Optional `OVERV`, `H-FACTOR`, ADF/HADF, single-mixture filtering, and
+- Optional `OVERV`, `H-FACTOR`, ADF/HADF, `NSPH`, single-mixture filtering, and
   single-point `BURN` helper metadata are supported.
 - The preflight validator checks both one-state and experimental `BURN`-axis
   multi-state HDF5 layouts, with optional P0 scatter row-balance thresholds.

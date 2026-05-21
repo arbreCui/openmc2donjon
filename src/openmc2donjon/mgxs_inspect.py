@@ -9,7 +9,7 @@ from typing import Any
 
 import h5py
 
-from .mgxs_input_contract import OPTIONAL_VECTOR_DATASETS, REQUIRED_DATASETS
+from .mgxs_input_contract import OPTIONAL_VECTOR_DATASETS, REQUIRED_DATASETS, SPH_DATASETS
 
 
 SCHEMA = "openmc2donjon.mgxs-inspect.v1"
@@ -33,6 +33,7 @@ class MixtureInspection:
     required_total: int
     optional_datasets: tuple[str, ...]
     adf_faces: tuple[str, ...]
+    sph: bool
     scatter_shape: tuple[int, ...] | None
     scatter_axes: str | None
     attr_keys: tuple[str, ...]
@@ -61,6 +62,7 @@ class Hdf5Inspection:
     flux_weight: int = 0
     adf_mixtures: int = 0
     adf_faces: tuple[str, ...] = ()
+    sph_calculations: int = 0
     scatter_axes: tuple[str, ...] = ()
     scatter_shapes: tuple[tuple[int, ...], ...] = ()
     mixtures: list[MixtureInspection] = field(default_factory=list)
@@ -156,6 +158,8 @@ def _inspect_open_h5(h5: h5py.File, report: Hdf5Inspection) -> None:
         if info.adf_faces:
             report.adf_mixtures += calculations
             adf_layouts.append(info.adf_faces)
+        if info.sph:
+            report.sph_calculations += calculations
         if info.scatter_axes:
             scatter_axes_seen.add(info.scatter_axes)
         if info.scatter_shape:
@@ -193,6 +197,7 @@ def _inspect_mixture(
     volume = _float_attr(first_group.attrs, parent_attrs, "volume")
     optional = tuple(name for name in OPTIONAL_VECTOR_DATASETS if name in first_group)
     adf_faces = _adf_faces(first_group)
+    sph = any(name in first_group for name in SPH_DATASETS)
     scatter = first_group.get("scatter_matrix")
     scatter_shape = (
         tuple(int(value) for value in scatter.shape)
@@ -214,6 +219,7 @@ def _inspect_mixture(
             required_total=len(REQUIRED_DATASETS),
             optional_datasets=optional,
             adf_faces=adf_faces,
+            sph=sph,
             scatter_shape=scatter_shape,
             scatter_axes=scatter_axes,
             attr_keys=tuple(sorted(attrs)),
@@ -256,7 +262,8 @@ def print_report(
         f"transport_total={report.transport_total}/{calculation_count} "
         f"h_factor={report.h_factor}/{calculation_count} "
         f"inverse_velocity={report.inverse_velocity}/{calculation_count} "
-        f"flux_weight={report.flux_weight}/{calculation_count}"
+        f"flux_weight={report.flux_weight}/{calculation_count} "
+        f"sph={report.sph_calculations}/{calculation_count}"
     )
     print(
         "        scatter="
@@ -283,7 +290,8 @@ def print_report(
             f"volume={_render_optional(mixture.volume)} "
             f"required={mixture.required_present}/{mixture.required_total} "
             f"optional={_render_list(mixture.optional_datasets)} "
-            f"adf={_render_list(mixture.adf_faces)}"
+            f"adf={_render_list(mixture.adf_faces)} "
+            f"sph={_render_bool(mixture.sph)}"
         )
     remaining = len(report.mixtures) - len(visible)
     if remaining > 0:
@@ -323,6 +331,7 @@ def _report_payload(report: Hdf5Inspection) -> dict[str, Any]:
         "flux_weight": report.flux_weight,
         "adf_mixtures": report.adf_mixtures,
         "adf_faces": list(report.adf_faces),
+        "sph_calculations": report.sph_calculations,
         "scatter_axes": list(report.scatter_axes),
         "scatter_shapes": [list(shape) for shape in report.scatter_shapes],
         "issues": list(report.issues),
@@ -336,6 +345,7 @@ def _report_payload(report: Hdf5Inspection) -> dict[str, Any]:
                 "required_total": mixture.required_total,
                 "optional_datasets": list(mixture.optional_datasets),
                 "adf_faces": list(mixture.adf_faces),
+                "sph": mixture.sph,
                 "scatter_shape": (
                     None if mixture.scatter_shape is None else list(mixture.scatter_shape)
                 ),

@@ -36,6 +36,7 @@ class MacrolibParserTests(unittest.TestCase):
                 inverse_velocity=np.array([1.0e-8, 2.0e-6]),
                 transport_total=np.array([0.25, 0.5]),
                 h_factor=np.array([10.0, 20.0]),
+                sph=np.array([1.10, 0.90]),
             ),
             MixtureXS(
                 name="moderator",
@@ -60,6 +61,7 @@ class MacrolibParserTests(unittest.TestCase):
                 volume=3.0,
                 transport_total=np.array([0.3, 0.6]),
                 h_factor=np.array([30.0, 40.0]),
+                sph=np.array([0.95, 1.05]),
             ),
         ]
 
@@ -70,6 +72,7 @@ class MacrolibParserTests(unittest.TestCase):
         self.assertEqual(blocks[4].name, "GROUP")
         self.assertEqual(macrolib.state_vector[:4], (2, 2, 2, 1))
         self.assertEqual(macrolib.state_vector[8], 1)
+        self.assertEqual(macrolib.state_vector[13], 1)
         np.testing.assert_allclose(macrolib.energy, [1.0e7, 1.0, 1.0e-5])
         np.testing.assert_allclose(macrolib.volume, [2.0, 3.0])
         np.testing.assert_allclose(macrolib.ntot0, [[0.5, 1.0], [0.6, 1.2]])
@@ -78,6 +81,7 @@ class MacrolibParserTests(unittest.TestCase):
             [[1.0 / 0.75, 1.0 / 1.5], [1.0 / 0.9, 1.0 / 1.8]],
         )
         np.testing.assert_allclose(macrolib.h_factor, [[10.0, 20.0], [30.0, 40.0]])
+        np.testing.assert_allclose(macrolib.sph, [[1.10, 0.90], [0.95, 1.05]])
         np.testing.assert_allclose(macrolib.nusigf, [[0.025, 0.05], [0.0, 0.0]])
         np.testing.assert_allclose(macrolib.chi, [[1.0, 0.0], [0.0, 0.0]])
         np.testing.assert_allclose(
