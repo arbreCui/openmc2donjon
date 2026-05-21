@@ -23,11 +23,13 @@ class SphLoopTests(unittest.TestCase):
             mgxs = root / "mgxs.h5"
             reference = root / "reference_flux.h5"
             solver = root / "fake_donjon_solver.py"
+            postprocess = root / "fake_postprocess.py"
             config = root / "loop.json"
             summary = root / "loop_summary.json"
             _write_mgxs(mgxs)
             _write_reference_flux(reference)
             _write_fake_solver(solver)
+            _write_fake_postprocess(postprocess)
             config.write_text(
                 json.dumps(
                     {
@@ -37,6 +39,7 @@ class SphLoopTests(unittest.TestCase):
                         "reference_flux": "reference_flux.h5::openmc_volume_flux",
                         "iterations": 2,
                         "format": "macrolib",
+                        "final_solve": True,
                         "damping": 1.0,
                         "scalar_flux_map": {"fuel": 2, "moderator": 4},
                         "solver": {
@@ -51,6 +54,21 @@ class SphLoopTests(unittest.TestCase):
                                 "{iteration}",
                             ],
                             "result": "donjon_flux.result",
+                        },
+                        "postprocess": {
+                            "command": [
+                                sys.executable,
+                                str(postprocess),
+                                "--input",
+                                "{workflow_ascii}",
+                                "--output",
+                                "{output}",
+                                "--sph",
+                                "{sph_sidecar}",
+                                "--iteration",
+                                "{iteration1}",
+                            ],
+                            "output": "corrected.macrolib.txt",
                         },
                     },
                     indent=2,
@@ -76,11 +94,14 @@ class SphLoopTests(unittest.TestCase):
             payload = json.loads(summary.read_text(encoding="utf-8"))
             self.assertEqual(payload["decision"], PASS_DECISION)
             self.assertEqual(payload["iterations"], 2)
-            self.assertEqual(len(payload["solves"]), 2)
+            self.assertEqual(len(payload["solves"]), 3)
             self.assertEqual(len(payload["workflows"]), 2)
+            self.assertEqual(len(payload["postprocesses"]), 2)
+            self.assertEqual(payload["final_solve"]["iteration"], 2)
             self.assertTrue((root / "loop_run/iter00_initial/out.macrolib.txt").exists())
             self.assertTrue((root / "loop_run/iter00_solve/solver.stdout.txt").exists())
             self.assertTrue((root / "loop_run/iter01_solve/solver.stdout.txt").exists())
+            self.assertTrue((root / "loop_run/iter02_solve/solver.stdout.txt").exists())
 
             final_sph = root / "loop_run/iter02_sph/next_sph.sidecar.h5"
             expected = np.asarray([[2.0, 2.0], [2.0, 2.0]])
@@ -88,7 +109,9 @@ class SphLoopTests(unittest.TestCase):
                 np.testing.assert_allclose(h5["sph"][:], expected)
                 self.assertEqual(h5.attrs["sph_kind"], "sph-loop-iter2")
 
-            final_macrolib = read_macrolib_ascii(root / "loop_run/iter02_sph/out.macrolib.txt")
+            final_macrolib = read_macrolib_ascii(
+                root / "loop_run/iter02_sph/corrected.macrolib.txt"
+            )
             self.assertIsNotNone(final_macrolib.sph)
             np.testing.assert_allclose(final_macrolib.sph, expected)
 
@@ -170,6 +193,39 @@ def write_flux_dump(path: Path, group1: tuple[float, ...], group2: tuple[float, 
 
 def header(level: int, flags: int, type_code: int, count: int, trailing: str) -> str:
     return f"-> {level:7d}{flags:8d}{type_code:8d}{count:8d}                                 <-   {trailing}"
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+
+def _write_fake_postprocess(path: Path) -> None:
+    path.write_text(
+        """
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+import shutil
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input", required=True)
+    parser.add_argument("--output", required=True)
+    parser.add_argument("--sph", required=True)
+    parser.add_argument("--iteration", type=int, required=True)
+    args = parser.parse_args()
+    if not Path(args.sph).exists():
+        raise SystemExit(f"missing sph sidecar: {args.sph}")
+    output = Path(args.output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(args.input, output)
+    print(f"fake postprocess iteration={args.iteration} output={output}")
+    return 0
 
 
 if __name__ == "__main__":

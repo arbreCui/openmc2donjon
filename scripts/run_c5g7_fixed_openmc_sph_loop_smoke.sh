@@ -11,23 +11,31 @@ C5G7_ACCEPTED_H5="${C5G7_ACCEPTED_H5:-$REPO_ROOT/examples/donjon_openmc2donjon/c
 C5G7_REFERENCE_FLUX_H5="${C5G7_REFERENCE_FLUX_H5:-$REPO_ROOT/examples/donjon_openmc2donjon/c5g7_homogeneous_face_flux_donjon.h5}"
 C5G7_SCATTER_ROW_BALANCE_FAIL="${OPENMC2DONJON_C5G7_SCATTER_ROW_BALANCE_FAIL:-1e-8}"
 SPH_DAMPING="${SPH_DAMPING:-0.1}"
+RUN_TAG="${RUN_TAG:-c5g7_fixed_openmc_sph_loop}"
+HELPER="$REPO_ROOT/scripts/c5g7_fixed_openmc_sph_loop_donjon.py"
 
-BASE_MACROLIB="$RUN_DIR/c5g7_base.macrolib.txt"
-ITER1_DIR="$RUN_DIR/iter1_workflow"
+LOOP_DIR="$RUN_DIR/sph_loop"
+LOOP_CONFIG="$RUN_DIR/c5g7_sph_loop_config.json"
+LOOP_SUMMARY_JSON="$LOOP_DIR/sph_loop_summary.json"
+BASE_MACROLIB="$LOOP_DIR/iter00_initial/out.macrolib.txt"
+ITER1_DIR="$LOOP_DIR/iter01_sph"
 ITER1_TABLE="$ITER1_DIR/next_sph.csv"
 ITER1_SIDECAR="$ITER1_DIR/next_sph.sidecar.h5"
 ITER1_H5="$ITER1_DIR/mgxs_with_sph.h5"
 ITER1_RAW_MACROLIB="$ITER1_DIR/out.macrolib.txt"
-ITER1_CORRECTED_MACROLIB="$RUN_DIR/iter1_corrected_pn.macrolib.txt"
-ITER2_DIR="$RUN_DIR/iter2_workflow"
+ITER1_CORRECTED_MACROLIB="$ITER1_DIR/corrected_pn.macrolib.txt"
+ITER2_DIR="$LOOP_DIR/iter02_sph"
 ITER2_TABLE="$ITER2_DIR/next_sph.csv"
 ITER2_SIDECAR="$ITER2_DIR/next_sph.sidecar.h5"
 ITER2_H5="$ITER2_DIR/mgxs_with_sph.h5"
 ITER2_RAW_MACROLIB="$ITER2_DIR/out.macrolib.txt"
-ITER2_CORRECTED_MACROLIB="$RUN_DIR/iter2_corrected_pn.macrolib.txt"
+ITER2_CORRECTED_MACROLIB="$ITER2_DIR/corrected_pn.macrolib.txt"
 BASE_FLUX_H5="$ITER1_DIR/donjon_volume_flux.h5"
 ITER1_FLUX_H5="$ITER2_DIR/donjon_volume_flux.h5"
 ITER2_FLUX_H5="$RUN_DIR/iter2_donjon_volume_flux.h5"
+RESULT0="$LOOP_DIR/iter00_solve/donjon_flux.result"
+RESULT1="$LOOP_DIR/iter01_solve/donjon_flux.result"
+RESULT2="$LOOP_DIR/iter02_solve/donjon_flux.result"
 SUMMARY_JSON="$RUN_DIR/c5g7_fixed_openmc_sph_loop_summary.json"
 
 mkdir -p "$RUN_DIR"
@@ -56,205 +64,116 @@ if [[ ! -x "$DONJON_RUNNER" ]]; then
 fi
 
 echo
-echo "== Convert fixed OpenMC base XS =="
-"$PYTHON_BIN" -m openmc2donjon.cli --format macrolib "$C5G7_ACCEPTED_H5" \
-  -o "$BASE_MACROLIB" \
-  --check \
+echo "== Check fixed OpenMC base XS =="
+"$PYTHON_BIN" -m openmc2donjon.cli check "$C5G7_ACCEPTED_H5" \
   --require-volume \
   --require-transport-dataset \
   --require-adf \
   --expected-adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
   --scatter-row-balance-fail "$C5G7_SCATTER_ROW_BALANCE_FAIL"
 
-write_solve_deck() {
-  local deck_path="$1"
-  local macrolib_path="$2"
-  local iteration="$3"
-  "$PYTHON_BIN" - "$deck_path" "$macrolib_path" "$iteration" <<'PY'
+echo
+echo "== Write C5G7 SPH loop config =="
+"$PYTHON_BIN" - "$LOOP_CONFIG" "$C5G7_ACCEPTED_H5" "$C5G7_REFERENCE_FLUX_H5" \
+  "$LOOP_DIR" "$HELPER" "$DONJON_ROOT" "$PYTHON_BIN" "$SPH_DAMPING" "$RUN_TAG" <<'PY'
+import json
 from pathlib import Path
 import sys
 
-deck = Path(sys.argv[1])
-macrolib = Path(sys.argv[2])
-iteration = sys.argv[3]
-deck.write_text(
-    f"""* C5G7 assembly-wise fixed-OpenMC SPH loop solve, iteration {iteration}.
-MODULE GEO: TRIVAT: TRIVAA: FLUD: GREP: UTL: END: ABORT: ;
-LINKED_LIST MACRO GEOM TRACK SYS FLUX ;
-REAL keff ;
-SEQ_ASCII MACRO_ASC :: FILE '{macrolib}' ;
+(
+    config_path,
+    accepted_h5,
+    reference_flux_h5,
+    loop_dir,
+    helper,
+    donjon_root,
+    python_bin,
+    damping,
+    run_tag,
+) = sys.argv[1:]
 
-MACRO := MACRO_ASC ;
-GEOM := GEO: :: CAR2D 3 3
-  EDIT 0
-  X- REFL X+ VOID
-  Y- REFL Y+ VOID
-  MIX
-  1 2 3
-  4 5 6
-  7 8 9
-  MESHX
-  0.00000000 21.42000000 42.84000000 64.26000000
-  MESHY
-  0.00000000 21.42000000 42.84000000 64.26000000
-;
+payload = {
+    "schema": "openmc2donjon.sph-loop-config.v1",
+    "input_h5": accepted_h5,
+    "output_dir": loop_dir,
+    "reference_flux": f"{reference_flux_h5}::openmc_volume_flux",
+    "iterations": 2,
+    "final_solve": True,
+    "format": "macrolib",
+    "damping": float(damping),
+    "clip_min": 0.5,
+    "clip_max": 2.0,
+    "map_h5": reference_flux_h5,
+    "sph_kind": "c5g7-fixed-openmc-loop",
+    "sph_real": False,
+    "sph_applied": False,
+    "source_label": "C5G7 fixed OpenMC XS SPH loop",
+    "solver": {
+        "command": [
+            python_bin,
+            helper,
+            "solve",
+            "--donjon-root",
+            donjon_root,
+            "--macrolib",
+            "{ascii_input}",
+            "--result",
+            "{result}",
+            "--iteration",
+            "{iteration}",
+            "--run-tag",
+            run_tag,
+        ],
+        "result": "donjon_flux.result",
+    },
+    "postprocess": {
+        "command": [
+            python_bin,
+            helper,
+            "apply",
+            "--donjon-root",
+            donjon_root,
+            "--raw-macrolib",
+            "{workflow_ascii}",
+            "--output",
+            "{output}",
+            "--iteration",
+            "{iteration1}",
+            "--run-tag",
+            run_tag,
+        ],
+        "output": "corrected_pn.macrolib.txt",
+    },
+}
 
-TRACK := TRIVAT: GEOM ::
-  TITLE 'C5G7 fixed OpenMC XS SPH loop iteration {iteration}' EDIT 1 MAXR 109
-  DUAL 1 1 ;
-SYS := TRIVAA: MACRO TRACK :: EDIT 0 ;
-FLUX := FLUD: SYS TRACK :: EDIT 1 ADI 4 ACCE 5 3 EXTE 700 1.E-6 ;
-GREP: FLUX :: GETVAL 'K-EFFECTIVE ' 1 >>keff<< ;
-ECHO 'OPENMC2DONJON C5G7 FIXED OPENMC SPH LOOP ITER {iteration} K-EFFECTIVE' keff ;
-UTL: FLUX :: IMPR STATE-VECTOR * DUMP ;
-END: ;
-""",
-    encoding="utf-8",
-)
+path = Path(config_path)
+path.parent.mkdir(parents=True, exist_ok=True)
+path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+print(path)
 PY
-}
-
-write_apply_deck() {
-  local deck_path="$1"
-  local raw_sph_macrolib="$2"
-  local corrected_macrolib="$3"
-  local iteration="$4"
-  "$PYTHON_BIN" - "$deck_path" "$raw_sph_macrolib" "$corrected_macrolib" "$iteration" <<'PY'
-from pathlib import Path
-import sys
-
-deck = Path(sys.argv[1])
-raw_sph_macrolib = Path(sys.argv[2])
-corrected_macrolib = Path(sys.argv[3])
-iteration = sys.argv[4]
-deck.write_text(
-    f"""* C5G7 fixed-OpenMC SPH loop DSPH/MAC apply, iteration {iteration}.
-MODULE DSPH: MAC: END: ABORT: ;
-LINKED_LIST SPHSRC DMACROPN OPTIMPN MACROPN ;
-SEQ_ASCII SPH_ASC :: FILE '{raw_sph_macrolib}' ;
-SEQ_ASCII PN_ASC :: FILE '{corrected_macrolib}' ;
-
-SPHSRC := SPH_ASC ;
-DMACROPN OPTIMPN := DSPH: SPHSRC :: EDIT 1 SPH PN ;
-MACROPN := SPHSRC ;
-MACROPN := MAC: MACROPN OPTIMPN ;
-PN_ASC := MACROPN ;
-END: ;
-""",
-    encoding="utf-8",
-)
-PY
-}
-
-solve_result_path() {
-  local iteration="$1"
-  local case_id="${RUN_TAG:-c5g7_fixed_openmc_sph_loop}_iter${iteration}"
-  printf '%s\n' "$DONJON_ROOT/Darwin_arm64/${case_id}_solve.result"
-}
-
-run_solve() {
-  local macrolib_path="$1"
-  local iteration="$2"
-  local case_id="${RUN_TAG:-c5g7_fixed_openmc_sph_loop}_iter${iteration}"
-  local data_case_dir="$DONJON_ROOT/data/openmc2donjon/case_runs/c5g7_fixed_openmc_sph_loop"
-  local deck_rel="openmc2donjon/case_runs/c5g7_fixed_openmc_sph_loop/${case_id}_solve.x2m"
-  local deck_path="$DONJON_ROOT/data/$deck_rel"
-  local short_macrolib="/tmp/${case_id}.macrolib.txt"
-
-  mkdir -p "$data_case_dir"
-  cp "$macrolib_path" "$short_macrolib"
-  write_solve_deck "$deck_path" "$short_macrolib" "$iteration"
-  (
-    cd "$DONJON_ROOT"
-    ./rdonjon -q "$deck_rel"
-  )
-}
-
-extract_flux() {
-  local result_path="$1"
-  local output_flux_h5="$2"
-  "$PYTHON_BIN" -m openmc2donjon.cli extract-donjon-volume-flux "$C5G7_ACCEPTED_H5" \
-    --flux-dump "$result_path" \
-    --map-h5 "$C5G7_REFERENCE_FLUX_H5" \
-    -o "$output_flux_h5" \
-    --force
-}
-
-run_iteration_workflow() {
-  local iteration="$1"
-  local result_path="$2"
-  local output_dir="$3"
-  local previous_sph="${4:-}"
-  local args=(
-    -m openmc2donjon.cli run-sph-iteration "$C5G7_ACCEPTED_H5"
-    --output-dir "$output_dir"
-    --reference-flux "$C5G7_REFERENCE_FLUX_H5::openmc_volume_flux"
-    --flux-dump "$result_path"
-    --map-h5 "$C5G7_REFERENCE_FLUX_H5"
-    --damping "$SPH_DAMPING"
-    --clip-min 0.5
-    --clip-max 2.0
-    --format macrolib
-    --sph-kind "c5g7-fixed-openmc-loop-iter${iteration}"
-    --sph-real false
-    --sph-applied false
-    --source-label "C5G7 fixed OpenMC XS SPH loop iteration ${iteration}"
-    --force
-  )
-  if [[ -n "$previous_sph" ]]; then
-    args+=(--previous-sph "$previous_sph")
-  fi
-  "$PYTHON_BIN" "${args[@]}"
-}
-
-apply_sph() {
-  local raw_sph_macrolib="$1"
-  local corrected_macrolib="$2"
-  local iteration="$3"
-  local case_id="${RUN_TAG:-c5g7_fixed_openmc_sph_loop}_iter${iteration}"
-  local data_case_dir="$DONJON_ROOT/data/openmc2donjon/case_runs/c5g7_fixed_openmc_sph_loop"
-  local deck_rel="openmc2donjon/case_runs/c5g7_fixed_openmc_sph_loop/${case_id}_apply.x2m"
-  local deck_path="$DONJON_ROOT/data/$deck_rel"
-  local short_raw="/tmp/${case_id}.raw_sph.macrolib.txt"
-  local short_corrected="/tmp/${case_id}.corrected_pn.macrolib.txt"
-
-  mkdir -p "$data_case_dir"
-  cp "$raw_sph_macrolib" "$short_raw"
-  rm -f "$short_corrected"
-  write_apply_deck "$deck_path" "$short_raw" "$short_corrected" "$iteration"
-  (
-    cd "$DONJON_ROOT"
-    ./rdonjon -q "$deck_rel"
-  )
-  cp "$short_corrected" "$corrected_macrolib"
-}
 
 echo
-echo "== Iteration 0: solve fixed OpenMC base XS =="
-run_solve "$BASE_MACROLIB" 0
+echo "== Run configured fixed-OpenMC SPH loop =="
+"$PYTHON_BIN" -m openmc2donjon.cli run-sph-loop \
+  --config "$LOOP_CONFIG" \
+  --summary-json "$LOOP_SUMMARY_JSON" \
+  --force
 
 echo
-echo "== Iteration 1: update SPH from OpenMC reference / DONJON iter0 flux =="
-run_iteration_workflow 1 "$(solve_result_path 0)" "$ITER1_DIR"
-apply_sph "$ITER1_RAW_MACROLIB" "$ITER1_CORRECTED_MACROLIB" 1
-run_solve "$ITER1_CORRECTED_MACROLIB" 1
-
-echo
-echo "== Iteration 2: update cumulative SPH from OpenMC reference / DONJON iter1 flux =="
-run_iteration_workflow 2 "$(solve_result_path 1)" "$ITER2_DIR" "$ITER1_SIDECAR"
-apply_sph "$ITER2_RAW_MACROLIB" "$ITER2_CORRECTED_MACROLIB" 2
-run_solve "$ITER2_CORRECTED_MACROLIB" 2
-extract_flux "$(solve_result_path 2)" "$ITER2_FLUX_H5"
+echo "== Extract final post-SPH DONJON flux =="
+"$PYTHON_BIN" -m openmc2donjon.cli extract-donjon-volume-flux "$C5G7_ACCEPTED_H5" \
+  --flux-dump "$RESULT2" \
+  --map-h5 "$C5G7_REFERENCE_FLUX_H5" \
+  -o "$ITER2_FLUX_H5" \
+  --force
 
 echo
 echo "== Validate fixed-OpenMC SPH loop =="
-"$PYTHON_BIN" - "$SUMMARY_JSON" \
+"$PYTHON_BIN" - "$SUMMARY_JSON" "$LOOP_SUMMARY_JSON" \
   "$BASE_FLUX_H5" "$ITER1_FLUX_H5" "$ITER2_FLUX_H5" \
   "$ITER1_SIDECAR" "$ITER2_SIDECAR" \
   "$BASE_MACROLIB" "$ITER1_CORRECTED_MACROLIB" "$ITER2_CORRECTED_MACROLIB" \
-  "$DONJON_ROOT/Darwin_arm64/${RUN_TAG:-c5g7_fixed_openmc_sph_loop}_iter0_solve.result" \
-  "$DONJON_ROOT/Darwin_arm64/${RUN_TAG:-c5g7_fixed_openmc_sph_loop}_iter1_solve.result" \
-  "$DONJON_ROOT/Darwin_arm64/${RUN_TAG:-c5g7_fixed_openmc_sph_loop}_iter2_solve.result" <<'PY'
+  "$RESULT0" "$RESULT1" "$RESULT2" <<'PY'
 import json
 from pathlib import Path
 import re
@@ -267,6 +186,7 @@ from openmc2donjon.macrolib import read_macrolib_ascii
 
 (
     summary_path,
+    loop_summary_path,
     flux0_path,
     flux1_path,
     flux2_path,
@@ -326,7 +246,14 @@ corrected2 = read_macrolib_ascii(corrected2_path)
 keff0 = read_keff(result0_path, 0)
 keff1 = read_keff(result1_path, 1)
 keff2 = read_keff(result2_path, 2)
+loop_summary = json.loads(loop_summary_path.read_text(encoding="utf-8"))
 
+if loop_summary.get("decision") != "openmc2donjon_sph_loop_passed":
+    raise SystemExit(f"SPH loop summary did not pass: {loop_summary_path}")
+if len(loop_summary.get("solves", [])) != 3:
+    raise SystemExit("configured SPH loop did not run the final solve")
+if len(loop_summary.get("postprocesses", [])) != 2:
+    raise SystemExit("configured SPH loop did not apply two postprocess steps")
 if sph1.shape != (9, 7) or sph2.shape != (9, 7):
     raise SystemExit(f"unexpected SPH shapes: {sph1.shape}, {sph2.shape}")
 if flux0.shape != (9, 7) or flux1.shape != (9, 7) or flux2.shape != (9, 7):

@@ -81,8 +81,11 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         )
 
         self.assertIn("fixed OpenMC base XS", text)
-        self.assertIn("run-sph-iteration", text)
-        self.assertIn("--previous-sph", text)
+        self.assertIn("run-sph-loop", text)
+        self.assertIn("c5g7_fixed_openmc_sph_loop_donjon.py", text)
+        self.assertIn('"final_solve": True', text)
+        self.assertIn('"postprocess"', text)
+        self.assertIn("openmc2donjon_sph_loop_passed", text)
         self.assertIn("ITER1_SIDECAR", text)
         self.assertIn("extract-donjon-volume-flux", text)
         self.assertIn("mesh_donjon_volume_flux", text)

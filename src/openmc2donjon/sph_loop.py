@@ -34,6 +34,19 @@ class SphLoopSolveReport:
 
 
 @dataclass(frozen=True)
+class SphLoopPostprocessReport:
+    iteration: int
+    command: tuple[str, ...]
+    cwd: Path
+    workflow_ascii: Path
+    output: Path
+    sph_sidecar: Path
+    stdout: Path
+    stderr: Path
+    returncode: int
+
+
+@dataclass(frozen=True)
 class SphLoopReport:
     config_path: Path
     input_h5: Path
@@ -47,6 +60,8 @@ class SphLoopReport:
     summary_json: Path
     solves: tuple[SphLoopSolveReport, ...]
     workflows: tuple[SphIterationWorkflowReport, ...]
+    postprocesses: tuple[SphLoopPostprocessReport, ...]
+    final_solve: SphLoopSolveReport | None
 
 
 def run_sph_loop(
@@ -120,8 +135,11 @@ def run_sph_loop(
     )
 
     solver = _solver_config(config)
+    postprocessor = _optional_command_config(config.get("postprocess"), "postprocess")
+    run_final_solve = bool(config.get("final_solve", False))
     solves: list[SphLoopSolveReport] = []
     workflows: list[SphIterationWorkflowReport] = []
+    postprocesses: list[SphLoopPostprocessReport] = []
     current_ascii = initial_ascii
     previous_sph: Path | None = None
 
@@ -164,6 +182,35 @@ def run_sph_loop(
         workflows.append(workflow)
         current_ascii = workflow.ascii_output
         previous_sph = workflow.sph_sidecar
+        if postprocessor is not None:
+            postprocess = _run_postprocessor(
+                postprocessor,
+                base_dir=base_dir,
+                loop_dir=loop_dir,
+                iteration=iteration,
+                input_h5=input_h5,
+                solve_result=solve_report.result,
+                workflow=workflow,
+                previous_sph=previous_sph,
+                output_format=output_format,
+                force=force,
+            )
+            postprocesses.append(postprocess)
+            current_ascii = postprocess.output
+
+    final_solve = None
+    if run_final_solve:
+        final_solve = _run_solver(
+            solver,
+            base_dir=base_dir,
+            loop_dir=loop_dir,
+            iteration=iterations,
+            input_h5=input_h5,
+            ascii_input=current_ascii,
+            previous_sph=previous_sph,
+            force=force,
+        )
+        solves.append(final_solve)
 
     report = SphLoopReport(
         config_path=config_file,
@@ -178,6 +225,8 @@ def run_sph_loop(
         summary_json=summary_path,
         solves=tuple(solves),
         workflows=tuple(workflows),
+        postprocesses=tuple(postprocesses),
+        final_solve=final_solve,
     )
     print_report(report)
     write_summary(summary_path, report)
@@ -200,6 +249,11 @@ def print_report(report: SphLoopReport) -> None:
         print(
             f"  solve[{solve.iteration}]: rc={solve.returncode} "
             f"result={solve.result}"
+        )
+    for postprocess in report.postprocesses:
+        print(
+            f"  postprocess[{postprocess.iteration}]: rc={postprocess.returncode} "
+            f"output={postprocess.output}"
         )
     print()
     print("SPH loop decision")
@@ -235,6 +289,15 @@ def write_summary(path: Path, report: SphLoopReport) -> None:
             }
             for solve in report.solves
         ],
+        "final_solve": (
+            None
+            if report.final_solve is None
+            else {
+                "iteration": report.final_solve.iteration,
+                "result": str(report.final_solve.result),
+                "returncode": report.final_solve.returncode,
+            }
+        ),
         "workflows": [
             {
                 "iteration": index + 1,
@@ -247,6 +310,20 @@ def write_summary(path: Path, report: SphLoopReport) -> None:
                 "sph_maximum": workflow.sph_maximum,
             }
             for index, workflow in enumerate(report.workflows)
+        ],
+        "postprocesses": [
+            {
+                "iteration": postprocess.iteration,
+                "command": list(postprocess.command),
+                "cwd": str(postprocess.cwd),
+                "workflow_ascii": str(postprocess.workflow_ascii),
+                "output": str(postprocess.output),
+                "sph_sidecar": str(postprocess.sph_sidecar),
+                "stdout": str(postprocess.stdout),
+                "stderr": str(postprocess.stderr),
+                "returncode": postprocess.returncode,
+            }
+            for postprocess in report.postprocesses
         ],
         "openmc_xs_policy": "fixed base MGXS; DONJON solves consume updated ASCII SPH handoffs",
     }
@@ -268,17 +345,26 @@ def _load_config(path: Path) -> dict[str, Any]:
 
 
 def _solver_config(config: dict[str, Any]) -> dict[str, Any]:
-    solver = config.get("solver")
-    if not isinstance(solver, dict):
-        raise ValueError("solver must be a JSON object")
-    if "command" not in solver:
-        raise ValueError("solver.command is required")
-    command = solver["command"]
+    return _command_config(config.get("solver"), "solver")
+
+
+def _optional_command_config(value: object, name: str) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    return _command_config(value, name)
+
+
+def _command_config(value: object, name: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError(f"{name} must be a JSON object")
+    if "command" not in value:
+        raise ValueError(f"{name}.command is required")
+    command = value["command"]
     if not isinstance(command, (list, str)):
-        raise ValueError("solver.command must be a list of strings or a command string")
+        raise ValueError(f"{name}.command must be a list of strings or a command string")
     if isinstance(command, list) and not all(isinstance(part, str) for part in command):
-        raise ValueError("solver.command list entries must be strings")
-    return solver
+        raise ValueError(f"{name}.command list entries must be strings")
+    return value
 
 
 def _write_initial_ascii(
@@ -385,6 +471,138 @@ def _run_solver(
         stderr=stderr,
         returncode=completed.returncode,
     )
+
+
+def _run_postprocessor(
+    postprocessor: dict[str, Any],
+    *,
+    base_dir: Path,
+    loop_dir: Path,
+    iteration: int,
+    input_h5: Path,
+    solve_result: Path,
+    workflow: SphIterationWorkflowReport,
+    previous_sph: Path | None,
+    output_format: str,
+    force: bool,
+) -> SphLoopPostprocessReport:
+    output = _postprocess_output_path(
+        postprocessor,
+        workflow_dir=workflow.output_dir,
+        loop_dir=loop_dir,
+        iteration=iteration,
+        input_h5=input_h5,
+        solve_result=solve_result,
+        workflow=workflow,
+        previous_sph=previous_sph,
+        output_format=output_format,
+    )
+    stdout = workflow.output_dir / "postprocess.stdout.txt"
+    stderr = workflow.output_dir / "postprocess.stderr.txt"
+    for path in (output, stdout, stderr):
+        _require_absent(path, force=force)
+
+    context = _postprocess_context(
+        iteration=iteration,
+        loop_dir=loop_dir,
+        input_h5=input_h5,
+        solve_result=solve_result,
+        workflow=workflow,
+        previous_sph=previous_sph,
+        output=output,
+    )
+    command = _format_command(postprocessor["command"], context)
+    cwd = _solver_cwd(postprocessor, base_dir, context, workflow.output_dir)
+    env = _solver_env(postprocessor, context)
+
+    with stdout.open("w", encoding="utf-8") as out, stderr.open("w", encoding="utf-8") as err:
+        completed = subprocess.run(
+            command,
+            cwd=cwd,
+            env=env,
+            stdout=out,
+            stderr=err,
+            text=True,
+            check=False,
+        )
+
+    if completed.returncode != 0:
+        raise RuntimeError(
+            f"postprocess command failed for iteration {iteration + 1} with "
+            f"exit code {completed.returncode}; see {stderr}"
+        )
+    if not output.exists():
+        raise FileNotFoundError(
+            f"postprocess command for iteration {iteration + 1} did not create {output}"
+        )
+
+    return SphLoopPostprocessReport(
+        iteration=iteration + 1,
+        command=tuple(command),
+        cwd=cwd,
+        workflow_ascii=workflow.ascii_output,
+        output=output,
+        sph_sidecar=workflow.sph_sidecar,
+        stdout=stdout,
+        stderr=stderr,
+        returncode=completed.returncode,
+    )
+
+
+def _postprocess_output_path(
+    postprocessor: dict[str, Any],
+    *,
+    workflow_dir: Path,
+    loop_dir: Path,
+    iteration: int,
+    input_h5: Path,
+    solve_result: Path,
+    workflow: SphIterationWorkflowReport,
+    previous_sph: Path | None,
+    output_format: str,
+) -> Path:
+    suffix = "macrolib.txt" if output_format == "macrolib" else "mcompo.txt"
+    template = str(postprocessor.get("output", f"out.postprocessed.{suffix}"))
+    context = _postprocess_context(
+        iteration=iteration,
+        loop_dir=loop_dir,
+        input_h5=input_h5,
+        solve_result=solve_result,
+        workflow=workflow,
+        previous_sph=previous_sph,
+        output=workflow_dir / f"out.postprocessed.{suffix}",
+    )
+    rendered = _format_template(template, context)
+    path = Path(rendered)
+    if not path.is_absolute():
+        path = workflow_dir / path
+    return path
+
+
+def _postprocess_context(
+    *,
+    iteration: int,
+    loop_dir: Path,
+    input_h5: Path,
+    solve_result: Path,
+    workflow: SphIterationWorkflowReport,
+    previous_sph: Path | None,
+    output: Path,
+) -> dict[str, str]:
+    return {
+        "iteration": str(iteration),
+        "iteration1": str(iteration + 1),
+        "loop_dir": str(loop_dir),
+        "workflow_dir": str(workflow.output_dir),
+        "input_h5": str(input_h5),
+        "solve_result": str(solve_result),
+        "workflow_ascii": str(workflow.ascii_output),
+        "ascii_input": str(workflow.ascii_output),
+        "output": str(output),
+        "sph_sidecar": str(workflow.sph_sidecar),
+        "augmented_h5": str(workflow.augmented_h5),
+        "previous_sph": "" if previous_sph is None else str(previous_sph),
+    }
 
 
 def _solver_result_path(
