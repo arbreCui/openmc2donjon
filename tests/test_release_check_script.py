@@ -80,7 +80,8 @@ class ReleaseCheckScriptTests(unittest.TestCase):
 
         self.assertIn("fixed OpenMC base XS", text)
         self.assertIn("--previous-sph \"$ITER1_SIDECAR\"", text)
-        self.assertIn("extract_c5g7_donjon_volume_flux.py", text)
+        self.assertIn("extract-donjon-volume-flux", text)
+        self.assertIn("mesh_donjon_volume_flux", text)
         self.assertIn("openmc2donjon_c5g7_fixed_openmc_sph_loop_passed", text)
 
 

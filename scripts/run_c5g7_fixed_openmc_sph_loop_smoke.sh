@@ -162,10 +162,11 @@ run_solve() {
     cd "$DONJON_ROOT"
     ./rdonjon -q "$deck_rel"
   )
-  "$PYTHON_BIN" "$REPO_ROOT/scripts/extract_c5g7_donjon_volume_flux.py" \
+  "$PYTHON_BIN" -m openmc2donjon.cli extract-donjon-volume-flux "$C5G7_ACCEPTED_H5" \
     --flux-dump "$result_path" \
     --map-h5 "$C5G7_REFERENCE_FLUX_H5" \
-    -o "$output_flux_h5"
+    -o "$output_flux_h5" \
+    --force
 }
 
 apply_sph() {
@@ -305,6 +306,11 @@ def read_flux(path: Path) -> np.ndarray:
         return np.asarray(h5["donjon_volume_flux"][:], dtype=float)
 
 
+def read_mesh_flux(path: Path) -> np.ndarray:
+    with h5py.File(path, "r") as h5:
+        return np.asarray(h5["mesh_donjon_volume_flux"][:], dtype=float)
+
+
 def read_sph(path: Path) -> np.ndarray:
     with h5py.File(path, "r") as h5:
         return np.asarray(h5["sph"][:], dtype=float)
@@ -329,6 +335,9 @@ def read_keff(path: Path, iteration: int) -> float:
 flux0 = read_flux(flux0_path)
 flux1 = read_flux(flux1_path)
 flux2 = read_flux(flux2_path)
+mesh_flux0 = read_mesh_flux(flux0_path)
+mesh_flux1 = read_mesh_flux(flux1_path)
+mesh_flux2 = read_mesh_flux(flux2_path)
 sph1 = read_sph(sph1_path)
 sph2 = read_sph(sph2_path)
 base = read_macrolib_ascii(base_macrolib_path)
@@ -340,8 +349,17 @@ keff2 = read_keff(result2_path, 2)
 
 if sph1.shape != (9, 7) or sph2.shape != (9, 7):
     raise SystemExit(f"unexpected SPH shapes: {sph1.shape}, {sph2.shape}")
-if flux0.shape != (3, 3, 7) or flux1.shape != (3, 3, 7) or flux2.shape != (3, 3, 7):
+if flux0.shape != (9, 7) or flux1.shape != (9, 7) or flux2.shape != (9, 7):
     raise SystemExit(f"unexpected flux shapes: {flux0.shape}, {flux1.shape}, {flux2.shape}")
+if (
+    mesh_flux0.shape != (3, 3, 7)
+    or mesh_flux1.shape != (3, 3, 7)
+    or mesh_flux2.shape != (3, 3, 7)
+):
+    raise SystemExit(
+        "unexpected mesh flux shapes: "
+        f"{mesh_flux0.shape}, {mesh_flux1.shape}, {mesh_flux2.shape}"
+    )
 if np.allclose(sph1, 1.0) or np.allclose(sph2, sph1):
     raise SystemExit("SPH loop did not produce a nontrivial cumulative update")
 if corrected1.sph is None or corrected2.sph is None:
