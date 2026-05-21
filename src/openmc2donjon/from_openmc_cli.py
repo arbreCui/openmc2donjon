@@ -9,12 +9,13 @@ import tempfile
 from pathlib import Path
 
 from . import __version__
-from .adf_augment import augment_hdf5_with_adf, parse_faces
 from .from_openmc_adf import (
+    AdfConfig,
     build_flux_ratio_adf,
     flux_ratio_adf_managed_paths,
+    inject_adf,
     print_dry_run_adf,
-    validate_flux_ratio_adf_args,
+    validate_flux_ratio_adf_config,
 )
 from .from_openmc_parser import build_parser
 from .from_openmc_run_dir import (
@@ -105,7 +106,10 @@ def _validate_args(args: argparse.Namespace, parser: argparse.ArgumentParser) ->
         parser.error(str(exc))
     if args.expected_adf_faces is None and args.adf_faces is not None:
         args.expected_adf_faces = args.adf_faces
-    validate_flux_ratio_adf_args(args, parser)
+    try:
+        validate_flux_ratio_adf_config(_adf_config(args))
+    except ValueError as exc:
+        parser.error(str(exc))
     try:
         validate_sph_config(_sph_config(args))
     except ValueError as exc:
@@ -163,10 +167,41 @@ def _sph_config(args: argparse.Namespace) -> SphConfig:
     )
 
 
+def _adf_config(args: argparse.Namespace) -> AdfConfig:
+    return AdfConfig(
+        run_dir=args.run_dir,
+        statepoint=args.statepoint,
+        dry_run=args.dry_run,
+        adf_source=args.adf_source,
+        adf_faces=args.adf_faces,
+        adf_summary_json=args.adf_summary_json,
+        adf_kind=args.adf_kind,
+        adf_real=args.adf_real,
+        adf_source_label=args.adf_source_label,
+        build_flux_ratio_adf=args.build_flux_ratio_adf,
+        adf_surface_flux=args.adf_surface_flux,
+        export_surface_flux=args.export_surface_flux,
+        surface_flux_tally_name=args.surface_flux_tally_name,
+        surface_flux_mesh_shape=args.surface_flux_mesh_shape,
+        surface_flux_mu_edges=args.surface_flux_mu_edges,
+        surface_flux_face_area=args.surface_flux_face_area,
+        homogeneous_face_flux=args.homogeneous_face_flux,
+        low_order_raw_driver=args.low_order_raw_driver,
+        low_order_volume_flux=args.low_order_volume_flux,
+        low_order_net_current=args.low_order_net_current,
+        low_order_net_current_sign_convention=args.low_order_net_current_sign_convention,
+        low_order_source_label=args.low_order_source_label,
+        adf_face_widths=args.adf_face_widths,
+        adf_invalid_fill=args.adf_invalid_fill,
+        adf_clip_min=args.adf_clip_min,
+        adf_clip_max=args.adf_clip_max,
+    )
+
+
 def _workflow_managed_paths(args: argparse.Namespace) -> list[Path | None]:
     paths = sph_managed_paths(_sph_config(args))
     if args.build_flux_ratio_adf:
-        paths.extend(flux_ratio_adf_managed_paths(args))
+        paths.extend(flux_ratio_adf_managed_paths(_adf_config(args)))
     return paths
 
 
@@ -183,7 +218,7 @@ def _run_dry_run(args: argparse.Namespace) -> bool:
     print_recipe_dry_run_summary(summary)
     print("one-step conversion dry-run OK")
     _print_dry_run_output(args, final_output, hdf5_path)
-    print_dry_run_adf(args)
+    print_dry_run_adf(_adf_config(args))
     print_dry_run_sph(_sph_config(args))
     print_dry_run_artifacts(_run_dir_config(args))
     _print_dry_run_checks(args)
@@ -313,14 +348,14 @@ def _apply_pipeline_corrections(
 ) -> None:
     if args.build_flux_ratio_adf:
         generated.adf_source, generated.adf_artifacts = build_flux_ratio_adf(
-            args,
+            _adf_config(args),
             hdf5_path,
             statepoint_path=recipe_summary.statepoint_path,
         )
 
     adf_source = effective_adf_source(_run_dir_config(args), generated)
     if adf_source is not None:
-        _inject_adf(args, hdf5_path, adf_source=adf_source)
+        inject_adf(_adf_config(args), hdf5_path, adf_source=adf_source)
 
     generated.sph_source, generated.sph_artifacts = apply_sph_workflow(
         _sph_config(args),
@@ -421,27 +456,6 @@ def _write_pipeline_summary(
         _write_json(args.summary_json, summary)
         print(f"wrote summary: {args.summary_json}")
     return summary
-
-
-def _inject_adf(args: argparse.Namespace, hdf5_path: Path, *, adf_source: Path) -> None:
-    with tempfile.TemporaryDirectory(
-        prefix=f"{hdf5_path.name}.adf.",
-        dir=str(hdf5_path.parent),
-    ) as tmpdir:
-        augmented_path = Path(tmpdir) / hdf5_path.name
-        augment_hdf5_with_adf(
-            hdf5_path,
-            adf_source=adf_source,
-            output_h5=augmented_path,
-            expected_faces=parse_faces(args.adf_faces),
-            force=True,
-            adf_kind=args.adf_kind,
-            adf_real=args.adf_real,
-            adf_source_label=args.adf_source_label,
-            summary_json=args.adf_summary_json,
-        )
-        augmented_path.replace(hdf5_path)
-    print(f"injected ADF into HDF5: {hdf5_path}")
 
 
 def _render_optional_list(values: list[str] | None) -> str:
