@@ -169,6 +169,7 @@ def create_flux_ratio_adf_sidecar(
         expected_faces=expected_faces,
         candidates=SURFACE_FLUX_DATASETS,
         label="surface flux",
+        allow_negative=False,
     )
     homogeneous = load_face_flux_payload(
         homogeneous_face_flux,
@@ -177,6 +178,7 @@ def create_flux_ratio_adf_sidecar(
         expected_faces=surface.face_names,
         candidates=HOMOGENEOUS_FACE_FLUX_DATASETS,
         label="homogeneous face flux",
+        allow_negative=True,
     )
     if homogeneous.face_names != surface.face_names:
         raise ValueError(
@@ -291,6 +293,7 @@ def load_face_flux_payload(
     expected_faces: tuple[str, ...] | None,
     candidates: tuple[str, ...],
     label: str,
+    allow_negative: bool = False,
 ) -> FaceFluxPayload:
     """Load face flux values normalized to ``(mixture, face, group)``."""
 
@@ -326,6 +329,7 @@ def load_face_flux_payload(
             face_names=face_names,
             declared_mixtures=declared_mixtures,
             label=f"{label} {path}:{dataset_path}",
+            allow_negative=allow_negative,
         )
     return FaceFluxPayload(
         values=normalized,
@@ -450,6 +454,7 @@ def _normalize_face_flux_values(
     face_names: tuple[str, ...],
     declared_mixtures: Any,
     label: str,
+    allow_negative: bool,
 ) -> np.ndarray:
     if values.ndim == 3:
         normalized = _normalize_rank3_flux(
@@ -473,7 +478,7 @@ def _normalize_face_flux_values(
         raise ValueError(f"{label}: expected 3D or 4D face flux dataset")
     if not np.all(np.isfinite(normalized)):
         raise ValueError(f"{label}: flux values must be finite")
-    if np.any(normalized < 0.0):
+    if not allow_negative and np.any(normalized < 0.0):
         raise ValueError(f"{label}: flux values must be non-negative")
     return normalized
 

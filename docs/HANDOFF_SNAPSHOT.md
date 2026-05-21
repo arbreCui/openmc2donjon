@@ -80,6 +80,8 @@ The default gate covers:
 - C5G7 converter readback to `L_MULTICOMPO` and `L_MACROLIB`;
 - accepted baseline manifest validation;
 - C5G7 ADF augment smoke.
+- C5G7 production ADF source reconstruction from OpenMC surface flux over
+  DONJON homogeneous face flux.
 
 Full local DONJON-side decks can be added with:
 

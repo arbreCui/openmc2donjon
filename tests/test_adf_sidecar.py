@@ -223,6 +223,75 @@ class AdfSidecarTests(unittest.TestCase):
         self.assertEqual(cm.exception.code, 1)
         self.assertIn("invalid bin", err.getvalue())
 
+    def test_make_flux_ratio_fills_nonpositive_homogeneous_flux(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            mgxs = tmp / "mgxs.h5"
+            surface = tmp / "surface_flux.h5"
+            homogeneous = tmp / "homogeneous_face_flux.h5"
+            sidecar = tmp / "adf_sidecar.h5"
+            summary = tmp / "adf_sidecar_summary.json"
+            _write_minimal_mgxs(mgxs)
+            _write_flux_file(
+                surface,
+                "surface_flux/mean",
+                np.array(
+                    [
+                        [[2.0, 4.0], [3.0, 6.0]],
+                        [[4.0, 8.0], [5.0, 10.0]],
+                    ]
+                ),
+            )
+            _write_flux_file(
+                homogeneous,
+                "homogeneous_face_flux",
+                np.array(
+                    [
+                        [[1.0, -2.0], [1.5, 0.0]],
+                        [[2.0, 4.0], [10.0, 5.0]],
+                    ]
+                ),
+            )
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                rc = cli_main(
+                    [
+                        "make-adf-sidecar",
+                        str(mgxs),
+                        "-o",
+                        str(sidecar),
+                        "--mode",
+                        "flux-ratio",
+                        "--surface-flux",
+                        str(surface),
+                        "--homogeneous-face-flux",
+                        str(homogeneous),
+                        "--faces",
+                        "FD_XMIN,FD_XMAX",
+                        "--invalid-fill",
+                        "1.0",
+                        "--summary-json",
+                        str(summary),
+                    ]
+                )
+
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+            with h5py.File(sidecar, "r") as h5:
+                values = h5["adf"][:]
+
+        self.assertEqual(rc, 0)
+        np.testing.assert_allclose(
+            values,
+            np.array(
+                [
+                    [[2.0, 1.0], [2.0, 1.0]],
+                    [[2.0, 2.0], [0.5, 2.0]],
+                ]
+            ),
+        )
+        self.assertEqual(payload["invalid_count"], 2)
+        self.assertEqual(payload["invalid_filled_count"], 2)
+
 
 def _write_minimal_mgxs(path: Path) -> None:
     with h5py.File(path, "w") as h5:

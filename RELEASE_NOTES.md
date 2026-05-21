@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added a C5G7 production ADF source reconstruction smoke that rebuilds the
+  accepted ADF sidecar from OpenMC surface flux over DONJON homogeneous face
+  flux and checks exact payload equality.
+- Allowed flux-ratio ADF generation to handle nonpositive homogeneous
+  denominator bins through the explicit `--invalid-fill` policy.
 - Restored C5G7 statepoint exporter parity by making the C5G7 recipe's
   `consistent nu-scatter matrix` baseline compatibility choice explicit and
   recording the same scatter provenance on the accepted HDF5 snapshot.
