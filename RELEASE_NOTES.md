@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Restored C5G7 statepoint exporter parity by making the C5G7 recipe's
+  `consistent nu-scatter matrix` baseline compatibility choice explicit and
+  recording the same scatter provenance on the accepted HDF5 snapshot.
 - Added a current handoff snapshot for reviewers, covering capabilities,
   accepted C5G7 validation, release gates, known boundaries, and next physical
   work.

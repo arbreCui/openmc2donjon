@@ -45,13 +45,17 @@ def build_library():
 
         library = mgxs.Library(geometry)
         library.energy_groups = mgxs.EnergyGroups(C5G7_7G_BOUNDS)
+        # The accepted C5G7 statepoint was generated with OpenMC's
+        # consistent nu-scatter matrix tally set. Keep that choice explicit so
+        # the recipe/statepoint parity check remains a true locked-baseline
+        # reproduction instead of silently switching scatter definitions.
         library.mgxs_types = [
             "total",
             "absorption",
             "fission",
             "nu-fission",
             "chi",
-            "scatter matrix",
+            "consistent nu-scatter matrix",
         ]
         if _domain_mode() == "material":
             library.domain_type = "material"
@@ -78,6 +82,10 @@ def domain_specs(library):
     if _domain_mode() == "material":
         return None
     return _assembly_specs(library.domains[0], _assembly_mesh())
+
+
+def scatter_mgxs_type():
+    return "consistent nu-scatter matrix"
 
 
 def root_attrs():

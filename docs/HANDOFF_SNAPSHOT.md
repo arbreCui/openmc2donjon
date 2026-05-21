@@ -109,19 +109,17 @@ All passed.
 - DRAGON/DONJON equivalence effects such as `SPH` or `LEAK B2` are not
   inferred from plain OpenMC MGXS handoffs. They need explicit matching
   handoff data.
-- The saved local C5G7 statepoint currently lacks one or more tallies required
-  by the latest exporter recipe. Release checks skip that parity path unless
-  `--require-statepoint-export` is requested; the accepted HDF5 baseline remains
-  locked and checked.
+- The accepted C5G7 statepoint/exporter parity path is locked to the OpenMC
+  `consistent nu-scatter matrix` tally definition that produced the baseline.
+  New user recipes should still use ordinary `scatter matrix` unless they
+  explicitly want a non-default scattering definition.
 
 ## Next Physical Work
 
-1. Regenerate the C5G7 OpenMC statepoint with the current recipe-generated
-   tallies to remove the parity skip.
-2. Replace minicase ADF/low-order fixtures with a real low-order driver handoff
+1. Replace minicase ADF/low-order fixtures with a real low-order driver handoff
    from the intended DONJON calculation route.
-3. Add a larger OpenMC-sourced user case with assembly-wise domains and
+2. Add a larger OpenMC-sourced user case with assembly-wise domains and
    production ADF/DF, then compare DONJON k-effective against the OpenMC
    reference at that homogenization level.
-4. Promote a hex validation line only after complete model inputs, correction
+3. Promote a hex validation line only after complete model inputs, correction
    handoffs, and a defensible reference solution are available.

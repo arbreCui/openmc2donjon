@@ -54,6 +54,11 @@ The OpenMC statepoint exporter reproduces the accepted HDF5 fields with:
 max_abs_diff = 0.0
 ```
 
+This C5G7 recipe intentionally selects OpenMC's
+`consistent nu-scatter matrix` MGXS as an explicit locked-baseline
+compatibility choice. The generic user recipe template remains on ordinary
+`scatter matrix`.
+
 ## Reproduction
 
 Portable release check:

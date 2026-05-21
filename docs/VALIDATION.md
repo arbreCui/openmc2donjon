@@ -55,6 +55,12 @@ assembly-wise P1 statepoint. The local upstream driver now rebuilds the
 OpenMC `mgxs.Library`, loads the saved statepoint, and writes the HDF5 contract
 through `export_openmc_mgxs_library`.
 
+The C5G7 recipe is a compatibility recipe for this accepted baseline: it
+explicitly selects OpenMC's `consistent nu-scatter matrix` MGXS because that is
+the tally definition present in the locked statepoint. New production recipes
+should use ordinary `scatter matrix` unless a non-default scattering definition
+is intentional.
+
 Smoke result:
 
 ```text
