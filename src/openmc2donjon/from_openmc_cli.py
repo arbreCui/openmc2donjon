@@ -428,6 +428,19 @@ def _prepare_run_dir(
 ) -> None:
     if args.run_dir is None:
         return
+    managed_paths = _managed_run_dir_paths(args, output_path, parser)
+    existing = [path for path in managed_paths if path is not None and path.exists()]
+    if existing and not args.force_run_dir:
+        rendered = ", ".join(str(path) for path in existing)
+        parser.error(f"--run-dir managed artifacts already exist; use --force-run-dir: {rendered}")
+    args.run_dir.mkdir(parents=True, exist_ok=True)
+
+
+def _managed_run_dir_paths(
+    args: argparse.Namespace,
+    output_path: Path,
+    parser: argparse.ArgumentParser,
+) -> list[Path | None]:
     run_dir = args.run_dir
     managed_paths = [
         args.keep_hdf5,
@@ -439,21 +452,15 @@ def _prepare_run_dir(
         managed_paths.append(args.bundle_validation_summary_json)
     if not args.no_handoff_summary:
         managed_paths.append(args.handoff_summary_json)
-    recipe_destination = run_dir / args.recipe.name
-    if not _same_path(args.recipe, recipe_destination):
-        managed_paths.append(recipe_destination)
+    _append_run_dir_copy(managed_paths, run_dir, args.recipe)
     if args.check:
         managed_paths.append(args.check_summary_json)
     if args.adf_source is not None:
         managed_paths.append(args.adf_summary_json)
-        adf_source_destination = run_dir / args.adf_source.name
-        if not _same_path(args.adf_source, adf_source_destination):
-            managed_paths.append(adf_source_destination)
+        _append_run_dir_copy(managed_paths, run_dir, args.adf_source)
     if args.sph_source is not None:
         managed_paths.append(args.sph_summary_json)
-        sph_source_destination = run_dir / args.sph_source.name
-        if not _same_path(args.sph_source, sph_source_destination):
-            managed_paths.append(sph_source_destination)
+        _append_run_dir_copy(managed_paths, run_dir, args.sph_source)
     if args.sph_macrolib is not None:
         paths = _sph_paths(args)
         managed_paths.extend(
@@ -463,51 +470,55 @@ def _prepare_run_dir(
                 paths["sph_sidecar_summary"],
             ]
         )
-        sph_macrolib_destination = run_dir / args.sph_macrolib.name
-        if not _same_path(args.sph_macrolib, sph_macrolib_destination):
-            managed_paths.append(sph_macrolib_destination)
+        _append_run_dir_copy(managed_paths, run_dir, args.sph_macrolib)
     if args.build_flux_ratio_adf:
-        paths = _flux_ratio_adf_paths(args)
-        if args.export_surface_flux:
-            managed_paths.extend([paths["surface_flux"], paths["surface_flux_summary"]])
-        if args.homogeneous_face_flux is None:
-            managed_paths.extend(
-                [
-                    paths["low_order_driver"],
-                    paths["low_order_driver_summary"],
-                    paths["low_order_driver_check_summary"],
-                    paths["homogeneous_face_flux"],
-                    paths["homogeneous_face_flux_summary"],
-                ]
-            )
-        else:
-            homogeneous_source = _hdf5_reference_file(args.homogeneous_face_flux)
-            homogeneous_destination = run_dir / homogeneous_source.name
-            if not _same_path(homogeneous_source, homogeneous_destination):
-                managed_paths.append(homogeneous_destination)
+        managed_paths.extend(_flux_ratio_adf_managed_paths(args))
+    for artifact in _extra_artifacts_from_args(args, parser):
+        _append_run_dir_copy(managed_paths, run_dir, artifact.source)
+    return managed_paths
+
+
+def _flux_ratio_adf_managed_paths(args: argparse.Namespace) -> list[Path | None]:
+    run_dir = args.run_dir
+    paths = _flux_ratio_adf_paths(args)
+    managed_paths: list[Path | None] = [
+        paths["face_flux_check_summary"],
+        paths["adf_sidecar"],
+        paths["adf_sidecar_summary"],
+        args.adf_summary_json,
+    ]
+    if args.export_surface_flux:
+        managed_paths.extend([paths["surface_flux"], paths["surface_flux_summary"]])
+    elif args.adf_surface_flux is not None:
+        _append_run_dir_copy(managed_paths, run_dir, _hdf5_reference_file(args.adf_surface_flux))
+
+    if args.homogeneous_face_flux is None:
         managed_paths.extend(
             [
-                paths["face_flux_check_summary"],
-                paths["adf_sidecar"],
-                paths["adf_sidecar_summary"],
+                paths["low_order_driver"],
+                paths["low_order_driver_summary"],
+                paths["low_order_driver_check_summary"],
+                paths["homogeneous_face_flux"],
+                paths["homogeneous_face_flux_summary"],
             ]
         )
-        if args.adf_summary_json is not None:
-            managed_paths.append(args.adf_summary_json)
-        if args.adf_surface_flux is not None:
-            surface_source = _hdf5_reference_file(args.adf_surface_flux)
-            surface_destination = run_dir / surface_source.name
-            if not _same_path(surface_source, surface_destination):
-                managed_paths.append(surface_destination)
-    for artifact in _extra_artifacts_from_args(args, parser):
-        destination = run_dir / artifact.source.name
-        if not _same_path(artifact.source, destination):
-            managed_paths.append(destination)
-    existing = [path for path in managed_paths if path is not None and path.exists()]
-    if existing and not args.force_run_dir:
-        rendered = ", ".join(str(path) for path in existing)
-        parser.error(f"--run-dir managed artifacts already exist; use --force-run-dir: {rendered}")
-    run_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        _append_run_dir_copy(
+            managed_paths,
+            run_dir,
+            _hdf5_reference_file(args.homogeneous_face_flux),
+        )
+    return managed_paths
+
+
+def _append_run_dir_copy(
+    paths: list[Path | None],
+    run_dir: Path,
+    source: Path,
+) -> None:
+    destination = run_dir / source.name
+    if not _same_path(source, destination):
+        paths.append(destination)
 
 
 def _same_path(left: Path, right: Path) -> bool:
@@ -948,7 +959,21 @@ def _validate_flux_ratio_adf_args(
     args: argparse.Namespace,
     parser: argparse.ArgumentParser,
 ) -> None:
-    dependent_options = (
+    if not args.build_flux_ratio_adf:
+        if _has_flux_ratio_adf_options(args):
+            parser.error(
+                "flux-ratio ADF workflow options require --build-flux-ratio-adf"
+            )
+        return
+
+    _validate_flux_ratio_adf_required_args(args, parser)
+    _validate_flux_ratio_surface_args(args, parser)
+    _validate_flux_ratio_low_order_args(args, parser)
+    _validate_flux_ratio_numeric_args(args, parser)
+
+
+def _has_flux_ratio_adf_options(args: argparse.Namespace) -> bool:
+    return (
         args.adf_surface_flux is not None
         or args.export_surface_flux
         or args.surface_flux_tally_name != DEFAULT_SURFACE_FLUX_TALLY_NAME
@@ -966,13 +991,12 @@ def _validate_flux_ratio_adf_args(
         or args.adf_clip_min is not None
         or args.adf_clip_max is not None
     )
-    if not args.build_flux_ratio_adf:
-        if dependent_options:
-            parser.error(
-                "flux-ratio ADF workflow options require --build-flux-ratio-adf"
-            )
-        return
 
+
+def _validate_flux_ratio_adf_required_args(
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+) -> None:
     if args.run_dir is None:
         parser.error("--build-flux-ratio-adf requires --run-dir")
     if args.adf_source is not None:
@@ -983,15 +1007,15 @@ def _validate_flux_ratio_adf_args(
             "--export-surface-flux or --adf-surface-flux"
         )
     if args.adf_surface_flux is not None:
-        try:
-            _hdf5_reference_file(args.adf_surface_flux)
-        except ValueError as exc:
-            parser.error(str(exc))
+        _validate_hdf5_reference_arg(args.adf_surface_flux, parser)
     if args.homogeneous_face_flux is not None:
-        try:
-            _hdf5_reference_file(args.homogeneous_face_flux)
-        except ValueError as exc:
-            parser.error(str(exc))
+        _validate_hdf5_reference_arg(args.homogeneous_face_flux, parser)
+
+
+def _validate_flux_ratio_surface_args(
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+) -> None:
     if args.export_surface_flux:
         if args.statepoint is None and not args.dry_run:
             parser.error("--export-surface-flux requires --statepoint")
@@ -1004,6 +1028,12 @@ def _validate_flux_ratio_adf_args(
             parser.error(str(exc))
         if not (args.surface_flux_face_area > 0.0):
             parser.error("--surface-flux-face-area must be positive")
+
+
+def _validate_flux_ratio_low_order_args(
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+) -> None:
     has_raw_low_order = args.low_order_raw_driver is not None
     has_explicit_low_order = (
         args.low_order_volume_flux is not None and args.low_order_net_current is not None
@@ -1031,6 +1061,12 @@ def _validate_flux_ratio_adf_args(
         parser.error("--low-order-net-current also requires --low-order-volume-flux")
     if args.low_order_volume_flux is not None and args.low_order_net_current is None:
         parser.error("--low-order-volume-flux also requires --low-order-net-current")
+
+
+def _validate_flux_ratio_numeric_args(
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+) -> None:
     try:
         _flux_ratio_faces(args)
         _parse_float_tuple(args.adf_face_widths, "--adf-face-widths")
@@ -1045,6 +1081,16 @@ def _validate_flux_ratio_adf_args(
             parser.error("--adf-clip-min must be <= --adf-clip-max")
     if args.adf_invalid_fill is not None and args.adf_invalid_fill <= 0.0:
         parser.error("--adf-invalid-fill must be positive")
+
+
+def _validate_hdf5_reference_arg(
+    reference: str | Path,
+    parser: argparse.ArgumentParser,
+) -> None:
+    try:
+        _hdf5_reference_file(reference)
+    except ValueError as exc:
+        parser.error(str(exc))
 
 
 def _validate_sph_args(
