@@ -12,12 +12,14 @@ from . import __version__
 from .adf_augment import augment_hdf5_with_adf, parse_faces
 from .from_openmc_adf import (
     build_flux_ratio_adf,
+    flux_ratio_adf_managed_paths,
     print_dry_run_adf,
     validate_flux_ratio_adf_args,
 )
 from .from_openmc_parser import build_parser
 from .from_openmc_run_dir import (
     GeneratedArtifacts,
+    RunDirConfig,
     apply_run_dir_defaults,
     effective_adf_source,
     finalize_run_dir,
@@ -25,12 +27,14 @@ from .from_openmc_run_dir import (
     prepare_run_dir,
     print_dry_run_artifacts,
     print_dry_run_run_dir,
-    validate_run_dir_args,
+    validate_run_dir_config,
 )
 from .from_openmc_sph import (
+    SphConfig,
     apply_sph_workflow,
     print_dry_run_sph,
-    validate_sph_args,
+    sph_managed_paths,
+    validate_sph_config,
 )
 from .from_openmc_summary import FROM_OPENMC_SUMMARY_SCHEMA
 from .macrolib import convert_mgxs_hdf5_to_macrolib
@@ -60,7 +64,14 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--statepoint is required unless --no-load-statepoint is set")
 
         final_output = output_path(args.output, args.format)
-        prepare_run_dir(args, final_output, parser)
+        try:
+            prepare_run_dir(
+                _run_dir_config(args),
+                final_output,
+                extra_managed_paths=_workflow_managed_paths(args),
+            )
+        except ValueError as exc:
+            parser.error(str(exc))
         if args.keep_hdf5 is not None:
             return 0 if _run_pipeline(args, args.keep_hdf5, final_output, hdf5_kept=True) else 1
         else:
@@ -84,17 +95,79 @@ def _normalize_args(args: argparse.Namespace) -> None:
     if args.sph_source is not None or args.sph_macrolib is not None:
         args.check = True
         args.require_sph = True
-    apply_run_dir_defaults(args)
+    _apply_run_dir_config(args, apply_run_dir_defaults(_run_dir_config(args)))
 
 
 def _validate_args(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
-    validate_run_dir_args(args, parser)
+    try:
+        validate_run_dir_config(_run_dir_config(args))
+    except ValueError as exc:
+        parser.error(str(exc))
     if args.expected_adf_faces is None and args.adf_faces is not None:
         args.expected_adf_faces = args.adf_faces
     validate_flux_ratio_adf_args(args, parser)
-    validate_sph_args(args, parser)
+    try:
+        validate_sph_config(_sph_config(args))
+    except ValueError as exc:
+        parser.error(str(exc))
     if args.strict_dry_run and not args.dry_run:
         parser.error("--strict-dry-run requires --dry-run")
+
+
+def _run_dir_config(args: argparse.Namespace) -> RunDirConfig:
+    return RunDirConfig(
+        run_dir=args.run_dir,
+        keep_hdf5=args.keep_hdf5,
+        output=args.output,
+        output_format=args.format,
+        summary_json=args.summary_json,
+        check=args.check,
+        check_summary_json=args.check_summary_json,
+        adf_source=args.adf_source,
+        build_flux_ratio_adf=args.build_flux_ratio_adf,
+        adf_summary_json=args.adf_summary_json,
+        sph_source=args.sph_source,
+        sph_macrolib=args.sph_macrolib,
+        sph_summary_json=args.sph_summary_json,
+        no_validate_bundle=args.no_validate_bundle,
+        bundle_validation_summary_json=args.bundle_validation_summary_json,
+        no_handoff_summary=args.no_handoff_summary,
+        handoff_summary_json=args.handoff_summary_json,
+        extra_artifact=tuple(args.extra_artifact),
+        force_run_dir=args.force_run_dir,
+        recipe=args.recipe,
+    )
+
+
+def _apply_run_dir_config(args: argparse.Namespace, config: RunDirConfig) -> None:
+    args.keep_hdf5 = config.keep_hdf5
+    args.output = config.output
+    args.summary_json = config.summary_json
+    args.check_summary_json = config.check_summary_json
+    args.adf_summary_json = config.adf_summary_json
+    args.sph_summary_json = config.sph_summary_json
+    args.bundle_validation_summary_json = config.bundle_validation_summary_json
+    args.handoff_summary_json = config.handoff_summary_json
+
+
+def _sph_config(args: argparse.Namespace) -> SphConfig:
+    return SphConfig(
+        run_dir=args.run_dir,
+        sph_source=args.sph_source,
+        sph_macrolib=args.sph_macrolib,
+        sph_summary_json=args.sph_summary_json,
+        sph_kind=args.sph_kind,
+        sph_real=args.sph_real,
+        sph_applied=args.sph_applied,
+        sph_source_label=args.sph_source_label,
+    )
+
+
+def _workflow_managed_paths(args: argparse.Namespace) -> list[Path | None]:
+    paths = sph_managed_paths(_sph_config(args))
+    if args.build_flux_ratio_adf:
+        paths.extend(flux_ratio_adf_managed_paths(args))
+    return paths
 
 
 def _run_dry_run(args: argparse.Namespace) -> bool:
@@ -111,10 +184,10 @@ def _run_dry_run(args: argparse.Namespace) -> bool:
     print("one-step conversion dry-run OK")
     _print_dry_run_output(args, final_output, hdf5_path)
     print_dry_run_adf(args)
-    print_dry_run_sph(args)
-    print_dry_run_artifacts(args)
+    print_dry_run_sph(_sph_config(args))
+    print_dry_run_artifacts(_run_dir_config(args))
     _print_dry_run_checks(args)
-    print_dry_run_run_dir(args)
+    print_dry_run_run_dir(_run_dir_config(args))
     if args.strict_dry_run:
         return print_strict_dry_run_decision(summary)
     return True
@@ -201,7 +274,7 @@ def _run_pipeline(
         legendre_order=export_summary.legendre_order,
     )
     return finalize_run_dir(
-        args,
+        _run_dir_config(args),
         hdf5_path=hdf5_path,
         output_path=output_path,
         recipe_path=recipe_summary.recipe_path,
@@ -245,11 +318,14 @@ def _apply_pipeline_corrections(
             statepoint_path=recipe_summary.statepoint_path,
         )
 
-    adf_source = effective_adf_source(args, generated)
+    adf_source = effective_adf_source(_run_dir_config(args), generated)
     if adf_source is not None:
         _inject_adf(args, hdf5_path, adf_source=adf_source)
 
-    generated.sph_source, generated.sph_artifacts = apply_sph_workflow(args, hdf5_path)
+    generated.sph_source, generated.sph_artifacts = apply_sph_workflow(
+        _sph_config(args),
+        hdf5_path,
+    )
 
 
 def _run_pipeline_preflight(

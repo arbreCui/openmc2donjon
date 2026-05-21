@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import argparse
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from . import __version__
@@ -13,9 +12,31 @@ from .bundle import (
     parse_extra_artifact,
     validate_bundle,
 )
-from .from_openmc_adf import flux_ratio_adf_managed_paths
-from .from_openmc_sph import sph_managed_paths
 from .handoff_summary import write_handoff_summary
+
+
+@dataclass(frozen=True, slots=True)
+class RunDirConfig:
+    run_dir: Path | None
+    keep_hdf5: Path | None
+    output: str | None
+    output_format: str
+    summary_json: Path | None
+    check: bool
+    check_summary_json: Path | None
+    adf_source: Path | None
+    build_flux_ratio_adf: bool
+    adf_summary_json: Path | None
+    sph_source: Path | None
+    sph_macrolib: Path | None
+    sph_summary_json: Path | None
+    no_validate_bundle: bool
+    bundle_validation_summary_json: Path | None
+    no_handoff_summary: bool
+    handoff_summary_json: Path | None
+    extra_artifact: tuple[str, ...]
+    force_run_dir: bool
+    recipe: Path
 
 
 @dataclass(slots=True)
@@ -26,90 +47,91 @@ class GeneratedArtifacts:
     sph_artifacts: list[ArtifactSpec] = field(default_factory=list)
 
 
-def apply_run_dir_defaults(args: argparse.Namespace) -> None:
-    if args.run_dir is None:
-        return
-    run_dir = args.run_dir
-    if args.keep_hdf5 is None:
-        args.keep_hdf5 = run_dir / "mgxs_library.h5"
-    if args.output is None:
-        args.output = str(run_dir / default_output_name(args.format))
-    if args.summary_json is None:
-        args.summary_json = run_dir / "run_summary.json"
-    if args.check and args.check_summary_json is None:
-        args.check_summary_json = run_dir / "check_summary.json"
-    if (args.adf_source is not None or args.build_flux_ratio_adf) and args.adf_summary_json is None:
-        args.adf_summary_json = run_dir / "adf_summary.json"
-    if (args.sph_source is not None or args.sph_macrolib is not None) and args.sph_summary_json is None:
-        args.sph_summary_json = run_dir / "sph_summary.json"
-    if not args.no_validate_bundle and args.bundle_validation_summary_json is None:
-        args.bundle_validation_summary_json = run_dir / "bundle_validation_summary.json"
-    if not args.no_handoff_summary and args.handoff_summary_json is None:
-        args.handoff_summary_json = run_dir / "handoff_summary.json"
+def apply_run_dir_defaults(config: RunDirConfig) -> RunDirConfig:
+    if config.run_dir is None:
+        return config
+    run_dir = config.run_dir
+    updates: dict[str, object] = {}
+    if config.keep_hdf5 is None:
+        updates["keep_hdf5"] = run_dir / "mgxs_library.h5"
+    if config.output is None:
+        updates["output"] = str(run_dir / default_output_name(config.output_format))
+    if config.summary_json is None:
+        updates["summary_json"] = run_dir / "run_summary.json"
+    if config.check and config.check_summary_json is None:
+        updates["check_summary_json"] = run_dir / "check_summary.json"
+    if (config.adf_source is not None or config.build_flux_ratio_adf) and config.adf_summary_json is None:
+        updates["adf_summary_json"] = run_dir / "adf_summary.json"
+    if (config.sph_source is not None or config.sph_macrolib is not None) and config.sph_summary_json is None:
+        updates["sph_summary_json"] = run_dir / "sph_summary.json"
+    if not config.no_validate_bundle and config.bundle_validation_summary_json is None:
+        updates["bundle_validation_summary_json"] = run_dir / "bundle_validation_summary.json"
+    if not config.no_handoff_summary and config.handoff_summary_json is None:
+        updates["handoff_summary_json"] = run_dir / "handoff_summary.json"
+    return replace(config, **updates)
 
 
-def validate_run_dir_args(
-    args: argparse.Namespace,
-    parser: argparse.ArgumentParser,
-) -> None:
-    if args.bundle_validation_summary_json is not None and args.run_dir is None:
-        parser.error("--bundle-validation-summary-json requires --run-dir")
-    if args.handoff_summary_json is not None and args.run_dir is None:
-        parser.error("--handoff-summary-json requires --run-dir")
-    if args.extra_artifact and args.run_dir is None:
-        parser.error("--extra-artifact requires --run-dir")
-    if args.no_validate_bundle and args.bundle_validation_summary_json is not None:
-        parser.error("--bundle-validation-summary-json cannot be used with --no-validate-bundle")
-    if args.no_handoff_summary and args.handoff_summary_json is not None:
-        parser.error("--handoff-summary-json cannot be used with --no-handoff-summary")
-    extra_artifacts_from_args(args, parser)
+def validate_run_dir_config(config: RunDirConfig) -> None:
+    if config.bundle_validation_summary_json is not None and config.run_dir is None:
+        raise ValueError("--bundle-validation-summary-json requires --run-dir")
+    if config.handoff_summary_json is not None and config.run_dir is None:
+        raise ValueError("--handoff-summary-json requires --run-dir")
+    if config.extra_artifact and config.run_dir is None:
+        raise ValueError("--extra-artifact requires --run-dir")
+    if config.no_validate_bundle and config.bundle_validation_summary_json is not None:
+        raise ValueError("--bundle-validation-summary-json cannot be used with --no-validate-bundle")
+    if config.no_handoff_summary and config.handoff_summary_json is not None:
+        raise ValueError("--handoff-summary-json cannot be used with --no-handoff-summary")
+    extra_artifacts_from_config(config)
 
 
-def print_dry_run_artifacts(args: argparse.Namespace) -> None:
-    if args.extra_artifact:
+def print_dry_run_artifacts(config: RunDirConfig) -> None:
+    if config.extra_artifact:
         print("  extra_artifacts:")
-        for artifact in extra_artifacts_from_args(args):
+        for artifact in extra_artifacts_from_config(config):
             print(f"    {artifact.label}: {artifact.source} (not copied)")
     else:
         print("  extra_artifacts: none")
-    if args.summary_json is None:
+    if config.summary_json is None:
         print("  summary_json: none")
     else:
-        print(f"  summary_json: {args.summary_json} (not written)")
+        print(f"  summary_json: {config.summary_json} (not written)")
 
 
-def print_dry_run_run_dir(args: argparse.Namespace) -> None:
-    if args.run_dir is not None:
-        if args.no_validate_bundle:
+def print_dry_run_run_dir(config: RunDirConfig) -> None:
+    if config.run_dir is not None:
+        if config.no_validate_bundle:
             print("  bundle_validation_summary_json: disabled")
         else:
             print(
                 "  bundle_validation_summary_json: "
-                f"{args.bundle_validation_summary_json} (not written)"
+                f"{config.bundle_validation_summary_json} (not written)"
             )
-        if args.no_handoff_summary:
+        if config.no_handoff_summary:
             print("  handoff_summary_json: disabled")
         else:
-            print(f"  handoff_summary_json: {args.handoff_summary_json} (not written)")
+            print(f"  handoff_summary_json: {config.handoff_summary_json} (not written)")
 
 
 def prepare_run_dir(
-    args: argparse.Namespace,
+    config: RunDirConfig,
     output_path: Path,
-    parser: argparse.ArgumentParser,
+    *,
+    extra_managed_paths: list[Path | None],
 ) -> None:
-    if args.run_dir is None:
+    if config.run_dir is None:
         return
-    managed_paths = _managed_run_dir_paths(args, output_path, parser)
+    managed_paths = _managed_run_dir_paths(config, output_path)
+    managed_paths.extend(extra_managed_paths)
     existing = [path for path in managed_paths if path is not None and path.exists()]
-    if existing and not args.force_run_dir:
+    if existing and not config.force_run_dir:
         rendered = ", ".join(str(path) for path in existing)
-        parser.error(f"--run-dir managed artifacts already exist; use --force-run-dir: {rendered}")
-    args.run_dir.mkdir(parents=True, exist_ok=True)
+        raise ValueError(f"--run-dir managed artifacts already exist; use --force-run-dir: {rendered}")
+    config.run_dir.mkdir(parents=True, exist_ok=True)
 
 
 def finalize_run_dir(
-    args: argparse.Namespace,
+    config: RunDirConfig,
     *,
     hdf5_path: Path,
     output_path: Path,
@@ -118,48 +140,48 @@ def finalize_run_dir(
     summary: dict[str, object],
     generated: GeneratedArtifacts,
 ) -> bool:
-    if args.run_dir is None:
+    if config.run_dir is None:
         return True
 
-    manifest_path = args.run_dir / "manifest.json"
+    manifest_path = config.run_dir / "manifest.json"
     _write_run_dir_manifest(
-        args,
+        config,
         hdf5_path,
         output_path,
         recipe_path,
         generated=generated,
     )
     report = None
-    if not args.no_validate_bundle:
+    if not config.no_validate_bundle:
         report = validate_bundle(
             manifest_path,
-            summary_json=args.bundle_validation_summary_json,
+            summary_json=config.bundle_validation_summary_json,
         )
-    if not args.no_handoff_summary:
+    if not config.no_handoff_summary:
         write_handoff_summary(
-            args.handoff_summary_json,
+            config.handoff_summary_json,
             package_version=__version__,
-            run_dir=args.run_dir,
+            run_dir=config.run_dir,
             summary=summary,
             recipe_path=recipe_path,
             statepoint_path=statepoint_path,
             hdf5_path=hdf5_path,
             output_path=output_path,
-            output_format=args.format,
-            run_summary_json=args.summary_json,
-            check_summary_json=args.check_summary_json if args.check else None,
+            output_format=config.output_format,
+            run_summary_json=config.summary_json,
+            check_summary_json=config.check_summary_json if config.check else None,
             manifest_path=manifest_path,
             bundle_validation_summary_json=(
-                args.bundle_validation_summary_json
-                if not args.no_validate_bundle
+                config.bundle_validation_summary_json
+                if not config.no_validate_bundle
                 else None
             ),
             bundle_validation_passed=None if report is None else report.ok,
             bundle_validation_decision=None if report is None else report.decision,
-            adf_enabled=effective_adf_source(args, generated) is not None,
-            sph_enabled=effective_sph_source(args, generated) is not None,
+            adf_enabled=effective_adf_source(config, generated) is not None,
+            sph_enabled=effective_sph_source(config, generated) is not None,
         )
-        print(f"wrote handoff summary: {args.handoff_summary_json}")
+        print(f"wrote handoff summary: {config.handoff_summary_json}")
     return report is None or report.ok
 
 
@@ -176,70 +198,61 @@ def default_output_name(output_format: str) -> str:
 
 
 def effective_adf_source(
-    args: argparse.Namespace,
+    config: RunDirConfig,
     generated: GeneratedArtifacts | None = None,
 ) -> Path | None:
     if generated is not None and generated.adf_source is not None:
         return generated.adf_source
-    return args.adf_source
+    return config.adf_source
 
 
 def effective_sph_source(
-    args: argparse.Namespace,
+    config: RunDirConfig,
     generated: GeneratedArtifacts | None = None,
 ) -> Path | None:
     if generated is not None and generated.sph_source is not None:
         return generated.sph_source
-    return args.sph_source
+    return config.sph_source
 
 
-def extra_artifacts_from_args(
-    args: argparse.Namespace,
-    parser: argparse.ArgumentParser | None = None,
-) -> list[ArtifactSpec]:
+def extra_artifacts_from_config(config: RunDirConfig) -> list[ArtifactSpec]:
     artifacts: list[ArtifactSpec] = []
-    for raw in args.extra_artifact:
+    for raw in config.extra_artifact:
         try:
             artifacts.append(parse_extra_artifact(raw))
         except ValueError as exc:
-            if parser is not None:
-                parser.error(f"--extra-artifact {raw!r}: {exc}")
-            raise
+            raise ValueError(f"--extra-artifact {raw!r}: {exc}") from exc
     return artifacts
 
 
 def _managed_run_dir_paths(
-    args: argparse.Namespace,
+    config: RunDirConfig,
     output_path: Path,
-    parser: argparse.ArgumentParser,
 ) -> list[Path | None]:
-    run_dir = args.run_dir
+    run_dir = config.run_dir
     managed_paths = [
-        args.keep_hdf5,
+        config.keep_hdf5,
         output_path,
-        args.summary_json,
+        config.summary_json,
         run_dir / "manifest.json",
     ]
-    if not args.no_validate_bundle:
-        managed_paths.append(args.bundle_validation_summary_json)
-    if not args.no_handoff_summary:
-        managed_paths.append(args.handoff_summary_json)
-    _append_run_dir_copy(managed_paths, run_dir, args.recipe)
-    if args.check:
-        managed_paths.append(args.check_summary_json)
-    if args.adf_source is not None:
-        managed_paths.append(args.adf_summary_json)
-        _append_run_dir_copy(managed_paths, run_dir, args.adf_source)
-    managed_paths.extend(sph_managed_paths(args))
-    if args.build_flux_ratio_adf:
-        managed_paths.extend(flux_ratio_adf_managed_paths(args))
-    for artifact in extra_artifacts_from_args(args, parser):
+    if not config.no_validate_bundle:
+        managed_paths.append(config.bundle_validation_summary_json)
+    if not config.no_handoff_summary:
+        managed_paths.append(config.handoff_summary_json)
+    _append_run_dir_copy(managed_paths, run_dir, config.recipe)
+    if config.check:
+        managed_paths.append(config.check_summary_json)
+    if config.adf_source is not None:
+        managed_paths.append(config.adf_summary_json)
+        _append_run_dir_copy(managed_paths, run_dir, config.adf_source)
+    for artifact in extra_artifacts_from_config(config):
         _append_run_dir_copy(managed_paths, run_dir, artifact.source)
     return managed_paths
 
 
 def _write_run_dir_manifest(
-    args: argparse.Namespace,
+    config: RunDirConfig,
     hdf5_path: Path,
     output_path: Path,
     recipe_path: Path,
@@ -247,30 +260,30 @@ def _write_run_dir_manifest(
     generated: GeneratedArtifacts,
 ) -> None:
     artifacts = [ArtifactSpec(label="mgxs", source=hdf5_path)]
-    if args.format == "macrolib":
+    if config.output_format == "macrolib":
         artifacts.append(ArtifactSpec(label="macrolib", source=output_path))
     else:
         artifacts.append(ArtifactSpec(label="mcompo", source=output_path))
-    if args.summary_json is not None:
-        artifacts.append(ArtifactSpec(label="run-summary", source=args.summary_json))
-    if args.check and args.check_summary_json is not None:
-        artifacts.append(ArtifactSpec(label="check-summary", source=args.check_summary_json))
-    adf_source = effective_adf_source(args, generated)
+    if config.summary_json is not None:
+        artifacts.append(ArtifactSpec(label="run-summary", source=config.summary_json))
+    if config.check and config.check_summary_json is not None:
+        artifacts.append(ArtifactSpec(label="check-summary", source=config.check_summary_json))
+    adf_source = effective_adf_source(config, generated)
     if adf_source is not None:
         artifacts.append(ArtifactSpec(label="adf-source", source=adf_source))
-        if args.adf_summary_json is not None:
-            artifacts.append(ArtifactSpec(label="adf-summary", source=args.adf_summary_json))
+        if config.adf_summary_json is not None:
+            artifacts.append(ArtifactSpec(label="adf-summary", source=config.adf_summary_json))
     artifacts.extend(generated.adf_artifacts)
-    sph_source = effective_sph_source(args, generated)
+    sph_source = effective_sph_source(config, generated)
     if sph_source is not None:
         artifacts.append(ArtifactSpec(label="sph-source", source=sph_source))
-        if args.sph_summary_json is not None:
-            artifacts.append(ArtifactSpec(label="sph-summary", source=args.sph_summary_json))
+        if config.sph_summary_json is not None:
+            artifacts.append(ArtifactSpec(label="sph-summary", source=config.sph_summary_json))
     artifacts.extend(generated.sph_artifacts)
-    artifacts.extend(extra_artifacts_from_args(args))
+    artifacts.extend(extra_artifacts_from_config(config))
     artifacts.append(ArtifactSpec(label="recipe", source=recipe_path))
     bundle_artifacts(
-        output_dir=args.run_dir,
+        output_dir=config.run_dir,
         artifacts=artifacts,
         force=True,
     )
