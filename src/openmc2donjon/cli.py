@@ -29,6 +29,7 @@ from .sph_augment import (
     create_table_sph_sidecar,
     create_unity_sph_sidecar,
 )
+from .sph_iteration import create_sph_update_table
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -50,8 +51,9 @@ def build_parser() -> argparse.ArgumentParser:
             "make-adf-sidecar <input_h5> ...' to create an ADF "
             "sidecar, 'openmc2donjon augment-adf <input_h5> ...' to inject "
             "computed discontinuity factors, 'openmc2donjon make-sph-sidecar "
-            "<input_h5> ...' and 'openmc2donjon augment-sph <input_h5> ...' "
-            "to carry SPH equivalence factors, "
+            "<input_h5> ...', 'openmc2donjon make-sph-update-table "
+            "<input_h5> ...', and 'openmc2donjon augment-sph <input_h5> ...' "
+            "to iterate and carry SPH equivalence factors, "
             "'openmc2donjon bundle --output-dir DIR ...' to collect "
             "production artifacts, 'openmc2donjon doctor' for environment checks, or "
             "'openmc2donjon check <input_h5>' for input-contract preflight."
@@ -739,6 +741,69 @@ def build_make_sph_sidecar_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_make_sph_update_table_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="openmc2donjon make-sph-update-table",
+        description=(
+            "Create the next external SPH CSV table from reference and "
+            "low-order volume fluxes using "
+            "next_sph = previous_sph * (reference_flux / low_order_flux) ** damping."
+        ),
+    )
+    parser.add_argument("input_h5", type=Path, help="MGXS HDF5 file used for mixture/group metadata")
+    parser.add_argument("-o", "--output", type=Path, required=True, help="SPH CSV table output path")
+    parser.add_argument(
+        "--reference-flux",
+        required=True,
+        help="reference flux CSV or HDF5 source, optionally PATH::DATASET",
+    )
+    parser.add_argument(
+        "--low-order-flux",
+        required=True,
+        help="low-order flux CSV or HDF5 source, optionally PATH::DATASET",
+    )
+    parser.add_argument(
+        "--previous-sph",
+        default=None,
+        help="previous SPH CSV or HDF5 sidecar/source; defaults to unity",
+    )
+    parser.add_argument(
+        "--damping",
+        type=float,
+        default=1.0,
+        help="multiplicative update damping in 0..1 (default: 1.0)",
+    )
+    parser.add_argument(
+        "--clip-min",
+        type=float,
+        default=None,
+        help="minimum SPH value after update",
+    )
+    parser.add_argument(
+        "--clip-max",
+        type=float,
+        default=None,
+        help="maximum SPH value after update",
+    )
+    parser.add_argument(
+        "--source-label",
+        default="external low-order SPH iteration",
+        help="provenance label recorded in the summary JSON",
+    )
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        default=None,
+        help="write a machine-readable SPH iteration summary JSON",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="overwrite the SPH CSV output if it already exists",
+    )
+    return parser
+
+
 def build_export_surface_flux_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="openmc2donjon export-surface-flux",
@@ -1022,6 +1087,8 @@ def main(argv: list[str] | None = None) -> int:
         return _augment_adf_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "make-sph-sidecar":
         return _make_sph_sidecar_main(raw_argv[1:])
+    if raw_argv and raw_argv[0] == "make-sph-update-table":
+        return _make_sph_update_table_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "augment-sph":
         return _augment_sph_main(raw_argv[1:])
     if raw_argv and raw_argv[0] == "bundle":
@@ -1286,6 +1353,28 @@ def _make_sph_sidecar_main(argv: list[str]) -> int:
             parser.error(f"unsupported --mode: {args.mode}")
     except Exception as exc:
         parser.exit(1, f"openmc2donjon make-sph-sidecar: error: {exc}\n")
+    return 0
+
+
+def _make_sph_update_table_main(argv: list[str]) -> int:
+    parser = build_make_sph_update_table_parser()
+    args = parser.parse_args(argv)
+    try:
+        create_sph_update_table(
+            args.input_h5,
+            args.output,
+            reference_flux=args.reference_flux,
+            low_order_flux=args.low_order_flux,
+            previous_sph=args.previous_sph,
+            damping=args.damping,
+            clip_min=args.clip_min,
+            clip_max=args.clip_max,
+            source_label=args.source_label,
+            force=args.force,
+            summary_json=args.summary_json,
+        )
+    except Exception as exc:
+        parser.exit(1, f"openmc2donjon make-sph-update-table: error: {exc}\n")
     return 0
 
 
