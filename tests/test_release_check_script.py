@@ -32,6 +32,8 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertIn("run-sph-loop --help", default_section)
         self.assertIn("== SPH iteration loop smoke ==", default_section)
         self.assertIn("examples/sph_iteration_loop/run_smoke.sh", default_section)
+        self.assertIn("== Generic DONJON SPH loop adapter smoke ==", default_section)
+        self.assertIn("examples/donjon_sph_loop_adapter/run_smoke.sh", default_section)
         self.assertIn("== External SPH handoff smoke ==", default_section)
         self.assertIn("examples/external_sph_handoff/run_smoke.sh", default_section)
         self.assertIn("== C5G7 ADF source reconstruction smoke ==", accepted_section)

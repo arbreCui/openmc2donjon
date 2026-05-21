@@ -43,6 +43,7 @@ Useful checks:
 ```sh
 bash scripts/run_recipe_export_smoke.sh
 bash examples/external_face_flux_adapter/run_smoke.sh
+bash examples/donjon_sph_loop_adapter/run_smoke.sh
 bash scripts/run_c5g7_demo.sh
 bash scripts/release_check.sh
 ```
