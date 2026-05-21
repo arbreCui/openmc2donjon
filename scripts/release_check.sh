@@ -35,6 +35,7 @@ Default:
   - CLI help/version smoke
   - recipe/statepoint exporter smoke
   - DRAGON SPH macrolib handoff smoke when local DRAGON TCM38 inputs exist
+  - DONJON DSPH consume smoke when local DONJON is available
   - external face-flux adapter smoke
   - production minicase and OpenMC hex minicase smokes
   - C5G7 converter readback smoke
@@ -161,9 +162,17 @@ PYTHON_BIN="$PYTHON_BIN" \
 
 echo
 echo "== DRAGON SPH macrolib handoff smoke =="
-RUN_DIR="$RUN_DIR/dragon_sph_handoff" \
+DRAGON_SPH_RUN_DIR="$RUN_DIR/dragon_sph_handoff"
+RUN_DIR="$DRAGON_SPH_RUN_DIR" \
 PYTHON_BIN="$PYTHON_BIN" \
   bash "$REPO_ROOT/scripts/run_dragon_sph_handoff_smoke.sh"
+
+echo
+echo "== DONJON SPH consume smoke =="
+RUN_DIR="$RUN_DIR/donjon_sph_consume" \
+PYTHON_BIN="$PYTHON_BIN" \
+MACROLIB_ASCII="$DRAGON_SPH_RUN_DIR/from_openmc_sph/out.macrolib.txt" \
+  bash "$REPO_ROOT/scripts/run_donjon_sph_consume_smoke.sh"
 
 echo
 echo "== External low-order handoff smoke =="
