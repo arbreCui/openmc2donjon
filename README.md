@@ -30,6 +30,7 @@ Start here:
 - [Quickstart](docs/QUICKSTART.md)
 - [OpenMC export workflow](docs/OPENMC_EXPORT_WORKFLOW.md)
 - [HDF5 input contract](docs/HDF5_INPUT_CONTRACT.md)
+- [External face-flux contract](docs/EXTERNAL_FACE_FLUX_CONTRACT.md)
 - [From-OpenMC summary JSON](docs/FROM_OPENMC_SUMMARY_SCHEMA.md)
 - [Validation summary](docs/VALIDATION.md)
 - [Handoff note](docs/HANDOFF_NOTE.md)
@@ -41,6 +42,7 @@ Useful checks:
 
 ```sh
 bash scripts/run_recipe_export_smoke.sh
+bash examples/external_face_flux_adapter/run_smoke.sh
 bash scripts/run_c5g7_demo.sh
 bash scripts/release_check.sh
 ```

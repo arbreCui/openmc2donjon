@@ -378,6 +378,9 @@ ratio. If invalid ratio bins are expected, they must be acknowledged with an
 explicit `--invalid-fill` policy; the JSON summary records the invalid and
 filled bin counts plus the same clip bounds used by sidecar generation.
 
+For the direct external homogeneous-face-flux denominator contract and adapter
+pattern, see `docs/EXTERNAL_FACE_FLUX_CONTRACT.md`.
+
 The sidecar can either reuse the normal MGXS layout with
 `/mixtures/<domain_name>/adf`, or provide a compact root dataset:
 

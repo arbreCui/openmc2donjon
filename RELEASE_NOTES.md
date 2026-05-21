@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added `docs/EXTERNAL_FACE_FLUX_CONTRACT.md` and
+  `examples/external_face_flux_adapter`, a runnable template for adapting
+  external nodal/SPN/diffusion homogeneous face fluxes into the canonical
+  `homogeneous_face_flux` HDF5 denominator used by flux-ratio ADF generation.
 - Added `scripts/run_c5g7_donjon_face_flux_smoke.sh`, which regenerates the
   accepted C5G7 homogeneous face-flux denominator from real DONJON
   `L_FLUX`/`L_TRACK` dumps, checks exact HDF5 payload parity with the accepted

@@ -34,6 +34,7 @@ Default:
   - package tests
   - CLI help/version smoke
   - recipe/statepoint exporter smoke
+  - external face-flux adapter smoke
   - production minicase and OpenMC hex minicase smokes
   - C5G7 converter readback smoke
   - accepted baseline manifest validation
@@ -160,6 +161,12 @@ echo "== External low-order handoff smoke =="
 RUN_DIR="$RUN_DIR/external_low_order_handoff" \
 PYTHON_BIN="$PYTHON_BIN" \
   bash "$REPO_ROOT/examples/external_low_order_handoff/run_smoke.sh"
+
+echo
+echo "== External face-flux adapter smoke =="
+RUN_DIR="$RUN_DIR/external_face_flux_adapter" \
+PYTHON_BIN="$PYTHON_BIN" \
+  bash "$REPO_ROOT/examples/external_face_flux_adapter/run_smoke.sh"
 
 echo
 echo "== Production minicase smoke =="

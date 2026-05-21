@@ -33,6 +33,8 @@ remain separate mixtures when their spectra or leakage environments differ.
 - ADF/DF sidecar injection, OpenMC surface-flux export, low-order driver
   canonicalization, face-flux contract checks, and flux-ratio ADF workflow
   plumbing.
+- External homogeneous face-flux adapter pattern for low-order, nodal, SPN, or
+  diffusion solvers that already compute the ADF denominator directly.
 - Managed run directories with `mgxs_library.h5`, DONJON ASCII output,
   summaries, recipe copies, and bundle manifests.
 
@@ -76,6 +78,7 @@ The default gate covers:
 - package tests;
 - installed CLI help/version smoke;
 - recipe/export smoke;
+- direct external face-flux adapter smoke;
 - real OpenMC Cartesian production minicase;
 - real OpenMC hex minicase;
 - C5G7 converter readback to `L_MULTICOMPO` and `L_MACROLIB`;

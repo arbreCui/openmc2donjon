@@ -147,6 +147,14 @@ A complete deterministic external low-order handoff example is available here:
 bash examples/external_low_order_handoff/run_smoke.sh
 ```
 
+When the external solver already computes the homogeneous face flux directly,
+start from the adapter template instead of reconstructing the denominator from
+volume flux and net current:
+
+```sh
+bash examples/external_face_flux_adapter/run_smoke.sh
+```
+
 To keep explicit paths instead of using a managed run directory:
 
 ```sh

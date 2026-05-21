@@ -18,6 +18,8 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         )
         self.assertIn("== OpenMC hex minicase smoke ==", default_section)
         self.assertIn("examples/openmc_hex_minicase/run_smoke.sh", default_section)
+        self.assertIn("== External face-flux adapter smoke ==", default_section)
+        self.assertIn("examples/external_face_flux_adapter/run_smoke.sh", default_section)
         self.assertIn("== C5G7 ADF source reconstruction smoke ==", accepted_section)
         self.assertIn("scripts/run_c5g7_adf_source_smoke.sh", accepted_section)
         self.assertIn("== C5G7 DONJON face-flux regeneration smoke ==", accepted_section)

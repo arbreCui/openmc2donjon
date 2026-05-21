@@ -220,6 +220,15 @@ current conversion, run:
 bash examples/external_low_order_handoff/run_smoke.sh
 ```
 
+If the external solver already writes homogeneous face fluxes, use the direct
+face-flux adapter contract instead:
+
+```sh
+bash examples/external_face_flux_adapter/run_smoke.sh
+```
+
+The formal denominator contract is in `docs/EXTERNAL_FACE_FLUX_CONTRACT.md`.
+
 If the ADF sidecar was produced separately, pass it directly:
 
 ```sh
