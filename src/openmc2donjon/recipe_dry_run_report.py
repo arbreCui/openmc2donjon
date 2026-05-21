@@ -51,6 +51,34 @@ def print_recipe_dry_run_summary(summary: RecipeDryRunSummary) -> None:
         print(f"    ... {remaining} more mixtures")
 
 
+def strict_dry_run_failures(summary: RecipeDryRunSummary) -> tuple[str, ...]:
+    """Return production-readiness findings that should fail strict dry-run."""
+
+    failures: list[str] = []
+    for check in summary.production_checks:
+        if check.status != "PASS":
+            failures.append(f"{check.status} {check.name}: {check.detail}")
+    for warning in summary.warnings:
+        failures.append(f"WARN warning: {warning}")
+    return tuple(failures)
+
+
+def print_strict_dry_run_decision(summary: RecipeDryRunSummary) -> bool:
+    """Print and return the strict recipe dry-run decision."""
+
+    failures = strict_dry_run_failures(summary)
+    print("recipe dry-run strict decision")
+    if not failures:
+        print("  recipe_dry_run_strict_passed")
+        return True
+    print("  recipe_dry_run_strict_failed")
+    for failure in failures[:12]:
+        print(f"    {failure}")
+    if len(failures) > 12:
+        print(f"    ... {len(failures) - 12} more finding(s)")
+    return False
+
+
 def _render_list(values: tuple[str, ...]) -> str:
     if not values:
         return "none"

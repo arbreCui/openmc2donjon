@@ -33,13 +33,15 @@ Before running a long OpenMC job, dry-run the recipe:
 
 ```sh
 openmc2donjon-export --recipe export_recipe.py --no-load-statepoint --dry-run
+openmc2donjon-export --recipe export_recipe.py --no-load-statepoint --dry-run --strict-dry-run
 ```
 
 The dry-run builds the recipe library, reports the group count, Legendre order,
 domain type, MGXS types, root attributes, and the first mixture names. It also
 prints a production checklist for required MGXS types, transport availability,
 domain mapping, volume provenance, and `domain_mode`. It does not read MGXS
-values or write an HDF5 file.
+values or write an HDF5 file. Use `--strict-dry-run` in automation when recipe
+warnings should fail early, before an expensive OpenMC run is launched.
 
 To export and immediately write DONJON ASCII in one command:
 
@@ -48,7 +50,8 @@ openmc2donjon-from-openmc \
   --recipe export_recipe.py \
   --dry-run \
   --run-dir runs/case1 \
-  --check
+  --check \
+  --strict-dry-run
 ```
 
 The one-step dry-run reports the same recipe/domain metadata plus the planned

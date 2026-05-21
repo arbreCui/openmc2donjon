@@ -10,7 +10,10 @@ from . import __version__
 from .export_openmc_mgxs import export_openmc_mgxs_library
 from .openmc_statepoint import export_openmc_statepoint_recipe
 from .openmc_statepoint import dry_run_openmc_statepoint_recipe
-from .recipe_dry_run_report import print_recipe_dry_run_summary
+from .recipe_dry_run_report import (
+    print_recipe_dry_run_summary,
+    print_strict_dry_run_decision,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -54,6 +57,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="with --recipe, inspect domains and metadata without writing HDF5",
     )
     parser.add_argument(
+        "--strict-dry-run",
+        action="store_true",
+        help=(
+            "with --dry-run, return non-zero if any production checklist item "
+            "warns/fails or if recipe warnings are emitted"
+        ),
+    )
+    parser.add_argument(
         "--no-overwrite",
         action="store_true",
         help="fail if the output HDF5 already exists",
@@ -80,6 +91,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--no-load-statepoint can only be used with --recipe")
     if args.dry_run and args.recipe is None:
         parser.error("--dry-run can only be used with --recipe")
+    if args.strict_dry_run and not args.dry_run:
+        parser.error("--strict-dry-run requires --dry-run")
     if not args.dry_run and args.output is None:
         parser.error("-o/--output is required unless --dry-run is set")
 
@@ -93,6 +106,8 @@ def main(argv: list[str] | None = None) -> int:
                 scatter_mgxs_type=args.scatter_mgxs_type,
             )
             print_recipe_dry_run_summary(summary)
+            if args.strict_dry_run:
+                return 0 if print_strict_dry_run_decision(summary) else 1
             return 0
         if args.statepoint is None and not args.no_load_statepoint:
             parser.error("--recipe requires --statepoint unless --no-load-statepoint is set")

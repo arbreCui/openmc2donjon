@@ -185,15 +185,19 @@ Check a recipe before writing an HDF5 handoff:
 
 ```sh
 openmc2donjon-export --recipe export_recipe.py --no-load-statepoint --dry-run
+openmc2donjon-export --recipe export_recipe.py --no-load-statepoint --dry-run --strict-dry-run
 ```
 
 Dry-run output includes a production checklist for MGXS coverage, transport
 readiness, domain mapping, volume provenance, and `domain_mode`.
+`--strict-dry-run` turns checklist warnings/failures into a non-zero exit code
+for CI-style recipe gates.
 
 Check the one-command conversion plan before writing any artifacts:
 
 ```sh
 openmc2donjon-from-openmc --recipe export_recipe.py --dry-run --run-dir runs/case1 --check
+openmc2donjon-from-openmc --recipe export_recipe.py --dry-run --run-dir runs/case1 --check --strict-dry-run
 ```
 
 Convert with input-contract preflight:

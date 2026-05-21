@@ -13,6 +13,8 @@
 - Added shared summary schema validation for unittest and smoke-script checks.
 - Added an editable OpenMC recipe template for user production cases.
 - Added `openmc2donjon-export --dry-run` for recipe/domain preflight checks.
+- Added `--strict-dry-run` to recipe dry-run entry points so production
+  checklist warnings/failures can return non-zero in automation.
 - Added `openmc2donjon check` as the packaged MGXS HDF5 input-contract
   preflight entry point.
 - Added optional scatter row-balance thresholds to input-contract preflight,

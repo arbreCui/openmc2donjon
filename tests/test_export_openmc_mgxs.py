@@ -490,6 +490,103 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
         self.assertIn("nu-scatter MGXS is not used as DONJON scattering", output)
         self.assertIn("mgxs_types declares nu-scatter", output)
 
+    def test_export_cli_strict_dry_run_fails_on_production_findings(self) -> None:
+        recipe = """
+            from dataclasses import dataclass
+
+            import numpy as np
+
+            class EnergyGroups:
+                group_edges = np.array([1.0e-5, 1.0, 1.0e7])
+
+            @dataclass(frozen=True)
+            class Domain:
+                name: str
+                id: int
+                volume: float
+
+            class Library:
+                def __init__(self):
+                    self.energy_groups = EnergyGroups()
+                    self.domain_type = "cell"
+                    self.legendre_order = 1
+                    self.mgxs_types = [
+                        "total",
+                        "absorption",
+                        "consistent nu-scatter matrix",
+                    ]
+                    self.domains = [Domain("fuel", 1, 10.0)]
+
+            def build_library():
+                return Library()
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            recipe_path = Path(tmpdir) / "recipe.py"
+            recipe_path.write_text(textwrap.dedent(recipe), encoding="utf-8")
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = export_cli_main(
+                    ["--recipe", str(recipe_path), "--dry-run", "--strict-dry-run"]
+                )
+
+        output = stream.getvalue()
+        self.assertEqual(rc, 1)
+        self.assertIn("recipe_dry_run_strict_failed", output)
+        self.assertIn("FAIL mgxs-required:", output)
+
+    def test_export_cli_strict_dry_run_passes_clean_recipe(self) -> None:
+        recipe = """
+            from dataclasses import dataclass
+
+            import numpy as np
+
+            class EnergyGroups:
+                group_edges = np.array([1.0e-5, 1.0, 1.0e7])
+
+            @dataclass(frozen=True)
+            class Domain:
+                name: str
+                id: int
+                volume: float
+
+            class Library:
+                def __init__(self):
+                    self.energy_groups = EnergyGroups()
+                    self.domain_type = "cell"
+                    self.legendre_order = 1
+                    self.mgxs_types = [
+                        "total",
+                        "absorption",
+                        "scatter matrix",
+                        "transport",
+                        "fission",
+                        "nu-fission",
+                        "chi",
+                    ]
+                    self.domains = [Domain("fuel", 1, 10.0)]
+
+            def build_library():
+                return Library()
+
+            def root_attrs():
+                return {"domain_mode": "cell"}
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            recipe_path = Path(tmpdir) / "recipe.py"
+            recipe_path.write_text(textwrap.dedent(recipe), encoding="utf-8")
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = export_cli_main(
+                    ["--recipe", str(recipe_path), "--dry-run", "--strict-dry-run"]
+                )
+
+        output = stream.getvalue()
+        self.assertEqual(rc, 0)
+        self.assertIn("recipe_dry_run_strict_passed", output)
+        self.assertNotIn("recipe_dry_run_strict_failed", output)
+
     def test_export_cli_recipe_dry_run_flags_missing_required_mgxs_types(self) -> None:
         recipe = """
             from dataclasses import dataclass

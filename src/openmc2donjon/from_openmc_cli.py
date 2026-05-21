@@ -22,7 +22,10 @@ from .openmc_surface_flux import (
     export_openmc_surface_flux,
 )
 from .openmc_statepoint import dry_run_openmc_statepoint_recipe, export_openmc_statepoint_recipe
-from .recipe_dry_run_report import print_recipe_dry_run_summary
+from .recipe_dry_run_report import (
+    print_recipe_dry_run_summary,
+    print_strict_dry_run_decision,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -59,6 +62,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run",
         action="store_true",
         help="inspect the recipe and one-step conversion plan without writing files",
+    )
+    parser.add_argument(
+        "--strict-dry-run",
+        action="store_true",
+        help=(
+            "with --dry-run, return non-zero if any production checklist item "
+            "warns/fails or if recipe warnings are emitted"
+        ),
     )
     parser.add_argument(
         "--format",
@@ -363,9 +374,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.expected_adf_faces is None and args.adf_faces is not None:
         args.expected_adf_faces = args.adf_faces
     _validate_flux_ratio_adf_args(args, parser)
+    if args.strict_dry_run and not args.dry_run:
+        parser.error("--strict-dry-run requires --dry-run")
     if args.dry_run:
-        _run_dry_run(args)
-        return 0
+        return 0 if _run_dry_run(args) else 1
     if args.statepoint is None and not args.no_load_statepoint:
         parser.error("--statepoint is required unless --no-load-statepoint is set")
 
@@ -379,7 +391,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0 if ok else 1
 
 
-def _run_dry_run(args: argparse.Namespace) -> None:
+def _run_dry_run(args: argparse.Namespace) -> bool:
     output_path = _output_path(args.output, args.format)
     hdf5_path = args.keep_hdf5
     summary = dry_run_openmc_statepoint_recipe(
@@ -478,6 +490,9 @@ def _run_dry_run(args: argparse.Namespace) -> None:
             print(f"    check_summary_json: {args.check_summary_json} (not written)")
     else:
         print("  check: disabled")
+    if args.strict_dry_run:
+        return print_strict_dry_run_decision(summary)
+    return True
 
 
 def _run_pipeline(

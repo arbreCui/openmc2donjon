@@ -155,6 +155,27 @@ class FromOpenMCCliTests(unittest.TestCase):
         self.assertFalse(summary_exists)
         self.assertFalse(check_summary_exists)
 
+    def test_strict_dry_run_returns_nonzero_for_recipe_warnings(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        recipe = repo_root / "examples/recipe_export_smoke/minimal_recipe.py"
+
+        stream = io.StringIO()
+        with contextlib.redirect_stdout(stream):
+            rc = from_openmc_main(
+                [
+                    "--recipe",
+                    str(recipe),
+                    "--dry-run",
+                    "--strict-dry-run",
+                ]
+            )
+
+        rendered = stream.getvalue()
+        self.assertEqual(rc, 1)
+        self.assertIn("one-step conversion dry-run OK", rendered)
+        self.assertIn("recipe_dry_run_strict_failed", rendered)
+        self.assertIn("WARN mgxs-required:", rendered)
+
     def test_run_dir_writes_standard_artifacts_and_manifest(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         recipe = repo_root / "examples/recipe_export_smoke/minimal_recipe.py"
