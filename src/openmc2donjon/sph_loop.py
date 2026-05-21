@@ -10,9 +10,12 @@ import shlex
 import subprocess
 from typing import Any
 
+import numpy as np
+
 from . import __version__
 from .macrolib import convert_mgxs_hdf5_to_macrolib
 from .multicompo import DEFAULT_ROOT_NAME, convert_mgxs_hdf5
+from .sph_augment import load_sph_source
 from .sph_workflow import SphIterationWorkflowReport, run_sph_iteration_workflow
 
 
@@ -47,19 +50,36 @@ class SphLoopPostprocessReport:
 
 
 @dataclass(frozen=True)
+class SphLoopConvergenceReport:
+    iteration: int
+    sph_max_abs_change: float
+    sph_max_rel_change: float
+    flux_ratio_max_residual: float
+    converged: bool
+
+
+@dataclass(frozen=True)
 class SphLoopReport:
     config_path: Path
     input_h5: Path
     output_dir: Path
     reference_flux: str
     iterations: int
+    completed_iterations: int
     output_format: str
     initial_ascii: Path
     final_ascii: Path
     final_sph_sidecar: Path | None
     summary_json: Path
+    convergence_enabled: bool
+    converged: bool
+    stop_reason: str
+    sph_change_tolerance: float | None
+    flux_ratio_tolerance: float | None
+    min_iterations: int
     solves: tuple[SphLoopSolveReport, ...]
     workflows: tuple[SphIterationWorkflowReport, ...]
+    convergence: tuple[SphLoopConvergenceReport, ...]
     postprocesses: tuple[SphLoopPostprocessReport, ...]
     final_solve: SphLoopSolveReport | None
 
@@ -93,6 +113,18 @@ def run_sph_loop(
     iterations = int(config.get("iterations", 1))
     if iterations < 1:
         raise ValueError("iterations must be >= 1")
+    convergence_config = _convergence_config(config)
+    sph_change_tolerance = _optional_float(convergence_config.get("sph_change_tolerance"))
+    flux_ratio_tolerance = _optional_float(convergence_config.get("flux_ratio_tolerance"))
+    convergence_enabled = (
+        sph_change_tolerance is not None or flux_ratio_tolerance is not None
+    )
+    min_iterations = int(convergence_config.get("min_iterations", 1))
+    if min_iterations < 1:
+        raise ValueError("convergence.min_iterations must be >= 1")
+    if min_iterations > iterations:
+        raise ValueError("convergence.min_iterations must be <= iterations")
+    fail_on_nonconvergence = bool(convergence_config.get("fail_on_nonconvergence", False))
 
     output_format = str(config.get("format", "macrolib"))
     if output_format not in {"macrolib", "multicompo"}:
@@ -139,11 +171,14 @@ def run_sph_loop(
     run_final_solve = bool(config.get("final_solve", False))
     solves: list[SphLoopSolveReport] = []
     workflows: list[SphIterationWorkflowReport] = []
+    convergence_reports: list[SphLoopConvergenceReport] = []
     postprocesses: list[SphLoopPostprocessReport] = []
     current_ascii = initial_ascii
     previous_sph: Path | None = None
+    stop_reason = "max_iterations"
 
     for iteration in range(iterations):
+        sph_before_iteration = previous_sph
         solve_report = _run_solver(
             solver,
             base_dir=base_dir,
@@ -181,6 +216,16 @@ def run_sph_loop(
         )
         workflows.append(workflow)
         current_ascii = workflow.ascii_output
+        convergence_report = _build_convergence_report(
+            workflow,
+            input_h5=input_h5,
+            previous_sph=sph_before_iteration,
+            iteration=iteration + 1,
+            sph_change_tolerance=sph_change_tolerance,
+            flux_ratio_tolerance=flux_ratio_tolerance,
+            min_iterations=min_iterations,
+        )
+        convergence_reports.append(convergence_report)
         previous_sph = workflow.sph_sidecar
         if postprocessor is not None:
             postprocess = _run_postprocessor(
@@ -197,14 +242,18 @@ def run_sph_loop(
             )
             postprocesses.append(postprocess)
             current_ascii = postprocess.output
+        if convergence_enabled and convergence_report.converged:
+            stop_reason = "converged"
+            break
 
     final_solve = None
     if run_final_solve:
+        final_iteration = len(workflows)
         final_solve = _run_solver(
             solver,
             base_dir=base_dir,
             loop_dir=loop_dir,
-            iteration=iterations,
+            iteration=final_iteration,
             input_h5=input_h5,
             ascii_input=current_ascii,
             previous_sph=previous_sph,
@@ -212,24 +261,42 @@ def run_sph_loop(
         )
         solves.append(final_solve)
 
+    converged = bool(convergence_reports and convergence_reports[-1].converged)
     report = SphLoopReport(
         config_path=config_file,
         input_h5=input_h5,
         output_dir=loop_dir,
         reference_flux=reference_flux,
         iterations=iterations,
+        completed_iterations=len(workflows),
         output_format=output_format,
         initial_ascii=initial_ascii,
         final_ascii=current_ascii,
         final_sph_sidecar=previous_sph,
         summary_json=summary_path,
+        convergence_enabled=convergence_enabled,
+        converged=converged,
+        stop_reason=stop_reason,
+        sph_change_tolerance=sph_change_tolerance,
+        flux_ratio_tolerance=flux_ratio_tolerance,
+        min_iterations=min_iterations,
         solves=tuple(solves),
         workflows=tuple(workflows),
+        convergence=tuple(convergence_reports),
         postprocesses=tuple(postprocesses),
         final_solve=final_solve,
     )
     print_report(report)
     write_summary(summary_path, report)
+    if (
+        convergence_enabled
+        and fail_on_nonconvergence
+        and not report.converged
+    ):
+        raise RuntimeError(
+            "SPH loop did not converge within "
+            f"{report.iterations} iteration(s); see {summary_path}"
+        )
     return report
 
 
@@ -239,7 +306,7 @@ def print_report(report: SphLoopReport) -> None:
     print(f"  config: {report.config_path}")
     print(f"  input: {report.input_h5}")
     print(f"  output_dir: {report.output_dir}")
-    print(f"  iterations: {report.iterations}")
+    print(f"  iterations: {report.completed_iterations}/{report.iterations}")
     print(f"  reference_flux: {report.reference_flux}")
     print(f"  initial_ascii: {report.initial_ascii}")
     print(f"  final_ascii: {report.final_ascii}")
@@ -255,6 +322,16 @@ def print_report(report: SphLoopReport) -> None:
             f"  postprocess[{postprocess.iteration}]: rc={postprocess.returncode} "
             f"output={postprocess.output}"
         )
+    if report.convergence_enabled:
+        print("  convergence:")
+        for item in report.convergence:
+            print(
+                f"    iter{item.iteration}: "
+                f"sph_rel={item.sph_max_rel_change:.6e} "
+                f"flux_res={item.flux_ratio_max_residual:.6e} "
+                f"converged={item.converged}"
+            )
+        print(f"  stop_reason: {report.stop_reason}")
     print()
     print("SPH loop decision")
     print(f"  {PASS_DECISION}")
@@ -270,12 +347,19 @@ def write_summary(path: Path, report: SphLoopReport) -> None:
         "output_dir": str(report.output_dir),
         "reference_flux": report.reference_flux,
         "iterations": report.iterations,
+        "completed_iterations": report.completed_iterations,
         "output_format": report.output_format,
         "initial_ascii": str(report.initial_ascii),
         "final_ascii": str(report.final_ascii),
         "final_sph_sidecar": (
             None if report.final_sph_sidecar is None else str(report.final_sph_sidecar)
         ),
+        "convergence_enabled": report.convergence_enabled,
+        "converged": report.converged,
+        "stop_reason": report.stop_reason,
+        "sph_change_tolerance": report.sph_change_tolerance,
+        "flux_ratio_tolerance": report.flux_ratio_tolerance,
+        "min_iterations": report.min_iterations,
         "solves": [
             {
                 "iteration": solve.iteration,
@@ -288,6 +372,16 @@ def write_summary(path: Path, report: SphLoopReport) -> None:
                 "returncode": solve.returncode,
             }
             for solve in report.solves
+        ],
+        "convergence": [
+            {
+                "iteration": item.iteration,
+                "sph_max_abs_change": item.sph_max_abs_change,
+                "sph_max_rel_change": item.sph_max_rel_change,
+                "flux_ratio_max_residual": item.flux_ratio_max_residual,
+                "converged": item.converged,
+            }
+            for item in report.convergence
         ],
         "final_solve": (
             None
@@ -331,6 +425,79 @@ def write_summary(path: Path, report: SphLoopReport) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def _build_convergence_report(
+    workflow: SphIterationWorkflowReport,
+    *,
+    input_h5: Path,
+    previous_sph: Path | None,
+    iteration: int,
+    sph_change_tolerance: float | None,
+    flux_ratio_tolerance: float | None,
+    min_iterations: int,
+) -> SphLoopConvergenceReport:
+    current = _load_sph_matrix(workflow.sph_sidecar, input_h5=input_h5)
+    previous = (
+        np.ones_like(current)
+        if previous_sph is None
+        else _load_sph_matrix(previous_sph, input_h5=input_h5)
+    )
+    if previous.shape != current.shape:
+        raise ValueError(
+            "previous/current SPH shapes do not match: "
+            f"{previous.shape} != {current.shape}"
+        )
+    abs_change = np.abs(current - previous)
+    rel_change = abs_change / np.maximum(np.abs(previous), 1.0e-30)
+    flux_residual = _flux_ratio_max_residual(workflow)
+    checks: list[bool] = []
+    if sph_change_tolerance is not None:
+        checks.append(float(np.max(rel_change)) <= sph_change_tolerance)
+    if flux_ratio_tolerance is not None:
+        checks.append(flux_residual <= flux_ratio_tolerance)
+    converged = bool(checks and all(checks) and iteration >= min_iterations)
+    return SphLoopConvergenceReport(
+        iteration=iteration,
+        sph_max_abs_change=float(np.max(abs_change)),
+        sph_max_rel_change=float(np.max(rel_change)),
+        flux_ratio_max_residual=flux_residual,
+        converged=converged,
+    )
+
+
+def _flux_ratio_max_residual(workflow: SphIterationWorkflowReport) -> float:
+    summary_path = workflow.output_dir / "next_sph_summary.json"
+    payload = json.loads(summary_path.read_text(encoding="utf-8"))
+    raw_min = float(payload["raw_update_minimum"])
+    raw_max = float(payload["raw_update_maximum"])
+    return max(abs(raw_min - 1.0), abs(raw_max - 1.0))
+
+
+def _load_sph_matrix(path: Path, *, input_h5: Path) -> np.ndarray:
+    mixture_names, energy_groups = _read_input_metadata(input_h5)
+    loaded = load_sph_source(path, mixture_names=mixture_names, energy_groups=energy_groups)
+    return np.stack([loaded.sph[name] for name in mixture_names])
+
+
+def _read_input_metadata(path: Path) -> tuple[tuple[str, ...], int]:
+    import h5py
+
+    with h5py.File(path, "r") as h5:
+        if "mixtures" not in h5 or not hasattr(h5["mixtures"], "keys"):
+            raise ValueError("input HDF5 must contain a /mixtures group")
+        mixture_names = tuple(str(name) for name in h5["mixtures"].keys())
+        if "energy_groups" in h5.attrs:
+            energy_groups = int(h5.attrs["energy_groups"])
+        elif "energy_bounds" in h5:
+            energy_groups = int(h5["energy_bounds"].shape[0]) - 1
+        else:
+            raise ValueError("input HDF5 must define energy_groups or energy_bounds")
+    if not mixture_names:
+        raise ValueError("input HDF5 contains no mixtures")
+    if energy_groups <= 0:
+        raise ValueError("energy group count must be positive")
+    return mixture_names, energy_groups
+
+
 def _load_config(path: Path) -> dict[str, Any]:
     config = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(config, dict):
@@ -342,6 +509,29 @@ def _load_config(path: Path) -> dict[str, Any]:
     if schema is not None and schema != CONFIG_SCHEMA:
         raise ValueError(f"unsupported SPH loop config schema {schema!r}")
     return config
+
+
+def _convergence_config(config: dict[str, Any]) -> dict[str, Any]:
+    nested = config.get("convergence", {})
+    if nested is None:
+        nested = {}
+    if not isinstance(nested, dict):
+        raise ValueError("convergence must be a JSON object")
+    out = dict(nested)
+    for key in (
+        "sph_change_tolerance",
+        "flux_ratio_tolerance",
+        "min_iterations",
+        "fail_on_nonconvergence",
+    ):
+        if key in config and key not in out:
+            out[key] = config[key]
+    for key in ("sph_change_tolerance", "flux_ratio_tolerance"):
+        value = _optional_float(out.get(key))
+        if value is not None and value < 0.0:
+            raise ValueError(f"convergence.{key} must be >= 0")
+        out[key] = value
+    return out
 
 
 def _solver_config(config: dict[str, Any]) -> dict[str, Any]:

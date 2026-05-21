@@ -37,6 +37,10 @@ def build_donjon_sph_loop_config(
     damping: float = 0.5,
     clip_min: float | None = 0.5,
     clip_max: float | None = 3.0,
+    sph_change_tolerance: float | None = None,
+    flux_ratio_tolerance: float | None = None,
+    min_iterations: int = 1,
+    fail_on_nonconvergence: bool = False,
     donjon_root: str | Path = "/Users/wen/dragon-5.1/Donjon",
     apply_template: str | Path | None = None,
     driver: str | Path | None = None,
@@ -62,6 +66,14 @@ def build_donjon_sph_loop_config(
 
     if iterations < 1:
         raise ValueError("iterations must be >= 1")
+    if min_iterations < 1:
+        raise ValueError("min_iterations must be >= 1")
+    if min_iterations > iterations:
+        raise ValueError("min_iterations must be <= iterations")
+    if sph_change_tolerance is not None and sph_change_tolerance < 0.0:
+        raise ValueError("sph_change_tolerance must be >= 0")
+    if flux_ratio_tolerance is not None and flux_ratio_tolerance < 0.0:
+        raise ValueError("flux_ratio_tolerance must be >= 0")
     if output_format not in {"macrolib", "multicompo"}:
         raise ValueError("output_format must be 'macrolib' or 'multicompo'")
 
@@ -83,6 +95,12 @@ def build_donjon_sph_loop_config(
         "damping": damping,
         "clip_min": clip_min,
         "clip_max": clip_max,
+        "convergence": {
+            "sph_change_tolerance": sph_change_tolerance,
+            "flux_ratio_tolerance": flux_ratio_tolerance,
+            "min_iterations": min_iterations,
+            "fail_on_nonconvergence": bool(fail_on_nonconvergence),
+        },
         "sph_kind": sph_kind,
         "sph_real": sph_real,
         "sph_applied": sph_applied,
@@ -155,6 +173,10 @@ def write_donjon_sph_loop_config(
     damping: float = 0.5,
     clip_min: float | None = 0.5,
     clip_max: float | None = 3.0,
+    sph_change_tolerance: float | None = None,
+    flux_ratio_tolerance: float | None = None,
+    min_iterations: int = 1,
+    fail_on_nonconvergence: bool = False,
     donjon_root: str | Path = "/Users/wen/dragon-5.1/Donjon",
     apply_template: str | Path | None = None,
     driver: str | Path | None = None,
@@ -185,6 +207,10 @@ def write_donjon_sph_loop_config(
         damping=damping,
         clip_min=clip_min,
         clip_max=clip_max,
+        sph_change_tolerance=sph_change_tolerance,
+        flux_ratio_tolerance=flux_ratio_tolerance,
+        min_iterations=min_iterations,
+        fail_on_nonconvergence=fail_on_nonconvergence,
         donjon_root=donjon_root,
         apply_template=apply_template,
         driver=driver,

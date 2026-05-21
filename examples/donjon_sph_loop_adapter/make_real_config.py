@@ -41,6 +41,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--damping", type=float, default=0.5)
     parser.add_argument("--clip-min", type=float, default=0.5)
     parser.add_argument("--clip-max", type=float, default=3.0)
+    parser.add_argument("--sph-change-tolerance", type=float, default=None)
+    parser.add_argument("--flux-ratio-tolerance", type=float, default=None)
+    parser.add_argument("--min-iterations", type=int, default=1)
+    parser.add_argument("--fail-on-nonconvergence", action="store_true")
     parser.add_argument("--case-id-prefix", default="openmc2donjon_sph_loop")
     parser.add_argument(
         "--stage-prefix",
@@ -64,6 +68,10 @@ def main(argv: list[str] | None = None) -> int:
         damping=args.damping,
         clip_min=args.clip_min,
         clip_max=args.clip_max,
+        sph_change_tolerance=args.sph_change_tolerance,
+        flux_ratio_tolerance=args.flux_ratio_tolerance,
+        min_iterations=args.min_iterations,
+        fail_on_nonconvergence=args.fail_on_nonconvergence,
         case_id_prefix=args.case_id_prefix,
         stage_prefix=args.stage_prefix,
         sph_kind="donjon-sph-loop-real-adapter",

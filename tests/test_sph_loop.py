@@ -115,6 +115,82 @@ class SphLoopTests(unittest.TestCase):
             self.assertIsNotNone(final_macrolib.sph)
             np.testing.assert_allclose(final_macrolib.sph, expected)
 
+    def test_convergence_tolerance_stops_loop_early(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference = root / "reference_flux.h5"
+            solver = root / "fake_exact_donjon_solver.py"
+            config = root / "loop.json"
+            summary = root / "loop_summary.json"
+            _write_mgxs(mgxs)
+            _write_reference_flux(reference)
+            _write_exact_fake_solver(solver)
+            config.write_text(
+                json.dumps(
+                    {
+                        "schema": "openmc2donjon.sph-loop-config.v1",
+                        "input_h5": "mgxs.h5",
+                        "output_dir": "loop_run",
+                        "reference_flux": "reference_flux.h5::openmc_volume_flux",
+                        "iterations": 4,
+                        "format": "macrolib",
+                        "final_solve": True,
+                        "damping": 1.0,
+                        "scalar_flux_map": {"fuel": 2, "moderator": 4},
+                        "convergence": {
+                            "sph_change_tolerance": 1.0e-12,
+                            "flux_ratio_tolerance": 1.0e-12,
+                            "min_iterations": 1,
+                        },
+                        "solver": {
+                            "command": [
+                                sys.executable,
+                                str(solver),
+                                "--macrolib",
+                                "{ascii_input}",
+                                "--result",
+                                "{result}",
+                                "--iteration",
+                                "{iteration}",
+                            ],
+                            "result": "donjon_flux.result",
+                        },
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            rc = cli_main(
+                [
+                    "run-sph-loop",
+                    "--config",
+                    str(config),
+                    "--summary-json",
+                    str(summary),
+                ]
+            )
+
+            self.assertEqual(rc, 0)
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+            self.assertEqual(payload["iterations"], 4)
+            self.assertEqual(payload["completed_iterations"], 1)
+            self.assertTrue(payload["convergence_enabled"])
+            self.assertTrue(payload["converged"])
+            self.assertEqual(payload["stop_reason"], "converged")
+            self.assertEqual(len(payload["workflows"]), 1)
+            self.assertEqual(len(payload["solves"]), 2)
+            self.assertEqual(payload["final_solve"]["iteration"], 1)
+            self.assertEqual(len(payload["convergence"]), 1)
+            self.assertEqual(payload["convergence"][0]["iteration"], 1)
+            self.assertAlmostEqual(payload["convergence"][0]["sph_max_rel_change"], 0.0)
+            self.assertAlmostEqual(
+                payload["convergence"][0]["flux_ratio_max_residual"],
+                0.0,
+            )
+
 
 def _write_mgxs(path: Path) -> None:
     with h5py.File(path, "w") as h5:
@@ -184,6 +260,50 @@ def write_flux_dump(path: Path, group1: tuple[float, ...], group2: tuple[float, 
     path.parent.mkdir(parents=True, exist_ok=True)
     lines = []
     for index, values in enumerate((group1, group2), start=1):
+        tag = f"{index:08d}"
+        lines.append(header(1, 0, 0, -1, tag))
+        lines.append(header(1, 0, 2, len(values), tag))
+        lines.append("".join(f"{value:16.8E}" for value in values))
+    path.write_text("\\n".join(lines) + "\\n", encoding="utf-8")
+
+
+def header(level: int, flags: int, type_code: int, count: int, trailing: str) -> str:
+    return f"-> {level:7d}{flags:8d}{type_code:8d}{count:8d}                                 <-   {trailing}"
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+
+def _write_exact_fake_solver(path: Path) -> None:
+    path.write_text(
+        """
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--macrolib", required=True)
+    parser.add_argument("--result", required=True)
+    parser.add_argument("--iteration", type=int, required=True)
+    args = parser.parse_args()
+    if not Path(args.macrolib).exists():
+        raise SystemExit(f"missing macrolib input: {args.macrolib}")
+    write_flux_dump(Path(args.result))
+    print(f"fake exact DONJON solve iteration={args.iteration} macrolib={args.macrolib}")
+    return 0
+
+
+def write_flux_dump(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = []
+    for index, values in enumerate(((1.0, 80.0, 3.0, 80.0), (10.0, 800.0, 30.0, 800.0)), start=1):
         tag = f"{index:08d}"
         lines.append(header(1, 0, 0, -1, tag))
         lines.append(header(1, 0, 2, len(values), tag))

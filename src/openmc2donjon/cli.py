@@ -1075,6 +1075,29 @@ def build_make_donjon_sph_loop_config_parser() -> argparse.ArgumentParser:
     parser.add_argument("--damping", type=float, default=0.5)
     parser.add_argument("--clip-min", type=float, default=0.5)
     parser.add_argument("--clip-max", type=float, default=3.0)
+    parser.add_argument(
+        "--sph-change-tolerance",
+        type=float,
+        default=None,
+        help="optional early-stop tolerance on max relative SPH change",
+    )
+    parser.add_argument(
+        "--flux-ratio-tolerance",
+        type=float,
+        default=None,
+        help="optional early-stop tolerance on max |reference/low_order - 1|",
+    )
+    parser.add_argument(
+        "--min-iterations",
+        type=int,
+        default=1,
+        help="minimum SPH update cycles before convergence can stop the loop",
+    )
+    parser.add_argument(
+        "--fail-on-nonconvergence",
+        action="store_true",
+        help="return an error if configured convergence tolerances are not met",
+    )
     parser.add_argument("--case-id-prefix", default="openmc2donjon_sph_loop")
     parser.add_argument("--stage-prefix", default="odj_sph_loop")
     parser.add_argument(
@@ -1791,6 +1814,10 @@ def _make_donjon_sph_loop_config_main(argv: list[str]) -> int:
             damping=args.damping,
             clip_min=args.clip_min,
             clip_max=args.clip_max,
+            sph_change_tolerance=args.sph_change_tolerance,
+            flux_ratio_tolerance=args.flux_ratio_tolerance,
+            min_iterations=args.min_iterations,
+            fail_on_nonconvergence=args.fail_on_nonconvergence,
             donjon_root=args.donjon_root,
             python_bin=args.python_bin,
             case_id_prefix=args.case_id_prefix,

@@ -38,11 +38,17 @@ openmc2donjon make-donjon-sph-loop-config \
   --mgxs mgxs_library.h5 \
   --flux-map flux_map.h5 \
   --solve-template solve_lflux_dump.x2m.in \
+  --flux-ratio-tolerance 1e-4 \
+  --sph-change-tolerance 1e-4 \
   --donjon-root /path/to/dragon-5.1/Donjon
 ```
 
 If the reference flux is not stored in `flux_map.h5::openmc_volume_flux`, add
 `--reference-flux reference_flux.h5::dataset`.
+
+When tolerances are set, `run-sph-loop` records per-iteration flux-ratio and
+SPH-change residuals in `sph_loop_summary.json` and stops early once both are
+below tolerance after `--min-iterations`.
 
 The runner stages the current ASCII macrolib under a short `/tmp` path, renders
 an `.x2m` deck under

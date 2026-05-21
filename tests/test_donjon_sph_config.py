@@ -22,12 +22,25 @@ class DonjonSphConfigTests(unittest.TestCase):
             case_id_prefix="case",
             stage_prefix="stage",
             iterations=3,
+            sph_change_tolerance=1.0e-4,
+            flux_ratio_tolerance=5.0e-4,
+            min_iterations=2,
+            fail_on_nonconvergence=True,
         )
 
         self.assertEqual(config["schema"], "openmc2donjon.sph-loop-config.v1")
         self.assertEqual(config["reference_flux"], "flux_map.h5::openmc_volume_flux")
         self.assertEqual(config["map_h5"], "flux_map.h5")
         self.assertEqual(config["iterations"], 3)
+        self.assertEqual(
+            config["convergence"],
+            {
+                "sph_change_tolerance": 1.0e-4,
+                "flux_ratio_tolerance": 5.0e-4,
+                "min_iterations": 2,
+                "fail_on_nonconvergence": True,
+            },
+        )
         self.assertTrue(config["final_solve"])
         self.assertEqual(config["solver"]["result"], "donjon_flux.result")
         solver = " ".join(config["solver"]["command"])
@@ -67,6 +80,10 @@ class DonjonSphConfigTests(unittest.TestCase):
                         "/usr/bin/python3",
                         "--iterations",
                         "1",
+                        "--flux-ratio-tolerance",
+                        "1e-3",
+                        "--sph-change-tolerance",
+                        "2e-3",
                         "--no-final-solve",
                     ]
                 )
@@ -77,6 +94,8 @@ class DonjonSphConfigTests(unittest.TestCase):
             self.assertEqual(payload["reference_flux"], f"{tmp / 'reference.h5'}::phi")
             self.assertFalse(payload["final_solve"])
             self.assertEqual(payload["iterations"], 1)
+            self.assertEqual(payload["convergence"]["flux_ratio_tolerance"], 1.0e-3)
+            self.assertEqual(payload["convergence"]["sph_change_tolerance"], 2.0e-3)
             self.assertEqual(payload["input_h5"], str(tmp / "mgxs.h5"))
             self.assertIn("openmc2donjon.donjon_deck_runner", payload["solver"]["command"])
 
