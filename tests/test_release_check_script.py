@@ -32,6 +32,8 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertIn("scripts/run_c5g7_donjon_face_flux_smoke.sh", accepted_section)
         self.assertIn("== C5G7 from-OpenMC flux-ratio ADF smoke ==", accepted_section)
         self.assertIn("scripts/run_c5g7_from_openmc_adf_smoke.sh", accepted_section)
+        self.assertIn("== C5G7 SPH solver response smoke ==", accepted_section)
+        self.assertIn("scripts/run_c5g7_sph_solver_response_smoke.sh", accepted_section)
         self.assertNotIn("examples/openmc_hex_minicase/run_smoke.sh", candidate_section)
 
 
