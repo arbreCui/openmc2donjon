@@ -77,6 +77,102 @@ class DonjonSphLoopAdapterExampleTests(unittest.TestCase):
             self.assertIn("{sph_sidecar}", payload["postprocess"]["command"])
             self.assertEqual(payload["postprocess"]["output"], "corrected.macrolib.txt")
 
+    def test_make_real_config_writes_donjon_deck_runner_contract(self) -> None:
+        root = _repo_root()
+        script = root / "examples/donjon_sph_loop_adapter/make_real_config.py"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            config = tmp / "real_config.json"
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(script),
+                    "--output",
+                    str(config),
+                    "--output-dir",
+                    str(tmp / "loop"),
+                    "--mgxs",
+                    str(tmp / "mgxs.h5"),
+                    "--reference-flux",
+                    str(tmp / "reference_flux.h5"),
+                    "--flux-map",
+                    str(tmp / "flux_map.h5"),
+                    "--donjon-root",
+                    str(tmp / "Donjon"),
+                    "--python-bin",
+                    sys.executable,
+                    "--case-id-prefix",
+                    "case",
+                ],
+                check=True,
+                cwd=root,
+            )
+
+            payload = json.loads(config.read_text(encoding="utf-8"))
+            solver = payload["solver"]["command"]
+            postprocess = payload["postprocess"]["command"]
+            self.assertIn("donjon_deck_runner.py", " ".join(solver))
+            self.assertIn("solve_lflux_dump.x2m.in", " ".join(solver))
+            self.assertIn("apply_nsph_mac.x2m.in", " ".join(postprocess))
+            self.assertIn("case_solve_iter{iteration}", solver)
+            self.assertIn("case_apply_iter{iteration1}", postprocess)
+            self.assertIn("{solve_dir}/donjon_stage", solver)
+            self.assertIn("{workflow_dir}/donjon_stage", postprocess)
+
+    def test_donjon_deck_runner_dry_run_renders_apply_deck(self) -> None:
+        root = _repo_root()
+        runner = root / "examples/donjon_sph_loop_adapter/donjon_deck_runner.py"
+        template = (
+            root
+            / "examples/donjon_sph_loop_adapter/templates/apply_nsph_mac.x2m.in"
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            macrolib = tmp / "input.macrolib.txt"
+            output = tmp / "corrected.macrolib.txt"
+            donjon_root = tmp / "Donjon"
+            work_dir = tmp / "stage"
+            case_id = "dry_case"
+            macrolib.write_text("dummy macrolib\n", encoding="utf-8")
+
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(runner),
+                    "apply",
+                    "--dry-run",
+                    "--donjon-root",
+                    str(donjon_root),
+                    "--deck-template",
+                    str(template),
+                    "--macrolib",
+                    str(macrolib),
+                    "--output",
+                    str(output),
+                    "--iteration",
+                    "2",
+                    "--case-id",
+                    case_id,
+                    "--work-dir",
+                    str(work_dir),
+                ],
+                check=True,
+                cwd=root,
+            )
+
+            deck = (
+                donjon_root
+                / "data/openmc2donjon/case_runs/donjon_sph_loop_adapter/dry_case.x2m"
+            )
+            staged = work_dir / "dry_case.macrolib.txt"
+            self.assertTrue(deck.exists())
+            self.assertTrue(staged.exists())
+            text = deck.read_text(encoding="utf-8")
+            self.assertIn("DSPH:", text)
+            self.assertIn("MAC:", text)
+            self.assertIn(str(staged), text)
+            self.assertIn("dry_case.corrected.macrolib.txt", text)
+
     def test_smoke_script_exercises_loop_driver(self) -> None:
         root = _repo_root()
         text = (root / "examples/donjon_sph_loop_adapter/run_smoke.sh").read_text(
@@ -88,6 +184,9 @@ class DonjonSphLoopAdapterExampleTests(unittest.TestCase):
         self.assertIn("donjon_volume_flux_h5", text)
         self.assertIn("corrected.macrolib.txt", text)
         self.assertIn("scalar_flux_ids", text)
+        self.assertIn("make_real_config.py", text)
+        self.assertIn("donjon_deck_runner.py", text)
+        self.assertIn("--dry-run", text)
 
 
 def _repo_root() -> Path:

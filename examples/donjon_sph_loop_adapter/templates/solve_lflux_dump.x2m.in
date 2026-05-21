@@ -1,0 +1,23 @@
+* Generic DONJON low-order solve deck template for run-sph-loop.
+* case_id: {case_id}
+* iteration: {iteration}
+*
+* This template is a starting point, not a complete geometry.  Keep the
+* SEQ_ASCII input and final UTL dump lines, then replace the GEOM/TRACK/SYS/FLUX
+* body with the production DONJON model for your case.
+MODULE GEO: TRIVAT: TRIVAA: FLUD: UTL: END: ABORT: ;
+LINKED_LIST MACRO GEOM TRACK SYS FLUX ;
+SEQ_ASCII MACRO_ASC :: FILE '{macrolib}' ;
+
+MACRO := MACRO_ASC ;
+
+* User-owned low-order solve body starts here.
+* Example shape:
+*   GEOM := GEO: :: ... ;
+*   TRACK := TRIVAT: GEOM :: ... ;
+*   SYS := TRIVAA: MACRO TRACK :: ... ;
+*   FLUX := FLUD: SYS TRACK :: ... ;
+* User-owned low-order solve body ends here.
+
+UTL: FLUX :: IMPR STATE-VECTOR * DUMP ;
+END: ;

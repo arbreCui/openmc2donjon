@@ -16,8 +16,10 @@ REFERENCE_FLUX="$INPUT_DIR/reference_flux.h5"
 FLUX_MAP="$INPUT_DIR/flux_map.h5"
 EXPECTED="$INPUT_DIR/reference_expected.h5"
 CONFIG="$RUN_DIR/donjon_sph_loop_config.json"
+REAL_CONFIG="$RUN_DIR/donjon_sph_loop_real_config.json"
 LOOP_DIR="$RUN_DIR/sph_loop"
 SUMMARY="$LOOP_DIR/sph_loop_summary.json"
+TEMPLATE_DIR="$SCRIPT_DIR/templates"
 
 echo "== openmc2donjon DONJON SPH loop adapter smoke =="
 
@@ -37,6 +39,34 @@ echo "== openmc2donjon DONJON SPH loop adapter smoke =="
   --flux-map "$FLUX_MAP" \
   --driver "$SCRIPT_DIR/fake_donjon_driver.py" \
   --python-bin "$PYTHON_BIN"
+
+"$PYTHON_BIN" "$SCRIPT_DIR/make_real_config.py" \
+  --output "$REAL_CONFIG" \
+  --output-dir "$LOOP_DIR" \
+  --mgxs "$MGXS" \
+  --reference-flux "$REFERENCE_FLUX" \
+  --flux-map "$FLUX_MAP" \
+  --driver "$SCRIPT_DIR/donjon_deck_runner.py" \
+  --solve-template "$TEMPLATE_DIR/solve_lflux_dump.x2m.in" \
+  --apply-template "$TEMPLATE_DIR/apply_nsph_mac.x2m.in" \
+  --python-bin "$PYTHON_BIN"
+
+"$PYTHON_BIN" - "$REAL_CONFIG" <<'PY'
+from __future__ import annotations
+
+import json
+from pathlib import Path
+import sys
+
+
+config = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+assert config["schema"] == "openmc2donjon.sph-loop-config.v1"
+assert "donjon_deck_runner.py" in " ".join(config["solver"]["command"])
+assert "solve_lflux_dump.x2m.in" in " ".join(config["solver"]["command"])
+assert "apply_nsph_mac.x2m.in" in " ".join(config["postprocess"]["command"])
+assert "{solve_dir}/donjon_stage" in config["solver"]["command"]
+assert "{workflow_dir}/donjon_stage" in config["postprocess"]["command"]
+PY
 
 "$PYTHON_BIN" -m openmc2donjon.cli run-sph-loop \
   --config "$CONFIG" \
@@ -90,6 +120,40 @@ print(
     f"final_sph={float(expected_sph[0, 0]):.8g} "
     f"summary={summary_path}"
 )
+PY
+
+DRY_ROOT="$RUN_DIR/donjon_root_dry"
+DRY_STAGE="$RUN_DIR/donjon_deck_runner_dry/stage"
+DRY_OUTPUT="$RUN_DIR/donjon_deck_runner_dry/corrected.macrolib.txt"
+DRY_CASE_ID="openmc2donjon_adapter_apply_dry"
+DRY_DECK="$DRY_ROOT/data/openmc2donjon/case_runs/donjon_sph_loop_adapter/$DRY_CASE_ID.x2m"
+"$PYTHON_BIN" "$SCRIPT_DIR/donjon_deck_runner.py" apply \
+  --dry-run \
+  --donjon-root "$DRY_ROOT" \
+  --deck-template "$TEMPLATE_DIR/apply_nsph_mac.x2m.in" \
+  --macrolib "$LOOP_DIR/iter02_sph/corrected.macrolib.txt" \
+  --output "$DRY_OUTPUT" \
+  --iteration 2 \
+  --case-id "$DRY_CASE_ID" \
+  --work-dir "$DRY_STAGE"
+
+"$PYTHON_BIN" - "$DRY_DECK" "$DRY_STAGE/$DRY_CASE_ID.macrolib.txt" <<'PY'
+from __future__ import annotations
+
+from pathlib import Path
+import sys
+
+
+deck = Path(sys.argv[1])
+staged_macrolib = Path(sys.argv[2])
+assert deck.exists()
+assert staged_macrolib.exists()
+text = deck.read_text(encoding="utf-8")
+assert "DSPH:" in text
+assert "MAC:" in text
+assert str(staged_macrolib) in text
+assert ".corrected.macrolib.txt" in text
+print(f"DONJON real deck runner dry-run OK: deck={deck}")
 PY
 
 echo "openmc2donjon DONJON SPH loop adapter smoke: PASS"

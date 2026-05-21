@@ -1,0 +1,14 @@
+* Generic DONJON DSPH/MAC application deck.
+* case_id: {case_id}
+* iteration: {iteration}
+MODULE DSPH: MAC: END: ABORT: ;
+LINKED_LIST SPHSRC DMACROPN OPTIMPN MACROPN ;
+SEQ_ASCII SPH_ASC :: FILE '{macrolib}' ;
+SEQ_ASCII PN_ASC :: FILE '{corrected_macrolib}' ;
+
+SPHSRC := SPH_ASC ;
+DMACROPN OPTIMPN := DSPH: SPHSRC :: EDIT 1 SPH PN ;
+MACROPN := SPHSRC ;
+MACROPN := MAC: MACROPN OPTIMPN ;
+PN_ASC := MACROPN ;
+END: ;
