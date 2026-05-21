@@ -26,6 +26,11 @@ class DonjonSphConfigTests(unittest.TestCase):
             flux_ratio_tolerance=5.0e-4,
             min_iterations=2,
             fail_on_nonconvergence=True,
+            acceptance={
+                "min_completed_iterations": 3,
+                "max_final_keff_delta_pcm": 5.0,
+                "fail_on_violation": True,
+            },
         )
 
         self.assertEqual(config["schema"], "openmc2donjon.sph-loop-config.v1")
@@ -39,6 +44,14 @@ class DonjonSphConfigTests(unittest.TestCase):
                 "flux_ratio_tolerance": 5.0e-4,
                 "min_iterations": 2,
                 "fail_on_nonconvergence": True,
+            },
+        )
+        self.assertEqual(
+            config["acceptance"],
+            {
+                "min_completed_iterations": 3,
+                "max_final_keff_delta_pcm": 5.0,
+                "fail_on_violation": True,
             },
         )
         self.assertTrue(config["final_solve"])
@@ -84,6 +97,12 @@ class DonjonSphConfigTests(unittest.TestCase):
                         "1e-3",
                         "--sph-change-tolerance",
                         "2e-3",
+                        "--acceptance-min-completed-iterations",
+                        "1",
+                        "--acceptance-require-final-solve",
+                        "--acceptance-max-final-keff-delta-pcm",
+                        "5.0",
+                        "--fail-on-acceptance-violation",
                         "--no-final-solve",
                     ]
                 )
@@ -96,6 +115,10 @@ class DonjonSphConfigTests(unittest.TestCase):
             self.assertEqual(payload["iterations"], 1)
             self.assertEqual(payload["convergence"]["flux_ratio_tolerance"], 1.0e-3)
             self.assertEqual(payload["convergence"]["sph_change_tolerance"], 2.0e-3)
+            self.assertEqual(payload["acceptance"]["min_completed_iterations"], 1)
+            self.assertTrue(payload["acceptance"]["require_final_solve"])
+            self.assertEqual(payload["acceptance"]["max_final_keff_delta_pcm"], 5.0)
+            self.assertTrue(payload["acceptance"]["fail_on_violation"])
             self.assertEqual(payload["input_h5"], str(tmp / "mgxs.h5"))
             self.assertIn("openmc2donjon.donjon_deck_runner", payload["solver"]["command"])
 

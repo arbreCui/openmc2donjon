@@ -87,6 +87,17 @@ def main(argv: list[str] | None = None) -> int:
         "sph_real": False,
         "sph_applied": False,
         "source_label": "C5G7 fixed OpenMC XS SPH loop",
+        "acceptance": {
+            "min_completed_iterations": 2,
+            "require_final_solve": True,
+            "max_sph_rel_change": 0.15,
+            "max_flux_ratio_residual": 2.2,
+            "sph_minimum_floor": args.clip_min,
+            "sph_maximum_ceiling": args.clip_max,
+            "max_keff_step_pcm": 5.0,
+            "max_final_keff_delta_pcm": 5.0,
+            "fail_on_violation": True,
+        },
         "solver": {
             "command": [
                 *driver_prefix,

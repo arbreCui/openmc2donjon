@@ -43,6 +43,17 @@ class SphLoopTests(unittest.TestCase):
                         "final_solve": True,
                         "damping": 1.0,
                         "scalar_flux_map": {"fuel": 2, "moderator": 4},
+                        "acceptance": {
+                            "min_completed_iterations": 2,
+                            "require_final_solve": True,
+                            "max_sph_rel_change": 1.0,
+                            "max_flux_ratio_residual": 1.0,
+                            "sph_minimum_floor": 1.9,
+                            "sph_maximum_ceiling": 2.1,
+                            "max_keff_step_pcm": 200.0,
+                            "max_final_keff_delta_pcm": 200.0,
+                            "fail_on_violation": True,
+                        },
                         "solver": {
                             "command": [
                                 sys.executable,
@@ -94,6 +105,14 @@ class SphLoopTests(unittest.TestCase):
             self.assertIn(PASS_DECISION, stream.getvalue())
             payload = json.loads(summary.read_text(encoding="utf-8"))
             self.assertEqual(payload["decision"], PASS_DECISION)
+            self.assertTrue(payload["acceptance_enabled"])
+            self.assertTrue(payload["acceptance_passed"])
+            self.assertEqual(
+                payload["acceptance_decision"],
+                "openmc2donjon_sph_loop_acceptance_passed",
+            )
+            self.assertTrue(payload["acceptance"]["passed"])
+            self.assertEqual(len(payload["acceptance"]["checks"]), 8)
             self.assertEqual(payload["iterations"], 2)
             self.assertEqual(len(payload["solves"]), 3)
             self.assertEqual(len(payload["workflows"]), 2)
@@ -104,6 +123,10 @@ class SphLoopTests(unittest.TestCase):
             self.assertEqual(payload["audit_rows"][0]["iteration"], 1)
             self.assertAlmostEqual(payload["audit_rows"][0]["keff"], 1.0)
             self.assertAlmostEqual(payload["audit_rows"][1]["sph_maximum"], 2.0)
+            self.assertLessEqual(
+                _acceptance_actual(payload, "max_final_keff_delta_pcm"),
+                200.0,
+            )
             self.assertEqual(payload["audit_rows"][2]["stage"], "final")
             self.assertEqual(payload["audit_rows"][2]["iteration"], 2)
             self.assertAlmostEqual(payload["audit_rows"][2]["keff"], 1.002)
@@ -215,6 +238,82 @@ class SphLoopTests(unittest.TestCase):
             self.assertEqual(payload["audit_rows"][1]["stage"], "final")
             self.assertAlmostEqual(payload["audit_rows"][0]["keff"], 1.0)
             self.assertAlmostEqual(payload["audit_rows"][1]["keff"], 1.001)
+
+    def test_acceptance_violation_can_fail_cli_after_writing_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference = root / "reference_flux.h5"
+            solver = root / "fake_exact_donjon_solver.py"
+            config = root / "loop.json"
+            summary = root / "loop_summary.json"
+            _write_mgxs(mgxs)
+            _write_reference_flux(reference)
+            _write_exact_fake_solver(solver)
+            config.write_text(
+                json.dumps(
+                    {
+                        "schema": "openmc2donjon.sph-loop-config.v1",
+                        "input_h5": "mgxs.h5",
+                        "output_dir": "loop_run",
+                        "reference_flux": "reference_flux.h5::openmc_volume_flux",
+                        "iterations": 1,
+                        "format": "macrolib",
+                        "final_solve": True,
+                        "damping": 1.0,
+                        "scalar_flux_map": {"fuel": 2, "moderator": 4},
+                        "acceptance": {
+                            "require_final_solve": True,
+                            "max_final_keff_delta_pcm": 0.001,
+                            "fail_on_violation": True,
+                        },
+                        "solver": {
+                            "command": [
+                                sys.executable,
+                                str(solver),
+                                "--macrolib",
+                                "{ascii_input}",
+                                "--result",
+                                "{result}",
+                                "--iteration",
+                                "{iteration}",
+                            ],
+                            "result": "donjon_flux.result",
+                        },
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as raised:
+                    cli_main(
+                        [
+                            "run-sph-loop",
+                            "--config",
+                            str(config),
+                            "--summary-json",
+                            str(summary),
+                        ]
+                    )
+
+            self.assertEqual(raised.exception.code, 1)
+            self.assertIn("acceptance criteria failed", stderr.getvalue())
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+            self.assertTrue(payload["acceptance_enabled"])
+            self.assertFalse(payload["acceptance_passed"])
+            self.assertEqual(
+                payload["acceptance_decision"],
+                "openmc2donjon_sph_loop_acceptance_failed",
+            )
+            self.assertEqual(len(payload["audit_rows"]), 2)
+            self.assertGreater(
+                _acceptance_actual(payload, "max_final_keff_delta_pcm"),
+                0.001,
+            )
 
 
 def _write_mgxs(path: Path) -> None:
@@ -380,6 +479,22 @@ if __name__ == "__main__":
 """.lstrip(),
         encoding="utf-8",
     )
+
+
+def _acceptance_actual(payload: dict[str, object], name: str) -> float:
+    acceptance = payload["acceptance"]
+    if not isinstance(acceptance, dict):
+        raise AssertionError("acceptance payload is not a JSON object")
+    checks = acceptance["checks"]
+    if not isinstance(checks, list):
+        raise AssertionError("acceptance checks are not a JSON array")
+    for item in checks:
+        if isinstance(item, dict) and item.get("name") == name:
+            value = item.get("actual")
+            if not isinstance(value, (int, float)):
+                raise AssertionError(f"acceptance check {name!r} has no numeric actual")
+            return float(value)
+    raise AssertionError(f"missing acceptance check {name!r}")
 
 
 if __name__ == "__main__":

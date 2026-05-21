@@ -188,6 +188,8 @@ audit_csv = Path(loop_summary["audit_csv"])
 
 if loop_summary.get("decision") != "openmc2donjon_sph_loop_passed":
     raise SystemExit(f"SPH loop summary did not pass: {loop_summary_path}")
+if loop_summary.get("acceptance_decision") != "openmc2donjon_sph_loop_acceptance_passed":
+    raise SystemExit(f"SPH loop acceptance did not pass: {loop_summary_path}")
 if len(loop_summary.get("solves", [])) != 3:
     raise SystemExit("configured SPH loop did not run the final solve")
 if len(loop_summary.get("postprocesses", [])) != 2:

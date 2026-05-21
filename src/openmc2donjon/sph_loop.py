@@ -24,6 +24,8 @@ from .sph_workflow import SphIterationWorkflowReport, run_sph_iteration_workflow
 CONFIG_SCHEMA = "openmc2donjon.sph-loop-config.v1"
 SCHEMA = "openmc2donjon.sph-loop.v1"
 PASS_DECISION = "openmc2donjon_sph_loop_passed"
+ACCEPTANCE_PASS_DECISION = "openmc2donjon_sph_loop_acceptance_passed"
+ACCEPTANCE_FAIL_DECISION = "openmc2donjon_sph_loop_acceptance_failed"
 
 
 @dataclass(frozen=True)
@@ -77,6 +79,25 @@ class SphLoopAuditRow:
 
 
 @dataclass(frozen=True)
+class SphLoopAcceptanceCheck:
+    name: str
+    actual: bool | float | int | None
+    limit: bool | float | int | None
+    units: str
+    passed: bool
+    message: str
+
+
+@dataclass(frozen=True)
+class SphLoopAcceptanceReport:
+    enabled: bool
+    passed: bool
+    fail_on_violation: bool
+    decision: str
+    checks: tuple[SphLoopAcceptanceCheck, ...]
+
+
+@dataclass(frozen=True)
 class SphLoopReport:
     config_path: Path
     input_h5: Path
@@ -103,6 +124,7 @@ class SphLoopReport:
     postprocesses: tuple[SphLoopPostprocessReport, ...]
     final_solve: SphLoopSolveReport | None
     audit_rows: tuple[SphLoopAuditRow, ...]
+    acceptance: SphLoopAcceptanceReport
 
 
 def run_sph_loop(
@@ -135,6 +157,7 @@ def run_sph_loop(
     if iterations < 1:
         raise ValueError("iterations must be >= 1")
     convergence_config = _convergence_config(config)
+    acceptance_config = _acceptance_config(config)
     sph_change_tolerance = _optional_float(convergence_config.get("sph_change_tolerance"))
     flux_ratio_tolerance = _optional_float(convergence_config.get("flux_ratio_tolerance"))
     convergence_enabled = (
@@ -293,6 +316,14 @@ def run_sph_loop(
         final_solve=final_solve,
         final_ascii=current_ascii,
     )
+    acceptance = _build_acceptance_report(
+        acceptance_config,
+        audit_rows=audit_rows,
+        convergence=tuple(convergence_reports),
+        completed_iterations=len(workflows),
+        converged=converged,
+        final_solve=final_solve,
+    )
     report = SphLoopReport(
         config_path=config_file,
         input_h5=input_h5,
@@ -319,6 +350,7 @@ def run_sph_loop(
         postprocesses=tuple(postprocesses),
         final_solve=final_solve,
         audit_rows=audit_rows,
+        acceptance=acceptance,
     )
     print_report(report)
     write_audit_csv(audit_csv, report.audit_rows)
@@ -333,6 +365,12 @@ def run_sph_loop(
             "SPH loop did not converge within "
             f"{report.iterations} iteration(s); see {summary_path}"
         )
+    if report.acceptance.enabled and report.acceptance.fail_on_violation:
+        if not report.acceptance.passed:
+            raise RuntimeError(
+                "SPH loop acceptance criteria failed; see "
+                f"{summary_path} and {audit_csv}"
+            )
     return report
 
 
@@ -370,6 +408,12 @@ def print_report(report: SphLoopReport) -> None:
                 f"converged={item.converged}"
             )
         print(f"  stop_reason: {report.stop_reason}")
+    if report.acceptance.enabled:
+        print("  acceptance:")
+        print(f"    decision={report.acceptance.decision}")
+        for item in report.acceptance.checks:
+            status = "PASS" if item.passed else "FAIL"
+            print(f"    {status} {item.name}: {item.message}")
     print()
     print("SPH loop decision")
     print(f"  {PASS_DECISION}")
@@ -391,6 +435,9 @@ def write_summary(path: Path, report: SphLoopReport) -> None:
         "final_ascii": str(report.final_ascii),
         "audit_csv": str(report.audit_csv),
         "audit_text": str(report.audit_text),
+        "acceptance_enabled": report.acceptance.enabled,
+        "acceptance_passed": report.acceptance.passed,
+        "acceptance_decision": report.acceptance.decision,
         "final_sph_sidecar": (
             None if report.final_sph_sidecar is None else str(report.final_sph_sidecar)
         ),
@@ -480,6 +527,23 @@ def write_summary(path: Path, report: SphLoopReport) -> None:
             }
             for row in report.audit_rows
         ],
+        "acceptance": {
+            "enabled": report.acceptance.enabled,
+            "passed": report.acceptance.passed,
+            "fail_on_violation": report.acceptance.fail_on_violation,
+            "decision": report.acceptance.decision,
+            "checks": [
+                {
+                    "name": item.name,
+                    "actual": item.actual,
+                    "limit": item.limit,
+                    "units": item.units,
+                    "passed": item.passed,
+                    "message": item.message,
+                }
+                for item in report.acceptance.checks
+            ],
+        },
         "openmc_xs_policy": "fixed base MGXS; DONJON solves consume updated ASCII SPH handoffs",
     }
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -650,6 +714,243 @@ def _format_optional_float(value: float | None) -> str:
     return f"{value:.12g}"
 
 
+def _build_acceptance_report(
+    config: dict[str, Any],
+    *,
+    audit_rows: tuple[SphLoopAuditRow, ...],
+    convergence: tuple[SphLoopConvergenceReport, ...],
+    completed_iterations: int,
+    converged: bool,
+    final_solve: SphLoopSolveReport | None,
+) -> SphLoopAcceptanceReport:
+    checks: list[SphLoopAcceptanceCheck] = []
+    if "min_completed_iterations" in config:
+        checks.append(
+            _minimum_check(
+                "min_completed_iterations",
+                actual=completed_iterations,
+                limit=int(config["min_completed_iterations"]),
+                units="iterations",
+            )
+        )
+    if "require_final_solve" in config:
+        checks.append(
+            _boolean_check(
+                "require_final_solve",
+                actual=final_solve is not None,
+                limit=bool(config["require_final_solve"]),
+            )
+        )
+    if "require_converged" in config:
+        checks.append(
+            _boolean_check(
+                "require_converged",
+                actual=converged,
+                limit=bool(config["require_converged"]),
+            )
+        )
+
+    last_convergence = convergence[-1] if convergence else None
+    if "max_sph_abs_change" in config:
+        checks.append(
+            _maximum_check(
+                "max_sph_abs_change",
+                actual=(
+                    None
+                    if last_convergence is None
+                    else last_convergence.sph_max_abs_change
+                ),
+                limit=float(config["max_sph_abs_change"]),
+                units="factor",
+            )
+        )
+    if "max_sph_rel_change" in config:
+        checks.append(
+            _maximum_check(
+                "max_sph_rel_change",
+                actual=(
+                    None
+                    if last_convergence is None
+                    else last_convergence.sph_max_rel_change
+                ),
+                limit=float(config["max_sph_rel_change"]),
+                units="relative",
+            )
+        )
+    if "max_flux_ratio_residual" in config:
+        checks.append(
+            _maximum_check(
+                "max_flux_ratio_residual",
+                actual=(
+                    None
+                    if last_convergence is None
+                    else last_convergence.flux_ratio_max_residual
+                ),
+                limit=float(config["max_flux_ratio_residual"]),
+                units="relative",
+            )
+        )
+
+    last_iteration = _last_iteration_audit_row(audit_rows)
+    if "sph_minimum_floor" in config:
+        checks.append(
+            _minimum_check(
+                "sph_minimum_floor",
+                actual=None if last_iteration is None else last_iteration.sph_minimum,
+                limit=float(config["sph_minimum_floor"]),
+                units="factor",
+            )
+        )
+    if "sph_maximum_ceiling" in config:
+        checks.append(
+            _maximum_check(
+                "sph_maximum_ceiling",
+                actual=None if last_iteration is None else last_iteration.sph_maximum,
+                limit=float(config["sph_maximum_ceiling"]),
+                units="factor",
+            )
+        )
+
+    keff_values = [row.keff for row in audit_rows if row.keff is not None]
+    if "max_keff_step_pcm" in config:
+        checks.append(
+            _maximum_check(
+                "max_keff_step_pcm",
+                actual=_max_keff_step_pcm(keff_values),
+                limit=float(config["max_keff_step_pcm"]),
+                units="pcm",
+            )
+        )
+    if "max_final_keff_delta_pcm" in config:
+        checks.append(
+            _maximum_check(
+                "max_final_keff_delta_pcm",
+                actual=_final_keff_delta_pcm(audit_rows),
+                limit=float(config["max_final_keff_delta_pcm"]),
+                units="pcm",
+            )
+        )
+
+    enabled = bool(checks)
+    passed = all(item.passed for item in checks)
+    decision = ACCEPTANCE_PASS_DECISION if passed else ACCEPTANCE_FAIL_DECISION
+    return SphLoopAcceptanceReport(
+        enabled=enabled,
+        passed=passed,
+        fail_on_violation=bool(config.get("fail_on_violation", False)),
+        decision=decision,
+        checks=tuple(checks),
+    )
+
+
+def _maximum_check(
+    name: str,
+    *,
+    actual: float | int | None,
+    limit: float | int,
+    units: str,
+) -> SphLoopAcceptanceCheck:
+    passed = actual is not None and float(actual) <= float(limit)
+    if actual is None:
+        message = f"metric unavailable; required <= {_format_check_value(limit)} {units}"
+    else:
+        message = (
+            f"actual {_format_check_value(actual)} <= "
+            f"limit {_format_check_value(limit)} {units}"
+        )
+    return SphLoopAcceptanceCheck(
+        name=name,
+        actual=actual,
+        limit=limit,
+        units=units,
+        passed=passed,
+        message=message,
+    )
+
+
+def _minimum_check(
+    name: str,
+    *,
+    actual: float | int | None,
+    limit: float | int,
+    units: str,
+) -> SphLoopAcceptanceCheck:
+    passed = actual is not None and float(actual) >= float(limit)
+    if actual is None:
+        message = f"metric unavailable; required >= {_format_check_value(limit)} {units}"
+    else:
+        message = (
+            f"actual {_format_check_value(actual)} >= "
+            f"limit {_format_check_value(limit)} {units}"
+        )
+    return SphLoopAcceptanceCheck(
+        name=name,
+        actual=actual,
+        limit=limit,
+        units=units,
+        passed=passed,
+        message=message,
+    )
+
+
+def _boolean_check(
+    name: str,
+    *,
+    actual: bool,
+    limit: bool,
+) -> SphLoopAcceptanceCheck:
+    passed = actual is limit
+    return SphLoopAcceptanceCheck(
+        name=name,
+        actual=actual,
+        limit=limit,
+        units="boolean",
+        passed=passed,
+        message=f"actual {actual} == required {limit}",
+    )
+
+
+def _last_iteration_audit_row(
+    rows: tuple[SphLoopAuditRow, ...],
+) -> SphLoopAuditRow | None:
+    for row in reversed(rows):
+        if row.stage == "iteration":
+            return row
+    return None
+
+
+def _max_keff_step_pcm(values: list[float]) -> float | None:
+    if len(values) < 2:
+        return None
+    deltas = []
+    for before, after in zip(values, values[1:]):
+        denominator = max(abs(before), 1.0e-30)
+        deltas.append(abs(after - before) / denominator * 1.0e5)
+    return float(max(deltas))
+
+
+def _final_keff_delta_pcm(rows: tuple[SphLoopAuditRow, ...]) -> float | None:
+    final_rows = [row for row in rows if row.stage == "final" and row.keff is not None]
+    iteration_rows = [
+        row for row in rows if row.stage == "iteration" and row.keff is not None
+    ]
+    if not final_rows or not iteration_rows:
+        return None
+    before = iteration_rows[-1].keff
+    after = final_rows[-1].keff
+    if before is None or after is None:
+        return None
+    return float(abs(after - before) / max(abs(before), 1.0e-30) * 1.0e5)
+
+
+def _format_check_value(value: bool | float | int | None) -> str:
+    if value is None:
+        return "none"
+    if isinstance(value, bool):
+        return str(value)
+    return f"{float(value):.12g}"
+
+
 def _build_convergence_report(
     workflow: SphIterationWorkflowReport,
     *,
@@ -757,6 +1058,55 @@ def _convergence_config(config: dict[str, Any]) -> dict[str, Any]:
             raise ValueError(f"convergence.{key} must be >= 0")
         out[key] = value
     return out
+
+
+def _acceptance_config(config: dict[str, Any]) -> dict[str, Any]:
+    nested = config.get("acceptance", {})
+    if nested is None:
+        nested = {}
+    if not isinstance(nested, dict):
+        raise ValueError("acceptance must be a JSON object")
+    allowed = {
+        "fail_on_violation",
+        "min_completed_iterations",
+        "require_final_solve",
+        "require_converged",
+        "max_sph_abs_change",
+        "max_sph_rel_change",
+        "max_flux_ratio_residual",
+        "sph_minimum_floor",
+        "sph_maximum_ceiling",
+        "max_keff_step_pcm",
+        "max_final_keff_delta_pcm",
+    }
+    unknown = sorted(set(nested) - allowed)
+    if unknown:
+        raise ValueError(f"unknown acceptance key(s): {', '.join(unknown)}")
+
+    out = dict(nested)
+    for key in (
+        "max_sph_abs_change",
+        "max_sph_rel_change",
+        "max_flux_ratio_residual",
+        "sph_minimum_floor",
+        "sph_maximum_ceiling",
+        "max_keff_step_pcm",
+        "max_final_keff_delta_pcm",
+    ):
+        if key in out and out[key] is not None:
+            value = float(out[key])
+            if value < 0.0:
+                raise ValueError(f"acceptance.{key} must be >= 0")
+            out[key] = value
+    if "min_completed_iterations" in out and out["min_completed_iterations"] is not None:
+        value = int(out["min_completed_iterations"])
+        if value < 1:
+            raise ValueError("acceptance.min_completed_iterations must be >= 1")
+        out["min_completed_iterations"] = value
+    for key in ("require_final_solve", "require_converged", "fail_on_violation"):
+        if key in out and out[key] is not None:
+            out[key] = bool(out[key])
+    return {key: value for key, value in out.items() if value is not None}
 
 
 def _solver_config(config: dict[str, Any]) -> dict[str, Any]:

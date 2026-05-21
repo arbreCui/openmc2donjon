@@ -1098,6 +1098,63 @@ def build_make_donjon_sph_loop_config_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="return an error if configured convergence tolerances are not met",
     )
+    parser.add_argument(
+        "--acceptance-min-completed-iterations",
+        type=int,
+        default=None,
+        help="production acceptance: require at least this many SPH update cycles",
+    )
+    parser.add_argument(
+        "--acceptance-require-final-solve",
+        action="store_true",
+        help="production acceptance: require a final DONJON solve row",
+    )
+    parser.add_argument(
+        "--acceptance-require-converged",
+        action="store_true",
+        help="production acceptance: require the convergence criteria to pass",
+    )
+    parser.add_argument(
+        "--acceptance-max-sph-rel-change",
+        type=float,
+        default=None,
+        help="production acceptance: max relative SPH change in the last update",
+    )
+    parser.add_argument(
+        "--acceptance-max-flux-ratio-residual",
+        type=float,
+        default=None,
+        help="production acceptance: max |reference/low_order - 1| in the last update",
+    )
+    parser.add_argument(
+        "--acceptance-sph-minimum-floor",
+        type=float,
+        default=None,
+        help="production acceptance: minimum allowed final SPH factor",
+    )
+    parser.add_argument(
+        "--acceptance-sph-maximum-ceiling",
+        type=float,
+        default=None,
+        help="production acceptance: maximum allowed final SPH factor",
+    )
+    parser.add_argument(
+        "--acceptance-max-keff-step-pcm",
+        type=float,
+        default=None,
+        help="production acceptance: max absolute keff step across audit rows",
+    )
+    parser.add_argument(
+        "--acceptance-max-final-keff-delta-pcm",
+        type=float,
+        default=None,
+        help="production acceptance: max final-vs-previous keff delta",
+    )
+    parser.add_argument(
+        "--fail-on-acceptance-violation",
+        action="store_true",
+        help="return an error after writing outputs if production acceptance fails",
+    )
     parser.add_argument("--case-id-prefix", default="openmc2donjon_sph_loop")
     parser.add_argument("--stage-prefix", default="odj_sph_loop")
     parser.add_argument(
@@ -1830,11 +1887,35 @@ def _make_donjon_sph_loop_config_main(argv: list[str]) -> int:
             postprocess_output=args.postprocess_output,
             root_name=args.root_name,
             h_factor_default=args.h_factor_default,
+            acceptance=_sph_loop_acceptance_from_args(args),
         )
     except Exception as exc:
         parser.exit(1, f"openmc2donjon make-donjon-sph-loop-config: error: {exc}\n")
     print(f"DONJON SPH loop config: {path}")
     return 0
+
+
+def _sph_loop_acceptance_from_args(args: argparse.Namespace) -> dict[str, object] | None:
+    acceptance: dict[str, object] = {}
+    optional_values = {
+        "min_completed_iterations": args.acceptance_min_completed_iterations,
+        "max_sph_rel_change": args.acceptance_max_sph_rel_change,
+        "max_flux_ratio_residual": args.acceptance_max_flux_ratio_residual,
+        "sph_minimum_floor": args.acceptance_sph_minimum_floor,
+        "sph_maximum_ceiling": args.acceptance_sph_maximum_ceiling,
+        "max_keff_step_pcm": args.acceptance_max_keff_step_pcm,
+        "max_final_keff_delta_pcm": args.acceptance_max_final_keff_delta_pcm,
+    }
+    for key, value in optional_values.items():
+        if value is not None:
+            acceptance[key] = value
+    if args.acceptance_require_final_solve:
+        acceptance["require_final_solve"] = True
+    if args.acceptance_require_converged:
+        acceptance["require_converged"] = True
+    if args.fail_on_acceptance_violation:
+        acceptance["fail_on_violation"] = True
+    return acceptance or None
 
 
 def _export_surface_flux_main(argv: list[str]) -> int:

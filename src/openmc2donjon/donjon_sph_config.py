@@ -55,6 +55,7 @@ def build_donjon_sph_loop_config(
     postprocess_output: str = "corrected.macrolib.txt",
     root_name: str | None = None,
     h_factor_default: float | None = None,
+    acceptance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return a ``run-sph-loop`` config using the packaged DONJON runner.
 
@@ -156,6 +157,8 @@ def build_donjon_sph_loop_config(
         config["root_name"] = root_name
     if h_factor_default is not None:
         config["h_factor_default"] = h_factor_default
+    if acceptance:
+        config["acceptance"] = dict(acceptance)
     return config
 
 
@@ -191,6 +194,7 @@ def write_donjon_sph_loop_config(
     postprocess_output: str = "corrected.macrolib.txt",
     root_name: str | None = None,
     h_factor_default: float | None = None,
+    acceptance: dict[str, Any] | None = None,
 ) -> Path:
     """Write a ``run-sph-loop`` JSON config and return its path."""
 
@@ -225,6 +229,7 @@ def write_donjon_sph_loop_config(
         postprocess_output=postprocess_output,
         root_name=root_name,
         h_factor_default=h_factor_default,
+        acceptance=acceptance,
     )
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(config, indent=2, sort_keys=True) + "\n", encoding="utf-8")
