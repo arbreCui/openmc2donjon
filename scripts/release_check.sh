@@ -34,6 +34,7 @@ Default:
   - package tests
   - CLI help/version smoke
   - recipe/statepoint exporter smoke
+  - production minicase and OpenMC hex minicase smokes
   - C5G7 converter readback smoke
   - accepted baseline manifest validation
   - C5G7 statepoint exporter parity check when C5G7_STATEPOINT exists
@@ -157,6 +158,12 @@ PYTHON_BIN="$PYTHON_BIN" \
   bash "$REPO_ROOT/scripts/run_production_minicase_smoke.sh"
 
 echo
+echo "== OpenMC hex minicase smoke =="
+RUN_DIR="$RUN_DIR/openmc_hex_minicase" \
+PYTHON_BIN="$PYTHON_BIN" \
+  bash "$REPO_ROOT/examples/openmc_hex_minicase/run_smoke.sh"
+
+echo
 echo "== C5G7 converter smoke =="
 RUN_DIR="$RUN_DIR/c5g7_demo" bash "$REPO_ROOT/scripts/run_c5g7_demo.sh" --skip-tests
 
@@ -166,9 +173,6 @@ if [[ "$RUN_LOCAL_CANDIDATES" -eq 1 ]]; then
   RUN_DIR="$RUN_DIR/hex_minicase" \
   PYTHON_BIN="$PYTHON_BIN" \
     bash "$REPO_ROOT/examples/hex_minicase/run_smoke.sh"
-  RUN_DIR="$RUN_DIR/openmc_hex_minicase" \
-  PYTHON_BIN="$PYTHON_BIN" \
-    bash "$REPO_ROOT/examples/openmc_hex_minicase/run_smoke.sh"
   RUN_DIR="$RUN_DIR/uox_5x5_tg6" \
   PYTHON_BIN="$PYTHON_BIN" \
     bash "$REPO_ROOT/examples/uox_5x5_tg6/run_smoke.sh"

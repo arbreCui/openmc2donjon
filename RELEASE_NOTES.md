@@ -91,6 +91,8 @@
 - Hardened the OpenMC hex minicase recipe with explicit `DomainExportSpec`
   mapping, production metadata, strict dry-run gating, and repeatable managed
   run-directory overwrites.
+- Promoted the real OpenMC hex minicase smoke into the default release check so
+  Cartesian and hexagonal OpenMC recipe/statepoint workflows are gated together.
 - Added `examples/uox_5x5_tg6`, a candidate non-C5G7 adapter/smoke for a local
   DRAGON/APEX UOX 5x5 TG6 HDF5 source, producing checked `L_MULTICOMPO` and
   `L_MACROLIB` outputs.

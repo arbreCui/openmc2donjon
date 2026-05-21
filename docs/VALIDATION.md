@@ -146,6 +146,8 @@ bash examples/openmc_hex_minicase/run_smoke.sh
 ```
 
 This is an OpenMC workflow capability smoke, not an accepted physics benchmark.
+It is part of the default `scripts/release_check.sh` gate so both Cartesian and
+hexagonal OpenMC recipe/statepoint workflows are exercised before handoff.
 
 `examples/uox_5x5_tg6` adapts a local DRAGON/APEX UOX 5x5 TG6 HDF5 file into
 the openmc2donjon MGXS input contract, then runs checked `L_MULTICOMPO` and
@@ -166,8 +168,8 @@ OpenMC-style MGXS handoff, so this example must not be promoted to an accepted
 k-effective benchmark unless a matching OpenMC-sourced reference and correction
 handoff are added.
 
-It can also be included in the release check on machines with the local source
-file:
+Additional local candidate examples can be included in the release check on
+machines with the local source files:
 
 ```sh
 bash scripts/release_check.sh --run-local-candidates
