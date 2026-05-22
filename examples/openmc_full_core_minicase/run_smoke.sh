@@ -6,6 +6,8 @@ PACKAGE_SRC="${OPENMC2DONJON_SRC:-$REPO_ROOT/src}"
 RUN_DIR="${RUN_DIR:-/private/tmp/openmc2donjon_openmc_full_core_minicase}"
 PYTHON_BIN="${PYTHON_BIN:-}"
 OPENMC_EXEC="${OPENMC_EXEC:-}"
+DONJON_ROOT="${DONJON_ROOT:-/Users/wen/dragon-5.1/Donjon}"
+DONJON_RUNNER="${DONJON_RUNNER:-$DONJON_ROOT/rdonjon}"
 OPENMC_THREADS="${OPENMC_THREADS:-2}"
 FULL_CORE_PARTICLES="${FULL_CORE_PARTICLES:-3000}"
 FULL_CORE_BATCHES="${FULL_CORE_BATCHES:-14}"
@@ -47,6 +49,10 @@ SPH_FIXTURE_DIR="$RUN_DIR/full_core_sph_fixture"
 SPH_CONFIG="$SPH_FIXTURE_DIR/loop_config.json"
 SPH_SUMMARY="$SPH_FIXTURE_DIR/sph_loop_summary.json"
 SPH_BUNDLE="$SPH_FIXTURE_DIR/bundle"
+REAL_DONJON_RESULT="$RUN_DIR/full_core_real_donjon.result"
+REAL_DONJON_FLUX="$RUN_DIR/full_core_real_donjon_flux.h5"
+REAL_DONJON_FLUX_SUMMARY="$RUN_DIR/full_core_real_donjon_flux_summary.json"
+REAL_DONJON_SOLVE_TEMPLATE="$EXAMPLE_DIR/templates/solve_lflux_dump.x2m.in"
 ENERGY_STRUCTURE="OPENMC2DONJON-FULL-CORE-MINICASE-2G"
 
 echo "== openmc2donjon OpenMC full-core assembly-wise minicase smoke =="
@@ -54,6 +60,7 @@ echo "repo: $REPO_ROOT"
 echo "run_dir: $RUN_DIR"
 echo "python: $PYTHON_BIN"
 echo "openmc: ${OPENMC_EXEC:-not found}"
+echo "donjon: $DONJON_RUNNER"
 
 if [[ -z "$OPENMC_EXEC" ]]; then
   echo "OpenMC full-core minicase skipped: OpenMC executable not found"
@@ -321,6 +328,76 @@ np.testing.assert_allclose(macrolib.sph, np.full((9, 2), 2.0))
 
 print("full-core SPH loop readback OK: mixtures=9 groups=2 final_sph=2")
 PY
+
+echo
+echo "== Real DONJON low-order solve smoke =="
+if [[ -x "$DONJON_RUNNER" ]]; then
+  "$PYTHON_BIN" -m openmc2donjon.donjon_deck_runner solve \
+    --donjon-root "$DONJON_ROOT" \
+    --deck-template "$REAL_DONJON_SOLVE_TEMPLATE" \
+    --macrolib "$MACROLIB" \
+    --result "$REAL_DONJON_RESULT" \
+    --iteration 0 \
+    --case-id openmc2donjon_full_core_minicase_solve \
+    --case-dir openmc2donjon/case_runs/openmc_full_core_minicase \
+    --work-dir /tmp/odj_full_core_minicase_solve \
+    --runner "$DONJON_RUNNER"
+
+  "$PYTHON_BIN" -m openmc2donjon.cli extract-donjon-volume-flux "$MGXS" \
+    --flux-dump "$REAL_DONJON_RESULT" \
+    --map-h5 "$SPH_FIXTURE_DIR/flux_map.h5" \
+    -o "$REAL_DONJON_FLUX" \
+    --summary-json "$REAL_DONJON_FLUX_SUMMARY" \
+    --force
+
+  "$PYTHON_BIN" - "$REAL_DONJON_RESULT" "$REAL_DONJON_FLUX" "$REAL_DONJON_FLUX_SUMMARY" <<'PY'
+import json
+from pathlib import Path
+import re
+import sys
+
+import h5py
+import numpy as np
+
+
+result = Path(sys.argv[1])
+flux_h5 = Path(sys.argv[2])
+summary_path = Path(sys.argv[3])
+text = result.read_text(encoding="utf-8", errors="replace")
+if "normal end of execution" not in text:
+    raise SystemExit("DONJON solve did not end normally")
+match = re.search(
+    r"OPENMC2DONJON FULL CORE MINICASE REAL DONJON ITER 0 K-EFFECTIVE\s+([0-9.Ee+-]+)",
+    text,
+)
+if match is None:
+    raise SystemExit("missing real DONJON k-effective echo")
+keff = float(match.group(1))
+if not np.isfinite(keff) or keff <= 0.0:
+    raise SystemExit(f"invalid real DONJON k-effective: {keff}")
+
+with h5py.File(flux_h5, "r") as h5:
+    values = h5["donjon_volume_flux"][:]
+    np.testing.assert_array_equal(h5["scalar_flux_ids"][:], np.arange(1, 10))
+    if values.shape != (9, 2):
+        raise SystemExit(f"unexpected real DONJON flux shape: {values.shape}")
+    if not np.all(np.isfinite(values)) or np.any(values <= 0.0):
+        raise SystemExit("real DONJON flux contains non-positive or non-finite values")
+
+summary = json.loads(summary_path.read_text(encoding="utf-8"))
+if summary["decision"] != "openmc2donjon_donjon_volume_flux_passed":
+    raise SystemExit("real DONJON flux extraction did not pass")
+if summary["mixture_count"] != 9 or summary["energy_groups"] != 2:
+    raise SystemExit("real DONJON flux summary dimensions mismatch")
+
+print(
+    "real DONJON full-core solve OK: "
+    f"keff={keff:.8g} flux_shape=9x2"
+)
+PY
+else
+  echo "DONJON runner unavailable; skipping real full-core low-order solve smoke"
+fi
 
 echo
 echo "OpenMC full-core assembly-wise minicase smoke passed"

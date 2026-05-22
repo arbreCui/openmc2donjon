@@ -61,6 +61,15 @@ class OpenMCFullCoreMinicaseExampleTests(unittest.TestCase):
         self.assertIn("run-sph-loop", text)
         self.assertIn("validate-bundle", text)
         self.assertIn("full-core SPH loop readback OK", text)
+        self.assertIn("Real DONJON low-order solve smoke", text)
+        self.assertIn("openmc2donjon.donjon_deck_runner", text)
+        self.assertIn('--runner "$DONJON_RUNNER"', text)
+        self.assertIn("extract-donjon-volume-flux", text)
+        self.assertIn("real DONJON full-core solve OK", text)
+        self.assertIn(
+            "DONJON runner unavailable; skipping real full-core low-order solve smoke",
+            text,
+        )
         self.assertIn("h_factor_datasets", text)
         self.assertIn("transport_total_datasets", text)
         self.assertIn("volume_attributes", text)
@@ -85,6 +94,21 @@ class OpenMCFullCoreMinicaseExampleTests(unittest.TestCase):
         self.assertIn("previous_sph", text)
         self.assertIn("openmc_volume_flux", text)
         self.assertIn('"L_FLUX"', text)
+
+    def test_real_donjon_template_matches_nine_assembly_order(self) -> None:
+        template = (
+            _example_dir() / "templates" / "solve_lflux_dump.x2m.in"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("CAR2D 3 3", template)
+        self.assertIn("1 2 3", template)
+        self.assertIn("4 5 6", template)
+        self.assertIn("7 8 9", template)
+        self.assertIn("TRIVAT:", template)
+        self.assertIn("TRIVAA:", template)
+        self.assertIn("FLUD:", template)
+        self.assertIn("UTL: FLUX :: IMPR STATE-VECTOR * DUMP ;", template)
+        self.assertIn("FULL CORE MINICASE REAL DONJON", template)
 
 
 def _repo_root() -> Path:
