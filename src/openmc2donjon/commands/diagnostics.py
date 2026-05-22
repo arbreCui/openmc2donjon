@@ -106,7 +106,7 @@ def build_check_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--require-h-factor",
         action="store_true",
-        help="require group-wise H-FACTOR/kappa-fission data for every calculation",
+        help="require group-wise H-FACTOR/kappa-fission data for fissionable calculations",
     )
     parser.add_argument(
         "--expected-energy-group-structure",

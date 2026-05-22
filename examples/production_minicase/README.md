@@ -36,6 +36,7 @@ openmc2donjon-from-openmc \
   --run-dir "$RUN_DIR" \
   --check \
   --require-volume \
+  --require-h-factor \
   --expected-energy-group-structure OPENMC2DONJON-PRODUCTION-MINICASE-2G \
   --require-transport-dataset
 
@@ -49,6 +50,7 @@ openmc2donjon-from-openmc \
   --force-run-dir \
   --check \
   --require-volume \
+  --require-h-factor \
   --expected-energy-group-structure OPENMC2DONJON-PRODUCTION-MINICASE-2G \
   --require-transport-dataset
 ```

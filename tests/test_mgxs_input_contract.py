@@ -274,6 +274,19 @@ class MgxsInputContractTests(unittest.TestCase):
         self.assertTrue(present_report.ok, present_report.issues)
         self.assertEqual(present_report.h_factor_datasets, 1)
 
+    def test_require_h_factor_allows_nonfissionable_mixture_without_h_factor(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "moderator.h5"
+            write_single_state_fixture(path, total=[0.29, 0.38])
+            with h5py.File(path, "a") as h5:
+                h5["mixtures/fuel"].attrs["fissionable"] = False
+
+            report = validator.validate_input(path, require_h_factor=True)
+
+        self.assertTrue(report.ok, report.issues)
+        self.assertEqual(report.fissionable_mixtures, 0)
+        self.assertEqual(report.h_factor_datasets, 0)
+
     def test_energy_group_identity_gate_accepts_matching_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "c5g7.h5"

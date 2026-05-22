@@ -147,7 +147,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--require-h-factor",
         action="store_true",
-        help="with --check, require group-wise H-FACTOR/kappa-fission data",
+        help="with --check, require group-wise H-FACTOR/kappa-fission data for fissionable mixtures",
     )
     parser.add_argument(
         "--expected-energy-group-structure",

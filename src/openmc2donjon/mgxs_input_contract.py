@@ -173,7 +173,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--require-h-factor",
         action="store_true",
-        help="require group-wise H-FACTOR/kappa-fission data for every calculation",
+        help="require group-wise H-FACTOR/kappa-fission data for fissionable calculations",
     )
     parser.add_argument(
         "--expected-energy-group-structure",
@@ -707,9 +707,11 @@ def validate_calculation(
         report.fail(f"mixture {name}: missing dataset(s): {', '.join(missing)}")
         return
 
-    if attr_with_parent(group, parent_group, "fissionable") is None:
+    fissionable_attr = attr_with_parent(group, parent_group, "fissionable")
+    fissionable = False if fissionable_attr is None else bool(fissionable_attr)
+    if fissionable_attr is None:
         report.fail(f"mixture {name}: fissionable attribute is missing")
-    elif count_fissionable and bool(attr_with_parent(group, parent_group, "fissionable")):
+    elif count_fissionable and fissionable:
         report.fissionable_mixtures += 1
 
     volume = attr_with_parent(group, parent_group, "volume")
@@ -754,9 +756,10 @@ def validate_calculation(
 
     if has_h_factor(group):
         report.h_factor_datasets += 1
-    elif require_h_factor:
+    elif require_h_factor and fissionable:
         report.fail(
-            f"mixture {name}: group-wise H-FACTOR/kappa_fission dataset is required"
+            f"mixture {name}: fissionable calculation requires group-wise "
+            "H-FACTOR/kappa_fission data"
         )
 
     validate_uncertainty_for_calculation(

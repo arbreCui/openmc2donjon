@@ -177,6 +177,7 @@ OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
   --run-dir "$DRY_RUN_DIR" \
   --check \
   --require-volume \
+  --require-h-factor \
   --expected-energy-group-structure OPENMC2DONJON-PRODUCTION-MINICASE-2G \
   --require-transport-dataset \
   "${SCATTER_ROW_BALANCE_ARGS[@]}" \
@@ -203,6 +204,7 @@ OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
   --force-run-dir \
   --check \
   --require-volume \
+  --require-h-factor \
   --expected-energy-group-structure OPENMC2DONJON-PRODUCTION-MINICASE-2G \
   --require-transport-dataset \
   "${SCATTER_ROW_BALANCE_ARGS[@]}" \
@@ -247,6 +249,11 @@ with h5py.File(mgxs, "r") as h5:
         group = h5[f"mixtures/{name}"]
         if "transport_total" not in group:
             raise SystemExit(f"{name}: missing transport_total")
+        if bool(group.attrs["fissionable"]):
+            if "kappa_fission" not in group:
+                raise SystemExit(f"{name}: missing fissionable kappa_fission")
+            if not np.any(group["kappa_fission"][:] > 0.0):
+                raise SystemExit(f"{name}: kappa_fission has no positive bins")
         volume = float(group.attrs["volume"])
         if volume <= 0.0:
             raise SystemExit(f"{name}: non-positive volume")
@@ -274,6 +281,8 @@ blocks = lcm_ascii.read_lcm_ascii(mco)
 block_names = [block.name for block in blocks if block.name]
 if block_names[:1] != ["SIGNATURE"] or "MIXTURES" not in block_names:
     raise SystemExit("invalid MULTICOMPO output")
+if "H-FACTOR" not in block_names:
+    raise SystemExit("MULTICOMPO output is missing H-FACTOR")
 
 summary = json.loads(summary_path.read_text(encoding="utf-8"))
 summary_errors = validate_from_openmc_summary(summary)
@@ -289,6 +298,8 @@ if summary["checked"] is not True or summary["check_passed"] is not True:
 check_summary = json.loads(check_summary_path.read_text(encoding="utf-8"))
 if check_summary["decision"] != "mgxs_input_contract_passed":
     raise SystemExit("production minicase preflight did not pass")
+if check_summary["inputs"][0]["h_factor_datasets"] <= 0:
+    raise SystemExit("production minicase preflight did not see H-FACTOR/kappa_fission")
 uncertainty = check_summary["inputs"][0]["uncertainty"]
 if uncertainty["datasets"] <= 0:
     raise SystemExit("production minicase preflight did not see any *_std_dev datasets")
@@ -371,6 +382,7 @@ OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
   --acceptance-sph-minimum-floor 0.5 \
   --acceptance-sph-maximum-ceiling 3.0 \
   --fail-on-acceptance-violation \
+  --require-h-factor \
   --force \
   "${SCATTER_ROW_BALANCE_ARGS[@]}" \
   "${UNCERTAINTY_ARGS[@]}"

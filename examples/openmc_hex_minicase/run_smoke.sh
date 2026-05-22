@@ -100,6 +100,7 @@ OPENMC2DONJON_HEX_MINICASE_DIR="$CASE_DIR" \
   --run-dir "$DRY_RUN_DIR" \
   --check \
   --require-volume \
+  --require-h-factor \
   --expected-energy-group-structure OPENMC2DONJON-HEX-MINICASE-2G \
   --require-transport-dataset \
   "${SCATTER_ROW_BALANCE_ARGS[@]}"
@@ -125,6 +126,7 @@ OPENMC2DONJON_HEX_MINICASE_DIR="$CASE_DIR" \
   --force-run-dir \
   --check \
   --require-volume \
+  --require-h-factor \
   --expected-energy-group-structure OPENMC2DONJON-HEX-MINICASE-2G \
   --require-transport-dataset \
   "${SCATTER_ROW_BALANCE_ARGS[@]}"
@@ -136,6 +138,7 @@ echo "== MACROLIB convert =="
   -o "$MACROLIB" \
   --check \
   --require-volume \
+  --require-h-factor \
   --expected-energy-group-structure OPENMC2DONJON-HEX-MINICASE-2G \
   --require-transport-dataset \
   "${SCATTER_ROW_BALANCE_ARGS[@]}"
@@ -178,6 +181,9 @@ with h5py.File(mgxs, "r") as h5:
         mixture = h5[f"mixtures/{name}"]
         if "transport_total" not in mixture:
             raise SystemExit(f"{name}: missing transport_total")
+        if bool(mixture.attrs["fissionable"]):
+            if "kappa_fission" not in mixture:
+                raise SystemExit(f"{name}: missing fissionable kappa_fission")
         if float(mixture.attrs["volume"]) <= 0.0:
             raise SystemExit(f"{name}: non-positive volume")
         if mixture["scatter_matrix"].shape != (2, 2, 2):
@@ -188,6 +194,10 @@ macrolib = read_macrolib_ascii(macrolib_path)
 macrolib_blocks = lcm_ascii.read_lcm_ascii(macrolib_path)
 if macrolib.ngroups != 2 or macrolib.nmixtures != 7:
     raise SystemExit("unexpected MACROLIB dimensions")
+if "H-FACTOR" not in [block.name for block in mcompo_blocks if block.name]:
+    raise SystemExit("MULTICOMPO output is missing H-FACTOR")
+if macrolib.h_factor is None:
+    raise SystemExit("MACROLIB output is missing H-FACTOR")
 
 summary = json.loads(summary_path.read_text(encoding="utf-8"))
 summary_errors = validate_from_openmc_summary(summary)
@@ -203,6 +213,8 @@ if summary["checked"] is not True or summary["check_passed"] is not True:
 check_summary = json.loads(check_summary_path.read_text(encoding="utf-8"))
 if check_summary["decision"] != "mgxs_input_contract_passed":
     raise SystemExit("OpenMC hex minicase preflight did not pass")
+if check_summary["inputs"][0]["h_factor_datasets"] <= 0:
+    raise SystemExit("OpenMC hex minicase preflight did not see H-FACTOR/kappa_fission")
 
 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 labels = {artifact["label"]: artifact for artifact in manifest["artifacts"]}
