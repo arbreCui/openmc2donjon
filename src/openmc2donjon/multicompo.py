@@ -317,6 +317,7 @@ def build_multicompo_history_blocks(
 
     burnup_axis = None if burnup_values is None else np.asarray(burnup_values, dtype=float)
     npar = 1 if burnup_axis is not None else 0
+    validated_root_name = _validate_root_name(root_name)
     blocks: list[lcm.LcmBlock] = [
         lcm.string_block(
             1,
@@ -324,7 +325,7 @@ def build_multicompo_history_blocks(
             "L_MULTICOMPO",
             width=DONJON_SIGNATURE_WIDTH,
         ),
-        lcm.block(1, root_name[:DONJON_OBJECT_NAME_WIDTH], 0, count=-1),
+        lcm.block(1, validated_root_name, 0, count=-1),
         lcm.string_block(2, "COMMENT", comment, width=DONJON_COMMENT_WIDTH),
         lcm.block(2, "GLOBAL", 0, count=-1),
         *_global_parameter_blocks(3, burnup_axis),
@@ -872,6 +873,17 @@ def _adf_name(name: str, mix_name: str) -> str:
         raise ValueError(
             f"mixture {mix_name}: ADF name {name!r} is longer than "
             f"{DONJON_ADF_NAME_WIDTH} characters"
+        )
+    return name
+
+
+def _validate_root_name(name: str) -> str:
+    if not name:
+        raise ValueError("root_name must not be empty")
+    if len(name) > DONJON_OBJECT_NAME_WIDTH:
+        raise ValueError(
+            f"root_name {name!r} is longer than "
+            f"{DONJON_OBJECT_NAME_WIDTH} characters"
         )
     return name
 

@@ -96,6 +96,47 @@ class MultiCompoSmokeTests(unittest.TestCase):
         self.assertEqual(by_name["pval00000001"].data, (0.0,))
         self.assertEqual(by_name["NVALUE"].data, (1,))
 
+    def test_rejects_root_name_truncation(self) -> None:
+        mixture = MixtureXS(
+            name="fuel",
+            total=np.array([0.5]),
+            absorption=np.array([0.05]),
+            fission=np.array([0.0]),
+            nu_fission=np.array([0.0]),
+            chi=np.array([0.0]),
+            scatter_matrix=np.array([[[0.1]]]),
+            fissionable=False,
+        )
+
+        with self.assertRaisesRegex(ValueError, "root_name .* longer than 72"):
+            build_multicompo_blocks(
+                [mixture],
+                np.array([1.0e-5, 1.0e7]),
+                root_name="R" * 73,
+                comment="bad root",
+            )
+
+    def test_accepts_long_openmc_domain_name(self) -> None:
+        mixture = MixtureXS(
+            name="assembly_row_001_col_002_axial_003_domain_fuel_region",
+            total=np.array([0.5]),
+            absorption=np.array([0.05]),
+            fission=np.array([0.0]),
+            nu_fission=np.array([0.0]),
+            chi=np.array([0.0]),
+            scatter_matrix=np.array([[[0.1]]]),
+            fissionable=False,
+        )
+
+        blocks = build_multicompo_blocks(
+            [mixture],
+            np.array([1.0e-5, 1.0e7]),
+            root_name="CPO",
+            comment="long domain",
+        )
+
+        self.assertEqual(blocks[1].name, "CPO")
+
     def test_writes_burnup_axis_with_multiple_calculations(self) -> None:
         calc0 = MixtureXS(
             name="fuel",

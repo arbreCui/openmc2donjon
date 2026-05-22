@@ -81,7 +81,12 @@ def pack_fixed_strings(values: Sequence[str], width: int) -> tuple[str, int]:
 
     if width % LCM_CHAR_CHUNK_WIDTH != 0:
         raise ValueError("LCM character width must be a multiple of 4")
-    text = "".join(value[:width].ljust(width) for value in values)
+    for value in values:
+        if len(value) > width:
+            raise ValueError(
+                f"fixed string {value!r} is longer than {width} characters"
+            )
+    text = "".join(value.ljust(width) for value in values)
     return text, len(text) // LCM_CHAR_CHUNK_WIDTH
 
 

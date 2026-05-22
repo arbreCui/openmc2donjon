@@ -49,6 +49,14 @@ class LcmAsciiTests(unittest.TestCase):
             [b.semantic_tuple() for b in reread],
         )
 
+    def test_pack_fixed_strings_rejects_truncation(self) -> None:
+        packed, count = lcm.pack_fixed_strings(["ABCDEFGH", "FD_B"], 8)
+
+        self.assertEqual(packed, "ABCDEFGHFD_B    ")
+        self.assertEqual(count, 4)
+        with self.assertRaisesRegex(ValueError, "longer than 8 characters"):
+            lcm.pack_fixed_strings(["ABCDEFGHI"], 8)
+
     def test_reads_realistic_global_fragment(self) -> None:
         fragment = [
             "->       1      12       3       3                                 <-   ",
