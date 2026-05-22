@@ -48,6 +48,7 @@ Default:
   - external SPH table handoff smoke
   - external face-flux adapter smoke
   - production minicase, OpenMC full-core, and OpenMC hex minicase smokes
+  - OpenMC full-core real DONJON-backed SPH loop smoke with --run-donjon
   - C5G7 converter readback smoke
   - accepted baseline manifest validation
   - C5G7 SPH solver-response smoke when local DONJON is available
@@ -256,6 +257,7 @@ echo
 echo "== OpenMC full-core assembly-wise minicase smoke =="
 RUN_DIR="$RUN_DIR/openmc_full_core_minicase" \
 PYTHON_BIN="$PYTHON_BIN" \
+RUN_REAL_DONJON="$RUN_DONJON" \
   bash "$REPO_ROOT/examples/openmc_full_core_minicase/run_smoke.sh"
 
 echo

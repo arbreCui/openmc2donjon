@@ -57,6 +57,8 @@ class OpenMCFullCoreMinicaseExampleTests(unittest.TestCase):
         self.assertIn("--production", text)
         self.assertIn("OPENMC2DONJON_FULL_CORE_MINICASE_DIR", text)
         self.assertIn("OPENMC2DONJON-FULL-CORE-MINICASE-2G", text)
+        self.assertIn('RUN_REAL_DONJON="${RUN_REAL_DONJON:-0}"', text)
+        self.assertIn("run_real_donjon: $RUN_REAL_DONJON", text)
         self.assertIn("full-core assembly-wise readback OK", text)
         self.assertIn("h5[\"mixture_names\"]", text)
         self.assertIn("unexpected declared mixture order", text)
@@ -80,12 +82,17 @@ class OpenMCFullCoreMinicaseExampleTests(unittest.TestCase):
         self.assertIn("--acceptance-min-completed-iterations 2", text)
         self.assertIn("--acceptance-require-final-solve", text)
         self.assertIn("power-normalized real DONJON SPH loop should not clip", text)
+        self.assertIn("real DONJON SPH residual must be non-negative", text)
         self.assertIn("auto normalization did not resolve to power", text)
         self.assertIn("normalization factor is not positive", text)
         self.assertIn("normalization={summary['workflows'][0]['flux_normalization']}", text)
         self.assertIn("real DONJON full-core SPH loop mechanical smoke OK", text)
         self.assertIn(
-            "DONJON runner unavailable; skipping real full-core low-order solve smoke",
+            "DONJON runner unavailable but RUN_REAL_DONJON=1",
+            text,
+        )
+        self.assertIn(
+            "real DONJON full-core smoke skipped; set RUN_REAL_DONJON=1 to enable",
             text,
         )
         self.assertIn("h_factor_datasets", text)

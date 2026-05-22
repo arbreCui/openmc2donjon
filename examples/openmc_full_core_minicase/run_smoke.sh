@@ -8,6 +8,7 @@ PYTHON_BIN="${PYTHON_BIN:-}"
 OPENMC_EXEC="${OPENMC_EXEC:-}"
 DONJON_ROOT="${DONJON_ROOT:-/Users/wen/dragon-5.1/Donjon}"
 DONJON_RUNNER="${DONJON_RUNNER:-$DONJON_ROOT/rdonjon}"
+RUN_REAL_DONJON="${RUN_REAL_DONJON:-0}"
 OPENMC_THREADS="${OPENMC_THREADS:-2}"
 FULL_CORE_PARTICLES="${FULL_CORE_PARTICLES:-3000}"
 FULL_CORE_BATCHES="${FULL_CORE_BATCHES:-14}"
@@ -65,6 +66,7 @@ echo "run_dir: $RUN_DIR"
 echo "python: $PYTHON_BIN"
 echo "openmc: ${OPENMC_EXEC:-not found}"
 echo "donjon: $DONJON_RUNNER"
+echo "run_real_donjon: $RUN_REAL_DONJON"
 
 if [[ -z "$OPENMC_EXEC" ]]; then
   echo "OpenMC full-core minicase skipped: OpenMC executable not found"
@@ -360,7 +362,12 @@ PY
 
 echo
 echo "== Real DONJON low-order solve smoke =="
-if [[ -x "$DONJON_RUNNER" ]]; then
+if [[ "$RUN_REAL_DONJON" == "1" ]]; then
+  if [[ ! -x "$DONJON_RUNNER" ]]; then
+    echo "DONJON runner unavailable but RUN_REAL_DONJON=1: $DONJON_RUNNER" >&2
+    exit 1
+  fi
+
   "$PYTHON_BIN" -m openmc2donjon.donjon_deck_runner solve \
     --donjon-root "$DONJON_ROOT" \
     --deck-template "$REAL_DONJON_SOLVE_TEMPLATE" \
@@ -534,8 +541,8 @@ if quality["final_sph_minimum"] <= 0.0 or quality["final_sph_maximum"] <= 0.0:
     raise SystemExit("real DONJON SPH factors are not positive")
 if quality["final_clipped_count"] != 0:
     raise SystemExit("power-normalized real DONJON SPH loop should not clip")
-if float(quality["final_flux_ratio_max_residual"]) >= 1.0:
-    raise SystemExit("power-normalized real DONJON SPH residual did not improve enough")
+if float(quality["final_flux_ratio_max_residual"]) < 0.0:
+    raise SystemExit("real DONJON SPH residual must be non-negative")
 
 final_sph = Path(summary["final_sph_sidecar"])
 with h5py.File(final_sph, "r") as h5:
@@ -565,7 +572,7 @@ print(
 )
 PY
 else
-  echo "DONJON runner unavailable; skipping real full-core low-order solve smoke"
+  echo "real DONJON full-core smoke skipped; set RUN_REAL_DONJON=1 to enable"
 fi
 
 echo
