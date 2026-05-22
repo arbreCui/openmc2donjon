@@ -8,21 +8,17 @@ from .macrolib import convert_mgxs_hdf5_to_macrolib
 from .multicompo import convert_mgxs_hdf5
 from .sph_loop_config import CONFIG_SCHEMA
 from .sph_loop_acceptance import build_acceptance_report
-from .sph_loop_convergence import (
-    SphLoopConvergenceReport,
-    build_convergence_report,
-)
-from .sph_loop_plan import build_sph_loop_plan
+from .sph_loop_execution import SphLoopExecution, execute_loop
+from .sph_loop_plan import SphLoopPlan, build_sph_loop_plan
 from .sph_loop_preflight import (
+    SphLoopFluxMapPreflightReport,
     build_flux_map_preflight_report,
     format_failure as format_preflight_failure,
 )
 from .sph_loop_report import (
     PASS_DECISION,
     SCHEMA,
-    SphLoopPostprocessReport,
     SphLoopReport,
-    SphLoopSolveReport,
     build_audit_rows,
     print_report,
     write_audit_csv,
@@ -30,8 +26,7 @@ from .sph_loop_report import (
     write_bundle,
     write_summary,
 )
-from .sph_loop_runner import require_absent, run_postprocessor, run_solver
-from .sph_workflow import SphIterationWorkflowReport, run_sph_iteration_workflow
+from .sph_loop_runner import require_absent
 
 
 def run_sph_loop(
@@ -58,18 +53,41 @@ def run_sph_loop(
         bundle_dir=bundle_dir,
         bundle_manifest_name=bundle_manifest_name,
     )
+    preflight = _run_preflight(plan)
+    initial_ascii = _write_initial_ascii_for_plan(plan, force=force)
+    execution = execute_loop(
+        plan,
+        initial_ascii=initial_ascii,
+        preflight=preflight,
+        force=force,
+    )
+    report = _build_report(plan, initial_ascii, preflight, execution)
+    _write_report_outputs(
+        report,
+        bundle_dir=plan.bundle_dir,
+        bundle_manifest_name=bundle_manifest_name,
+        force=force,
+    )
+    _enforce_outcome(plan, report)
+    return report
+
+
+def _run_preflight(plan: SphLoopPlan) -> SphLoopFluxMapPreflightReport:
     plan.loop_dir.mkdir(parents=True, exist_ok=True)
-    flux_map_preflight = build_flux_map_preflight_report(
+    preflight = build_flux_map_preflight_report(
         input_h5=plan.input_h5,
         reference_flux=plan.reference_flux,
         map_h5=plan.map_h5,
         scalar_flux_ids=plan.scalar_flux_ids,
         scalar_flux_column=plan.scalar_flux_column,
     )
-    if not flux_map_preflight.passed:
-        raise ValueError(format_preflight_failure(flux_map_preflight))
+    if not preflight.passed:
+        raise ValueError(format_preflight_failure(preflight))
+    return preflight
 
-    initial_ascii = _write_initial_ascii(
+
+def _write_initial_ascii_for_plan(plan: SphLoopPlan, *, force: bool) -> Path:
+    return _write_initial_ascii(
         plan.input_h5,
         plan.loop_dir,
         output_format=plan.output_format,
@@ -78,184 +96,104 @@ def run_sph_loop(
         force=force,
     )
 
-    solves: list[SphLoopSolveReport] = []
-    workflows: list[SphIterationWorkflowReport] = []
-    convergence_reports: list[SphLoopConvergenceReport] = []
-    postprocesses: list[SphLoopPostprocessReport] = []
-    current_ascii = initial_ascii
-    previous_sph: Path | None = None
-    stop_reason = "max_iterations"
 
-    for iteration in range(plan.iterations):
-        sph_before_iteration = previous_sph
-        solve_report = run_solver(
-            plan.solver,
-            base_dir=plan.base_dir,
-            loop_dir=plan.loop_dir,
-            iteration=iteration,
-            input_h5=plan.input_h5,
-            ascii_input=current_ascii,
-            previous_sph=previous_sph,
-            energy_groups=flux_map_preflight.energy_groups,
-            list_offset=plan.list_offset,
-            force=force,
-        )
-        solves.append(solve_report)
-
-        workflow_dir = plan.loop_dir / f"iter{iteration + 1:02d}_sph"
-        workflow = run_sph_iteration_workflow(
-            plan.input_h5,
-            workflow_dir,
-            reference_flux=plan.reference_flux,
-            flux_dump=solve_report.result,
-            map_h5=plan.map_h5,
-            scalar_flux_ids=plan.scalar_flux_ids,
-            scalar_flux_column=plan.scalar_flux_column,
-            list_offset=plan.list_offset,
-            previous_sph=previous_sph,
-            damping=plan.damping,
-            clip_min=plan.clip_min,
-            clip_max=plan.clip_max,
-            output_format=plan.output_format,
-            root_name=plan.root_name,
-            h_factor_default=plan.h_factor_default,
-            sph_kind=f"{plan.sph_kind}-iter{iteration + 1}",
-            sph_real=plan.sph_real,
-            sph_applied=plan.sph_applied,
-            source_label=f"{plan.source_label}: iteration {iteration + 1}",
-            force=force,
-        )
-        workflows.append(workflow)
-        current_ascii = workflow.ascii_output
-        convergence_report = build_convergence_report(
-            workflow,
-            input_h5=plan.input_h5,
-            previous_sph=sph_before_iteration,
-            iteration=iteration + 1,
-            sph_change_tolerance=plan.sph_change_tolerance,
-            flux_ratio_tolerance=plan.flux_ratio_tolerance,
-            min_iterations=plan.min_iterations,
-        )
-        convergence_reports.append(convergence_report)
-        previous_sph = workflow.sph_sidecar
-        if plan.postprocessor is not None:
-            postprocess = run_postprocessor(
-                plan.postprocessor,
-                base_dir=plan.base_dir,
-                loop_dir=plan.loop_dir,
-                iteration=iteration,
-                input_h5=plan.input_h5,
-                solve_result=solve_report.result,
-                workflow=workflow,
-                previous_sph=previous_sph,
-                output_format=plan.output_format,
-                force=force,
-            )
-            postprocesses.append(postprocess)
-            current_ascii = postprocess.output
-        if plan.convergence_enabled and convergence_report.converged:
-            stop_reason = "converged"
-            break
-
-    final_solve = None
-    if plan.run_final_solve:
-        final_iteration = len(workflows)
-        final_solve = run_solver(
-            plan.solver,
-            base_dir=plan.base_dir,
-            loop_dir=plan.loop_dir,
-            iteration=final_iteration,
-            input_h5=plan.input_h5,
-            ascii_input=current_ascii,
-            previous_sph=previous_sph,
-            energy_groups=flux_map_preflight.energy_groups,
-            list_offset=plan.list_offset,
-            force=force,
-        )
-        solves.append(final_solve)
-
-    converged = bool(convergence_reports and convergence_reports[-1].converged)
+def _build_report(
+    plan: SphLoopPlan,
+    initial_ascii: Path,
+    preflight: SphLoopFluxMapPreflightReport,
+    execution: SphLoopExecution,
+) -> SphLoopReport:
+    converged = bool(execution.convergence and execution.convergence[-1].converged)
     audit_rows = build_audit_rows(
-        solves=tuple(solves),
-        workflows=tuple(workflows),
-        convergence=tuple(convergence_reports),
-        postprocesses=tuple(postprocesses),
-        final_solve=final_solve,
-        final_ascii=current_ascii,
+        solves=execution.solves,
+        workflows=execution.workflows,
+        convergence=execution.convergence,
+        postprocesses=execution.postprocesses,
+        final_solve=execution.final_solve,
+        final_ascii=execution.final_ascii,
     )
     acceptance = build_acceptance_report(
         plan.normalized_acceptance,
         audit_rows=audit_rows,
-        convergence=tuple(convergence_reports),
-        completed_iterations=len(workflows),
+        convergence=execution.convergence,
+        completed_iterations=len(execution.workflows),
         converged=converged,
-        final_solve=final_solve,
+        final_solve=execution.final_solve,
     )
-    report = SphLoopReport(
+    return SphLoopReport(
         config_path=plan.config_path,
         input_h5=plan.input_h5,
         output_dir=plan.loop_dir,
         reference_flux=plan.reference_flux,
         iterations=plan.iterations,
-        completed_iterations=len(workflows),
+        completed_iterations=len(execution.workflows),
         output_format=plan.output_format,
         initial_ascii=initial_ascii,
-        final_ascii=current_ascii,
-        final_sph_sidecar=previous_sph,
+        final_ascii=execution.final_ascii,
+        final_sph_sidecar=execution.final_sph_sidecar,
         summary_json=plan.summary_path,
         audit_csv=plan.audit_csv,
         audit_text=plan.audit_text,
         bundle_manifest=plan.bundle_manifest,
         convergence_enabled=plan.convergence_enabled,
         converged=converged,
-        stop_reason=stop_reason,
+        stop_reason=execution.stop_reason,
         sph_change_tolerance=plan.sph_change_tolerance,
         flux_ratio_tolerance=plan.flux_ratio_tolerance,
         min_iterations=plan.min_iterations,
-        flux_map_preflight=flux_map_preflight,
-        solves=tuple(solves),
-        workflows=tuple(workflows),
-        convergence=tuple(convergence_reports),
-        postprocesses=tuple(postprocesses),
-        final_solve=final_solve,
+        flux_map_preflight=preflight,
+        solves=execution.solves,
+        workflows=execution.workflows,
+        convergence=execution.convergence,
+        postprocesses=execution.postprocesses,
+        final_solve=execution.final_solve,
         audit_rows=audit_rows,
         acceptance=acceptance,
     )
-    write_audit_csv(plan.audit_csv, report.audit_rows)
+
+
+def _write_report_outputs(
+    report: SphLoopReport,
+    *,
+    bundle_dir: Path | None,
+    bundle_manifest_name: str,
+    force: bool,
+) -> None:
+    write_audit_csv(report.audit_csv, report.audit_rows)
     write_audit_text(
-        plan.audit_text,
+        report.audit_text,
         report.audit_rows,
         flux_map_preflight=report.flux_map_preflight,
     )
-    write_summary(plan.summary_path, report)
-    if plan.bundle_dir is not None:
+    write_summary(report.summary_json, report)
+    if bundle_dir is not None:
         write_bundle(
             report,
-            output_dir=plan.bundle_dir,
+            output_dir=bundle_dir,
             manifest_name=bundle_manifest_name,
             force=force,
         )
     print_report(report)
-    if (
-        plan.convergence_enabled
-        and plan.fail_on_nonconvergence
-        and not report.converged
-    ):
+
+
+def _enforce_outcome(plan: SphLoopPlan, report: SphLoopReport) -> None:
+    if plan.convergence_enabled and plan.fail_on_nonconvergence and not report.converged:
         raise RuntimeError(
             "SPH loop did not converge within "
             f"{report.iterations} iteration(s); see {plan.summary_path}"
         )
-    if report.acceptance.enabled and report.acceptance.fail_on_violation:
-        if not report.acceptance.passed:
-            failed = ", ".join(
-                check.name for check in report.acceptance.checks if not check.passed
-            )
-            failed_suffix = f": {failed}" if failed else ""
-            raise RuntimeError(
-                f"SPH loop acceptance criteria failed{failed_suffix}; see "
-                f"{plan.summary_path} and {plan.audit_csv}"
-            )
-    return report
+    if not report.acceptance.enabled or not report.acceptance.fail_on_violation:
+        return
+    if report.acceptance.passed:
+        return
+    failed = ", ".join(
+        check.name for check in report.acceptance.checks if not check.passed
+    )
+    failed_suffix = f": {failed}" if failed else ""
+    raise RuntimeError(
+        f"SPH loop acceptance criteria failed{failed_suffix}; see "
+        f"{plan.summary_path} and {plan.audit_csv}"
+    )
 
 
 def _write_initial_ascii(
