@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 from pathlib import Path
+import shlex
 from typing import Any
 
 import numpy as np
@@ -29,6 +30,8 @@ class SphLoopScaffoldReport:
     reference_flux_h5: Path
     flux_map_h5: Path
     loop_config: Path
+    run_script: Path
+    run_command: tuple[str, ...]
     mixture_names: tuple[str, ...]
     energy_groups: int
     scalar_flux_ids: tuple[int, ...]
@@ -47,6 +50,7 @@ def create_sph_loop_scaffold(
     reference_output: str | Path | None = None,
     flux_map_output: str | Path | None = None,
     config_output: str | Path | None = None,
+    run_script_output: str | Path | None = None,
     loop_output_dir: str | Path | None = None,
     output_format: str = "macrolib",
     final_solve: bool = True,
@@ -113,8 +117,11 @@ def create_sph_loop_scaffold(
     config_path = (
         Path(config_output) if config_output else output_root / "loop_config.json"
     )
+    run_script_path = (
+        Path(run_script_output) if run_script_output else output_root / "run_sph_loop.sh"
+    )
     loop_dir = Path(loop_output_dir) if loop_output_dir else output_root / "sph_loop"
-    for path in (reference_path, flux_map_path, config_path):
+    for path in (reference_path, flux_map_path, config_path, run_script_path):
         _require_absent(path, force=force)
 
     output_root.mkdir(parents=True, exist_ok=True)
@@ -177,6 +184,8 @@ def create_sph_loop_scaffold(
         h_factor_default=h_factor_default,
         acceptance=acceptance,
     )
+    run_command = _run_sph_loop_command(config_path, python_bin=python_bin)
+    _write_run_script(run_script_path, run_command)
 
     report = SphLoopScaffoldReport(
         input_h5=input_path,
@@ -186,6 +195,8 @@ def create_sph_loop_scaffold(
         reference_flux_h5=reference_path,
         flux_map_h5=flux_map_path,
         loop_config=config_path,
+        run_script=run_script_path,
+        run_command=run_command,
         mixture_names=mixture_names,
         energy_groups=energy_groups,
         scalar_flux_ids=tuple(int(value) for value in ids),
@@ -233,6 +244,8 @@ def print_report(report: SphLoopScaffoldReport) -> None:
     print(f"  reference_flux_h5: {report.reference_flux_h5}")
     print(f"  flux_map_h5: {report.flux_map_h5}")
     print(f"  loop_config: {report.loop_config}")
+    print(f"  run_script: {report.run_script}")
+    print(f"  run_command: {_shell_join(report.run_command)}")
     print(
         f"  mixtures={len(report.mixture_names)} groups={report.energy_groups} "
         f"scalar_flux_ids={','.join(str(value) for value in report.scalar_flux_ids)}"
@@ -256,6 +269,8 @@ def write_summary(path: Path, report: SphLoopScaffoldReport) -> None:
         "reference_flux_h5": str(report.reference_flux_h5),
         "flux_map_h5": str(report.flux_map_h5),
         "loop_config": str(report.loop_config),
+        "run_script": str(report.run_script),
+        "run_command": list(report.run_command),
         "mixture_count": len(report.mixture_names),
         "mixture_names": list(report.mixture_names),
         "energy_groups": report.energy_groups,
@@ -359,6 +374,32 @@ def _write_flux_map(
             data=np.asarray(scalar_flux_ids, dtype=int),
         )
         dataset.attrs["mixture_names"] = np.asarray(mixture_names, dtype="S")
+
+
+def _run_sph_loop_command(config_path: Path, *, python_bin: str | Path | None) -> tuple[str, ...]:
+    return (
+        str(python_bin or "python3"),
+        "-m",
+        "openmc2donjon.cli",
+        "run-sph-loop",
+        "--config",
+        str(config_path),
+    )
+
+
+def _write_run_script(path: Path, command: tuple[str, ...]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        f"exec {_shell_join(command)} \"$@\"\n",
+        encoding="utf-8",
+    )
+    path.chmod(path.stat().st_mode | 0o111)
+
+
+def _shell_join(command: tuple[str, ...]) -> str:
+    return " ".join(shlex.quote(part) for part in command)
 
 
 def _require_absent(path: Path, *, force: bool) -> None:

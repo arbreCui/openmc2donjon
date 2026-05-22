@@ -45,6 +45,11 @@ class OpenMCSphLoopHandoffTests(unittest.TestCase):
             self.assertEqual(report.ascii_output, run_dir / "out.macrolib.txt")
             self.assertTrue(report.ascii_output.exists())
             self.assertEqual(report.scaffold.scalar_flux_ids, (2, 4))
+            self.assertEqual(
+                report.scaffold.run_script,
+                run_dir / "sph_loop_inputs/run_sph_loop.sh",
+            )
+            self.assertTrue(report.scaffold.run_script.exists())
             with h5py.File(report.mgxs_h5, "r") as h5:
                 np.testing.assert_allclose(
                     h5["openmc_volume_flux"][:],
@@ -64,6 +69,14 @@ class OpenMCSphLoopHandoffTests(unittest.TestCase):
                 str(run_dir / "sph_loop_inputs/loop_config.json"),
             )
             self.assertEqual(summary["scalar_flux_ids"], [2, 4])
+            self.assertEqual(
+                summary["run_script"],
+                str(run_dir / "sph_loop_inputs/run_sph_loop.sh"),
+            )
+            self.assertEqual(
+                summary["run_command"][-2:],
+                ["--config", str(run_dir / "sph_loop_inputs/loop_config.json")],
+            )
             loop_config = json.loads(
                 (run_dir / "sph_loop_inputs/loop_config.json").read_text(
                     encoding="utf-8"
@@ -116,6 +129,7 @@ class OpenMCSphLoopHandoffTests(unittest.TestCase):
             self.assertTrue((run_dir / "sph_loop_inputs/reference_flux.h5").exists())
             self.assertTrue((run_dir / "sph_loop_inputs/flux_map.h5").exists())
             self.assertTrue((run_dir / "sph_loop_inputs/loop_config.json").exists())
+            self.assertTrue((run_dir / "sph_loop_inputs/run_sph_loop.sh").exists())
             loop_config = json.loads(
                 (run_dir / "sph_loop_inputs/loop_config.json").read_text(
                     encoding="utf-8"

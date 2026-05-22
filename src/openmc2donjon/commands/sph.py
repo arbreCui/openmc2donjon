@@ -648,6 +648,7 @@ def build_make_sph_loop_scaffold_parser() -> argparse.ArgumentParser:
     parser.add_argument("--reference-output", type=Path, default=None)
     parser.add_argument("--flux-map-output", type=Path, default=None)
     parser.add_argument("--config-output", type=Path, default=None)
+    parser.add_argument("--run-script-output", type=Path, default=None)
     parser.add_argument("--loop-output-dir", type=Path, default=None)
     parser.add_argument(
         "--donjon-root",
@@ -932,6 +933,7 @@ def make_sph_loop_scaffold_handler(args: argparse.Namespace) -> int:
             reference_output=args.reference_output,
             flux_map_output=args.flux_map_output,
             config_output=args.config_output,
+            run_script_output=args.run_script_output,
             loop_output_dir=args.loop_output_dir,
             output_format=args.format,
             final_solve=not args.no_final_solve,

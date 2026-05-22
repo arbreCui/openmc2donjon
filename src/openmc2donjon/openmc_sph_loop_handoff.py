@@ -55,6 +55,7 @@ def prepare_openmc_sph_loop_handoff(
     reference_flux: str | Path | None = None,
     reference_flux_dataset: str = "openmc_volume_flux",
     scaffold_dir: str | Path | None = None,
+    run_script_output: str | Path | None = None,
     scalar_flux_ids: dict[str, int] | None = None,
     sequential_scalar_flux_map: bool = False,
     donjon_root: str | Path = "/Users/wen/dragon-5.1/Donjon",
@@ -155,6 +156,7 @@ def prepare_openmc_sph_loop_handoff(
         scaffold_root,
         reference_flux=reference_flux or f"{mgxs_h5}::{reference_flux_dataset}",
         solve_template=solve_template,
+        run_script_output=run_script_output,
         scalar_flux_ids=scalar_flux_ids,
         sequential_scalar_flux_map=sequential_scalar_flux_map,
         output_format=output_format,
@@ -213,6 +215,7 @@ def print_report(report: OpenMCSphLoopHandoffReport) -> None:
     print(f"  mgxs_h5: {report.mgxs_h5}")
     print(f"  ascii_output: {report.ascii_output}")
     print(f"  scaffold_config: {report.scaffold.loop_config}")
+    print(f"  run_script: {report.scaffold.run_script}")
     print(
         f"  mixtures={len(report.scaffold.mixture_names)} "
         f"groups={report.scaffold.energy_groups} format={report.output_format}"
@@ -241,6 +244,8 @@ def write_summary(path: Path, report: OpenMCSphLoopHandoffReport) -> None:
         "reference_flux_h5": str(report.scaffold.reference_flux_h5),
         "flux_map_h5": str(report.scaffold.flux_map_h5),
         "loop_config": str(report.scaffold.loop_config),
+        "run_script": str(report.scaffold.run_script),
+        "run_command": list(report.scaffold.run_command),
         "mixture_count": len(report.scaffold.mixture_names),
         "mixture_names": list(report.scaffold.mixture_names),
         "energy_groups": report.scaffold.energy_groups,

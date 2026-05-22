@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -37,6 +38,21 @@ class SphLoopScaffoldTests(unittest.TestCase):
 
             self.assertEqual(report.scalar_flux_ids, (2, 4))
             self.assertEqual(report.reference_flux_dataset, "openmc_volume_flux")
+            self.assertEqual(report.run_script, out / "run_sph_loop.sh")
+            self.assertTrue(report.run_script.exists())
+            self.assertTrue(os.access(report.run_script, os.X_OK))
+            self.assertEqual(
+                report.run_command,
+                (
+                    "python3",
+                    "-m",
+                    "openmc2donjon.cli",
+                    "run-sph-loop",
+                    "--config",
+                    str(out / "loop_config.json"),
+                ),
+            )
+            self.assertIn("run-sph-loop", report.run_script.read_text(encoding="utf-8"))
             with h5py.File(out / "reference_flux.h5", "r") as h5:
                 self.assertEqual(h5.attrs["schema"], "openmc2donjon.reference-flux.v1")
                 np.testing.assert_allclose(
@@ -114,10 +130,13 @@ class SphLoopScaffoldTests(unittest.TestCase):
             payload = json.loads(summary.read_text(encoding="utf-8"))
             self.assertTrue(payload["sequential_scalar_flux_map"])
             self.assertEqual(payload["scalar_flux_ids"], [1, 2])
+            self.assertEqual(payload["run_script"], str(out / "run_sph_loop.sh"))
+            self.assertEqual(payload["run_command"][-2:], ["--config", str(out / "loop_config.json")])
             self.assertTrue(payload["warnings"])
             self.assertTrue((out / "reference_flux.h5").exists())
             self.assertTrue((out / "flux_map.h5").exists())
             self.assertTrue((out / "loop_config.json").exists())
+            self.assertTrue((out / "run_sph_loop.sh").exists())
 
 
 def _write_mgxs(path: Path) -> None:

@@ -79,6 +79,12 @@ def build_prepare_openmc_sph_loop_parser() -> argparse.ArgumentParser:
     parser.add_argument("--reference-flux-dataset", default="openmc_volume_flux")
     parser.add_argument("--scaffold-dir", type=Path, default=None)
     parser.add_argument(
+        "--run-script-output",
+        type=Path,
+        default=None,
+        help="optional path for the generated run_sph_loop.sh helper",
+    )
+    parser.add_argument(
         "--scalar-flux-map",
         default=None,
         help="comma-separated DONJON scalar unknown ids, e.g. FUEL=1,MOD=2",
@@ -149,6 +155,7 @@ def prepare_openmc_sph_loop_handler(args: argparse.Namespace) -> int:
             reference_flux=args.reference_flux,
             reference_flux_dataset=args.reference_flux_dataset,
             scaffold_dir=args.scaffold_dir,
+            run_script_output=args.run_script_output,
             scalar_flux_ids=scalar_flux_ids,
             sequential_scalar_flux_map=args.sequential_scalar_flux_map,
             donjon_root=args.donjon_root,
