@@ -6,6 +6,7 @@ import argparse
 from pathlib import Path
 import sys
 
+from .acceptance import add_sph_loop_acceptance_args, sph_loop_acceptance_from_args
 from .base import (
     USER_FACING_EXCEPTIONS,
     CommandSpec,
@@ -102,6 +103,7 @@ def build_prepare_openmc_sph_loop_parser() -> argparse.ArgumentParser:
     parser.add_argument("--flux-ratio-tolerance", type=float, default=None)
     parser.add_argument("--min-iterations", type=int, default=1)
     parser.add_argument("--fail-on-nonconvergence", action="store_true")
+    add_sph_loop_acceptance_args(parser)
     parser.add_argument("--case-id-prefix", default="openmc_sph_loop")
     parser.add_argument("--stage-prefix", default="odj_openmc_sph_loop")
     parser.add_argument(
@@ -160,6 +162,7 @@ def prepare_openmc_sph_loop_handler(args: argparse.Namespace) -> int:
             flux_ratio_tolerance=args.flux_ratio_tolerance,
             min_iterations=args.min_iterations,
             fail_on_nonconvergence=args.fail_on_nonconvergence,
+            acceptance=sph_loop_acceptance_from_args(args),
             case_id_prefix=args.case_id_prefix,
             stage_prefix=args.stage_prefix,
             case_dir=args.case_dir,

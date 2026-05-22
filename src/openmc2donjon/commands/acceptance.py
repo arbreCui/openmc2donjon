@@ -1,0 +1,113 @@
+"""Shared CLI helpers for SPH loop production acceptance gates."""
+
+from __future__ import annotations
+
+import argparse
+
+
+def add_sph_loop_acceptance_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--acceptance-min-completed-iterations",
+        type=int,
+        default=None,
+        help="production acceptance: require at least this many SPH update cycles",
+    )
+    parser.add_argument(
+        "--acceptance-require-final-solve",
+        action="store_true",
+        help="production acceptance: require a final DONJON solve row",
+    )
+    parser.add_argument(
+        "--acceptance-require-converged",
+        action="store_true",
+        help="production acceptance: require the convergence criteria to pass",
+    )
+    parser.add_argument(
+        "--acceptance-max-sph-rel-change",
+        type=float,
+        default=None,
+        help="production acceptance: max relative SPH change in the last update",
+    )
+    parser.add_argument(
+        "--acceptance-max-flux-ratio-residual",
+        type=float,
+        default=None,
+        help="production acceptance: max |reference/low_order - 1| in the last update",
+    )
+    parser.add_argument(
+        "--acceptance-max-final-to-initial-flux-residual-ratio",
+        type=float,
+        default=None,
+        help="production acceptance: max final/initial flux residual ratio",
+    )
+    parser.add_argument(
+        "--acceptance-max-final-clipped-fraction",
+        type=float,
+        default=None,
+        help="production acceptance: max final clipped SPH bin fraction",
+    )
+    parser.add_argument(
+        "--acceptance-max-final-clipped-count",
+        type=int,
+        default=None,
+        help="production acceptance: max final clipped SPH bin count",
+    )
+    parser.add_argument(
+        "--acceptance-sph-minimum-floor",
+        type=float,
+        default=None,
+        help="production acceptance: minimum allowed final SPH factor",
+    )
+    parser.add_argument(
+        "--acceptance-sph-maximum-ceiling",
+        type=float,
+        default=None,
+        help="production acceptance: maximum allowed final SPH factor",
+    )
+    parser.add_argument(
+        "--acceptance-max-keff-step-pcm",
+        type=float,
+        default=None,
+        help="production acceptance: max absolute keff step across audit rows",
+    )
+    parser.add_argument(
+        "--acceptance-max-final-keff-delta-pcm",
+        type=float,
+        default=None,
+        help="production acceptance: max final-vs-previous keff delta",
+    )
+    parser.add_argument(
+        "--fail-on-acceptance-violation",
+        action="store_true",
+        help="return an error after writing outputs if production acceptance fails",
+    )
+
+
+def sph_loop_acceptance_from_args(
+    args: argparse.Namespace,
+) -> dict[str, object] | None:
+    acceptance: dict[str, object] = {}
+    optional_values = {
+        "min_completed_iterations": args.acceptance_min_completed_iterations,
+        "max_sph_rel_change": args.acceptance_max_sph_rel_change,
+        "max_flux_ratio_residual": args.acceptance_max_flux_ratio_residual,
+        "max_final_to_initial_flux_residual_ratio": (
+            args.acceptance_max_final_to_initial_flux_residual_ratio
+        ),
+        "max_final_clipped_fraction": args.acceptance_max_final_clipped_fraction,
+        "max_final_clipped_count": args.acceptance_max_final_clipped_count,
+        "sph_minimum_floor": args.acceptance_sph_minimum_floor,
+        "sph_maximum_ceiling": args.acceptance_sph_maximum_ceiling,
+        "max_keff_step_pcm": args.acceptance_max_keff_step_pcm,
+        "max_final_keff_delta_pcm": args.acceptance_max_final_keff_delta_pcm,
+    }
+    for key, value in optional_values.items():
+        if value is not None:
+            acceptance[key] = value
+    if args.acceptance_require_final_solve:
+        acceptance["require_final_solve"] = True
+    if args.acceptance_require_converged:
+        acceptance["require_converged"] = True
+    if args.fail_on_acceptance_violation:
+        acceptance["fail_on_violation"] = True
+    return acceptance or None

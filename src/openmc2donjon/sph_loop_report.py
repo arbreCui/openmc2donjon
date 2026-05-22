@@ -124,6 +124,7 @@ def print_report(report: SphLoopReport) -> None:
                 f"    iter{item.iteration}: "
                 f"sph_rel={item.sph_max_rel_change:.6e} "
                 f"flux_res={item.flux_ratio_max_residual:.6e} "
+                f"clipped={item.clipped_count}:{item.clipped_fraction:.3f} "
                 f"converged={item.converged}"
             )
         print(f"  stop_reason: {report.stop_reason}")
@@ -188,6 +189,8 @@ def write_summary(path: Path, report: SphLoopReport) -> None:
                 "sph_max_abs_change": item.sph_max_abs_change,
                 "sph_max_rel_change": item.sph_max_rel_change,
                 "flux_ratio_max_residual": item.flux_ratio_max_residual,
+                "clipped_count": item.clipped_count,
+                "clipped_fraction": item.clipped_fraction,
                 "converged": item.converged,
             }
             for item in report.convergence

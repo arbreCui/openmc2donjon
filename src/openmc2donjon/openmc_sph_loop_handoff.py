@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 from pathlib import Path
+from typing import Any
 
 from . import __version__
 from .macrolib import convert_mgxs_hdf5_to_macrolib
@@ -67,6 +68,7 @@ def prepare_openmc_sph_loop_handoff(
     flux_ratio_tolerance: float | None = None,
     min_iterations: int = 1,
     fail_on_nonconvergence: bool = False,
+    acceptance: dict[str, Any] | None = None,
     case_id_prefix: str = "openmc_sph_loop",
     stage_prefix: str = "odj_openmc_sph_loop",
     case_dir: str = "openmc2donjon/case_runs/openmc_sph_loop",
@@ -165,6 +167,7 @@ def prepare_openmc_sph_loop_handoff(
         flux_ratio_tolerance=flux_ratio_tolerance,
         min_iterations=min_iterations,
         fail_on_nonconvergence=fail_on_nonconvergence,
+        acceptance=acceptance,
         donjon_root=donjon_root,
         apply_template=apply_template,
         python_bin=python_bin,

@@ -35,6 +35,8 @@ class SphLoopAcceptanceTests(unittest.TestCase):
                     sph_max_abs_change=0.02,
                     sph_max_rel_change=0.1,
                     flux_ratio_max_residual=0.2,
+                    clipped_count=0,
+                    clipped_fraction=0.0,
                 ),
             ),
             completed_iterations=2,
@@ -68,6 +70,44 @@ class SphLoopAcceptanceTests(unittest.TestCase):
         self.assertEqual(report.decision, ACCEPTANCE_FAIL_DECISION)
         self.assertEqual(report.checks[0].actual, None)
         self.assertIn("metric unavailable", report.checks[0].message)
+
+    def test_builds_flux_improvement_and_clipping_acceptance_metrics(self) -> None:
+        report = build_acceptance_report(
+            {
+                "max_final_to_initial_flux_residual_ratio": 0.5,
+                "max_final_clipped_fraction": 0.25,
+                "max_final_clipped_count": 1,
+            },
+            audit_rows=(),
+            convergence=(
+                SimpleNamespace(
+                    sph_max_abs_change=1.0,
+                    sph_max_rel_change=1.0,
+                    flux_ratio_max_residual=10.0,
+                    clipped_count=2,
+                    clipped_fraction=0.5,
+                ),
+                SimpleNamespace(
+                    sph_max_abs_change=0.1,
+                    sph_max_rel_change=0.1,
+                    flux_ratio_max_residual=2.0,
+                    clipped_count=1,
+                    clipped_fraction=0.25,
+                ),
+            ),
+            completed_iterations=2,
+            converged=False,
+            final_solve=None,
+        )
+
+        self.assertTrue(report.passed)
+        actual = {check.name: check.actual for check in report.checks}
+        self.assertAlmostEqual(
+            float(actual["max_final_to_initial_flux_residual_ratio"]),
+            0.2,
+        )
+        self.assertEqual(actual["max_final_clipped_count"], 1)
+        self.assertEqual(actual["max_final_clipped_fraction"], 0.25)
 
     def test_empty_acceptance_config_is_disabled_and_passes(self) -> None:
         report = build_acceptance_report(

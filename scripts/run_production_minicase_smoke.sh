@@ -284,6 +284,14 @@ OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
   --case-dir openmc2donjon/case_runs/production_minicase_sph_loop \
   --sph-kind production-minicase-openmc-sph-loop \
   --source-label "Production minicase OpenMC SPH loop handoff" \
+  --acceptance-min-completed-iterations 2 \
+  --acceptance-require-final-solve \
+  --acceptance-max-final-to-initial-flux-residual-ratio 0.5 \
+  --acceptance-max-final-clipped-fraction 1.0 \
+  --acceptance-max-final-clipped-count 4 \
+  --acceptance-sph-minimum-floor 0.5 \
+  --acceptance-sph-maximum-ceiling 3.0 \
+  --fail-on-acceptance-violation \
   --force \
   "${SCATTER_ROW_BALANCE_ARGS[@]}"
 
@@ -341,6 +349,8 @@ import numpy as np
 summary = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
 if summary["decision"] != "openmc2donjon_sph_loop_passed":
     raise SystemExit("SPH loop summary did not pass")
+if not summary["acceptance_enabled"] or not summary["acceptance_passed"]:
+    raise SystemExit("SPH loop production acceptance did not pass")
 if summary["completed_iterations"] != 2:
     raise SystemExit(f"unexpected completed iterations: {summary['completed_iterations']}")
 if len(summary["solves"]) != 3:
@@ -351,6 +361,22 @@ if any(solve["returncode"] != 0 for solve in summary["solves"]):
     raise SystemExit("at least one DONJON solve failed")
 if any(step["returncode"] != 0 for step in summary["postprocesses"]):
     raise SystemExit("at least one DONJON NSPH apply step failed")
+
+checks = {
+    item["name"]: item
+    for item in summary["acceptance"]["checks"]
+}
+ratio = checks["max_final_to_initial_flux_residual_ratio"]["actual"]
+if ratio is None or ratio > 0.5:
+    raise SystemExit(f"SPH loop did not reduce flux residual enough: {ratio}")
+clipped_fraction = checks["max_final_clipped_fraction"]["actual"]
+if clipped_fraction is None or clipped_fraction > 1.0:
+    raise SystemExit(f"unexpected SPH clipped fraction: {clipped_fraction}")
+convergence = summary["convergence"]
+if len(convergence) != 2:
+    raise SystemExit(f"expected two convergence rows: {len(convergence)}")
+if convergence[-1]["flux_ratio_max_residual"] >= convergence[0]["flux_ratio_max_residual"]:
+    raise SystemExit("SPH loop flux residual did not improve")
 
 for key in ("final_ascii", "final_sph_sidecar", "audit_csv", "audit_text"):
     path = Path(summary[key])

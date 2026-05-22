@@ -102,6 +102,12 @@ class DonjonSphConfigTests(unittest.TestCase):
                         "--acceptance-require-final-solve",
                         "--acceptance-max-final-keff-delta-pcm",
                         "5.0",
+                        "--acceptance-max-final-to-initial-flux-residual-ratio",
+                        "0.5",
+                        "--acceptance-max-final-clipped-fraction",
+                        "1.0",
+                        "--acceptance-max-final-clipped-count",
+                        "4",
                         "--fail-on-acceptance-violation",
                         "--no-final-solve",
                     ]
@@ -118,6 +124,12 @@ class DonjonSphConfigTests(unittest.TestCase):
             self.assertEqual(payload["acceptance"]["min_completed_iterations"], 1)
             self.assertTrue(payload["acceptance"]["require_final_solve"])
             self.assertEqual(payload["acceptance"]["max_final_keff_delta_pcm"], 5.0)
+            self.assertEqual(
+                payload["acceptance"]["max_final_to_initial_flux_residual_ratio"],
+                0.5,
+            )
+            self.assertEqual(payload["acceptance"]["max_final_clipped_fraction"], 1.0)
+            self.assertEqual(payload["acceptance"]["max_final_clipped_count"], 4)
             self.assertTrue(payload["acceptance"]["fail_on_violation"])
             self.assertEqual(payload["input_h5"], str(tmp / "mgxs.h5"))
             self.assertIn("openmc2donjon.donjon_deck_runner", payload["solver"]["command"])

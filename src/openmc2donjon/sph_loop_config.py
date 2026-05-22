@@ -60,6 +60,9 @@ def acceptance_config(config: dict[str, Any]) -> dict[str, Any]:
         "max_sph_abs_change",
         "max_sph_rel_change",
         "max_flux_ratio_residual",
+        "max_final_to_initial_flux_residual_ratio",
+        "max_final_clipped_fraction",
+        "max_final_clipped_count",
         "sph_minimum_floor",
         "sph_maximum_ceiling",
         "max_keff_step_pcm",
@@ -74,6 +77,8 @@ def acceptance_config(config: dict[str, Any]) -> dict[str, Any]:
         "max_sph_abs_change",
         "max_sph_rel_change",
         "max_flux_ratio_residual",
+        "max_final_to_initial_flux_residual_ratio",
+        "max_final_clipped_fraction",
         "sph_minimum_floor",
         "sph_maximum_ceiling",
         "max_keff_step_pcm",
@@ -84,6 +89,11 @@ def acceptance_config(config: dict[str, Any]) -> dict[str, Any]:
             if value < 0.0:
                 raise ValueError(f"acceptance.{key} must be >= 0")
             out[key] = value
+    if "max_final_clipped_count" in out and out["max_final_clipped_count"] is not None:
+        value = int(out["max_final_clipped_count"])
+        if value < 0:
+            raise ValueError("acceptance.max_final_clipped_count must be >= 0")
+        out["max_final_clipped_count"] = value
     if "min_completed_iterations" in out and out["min_completed_iterations"] is not None:
         value = int(out["min_completed_iterations"])
         if value < 1:

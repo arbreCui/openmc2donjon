@@ -37,6 +37,7 @@ class OpenMCSphLoopHandoffTests(unittest.TestCase):
                 solve_template=solve_template,
                 scalar_flux_ids={"FUEL_A": 2, "MOD_A": 4},
                 scatter_row_balance_fail=1.0e-12,
+                acceptance={"min_completed_iterations": 2},
                 python_bin="python3",
             )
 
@@ -63,6 +64,12 @@ class OpenMCSphLoopHandoffTests(unittest.TestCase):
                 str(run_dir / "sph_loop_inputs/loop_config.json"),
             )
             self.assertEqual(summary["scalar_flux_ids"], [2, 4])
+            loop_config = json.loads(
+                (run_dir / "sph_loop_inputs/loop_config.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(loop_config["acceptance"]["min_completed_iterations"], 2)
 
     def test_cli_prepare_handoff_supports_sequential_flux_map(self) -> None:
         root = _repo_root()
@@ -87,6 +94,10 @@ class OpenMCSphLoopHandoffTests(unittest.TestCase):
                         "--solve-template",
                         str(solve_template),
                         "--sequential-scalar-flux-map",
+                        "--acceptance-max-final-to-initial-flux-residual-ratio",
+                        "0.5",
+                        "--acceptance-max-final-clipped-fraction",
+                        "1.0",
                         "--no-check",
                     ]
                 )
@@ -105,6 +116,16 @@ class OpenMCSphLoopHandoffTests(unittest.TestCase):
             self.assertTrue((run_dir / "sph_loop_inputs/reference_flux.h5").exists())
             self.assertTrue((run_dir / "sph_loop_inputs/flux_map.h5").exists())
             self.assertTrue((run_dir / "sph_loop_inputs/loop_config.json").exists())
+            loop_config = json.loads(
+                (run_dir / "sph_loop_inputs/loop_config.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(
+                loop_config["acceptance"]["max_final_to_initial_flux_residual_ratio"],
+                0.5,
+            )
+            self.assertEqual(loop_config["acceptance"]["max_final_clipped_fraction"], 1.0)
 
 
 def _repo_root() -> Path:

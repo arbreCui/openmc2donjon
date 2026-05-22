@@ -22,7 +22,7 @@ class SphLoopConvergenceTests(unittest.TestCase):
             _write_mgxs(mgxs)
             _write_sph_sidecar(previous_sph, [[1.0, 1.0], [1.0, 1.1]])
             _write_sph_sidecar(current_sph, [[1.1, 1.0], [0.9, 1.21]])
-            _write_sph_summary(root, raw_min=0.8, raw_max=1.3)
+            _write_sph_summary(root, raw_min=0.8, raw_max=1.3, clipped_count=1)
 
             report = build_convergence_report(
                 SimpleNamespace(sph_sidecar=current_sph, output_dir=root),
@@ -38,6 +38,8 @@ class SphLoopConvergenceTests(unittest.TestCase):
             self.assertAlmostEqual(report.sph_max_abs_change, 0.11)
             self.assertAlmostEqual(report.sph_max_rel_change, 0.1)
             self.assertAlmostEqual(report.flux_ratio_max_residual, 0.3)
+            self.assertEqual(report.clipped_count, 1)
+            self.assertAlmostEqual(report.clipped_fraction, 0.25)
             self.assertTrue(report.converged)
 
     def test_uses_unity_previous_sph_and_respects_min_iteration(self) -> None:
@@ -62,6 +64,8 @@ class SphLoopConvergenceTests(unittest.TestCase):
             self.assertAlmostEqual(report.sph_max_abs_change, 0.02)
             self.assertAlmostEqual(report.sph_max_rel_change, 0.02)
             self.assertAlmostEqual(report.flux_ratio_max_residual, 0.01)
+            self.assertEqual(report.clipped_count, 0)
+            self.assertEqual(report.clipped_fraction, 0.0)
             self.assertFalse(report.converged)
 
 
@@ -86,14 +90,21 @@ def _write_sph_sidecar(path: Path, values: list[list[float]]) -> None:
         )
 
 
-def _write_sph_summary(path: Path, *, raw_min: float, raw_max: float) -> None:
+def _write_sph_summary(
+    path: Path,
+    *,
+    raw_min: float,
+    raw_max: float,
+    clipped_count: int | None = None,
+) -> None:
+    payload: dict[str, float | int] = {
+        "raw_update_minimum": raw_min,
+        "raw_update_maximum": raw_max,
+    }
+    if clipped_count is not None:
+        payload["clipped_count"] = clipped_count
     (path / "next_sph_summary.json").write_text(
-        json.dumps(
-            {
-                "raw_update_minimum": raw_min,
-                "raw_update_maximum": raw_max,
-            }
-        ),
+        json.dumps(payload),
         encoding="utf-8",
     )
 

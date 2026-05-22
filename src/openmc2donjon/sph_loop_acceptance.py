@@ -22,6 +22,8 @@ class _ConvergenceLike(Protocol):
     sph_max_abs_change: float
     sph_max_rel_change: float
     flux_ratio_max_residual: float
+    clipped_count: int
+    clipped_fraction: float
 
 
 @dataclass(frozen=True)
@@ -117,6 +119,37 @@ def build_acceptance_report(
                 ),
                 limit=float(config["max_flux_ratio_residual"]),
                 units="relative",
+            )
+        )
+    if "max_final_to_initial_flux_residual_ratio" in config:
+        checks.append(
+            _maximum_check(
+                "max_final_to_initial_flux_residual_ratio",
+                actual=_final_to_initial_flux_residual_ratio(convergence),
+                limit=float(config["max_final_to_initial_flux_residual_ratio"]),
+                units="ratio",
+            )
+        )
+    if "max_final_clipped_fraction" in config:
+        checks.append(
+            _maximum_check(
+                "max_final_clipped_fraction",
+                actual=(
+                    None
+                    if last_convergence is None
+                    else last_convergence.clipped_fraction
+                ),
+                limit=float(config["max_final_clipped_fraction"]),
+                units="fraction",
+            )
+        )
+    if "max_final_clipped_count" in config:
+        checks.append(
+            _maximum_check(
+                "max_final_clipped_count",
+                actual=None if last_convergence is None else last_convergence.clipped_count,
+                limit=int(config["max_final_clipped_count"]),
+                units="bins",
             )
         )
 
@@ -256,6 +289,18 @@ def _max_keff_step_pcm(values: list[float]) -> float | None:
         denominator = max(abs(before), 1.0e-30)
         deltas.append(abs(after - before) / denominator * 1.0e5)
     return float(max(deltas))
+
+
+def _final_to_initial_flux_residual_ratio(
+    convergence: tuple[_ConvergenceLike, ...],
+) -> float | None:
+    if not convergence:
+        return None
+    initial = float(convergence[0].flux_ratio_max_residual)
+    final = float(convergence[-1].flux_ratio_max_residual)
+    if final == 0.0:
+        return 0.0
+    return final / max(abs(initial), 1.0e-30)
 
 
 def _final_keff_delta_pcm(rows: tuple[_AuditRowLike, ...]) -> float | None:
