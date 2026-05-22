@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from pathlib import Path
 import tempfile
 import unittest
@@ -226,6 +227,46 @@ class LcmAsciiTests(unittest.TestCase):
             [block.trailing for block in blocks if block.trailing],
             ["00000001", "00000001", "00000001"],
         )
+
+    def test_real_donjon_multicompo_file_parser_smoke(self) -> None:
+        fixture = FIXTURE_DIR / "donjon_multicompo_reflector_full.txt"
+
+        blocks = lcm.read_lcm_ascii(fixture)
+
+        self.assertEqual(len(blocks), 292)
+        self.assertEqual(
+            dict(sorted(Counter(block.type_code for block in blocks).items())),
+            {0: 61, 1: 62, 2: 109, 3: 37, 10: 9, 99: 14},
+        )
+        self.assertEqual(
+            [block.data.strip() for block in blocks if block.name == "SIGNATURE"],
+            [
+                "L_MULTICOMPO",
+                "L_LIBRARY",
+                "L_LIBRARY",
+                "L_LIBRARY",
+                "L_LIBRARY",
+                "L_LIBRARY",
+                "L_LIBRARY",
+            ],
+        )
+        state_vectors = [block for block in blocks if block.name == "STATE-VECTOR"]
+        self.assertEqual(len(state_vectors), 7)
+        self.assertEqual(
+            state_vectors[0].data[:12],
+            (2, 2, 3, 10, 3, 0, 0, 0, 0, 1, 0, 2006),
+        )
+        self.assertEqual(
+            [block.count for block in blocks if block.name == "MIXTURES"],
+            [2],
+        )
+        self.assertEqual(
+            [block.count for block in blocks if block.name == "CALCULATIONS"],
+            [10, 10],
+        )
+        self.assertEqual(sum(1 for block in blocks if block.name == "MACROLIB"), 6)
+        self.assertEqual(sum(1 for block in blocks if block.name == "TREE"), 2)
+        self.assertEqual(sum(1 for block in blocks if block.trailing), 28)
 
 
 if __name__ == "__main__":
