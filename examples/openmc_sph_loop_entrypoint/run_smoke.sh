@@ -18,6 +18,7 @@ SCAFFOLD_DIR="$HANDOFF_RUN_DIR/sph_loop_inputs"
 HANDOFF_SUMMARY="$HANDOFF_RUN_DIR/openmc_sph_loop_handoff_summary.json"
 SCAFFOLD_SUMMARY="$SCAFFOLD_DIR/scaffold_summary.json"
 RUN_SCRIPT="$SCAFFOLD_DIR/run_sph_loop.sh"
+BUNDLE_DIR="$HANDOFF_RUN_DIR/bundle"
 SOLVE_TEMPLATE="$REPO_ROOT/examples/sph_loop_minicase/templates/solve_lflux_dump.x2m.in"
 
 echo "== openmc2donjon OpenMC SPH loop entrypoint smoke =="
@@ -39,9 +40,10 @@ printf "fake statepoint for openmc sph loop entrypoint\n" > "$STATEPOINT"
   --source-label "OpenMC SPH loop entrypoint smoke" \
   --summary-json "$HANDOFF_SUMMARY" \
   --scaffold-summary-json "$SCAFFOLD_SUMMARY" \
+  --bundle-dir "$BUNDLE_DIR" \
   --force
 
-"$PYTHON_BIN" - "$MGXS" "$SCAFFOLD_DIR" "$SCAFFOLD_SUMMARY" "$HANDOFF_SUMMARY" "$RUN_SCRIPT" <<'PY'
+"$PYTHON_BIN" - "$MGXS" "$SCAFFOLD_DIR" "$SCAFFOLD_SUMMARY" "$HANDOFF_SUMMARY" "$RUN_SCRIPT" "$BUNDLE_DIR" <<'PY'
 from __future__ import annotations
 
 import json
@@ -57,6 +59,7 @@ scaffold = Path(sys.argv[2])
 scaffold_summary = json.loads(Path(sys.argv[3]).read_text(encoding="utf-8"))
 handoff_summary = json.loads(Path(sys.argv[4]).read_text(encoding="utf-8"))
 run_script = Path(sys.argv[5])
+bundle_dir = Path(sys.argv[6])
 
 with h5py.File(mgxs, "r") as h5:
     assert "openmc_volume_flux" in h5
@@ -80,8 +83,20 @@ assert scaffold_summary["run_command"][-2:] == ["--config", str(scaffold / "loop
 assert handoff_summary["decision"] == "openmc2donjon_openmc_sph_loop_handoff_passed"
 assert Path(handoff_summary["ascii_output"]).name == "out.macrolib.txt"
 assert handoff_summary["run_script"] == str(run_script)
+assert handoff_summary["bundle_manifest"] == str(bundle_dir / "manifest.json")
 assert run_script.exists()
 assert "run-sph-loop" in run_script.read_text(encoding="utf-8")
+manifest = json.loads((bundle_dir / "manifest.json").read_text(encoding="utf-8"))
+labels = {artifact["label"] for artifact in manifest["artifacts"]}
+for label in {
+    "openmc-sph-loop-config",
+    "openmc-sph-loop-flux-map",
+    "openmc-sph-loop-reference-flux",
+    "openmc-sph-loop-run-script",
+    "openmc-sph-loop-summary",
+    "openmc-sph-loop-solve-template",
+}:
+    assert label in labels, label
 print(f"OpenMC SPH loop entrypoint OK: {scaffold}")
 PY
 

@@ -125,6 +125,17 @@ def build_prepare_openmc_sph_loop_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-final-solve", action="store_true")
     parser.add_argument("--summary-json", type=Path, default=None)
     parser.add_argument("--scaffold-summary-json", type=Path, default=None)
+    parser.add_argument(
+        "--bundle-dir",
+        type=Path,
+        default=None,
+        help="write a manifest-backed OpenMC SPH loop handoff bundle in this directory",
+    )
+    parser.add_argument(
+        "--bundle-manifest-name",
+        default="manifest.json",
+        help="handoff bundle manifest filename (default: manifest.json)",
+    )
     parser.add_argument("--force", action="store_true")
     return parser
 
@@ -182,6 +193,8 @@ def prepare_openmc_sph_loop_handler(args: argparse.Namespace) -> int:
             force=args.force,
             summary_json=args.summary_json,
             scaffold_summary_json=args.scaffold_summary_json,
+            bundle_dir=args.bundle_dir,
+            bundle_manifest_name=args.bundle_manifest_name,
         )
     except USER_FACING_EXCEPTIONS as exc:
         exit_with_command_error(parser, "prepare-openmc-sph-loop", exc)

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from . import __version__
+from .bundle import ArtifactSpec, bundle_artifacts
 from .macrolib import convert_mgxs_hdf5_to_macrolib
 from .mgxs_input_contract import run_preflight
 from .multicompo import DEFAULT_ROOT_NAME, convert_mgxs_hdf5
@@ -23,6 +24,7 @@ PASS_DECISION = "openmc2donjon_openmc_sph_loop_handoff_passed"
 class OpenMCSphLoopHandoffReport:
     recipe: Path
     statepoint: Path | None
+    solve_template: Path
     run_dir: Path
     mgxs_h5: Path
     ascii_output: Path
@@ -30,8 +32,9 @@ class OpenMCSphLoopHandoffReport:
     output_format: str
     checked: bool
     check_summary_json: Path | None
-    summary_json: Path | None
+    summary_json: Path
     scaffold_summary_json: Path
+    bundle_manifest: Path | None
 
 
 def prepare_openmc_sph_loop_handoff(
@@ -82,6 +85,8 @@ def prepare_openmc_sph_loop_handoff(
     force: bool = False,
     summary_json: str | Path | None = None,
     scaffold_summary_json: str | Path | None = None,
+    bundle_dir: str | Path | None = None,
+    bundle_manifest_name: str = "manifest.json",
 ) -> OpenMCSphLoopHandoffReport:
     """Export OpenMC MGXS and write the corresponding SPH loop scaffold.
 
@@ -120,6 +125,10 @@ def prepare_openmc_sph_loop_handoff(
         Path(scaffold_summary_json)
         if scaffold_summary_json is not None
         else scaffold_root / "scaffold_summary.json"
+    )
+    bundle_root = None if bundle_dir is None else Path(bundle_dir)
+    bundle_manifest = (
+        None if bundle_root is None else bundle_root / bundle_manifest_name
     )
 
     _require_output_ok(mgxs_h5, force=force)
@@ -190,6 +199,7 @@ def prepare_openmc_sph_loop_handoff(
     report = OpenMCSphLoopHandoffReport(
         recipe=recipe_summary.recipe_path,
         statepoint=recipe_summary.statepoint_path,
+        solve_template=Path(solve_template),
         run_dir=run_root,
         mgxs_h5=mgxs_h5,
         ascii_output=ascii_output,
@@ -199,8 +209,16 @@ def prepare_openmc_sph_loop_handoff(
         check_summary_json=check_summary if check else None,
         summary_json=summary_path,
         scaffold_summary_json=scaffold_summary,
+        bundle_manifest=bundle_manifest,
     )
     write_summary(summary_path, report)
+    if bundle_root is not None:
+        write_bundle(
+            report,
+            output_dir=bundle_root,
+            manifest_name=bundle_manifest_name,
+            force=force,
+        )
     print_report(report)
     return report
 
@@ -216,6 +234,8 @@ def print_report(report: OpenMCSphLoopHandoffReport) -> None:
     print(f"  ascii_output: {report.ascii_output}")
     print(f"  scaffold_config: {report.scaffold.loop_config}")
     print(f"  run_script: {report.scaffold.run_script}")
+    if report.bundle_manifest is not None:
+        print(f"  bundle_manifest: {report.bundle_manifest}")
     print(
         f"  mixtures={len(report.scaffold.mixture_names)} "
         f"groups={report.scaffold.energy_groups} format={report.output_format}"
@@ -232,6 +252,7 @@ def write_summary(path: Path, report: OpenMCSphLoopHandoffReport) -> None:
         "package_version": __version__,
         "recipe": str(report.recipe),
         "statepoint": None if report.statepoint is None else str(report.statepoint),
+        "solve_template": str(report.solve_template),
         "run_dir": str(report.run_dir),
         "mgxs_h5": str(report.mgxs_h5),
         "ascii_output": str(report.ascii_output),
@@ -241,6 +262,9 @@ def write_summary(path: Path, report: OpenMCSphLoopHandoffReport) -> None:
             None if report.check_summary_json is None else str(report.check_summary_json)
         ),
         "scaffold_summary_json": str(report.scaffold_summary_json),
+        "bundle_manifest": (
+            None if report.bundle_manifest is None else str(report.bundle_manifest)
+        ),
         "reference_flux_h5": str(report.scaffold.reference_flux_h5),
         "flux_map_h5": str(report.scaffold.flux_map_h5),
         "loop_config": str(report.scaffold.loop_config),
@@ -253,6 +277,51 @@ def write_summary(path: Path, report: OpenMCSphLoopHandoffReport) -> None:
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def write_bundle(
+    report: OpenMCSphLoopHandoffReport,
+    *,
+    output_dir: Path,
+    manifest_name: str,
+    force: bool,
+) -> None:
+    artifacts = [
+        ArtifactSpec(label="openmc-sph-loop-recipe", source=report.recipe),
+        ArtifactSpec(label="openmc-sph-loop-solve-template", source=report.solve_template),
+        ArtifactSpec(label="openmc-sph-loop-mgxs", source=report.mgxs_h5),
+        ArtifactSpec(label="openmc-sph-loop-ascii", source=report.ascii_output),
+        ArtifactSpec(
+            label="openmc-sph-loop-reference-flux",
+            source=report.scaffold.reference_flux_h5,
+        ),
+        ArtifactSpec(label="openmc-sph-loop-flux-map", source=report.scaffold.flux_map_h5),
+        ArtifactSpec(label="openmc-sph-loop-config", source=report.scaffold.loop_config),
+        ArtifactSpec(label="openmc-sph-loop-run-script", source=report.scaffold.run_script),
+        ArtifactSpec(
+            label="openmc-sph-loop-scaffold-summary",
+            source=report.scaffold_summary_json,
+        ),
+        ArtifactSpec(label="openmc-sph-loop-summary", source=report.summary_json),
+    ]
+    if report.statepoint is not None:
+        artifacts.insert(
+            1,
+            ArtifactSpec(label="openmc-sph-loop-statepoint", source=report.statepoint),
+        )
+    if report.check_summary_json is not None:
+        artifacts.append(
+            ArtifactSpec(
+                label="openmc-sph-loop-check-summary",
+                source=report.check_summary_json,
+            )
+        )
+    bundle_artifacts(
+        output_dir=output_dir,
+        artifacts=artifacts,
+        manifest_name=manifest_name,
+        force=force,
+    )
 
 
 def _prepare_run_dir(path: Path, *, force: bool) -> None:
