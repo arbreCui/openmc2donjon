@@ -5,28 +5,17 @@ from __future__ import annotations
 from pathlib import Path
 
 from .macrolib import convert_mgxs_hdf5_to_macrolib
-from .multicompo import DEFAULT_ROOT_NAME, convert_mgxs_hdf5
-from .sph_loop_config import (
-    CONFIG_SCHEMA,
-    acceptance_config,
-    convergence_config,
-    load_config,
-    optional_command_config,
-    optional_float,
-    parse_scalar_flux_ids,
-    resolve_path,
-    resolve_source,
-    solver_config,
-)
+from .multicompo import convert_mgxs_hdf5
+from .sph_loop_config import CONFIG_SCHEMA
 from .sph_loop_acceptance import build_acceptance_report
 from .sph_loop_convergence import (
     SphLoopConvergenceReport,
     build_convergence_report,
 )
+from .sph_loop_plan import build_sph_loop_plan
 from .sph_loop_report import (
     PASS_DECISION,
     SCHEMA,
-    SphLoopAuditRow,
     SphLoopPostprocessReport,
     SphLoopReport,
     SphLoopSolveReport,
@@ -58,87 +47,24 @@ def run_sph_loop(
     next ASCII handoff for the following cycle.
     """
 
-    config_file = Path(config_path)
-    config = load_config(config_file)
-    base_dir = config_file.parent
-
-    input_h5 = resolve_path(config["input_h5"], base_dir)
-    loop_dir = (
-        resolve_path(output_dir, Path.cwd())
-        if output_dir is not None
-        else resolve_path(config["output_dir"], base_dir)
+    plan = build_sph_loop_plan(
+        config_path,
+        output_dir=output_dir,
+        summary_json=summary_json,
+        bundle_dir=bundle_dir,
+        bundle_manifest_name=bundle_manifest_name,
     )
-    reference_flux = resolve_source(str(config["reference_flux"]), base_dir)
-    iterations = int(config.get("iterations", 1))
-    if iterations < 1:
-        raise ValueError("iterations must be >= 1")
-    normalized_convergence = convergence_config(config)
-    normalized_acceptance = acceptance_config(config)
-    sph_change_tolerance = optional_float(normalized_convergence.get("sph_change_tolerance"))
-    flux_ratio_tolerance = optional_float(normalized_convergence.get("flux_ratio_tolerance"))
-    convergence_enabled = (
-        sph_change_tolerance is not None or flux_ratio_tolerance is not None
-    )
-    min_iterations = int(normalized_convergence.get("min_iterations", 1))
-    if min_iterations < 1:
-        raise ValueError("convergence.min_iterations must be >= 1")
-    if min_iterations > iterations:
-        raise ValueError("convergence.min_iterations must be <= iterations")
-    fail_on_nonconvergence = bool(normalized_convergence.get("fail_on_nonconvergence", False))
-
-    output_format = str(config.get("format", "macrolib"))
-    if output_format not in {"macrolib", "multicompo"}:
-        raise ValueError("format must be 'macrolib' or 'multicompo'")
-
-    root_name = str(config.get("root_name", DEFAULT_ROOT_NAME))
-    h_factor_default = optional_float(config.get("h_factor_default"))
-    damping = float(config.get("damping", 1.0))
-    clip_min = optional_float(config.get("clip_min"))
-    clip_max = optional_float(config.get("clip_max"))
-    sph_kind = str(config.get("sph_kind", "sph-loop"))
-    sph_real = bool(config.get("sph_real", True))
-    sph_applied = bool(config.get("sph_applied", False))
-    source_label = str(config.get("source_label", "DONJON low-order SPH loop"))
-    map_h5 = (
-        None
-        if config.get("map_h5") is None
-        else resolve_path(config["map_h5"], base_dir)
-    )
-    scalar_flux_ids = parse_scalar_flux_ids(config.get("scalar_flux_map"))
-    scalar_flux_column = int(config.get("kn_column", 1)) - 1
-    list_offset = int(config.get("list_offset", 0))
-    if map_h5 is not None and scalar_flux_ids is not None:
-        raise ValueError("map_h5 and scalar_flux_map are mutually exclusive")
-
-    loop_dir.mkdir(parents=True, exist_ok=True)
-    summary_path = (
-        loop_dir / "sph_loop_summary.json"
-        if summary_json is None
-        else resolve_path(summary_json, base_dir)
-    )
-    audit_csv = summary_path.with_name("sph_loop_audit.csv")
-    audit_text = summary_path.with_name("sph_loop_audit.txt")
-    resolved_bundle_dir = (
-        None if bundle_dir is None else resolve_path(bundle_dir, base_dir)
-    )
-    bundle_manifest = (
-        None
-        if resolved_bundle_dir is None
-        else resolved_bundle_dir / bundle_manifest_name
-    )
+    plan.loop_dir.mkdir(parents=True, exist_ok=True)
 
     initial_ascii = _write_initial_ascii(
-        input_h5,
-        loop_dir,
-        output_format=output_format,
-        root_name=root_name,
-        h_factor_default=h_factor_default,
+        plan.input_h5,
+        plan.loop_dir,
+        output_format=plan.output_format,
+        root_name=plan.root_name,
+        h_factor_default=plan.h_factor_default,
         force=force,
     )
 
-    solver = solver_config(config)
-    postprocessor = optional_command_config(config.get("postprocess"), "postprocess")
-    run_final_solve = bool(config.get("final_solve", False))
     solves: list[SphLoopSolveReport] = []
     workflows: list[SphIterationWorkflowReport] = []
     convergence_reports: list[SphLoopConvergenceReport] = []
@@ -147,84 +73,84 @@ def run_sph_loop(
     previous_sph: Path | None = None
     stop_reason = "max_iterations"
 
-    for iteration in range(iterations):
+    for iteration in range(plan.iterations):
         sph_before_iteration = previous_sph
         solve_report = run_solver(
-            solver,
-            base_dir=base_dir,
-            loop_dir=loop_dir,
+            plan.solver,
+            base_dir=plan.base_dir,
+            loop_dir=plan.loop_dir,
             iteration=iteration,
-            input_h5=input_h5,
+            input_h5=plan.input_h5,
             ascii_input=current_ascii,
             previous_sph=previous_sph,
             force=force,
         )
         solves.append(solve_report)
 
-        workflow_dir = loop_dir / f"iter{iteration + 1:02d}_sph"
+        workflow_dir = plan.loop_dir / f"iter{iteration + 1:02d}_sph"
         workflow = run_sph_iteration_workflow(
-            input_h5,
+            plan.input_h5,
             workflow_dir,
-            reference_flux=reference_flux,
+            reference_flux=plan.reference_flux,
             flux_dump=solve_report.result,
-            map_h5=map_h5,
-            scalar_flux_ids=scalar_flux_ids,
-            scalar_flux_column=scalar_flux_column,
-            list_offset=list_offset,
+            map_h5=plan.map_h5,
+            scalar_flux_ids=plan.scalar_flux_ids,
+            scalar_flux_column=plan.scalar_flux_column,
+            list_offset=plan.list_offset,
             previous_sph=previous_sph,
-            damping=damping,
-            clip_min=clip_min,
-            clip_max=clip_max,
-            output_format=output_format,
-            root_name=root_name,
-            h_factor_default=h_factor_default,
-            sph_kind=f"{sph_kind}-iter{iteration + 1}",
-            sph_real=sph_real,
-            sph_applied=sph_applied,
-            source_label=f"{source_label}: iteration {iteration + 1}",
+            damping=plan.damping,
+            clip_min=plan.clip_min,
+            clip_max=plan.clip_max,
+            output_format=plan.output_format,
+            root_name=plan.root_name,
+            h_factor_default=plan.h_factor_default,
+            sph_kind=f"{plan.sph_kind}-iter{iteration + 1}",
+            sph_real=plan.sph_real,
+            sph_applied=plan.sph_applied,
+            source_label=f"{plan.source_label}: iteration {iteration + 1}",
             force=force,
         )
         workflows.append(workflow)
         current_ascii = workflow.ascii_output
         convergence_report = build_convergence_report(
             workflow,
-            input_h5=input_h5,
+            input_h5=plan.input_h5,
             previous_sph=sph_before_iteration,
             iteration=iteration + 1,
-            sph_change_tolerance=sph_change_tolerance,
-            flux_ratio_tolerance=flux_ratio_tolerance,
-            min_iterations=min_iterations,
+            sph_change_tolerance=plan.sph_change_tolerance,
+            flux_ratio_tolerance=plan.flux_ratio_tolerance,
+            min_iterations=plan.min_iterations,
         )
         convergence_reports.append(convergence_report)
         previous_sph = workflow.sph_sidecar
-        if postprocessor is not None:
+        if plan.postprocessor is not None:
             postprocess = run_postprocessor(
-                postprocessor,
-                base_dir=base_dir,
-                loop_dir=loop_dir,
+                plan.postprocessor,
+                base_dir=plan.base_dir,
+                loop_dir=plan.loop_dir,
                 iteration=iteration,
-                input_h5=input_h5,
+                input_h5=plan.input_h5,
                 solve_result=solve_report.result,
                 workflow=workflow,
                 previous_sph=previous_sph,
-                output_format=output_format,
+                output_format=plan.output_format,
                 force=force,
             )
             postprocesses.append(postprocess)
             current_ascii = postprocess.output
-        if convergence_enabled and convergence_report.converged:
+        if plan.convergence_enabled and convergence_report.converged:
             stop_reason = "converged"
             break
 
     final_solve = None
-    if run_final_solve:
+    if plan.run_final_solve:
         final_iteration = len(workflows)
         final_solve = run_solver(
-            solver,
-            base_dir=base_dir,
-            loop_dir=loop_dir,
+            plan.solver,
+            base_dir=plan.base_dir,
+            loop_dir=plan.loop_dir,
             iteration=final_iteration,
-            input_h5=input_h5,
+            input_h5=plan.input_h5,
             ascii_input=current_ascii,
             previous_sph=previous_sph,
             force=force,
@@ -241,7 +167,7 @@ def run_sph_loop(
         final_ascii=current_ascii,
     )
     acceptance = build_acceptance_report(
-        normalized_acceptance,
+        plan.normalized_acceptance,
         audit_rows=audit_rows,
         convergence=tuple(convergence_reports),
         completed_iterations=len(workflows),
@@ -249,26 +175,26 @@ def run_sph_loop(
         final_solve=final_solve,
     )
     report = SphLoopReport(
-        config_path=config_file,
-        input_h5=input_h5,
-        output_dir=loop_dir,
-        reference_flux=reference_flux,
-        iterations=iterations,
+        config_path=plan.config_path,
+        input_h5=plan.input_h5,
+        output_dir=plan.loop_dir,
+        reference_flux=plan.reference_flux,
+        iterations=plan.iterations,
         completed_iterations=len(workflows),
-        output_format=output_format,
+        output_format=plan.output_format,
         initial_ascii=initial_ascii,
         final_ascii=current_ascii,
         final_sph_sidecar=previous_sph,
-        summary_json=summary_path,
-        audit_csv=audit_csv,
-        audit_text=audit_text,
-        bundle_manifest=bundle_manifest,
-        convergence_enabled=convergence_enabled,
+        summary_json=plan.summary_path,
+        audit_csv=plan.audit_csv,
+        audit_text=plan.audit_text,
+        bundle_manifest=plan.bundle_manifest,
+        convergence_enabled=plan.convergence_enabled,
         converged=converged,
         stop_reason=stop_reason,
-        sph_change_tolerance=sph_change_tolerance,
-        flux_ratio_tolerance=flux_ratio_tolerance,
-        min_iterations=min_iterations,
+        sph_change_tolerance=plan.sph_change_tolerance,
+        flux_ratio_tolerance=plan.flux_ratio_tolerance,
+        min_iterations=plan.min_iterations,
         solves=tuple(solves),
         workflows=tuple(workflows),
         convergence=tuple(convergence_reports),
@@ -277,31 +203,31 @@ def run_sph_loop(
         audit_rows=audit_rows,
         acceptance=acceptance,
     )
-    write_audit_csv(audit_csv, report.audit_rows)
-    write_audit_text(audit_text, report.audit_rows)
-    write_summary(summary_path, report)
-    if resolved_bundle_dir is not None:
+    write_audit_csv(plan.audit_csv, report.audit_rows)
+    write_audit_text(plan.audit_text, report.audit_rows)
+    write_summary(plan.summary_path, report)
+    if plan.bundle_dir is not None:
         write_bundle(
             report,
-            output_dir=resolved_bundle_dir,
+            output_dir=plan.bundle_dir,
             manifest_name=bundle_manifest_name,
             force=force,
         )
     print_report(report)
     if (
-        convergence_enabled
-        and fail_on_nonconvergence
+        plan.convergence_enabled
+        and plan.fail_on_nonconvergence
         and not report.converged
     ):
         raise RuntimeError(
             "SPH loop did not converge within "
-            f"{report.iterations} iteration(s); see {summary_path}"
+            f"{report.iterations} iteration(s); see {plan.summary_path}"
         )
     if report.acceptance.enabled and report.acceptance.fail_on_violation:
         if not report.acceptance.passed:
             raise RuntimeError(
                 "SPH loop acceptance criteria failed; see "
-                f"{summary_path} and {audit_csv}"
+                f"{plan.summary_path} and {plan.audit_csv}"
             )
     return report
 
