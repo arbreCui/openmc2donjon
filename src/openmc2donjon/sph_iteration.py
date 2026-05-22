@@ -715,6 +715,7 @@ def _load_hdf5_matrix(
         _validate_hdf5_flux_group_order(obj, h5, label)
         values = np.asarray(obj[:], dtype=float)
         declared = _names_from_hdf5(obj, h5, ("mixture_names", "mixtures", "domain_names"))
+        _validate_hdf5_flux_mixture_names(declared, label)
     return _normalize_matrix(values, declared, mixture_names, energy_groups, label), dataset_path
 
 
@@ -723,11 +724,24 @@ def _validate_hdf5_flux_group_order(obj: Any, root: Any, label: str) -> None:
         return
     group_order = _hdf5_text_attr(obj, root, "group_order")
     if group_order is None:
-        return
+        raise ValueError(
+            f"{label}: group_order must be {MGXS_DONJON_GROUP_ORDER!r}; "
+            "HDF5 flux sources must declare their energy-group order"
+        )
     if group_order != MGXS_DONJON_GROUP_ORDER:
         raise ValueError(
             f"{label}: group_order must be {MGXS_DONJON_GROUP_ORDER!r}, "
             f"got {group_order!r}"
+        )
+
+
+def _validate_hdf5_flux_mixture_names(declared_mixtures: Any, label: str) -> None:
+    if "flux" not in label.lower():
+        return
+    if declared_mixtures is None or not _flatten_names(declared_mixtures):
+        raise ValueError(
+            f"{label}: HDF5 flux sources must declare mixture_names, "
+            "mixtures, or domain_names"
         )
 
 

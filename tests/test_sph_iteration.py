@@ -45,6 +45,7 @@ class SphIterationTests(unittest.TestCase):
                 data = np.array([[1.0, 1.0], [1.0, 1.0]])
                 dataset = h5.create_dataset("volume_flux", data=data)
                 dataset.attrs["mixture_names"] = np.asarray(("fuel", "moderator"), dtype="S")
+                dataset.attrs["group_order"] = "mgxs_donjon"
 
             self.assertEqual(
                 cli_main(
@@ -382,14 +383,16 @@ class SphIterationTests(unittest.TestCase):
             with h5py.File(flux, "w") as h5:
                 names = np.asarray([["moderator", "fuel"]], dtype="S")
                 h5.create_dataset("mixture_names", data=names)
-                h5.create_dataset(
+                reference = h5.create_dataset(
                     "reference_flux",
                     data=np.asarray([[[4.0, 9.0], [16.0, 25.0]]]),
                 )
-                h5.create_dataset(
+                reference.attrs["group_order"] = "mgxs_donjon"
+                low_order = h5.create_dataset(
                     "low_order_flux",
                     data=np.asarray([[[1.0, 1.0], [1.0, 1.0]]]),
                 )
+                low_order.attrs["group_order"] = "mgxs_donjon"
 
             self.assertEqual(
                 cli_main(
@@ -519,6 +522,51 @@ class SphIterationTests(unittest.TestCase):
             self.assertIn("fuel,2,3.6", rows)
             self.assertIn("moderator,1,3.6", rows)
             self.assertIn("moderator,2,5", rows)
+
+    def test_rejects_hdf5_flux_without_required_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference_flux = root / "reference_flux.csv"
+            low_order_flux = root / "low_order_flux.h5"
+            table = root / "next_sph.csv"
+            write_mgxs(mgxs)
+            reference_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,1.0\nfuel,2,1.0\n"
+                "moderator,1,1.0\nmoderator,2,1.0\n",
+                encoding="utf-8",
+            )
+            with h5py.File(low_order_flux, "w") as h5:
+                h5.create_dataset(
+                    "low_order_flux",
+                    data=np.asarray([[1.0, 1.0], [1.0, 1.0]]),
+                )
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "low-order flux: group_order must be 'mgxs_donjon'",
+            ):
+                create_sph_update_table(
+                    mgxs,
+                    table,
+                    reference_flux=reference_flux,
+                    low_order_flux=f"{low_order_flux}::low_order_flux",
+                )
+
+            with h5py.File(low_order_flux, "a") as h5:
+                h5["low_order_flux"].attrs["group_order"] = "mgxs_donjon"
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "low-order flux: HDF5 flux sources must declare mixture_names",
+            ):
+                create_sph_update_table(
+                    mgxs,
+                    table,
+                    reference_flux=reference_flux,
+                    low_order_flux=f"{low_order_flux}::low_order_flux",
+                )
 
 
 def write_mgxs(path: Path, *, h_factor: dict[str, np.ndarray] | None = None) -> None:

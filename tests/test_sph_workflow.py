@@ -120,6 +120,7 @@ def _write_reference_flux(path: Path) -> None:
             data=np.asarray([[80.0, 800.0], [80.0, 800.0]]),
         )
         dataset.attrs["mixture_names"] = np.asarray(("fuel", "moderator"), dtype="S")
+        dataset.attrs["group_order"] = "mgxs_donjon"
 
 
 def _write_flux_dump(path: Path) -> None:

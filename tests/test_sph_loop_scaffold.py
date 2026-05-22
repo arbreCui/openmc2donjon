@@ -161,6 +161,7 @@ def _write_reference_h5(path: Path) -> None:
             data=np.array([[120.0, 600.0], [80.0, 800.0]], dtype=float),
         )
         dataset.attrs["mixture_names"] = np.asarray(["MOD", "FUEL"], dtype="S")
+        dataset.attrs["group_order"] = "mgxs_donjon"
 
 
 def _write_reference_csv(path: Path) -> None:
