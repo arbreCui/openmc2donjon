@@ -67,6 +67,14 @@ class LcmAsciiTests(unittest.TestCase):
         self.assertEqual(block.data, "abcd")
         self.assertEqual(block.count, 1)
 
+    def test_rejects_overlong_block_name(self) -> None:
+        name = "X" * 81
+
+        with self.assertRaisesRegex(ValueError, "LCM block name .* longer than 80"):
+            lcm.block(1, name, 1, [1])
+        with self.assertRaisesRegex(ValueError, "LCM block name .* longer than 80"):
+            lcm.format_lcm_ascii([lcm.LcmBlock(1, 12, 0, -1, name=name)])
+
     def test_reads_realistic_global_fragment(self) -> None:
         fragment = [
             "->       1      12       3       3                                 <-   ",

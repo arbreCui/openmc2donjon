@@ -183,6 +183,7 @@ def format_lcm_ascii(blocks: Iterable[LcmBlock]) -> str:
         if block.is_control:
             continue
         if block.name is not None:
+            _validate_block_name(block.name)
             lines.append(f"{block.name:<{LCM_BLOCK_NAME_WIDTH}}")
         if block.type_code == 1:
             lines.extend(
@@ -226,6 +227,7 @@ def block(
 ) -> LcmBlock:
     """Create a named LCM block with a computed count when possible."""
 
+    _validate_block_name(name)
     if type_code in (0, 10):
         if count is None:
             count = -1
@@ -248,6 +250,14 @@ def block(
     else:
         raise ValueError(f"unsupported LCM type_code={type_code}")
     return LcmBlock(level, flags, type_code, count, name=name, data=payload)
+
+
+def _validate_block_name(name: str) -> None:
+    if len(name) > LCM_BLOCK_NAME_WIDTH:
+        raise ValueError(
+            f"LCM block name {name!r} is longer than "
+            f"{LCM_BLOCK_NAME_WIDTH} characters"
+        )
 
 
 def string_block(
