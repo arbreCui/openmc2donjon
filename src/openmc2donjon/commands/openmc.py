@@ -68,6 +68,10 @@ def build_prepare_openmc_sph_loop_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-require-transport-dataset", action="store_true")
     parser.add_argument("--scatter-row-balance-warn", type=float, default=None)
     parser.add_argument("--scatter-row-balance-fail", type=float, default=None)
+    parser.add_argument("--uncertainty-warn", type=float, default=0.05)
+    parser.add_argument("--uncertainty-fail", type=float, default=None)
+    parser.add_argument("--uncertainty-mean-abs-floor", type=float, default=1.0e-12)
+    parser.add_argument("--no-uncertainty-check", action="store_true")
     parser.add_argument(
         "--reference-flux",
         default=None,
@@ -163,6 +167,9 @@ def prepare_openmc_sph_loop_handler(args: argparse.Namespace) -> int:
             require_transport_dataset=not args.no_require_transport_dataset,
             scatter_row_balance_warn=args.scatter_row_balance_warn,
             scatter_row_balance_fail=args.scatter_row_balance_fail,
+            uncertainty_warn=None if args.no_uncertainty_check else args.uncertainty_warn,
+            uncertainty_fail=None if args.no_uncertainty_check else args.uncertainty_fail,
+            uncertainty_mean_abs_floor=args.uncertainty_mean_abs_floor,
             reference_flux=args.reference_flux,
             reference_flux_dataset=args.reference_flux_dataset,
             scaffold_dir=args.scaffold_dir,

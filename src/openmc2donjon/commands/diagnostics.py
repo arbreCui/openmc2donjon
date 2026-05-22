@@ -124,6 +124,32 @@ def build_check_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--uncertainty-warn",
+        type=float,
+        default=0.05,
+        metavar="REL",
+        help="warn if any available *_std_dev / |mean| exceeds REL (default: 0.05)",
+    )
+    parser.add_argument(
+        "--uncertainty-fail",
+        type=float,
+        default=None,
+        metavar="REL",
+        help="fail if any available *_std_dev / |mean| exceeds REL",
+    )
+    parser.add_argument(
+        "--uncertainty-mean-abs-floor",
+        type=float,
+        default=1.0e-12,
+        metavar="ABS",
+        help="skip relative uncertainty bins with |mean| <= ABS (default: 1e-12)",
+    )
+    parser.add_argument(
+        "--no-uncertainty-check",
+        action="store_true",
+        help="disable *_std_dev relative uncertainty checks",
+    )
+    parser.add_argument(
         "--summary-json",
         type=Path,
         default=None,
@@ -371,6 +397,9 @@ def check_handler(args: argparse.Namespace) -> int:
         require_volume=args.require_volume,
         scatter_row_balance_warn=args.scatter_row_balance_warn,
         scatter_row_balance_fail=args.scatter_row_balance_fail,
+        uncertainty_warn=None if args.no_uncertainty_check else args.uncertainty_warn,
+        uncertainty_fail=None if args.no_uncertainty_check else args.uncertainty_fail,
+        uncertainty_mean_abs_floor=args.uncertainty_mean_abs_floor,
         summary_json=args.summary_json,
     )
     return 0 if ok or args.no_fail else 1

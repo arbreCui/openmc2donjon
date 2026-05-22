@@ -42,6 +42,12 @@ from .mgxs_input_scatter import (
     validate_scatter,
     vector_values_for_balance,
 )
+from .mgxs_input_uncertainty import (
+    UncertaintyConfig,
+    configure_uncertainty,
+    finalize_uncertainty,
+    validate_uncertainty_for_calculation,
+)
 
 VALID_MULTICOMPO_EXTENSIONS = (".mco", ".mcompo.txt")
 VALID_MACROLIB_EXTENSIONS = (".macrolib.txt",)
@@ -71,6 +77,11 @@ def main() -> int:
             expected_adf_faces=expected_faces,
             scatter_row_balance_warn=args.scatter_row_balance_warn,
             scatter_row_balance_fail=args.scatter_row_balance_fail,
+            uncertainty=UncertaintyConfig(
+                warn_threshold=None if args.no_uncertainty_check else args.uncertainty_warn,
+                fail_threshold=None if args.no_uncertainty_check else args.uncertainty_fail,
+                mean_abs_floor=args.uncertainty_mean_abs_floor,
+            ),
         )
         for path in args.input_h5
     ]
@@ -153,6 +164,32 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--uncertainty-warn",
+        type=float,
+        default=0.05,
+        metavar="REL",
+        help="warn if any available *_std_dev / |mean| exceeds REL (default: 0.05)",
+    )
+    parser.add_argument(
+        "--uncertainty-fail",
+        type=float,
+        default=None,
+        metavar="REL",
+        help="fail if any available *_std_dev / |mean| exceeds REL",
+    )
+    parser.add_argument(
+        "--uncertainty-mean-abs-floor",
+        type=float,
+        default=1.0e-12,
+        metavar="ABS",
+        help="skip relative uncertainty bins with |mean| <= ABS (default: 1e-12)",
+    )
+    parser.add_argument(
+        "--no-uncertainty-check",
+        action="store_true",
+        help="disable *_std_dev relative uncertainty checks",
+    )
+    parser.add_argument(
         "--summary-json",
         type=Path,
         default=None,
@@ -176,6 +213,7 @@ def validate_input(
     expected_adf_faces: list[str] | None = None,
     scatter_row_balance_warn: float | None = None,
     scatter_row_balance_fail: float | None = None,
+    uncertainty: UncertaintyConfig | None = None,
 ) -> InputReport:
     report = InputReport(path=str(path))
     configure_scatter_row_balance(
@@ -183,6 +221,7 @@ def validate_input(
         warn_threshold=scatter_row_balance_warn,
         fail_threshold=scatter_row_balance_fail,
     )
+    configure_uncertainty(report, uncertainty or UncertaintyConfig())
     if not path.is_file():
         report.fail(f"input file does not exist: {path}")
         return report
@@ -197,6 +236,7 @@ def validate_input(
                 require_transport_dataset=require_transport_dataset,
                 require_volume=require_volume,
                 expected_adf_faces=expected_adf_faces,
+                uncertainty=uncertainty or UncertaintyConfig(),
             )
     except OSError as exc:
         report.fail(f"cannot open HDF5 file: {exc}")
@@ -212,6 +252,7 @@ def validate_open_h5(
     require_transport_dataset: bool,
     require_volume: bool,
     expected_adf_faces: list[str] | None,
+    uncertainty: UncertaintyConfig,
 ) -> None:
     ngroups = integer_attr(h5.attrs, "energy_groups")
     legendre_order = integer_attr(h5.attrs, "legendre_order")
@@ -267,6 +308,7 @@ def validate_open_h5(
                 sph_present_by_calc,
                 require_transport_dataset=require_transport_dataset,
                 require_volume=require_volume,
+                uncertainty=uncertainty,
             )
         )
 
@@ -276,6 +318,7 @@ def validate_open_h5(
     validate_sph_layout(report, sph_present_by_calc, require_sph)
 
     finalize_scatter_row_balance(report)
+    finalize_uncertainty(report)
 
 
 def burnup_axis_from_hdf5(h5: h5py.File, report: InputReport) -> np.ndarray | None:
@@ -387,6 +430,7 @@ def validate_mixture(
     *,
     require_transport_dataset: bool,
     require_volume: bool,
+    uncertainty: UncertaintyConfig,
 ) -> int:
     if "states" in group:
         return validate_mixture_states(
@@ -400,6 +444,7 @@ def validate_mixture(
             sph_present_by_calc,
             require_transport_dataset=require_transport_dataset,
             require_volume=require_volume,
+            uncertainty=uncertainty,
         )
 
     validate_calculation(
@@ -415,6 +460,7 @@ def validate_mixture(
         count_fissionable=True,
         require_transport_dataset=require_transport_dataset,
         require_volume=require_volume,
+        uncertainty=uncertainty,
     )
     report.calculations += 1
     return 1
@@ -432,6 +478,7 @@ def validate_mixture_states(
     *,
     require_transport_dataset: bool,
     require_volume: bool,
+    uncertainty: UncertaintyConfig,
 ) -> int:
     states = mixture_group["states"]
     if not isinstance(states, h5py.Group):
@@ -468,6 +515,7 @@ def validate_mixture_states(
             count_fissionable=index == 0,
             require_transport_dataset=require_transport_dataset,
             require_volume=require_volume,
+            uncertainty=uncertainty,
         )
     return len(state_names)
 
@@ -486,6 +534,7 @@ def validate_calculation(
     count_fissionable: bool,
     require_transport_dataset: bool,
     require_volume: bool,
+    uncertainty: UncertaintyConfig,
 ) -> None:
     missing = [field for field in REQUIRED_DATASETS if field not in group]
     if missing:
@@ -532,6 +581,17 @@ def validate_calculation(
     for field in OPTIONAL_VECTOR_DATASETS:
         if field in group:
             validate_vector(group[field], ngroups, report, f"mixture {name}: {field}")
+
+    validate_uncertainty_for_calculation(
+        group,
+        name,
+        REQUIRED_DATASETS
+        + tuple(field for field in OPTIONAL_VECTOR_DATASETS if field in group),
+        scatter_axes=axes,
+        ngroups=ngroups,
+        legendre_order=legendre_order,
+        report=report,
+    )
 
     if "transport_total" in group:
         report.transport_total_datasets += 1
@@ -641,6 +701,9 @@ def run_preflight(
     require_volume: bool = False,
     scatter_row_balance_warn: float | None = None,
     scatter_row_balance_fail: float | None = None,
+    uncertainty_warn: float | None = 0.05,
+    uncertainty_fail: float | None = None,
+    uncertainty_mean_abs_floor: float = 1.0e-12,
     summary_json: Path | None = None,
 ) -> bool:
     expected_faces = (
@@ -658,6 +721,11 @@ def run_preflight(
             expected_adf_faces=expected_faces,
             scatter_row_balance_warn=scatter_row_balance_warn,
             scatter_row_balance_fail=scatter_row_balance_fail,
+            uncertainty=UncertaintyConfig(
+                warn_threshold=uncertainty_warn,
+                fail_threshold=uncertainty_fail,
+                mean_abs_floor=uncertainty_mean_abs_floor,
+            ),
         )
         for path in input_paths
     ]

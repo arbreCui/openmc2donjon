@@ -42,8 +42,10 @@ class FakeEnergyGroups:
 
 
 class FakeMGXS:
-    def __init__(self, values: np.ndarray) -> None:
+    def __init__(self, values: np.ndarray, std_dev: np.ndarray | None = None) -> None:
         self._values = np.asarray(values, dtype=float)
+        if std_dev is not None:
+            self.std_dev = np.asarray(std_dev, dtype=float)
 
     def get_xs(self, **_kwargs: object) -> np.ndarray:
         return self._values
@@ -169,6 +171,56 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
         self.assertEqual(mod_scatter.shape, (2, 3, 3))
         np.testing.assert_allclose(mod_scatter[0], np.eye(3))
         np.testing.assert_allclose(mod_scatter[1], np.zeros((3, 3)))
+
+    def test_exports_mgxs_standard_deviations_when_available(self) -> None:
+        class StdDevMGXS:
+            def __init__(self, mean: np.ndarray, std_dev: np.ndarray) -> None:
+                self.mean = np.asarray(mean, dtype=float)
+                self.std_dev = np.asarray(std_dev, dtype=float)
+
+            def get_xs(self, value: str = "mean", **_kwargs: object) -> np.ndarray:
+                if value == "std_dev":
+                    return self.std_dev
+                return self.mean
+
+        class Library:
+            def __init__(self) -> None:
+                self.energy_groups = FakeEnergyGroups()
+                self.domain = FakeDomain("fuel", 1, 3.0, True)
+                self.domains = [self.domain]
+                self.data = {
+                    "total": StdDevMGXS(
+                        np.array([0.5, 0.6, 0.7]),
+                        np.array([0.01, 0.02, 0.03]),
+                    ),
+                    "absorption": StdDevMGXS(
+                        np.array([0.05, 0.06, 0.07]),
+                        np.array([0.001, 0.002, 0.003]),
+                    ),
+                    "scatter matrix": StdDevMGXS(
+                        np.eye(3),
+                        np.eye(3) * 0.001,
+                    ),
+                }
+
+            def get_mgxs(self, domain: FakeDomain, mgxs_type: str) -> StdDevMGXS:
+                if domain is not self.domain or mgxs_type not in self.data:
+                    raise KeyError((domain, mgxs_type))
+                return self.data[mgxs_type]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "mgxs.h5"
+            export_openmc_mgxs_library(Library(), path)
+            with h5py.File(path, "r") as h5:
+                group = h5["mixtures"]["fuel"]
+                total_std_dev = group["total_std_dev"][:]
+                absorption_std_dev = group["absorption_std_dev"][:]
+                scatter_std_dev = group["scatter_matrix_std_dev"][:]
+
+        np.testing.assert_allclose(total_std_dev, [0.01, 0.02, 0.03])
+        np.testing.assert_allclose(absorption_std_dev, [0.001, 0.002, 0.003])
+        self.assertEqual(scatter_std_dev.shape, (1, 3, 3))
+        np.testing.assert_allclose(scatter_std_dev[0], np.eye(3) * 0.001)
 
     def test_exports_ambiguous_two_group_p1_scatter_as_openmc_moment_last(self) -> None:
         class EnergyGroups2:

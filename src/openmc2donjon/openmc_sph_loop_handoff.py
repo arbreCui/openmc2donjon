@@ -56,6 +56,9 @@ def prepare_openmc_sph_loop_handoff(
     require_transport_dataset: bool = True,
     scatter_row_balance_warn: float | None = None,
     scatter_row_balance_fail: float | None = None,
+    uncertainty_warn: float | None = 0.05,
+    uncertainty_fail: float | None = None,
+    uncertainty_mean_abs_floor: float = 1.0e-12,
     reference_flux: str | Path | None = None,
     reference_flux_dataset: str = "openmc_volume_flux",
     scaffold_dir: str | Path | None = None,
@@ -152,6 +155,9 @@ def prepare_openmc_sph_loop_handoff(
         require_transport_dataset=require_transport_dataset,
         scatter_row_balance_warn=scatter_row_balance_warn,
         scatter_row_balance_fail=scatter_row_balance_fail,
+        uncertainty_warn=uncertainty_warn,
+        uncertainty_fail=uncertainty_fail,
+        uncertainty_mean_abs_floor=uncertainty_mean_abs_floor,
     )
     _write_ascii(
         mgxs_h5,
@@ -517,6 +523,9 @@ def _run_optional_preflight(
     require_transport_dataset: bool,
     scatter_row_balance_warn: float | None,
     scatter_row_balance_fail: float | None,
+    uncertainty_warn: float | None,
+    uncertainty_fail: float | None,
+    uncertainty_mean_abs_floor: float,
 ) -> None:
     if not check:
         return
@@ -528,6 +537,9 @@ def _run_optional_preflight(
         require_transport_dataset=require_transport_dataset,
         scatter_row_balance_warn=scatter_row_balance_warn,
         scatter_row_balance_fail=scatter_row_balance_fail,
+        uncertainty_warn=uncertainty_warn,
+        uncertainty_fail=uncertainty_fail,
+        uncertainty_mean_abs_floor=uncertainty_mean_abs_floor,
         summary_json=check_summary_json,
     )
     if not ok:

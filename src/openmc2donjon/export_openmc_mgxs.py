@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+import inspect
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -173,10 +174,19 @@ def export_openmc_mgxs_library(
                 value = data.get(key)
                 if value is not None:
                     group.create_dataset(key, data=value)
+                std_dev = data.get(f"{key}_std_dev")
+                if std_dev is not None:
+                    group.create_dataset(f"{key}_std_dev", data=std_dev)
             group.create_dataset(
                 "scatter_matrix",
                 data=_pad_scatter_moments(data["scatter_matrix"], legendre_order + 1),
             )
+            scatter_std_dev = data.get("scatter_matrix_std_dev")
+            if scatter_std_dev is not None:
+                group.create_dataset(
+                    "scatter_matrix_std_dev",
+                    data=_pad_scatter_moments(scatter_std_dev, legendre_order + 1),
+                )
 
     return ExportSummary(
         output_path=path,
@@ -221,7 +231,7 @@ def _domain_data(
         ngroups,
         xs_kwargs=xs_kwargs,
     )
-    scatter, actual_scatter_mgxs_type = _required_scatter(
+    scatter, scatter_std_dev, actual_scatter_mgxs_type = _required_scatter(
         library,
         domain,
         ngroups,
@@ -247,11 +257,47 @@ def _domain_data(
 
     return {
         "total": total,
+        "total_std_dev": _optional_vector_std_dev(
+            library,
+            domain,
+            "total",
+            ngroups,
+            xs_kwargs=xs_kwargs,
+        ),
         "absorption": absorption,
+        "absorption_std_dev": _optional_vector_std_dev(
+            library,
+            domain,
+            "absorption",
+            ngroups,
+            xs_kwargs=xs_kwargs,
+        ),
         "fission": fission,
+        "fission_std_dev": _optional_vector_std_dev(
+            library,
+            domain,
+            "fission",
+            ngroups,
+            xs_kwargs=xs_kwargs,
+        ),
         "nu_fission": nu_fission,
+        "nu_fission_std_dev": _optional_vector_std_dev(
+            library,
+            domain,
+            "nu_fission",
+            ngroups,
+            xs_kwargs=xs_kwargs,
+        ),
         "chi": chi,
+        "chi_std_dev": _optional_vector_std_dev(
+            library,
+            domain,
+            "chi",
+            ngroups,
+            xs_kwargs=xs_kwargs,
+        ),
         "scatter_matrix": scatter,
+        "scatter_matrix_std_dev": scatter_std_dev,
         "scatter_mgxs_type": actual_scatter_mgxs_type,
         "transport_total": _optional_vector(
             library,
@@ -260,7 +306,21 @@ def _domain_data(
             ngroups,
             xs_kwargs=xs_kwargs,
         ),
+        "transport_total_std_dev": _optional_vector_std_dev(
+            library,
+            domain,
+            "transport_total",
+            ngroups,
+            xs_kwargs=xs_kwargs,
+        ),
         "inverse_velocity": _optional_vector(
+            library,
+            domain,
+            "inverse_velocity",
+            ngroups,
+            xs_kwargs=xs_kwargs,
+        ),
+        "inverse_velocity_std_dev": _optional_vector_std_dev(
             library,
             domain,
             "inverse_velocity",
@@ -305,6 +365,28 @@ def _optional_vector(
     )
 
 
+def _optional_vector_std_dev(
+    library: Any,
+    domain: Any,
+    key: str,
+    ngroups: int,
+    *,
+    xs_kwargs: Mapping[str, Any] | None,
+) -> np.ndarray | None:
+    mgxs = _get_mgxs_optional(library, domain, key)
+    if mgxs is None:
+        return None
+    values = _mgxs_std_dev(mgxs, xs_kwargs=xs_kwargs)
+    if values is None:
+        return None
+    return _as_group_vector(
+        values,
+        ngroups,
+        _domain_label(domain),
+        f"{key}_std_dev",
+    )
+
+
 def _required_scatter(
     library: Any,
     domain: Any,
@@ -312,7 +394,7 @@ def _required_scatter(
     *,
     xs_kwargs: Mapping[str, Any] | None,
     scatter_mgxs_type: str | None,
-) -> tuple[np.ndarray, str]:
+) -> tuple[np.ndarray, np.ndarray | None, str]:
     mgxs_type_names = _scatter_mgxs_type_candidates(scatter_mgxs_type)
     mgxs, actual_type = _get_mgxs_optional_with_type(
         library,
@@ -335,14 +417,22 @@ def _required_scatter(
             f"domain {_domain_label(domain)}: missing required MGXS "
             f"{' / '.join(mgxs_type_names)}"
         )
-    return (
-        _as_scatter_moments(
-            _mgxs_values(mgxs, xs_kwargs=xs_kwargs),
+    scatter = _as_scatter_moments(
+        _mgxs_values(mgxs, xs_kwargs=xs_kwargs),
+        ngroups,
+        _domain_label(domain),
+    )
+    std_dev_values = _mgxs_std_dev(mgxs, xs_kwargs=xs_kwargs)
+    scatter_std_dev = (
+        None
+        if std_dev_values is None
+        else _as_scatter_moments(
+            std_dev_values,
             ngroups,
             _domain_label(domain),
-        ),
-        actual_type or _scatter_mgxs_type_label(scatter_mgxs_type),
+        )
     )
+    return scatter, scatter_std_dev, actual_type or _scatter_mgxs_type_label(scatter_mgxs_type)
 
 
 def _get_mgxs_optional(library: Any, domain: Any, key: str) -> Any | None:
@@ -417,6 +507,39 @@ def _mgxs_values(mgxs: Any, *, xs_kwargs: Mapping[str, Any] | None) -> np.ndarra
                 value = value()
             return np.asarray(value, dtype=float)
     raise TypeError(f"cannot extract XS values from {type(mgxs)!r}")
+
+
+def _mgxs_std_dev(mgxs: Any, *, xs_kwargs: Mapping[str, Any] | None) -> np.ndarray | None:
+    for attr in ("std_dev", "stddev", "std"):
+        if hasattr(mgxs, attr):
+            value = getattr(mgxs, attr)
+            if callable(value):
+                value = value()
+            return np.asarray(value, dtype=float)
+    if not hasattr(mgxs, "get_xs"):
+        return None
+    if not _get_xs_has_value_parameter(mgxs.get_xs):
+        return None
+    extra_kwargs = dict(xs_kwargs or {})
+    for base_kwargs in (
+        {"nuclides": "sum", "value": "std_dev"},
+        {"nuclides": "sum", "xs_type": "macro", "value": "std_dev"},
+        {"value": "std_dev"},
+    ):
+        kwargs = {**base_kwargs, **extra_kwargs}
+        try:
+            return np.asarray(mgxs.get_xs(**kwargs), dtype=float)
+        except (TypeError, ValueError, LookupError, AttributeError, KeyError):
+            continue
+    return None
+
+
+def _get_xs_has_value_parameter(method: Any) -> bool:
+    try:
+        parameters = inspect.signature(method).parameters
+    except (TypeError, ValueError):
+        return False
+    return "value" in parameters
 
 
 def _as_group_vector(

@@ -37,6 +37,16 @@ class InputReport:
     scatter_row_balance_max_abs: float | None = None
     scatter_row_balance_max_rel: float | None = None
     scatter_row_balance_worst: str | None = None
+    uncertainty_checked: bool = False
+    uncertainty_warn_threshold: float | None = None
+    uncertainty_fail_threshold: float | None = None
+    uncertainty_mean_abs_floor: float = 1.0e-12
+    uncertainty_expected_datasets: int = 0
+    uncertainty_datasets: int = 0
+    uncertainty_bins_checked: int = 0
+    uncertainty_max_rel: float | None = None
+    uncertainty_worst: str | None = None
+    uncertainty_top: list[str] = field(default_factory=list)
     issues: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -106,6 +116,7 @@ def print_report(report: InputReport) -> None:
                 f"max_abs={(report.scatter_row_balance_max_abs or 0.0):.6e} "
                 f"worst={report.scatter_row_balance_worst}"
             )
+    print(_uncertainty_line(report))
     if report.adf_mixtures:
         print(
             "        adf="
@@ -165,6 +176,21 @@ def _report_payload(report: InputReport) -> dict[str, object]:
             "max_rel": report.scatter_row_balance_max_rel,
             "worst": report.scatter_row_balance_worst,
         },
+        "uncertainty": {
+            "checked": report.uncertainty_checked,
+            "warn_threshold": report.uncertainty_warn_threshold,
+            "fail_threshold": report.uncertainty_fail_threshold,
+            "mean_abs_floor": report.uncertainty_mean_abs_floor,
+            "expected_datasets": report.uncertainty_expected_datasets,
+            "datasets": report.uncertainty_datasets,
+            "missing_datasets": (
+                report.uncertainty_expected_datasets - report.uncertainty_datasets
+            ),
+            "bins_checked": report.uncertainty_bins_checked,
+            "max_rel": report.uncertainty_max_rel,
+            "worst": report.uncertainty_worst,
+            "top": report.uncertainty_top,
+        },
         "transport_total_datasets": report.transport_total_datasets,
         "transport_total_derivable": report.transport_total_derivable,
         "adf_mixtures": report.adf_mixtures,
@@ -173,3 +199,25 @@ def _report_payload(report: InputReport) -> dict[str, object]:
         "issues": report.issues,
         "warnings": report.warnings,
     }
+
+
+def _uncertainty_line(report: InputReport) -> str:
+    prefix = "        uncertainty="
+    if not report.uncertainty_checked:
+        return f"{prefix}not checked"
+    if report.uncertainty_expected_datasets == 0:
+        return f"{prefix}not applicable"
+    if report.uncertainty_datasets == 0:
+        return f"{prefix}missing"
+    coverage = f"{report.uncertainty_datasets}/{report.uncertainty_expected_datasets}"
+    if report.uncertainty_max_rel is None:
+        return (
+            f"{prefix}std_dev={coverage} "
+            f"bins={report.uncertainty_bins_checked} max_rel=not evaluated"
+        )
+    return (
+        f"{prefix}std_dev={coverage} "
+        f"bins={report.uncertainty_bins_checked} "
+        f"max_rel={report.uncertainty_max_rel:.6e} "
+        f"worst={report.uncertainty_worst}"
+    )

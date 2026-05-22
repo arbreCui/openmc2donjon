@@ -222,6 +222,64 @@ class MgxsInputContractTests(unittest.TestCase):
         self.assertIsNotNone(report.scatter_row_balance_max_rel)
         self.assertLess(float(report.scatter_row_balance_max_rel), 1.0e-15)
 
+    def test_uncertainty_warns_for_high_relative_std_dev(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "uncertain.h5"
+            write_single_state_fixture(path, total=[0.5, 0.7])
+            with h5py.File(path, "a") as h5:
+                fuel = h5["mixtures/fuel"]
+                fuel.create_dataset("total_std_dev", data=np.array([0.001, 0.14]))
+                fuel.create_dataset(
+                    "scatter_matrix_std_dev",
+                    data=np.zeros((1, 2, 2)),
+                )
+
+            report = validator.validate_input(
+                path,
+                require_adf=False,
+                require_transport_dataset=False,
+                require_volume=False,
+                expected_adf_faces=None,
+                uncertainty=validator.UncertaintyConfig(warn_threshold=0.05),
+            )
+
+        self.assertTrue(report.ok, report.issues)
+        self.assertEqual(report.uncertainty_datasets, 2)
+        self.assertEqual(report.uncertainty_expected_datasets, 7)
+        self.assertAlmostEqual(report.uncertainty_max_rel or 0.0, 0.2)
+        self.assertTrue((report.uncertainty_worst or "").startswith("fuel: total g=2"))
+        self.assertTrue(
+            any("statistical uncertainty" in item for item in report.warnings)
+        )
+        self.assertTrue(report.uncertainty_top)
+
+    def test_uncertainty_can_fail_and_validates_std_dev_shape(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "bad_uncertainty.h5"
+            write_single_state_fixture(path, total=[0.5, 0.7])
+            with h5py.File(path, "a") as h5:
+                h5["mixtures/fuel"].create_dataset(
+                    "absorption_std_dev",
+                    data=np.array([0.01]),
+                )
+                h5["mixtures/fuel"].create_dataset(
+                    "total_std_dev",
+                    data=np.array([0.001, 0.14]),
+                )
+
+            report = validator.validate_input(
+                path,
+                require_adf=False,
+                require_transport_dataset=False,
+                require_volume=False,
+                expected_adf_faces=None,
+                uncertainty=validator.UncertaintyConfig(fail_threshold=0.1),
+            )
+
+        self.assertFalse(report.ok)
+        self.assertTrue(any("absorption_std_dev shape" in item for item in report.issues))
+        self.assertTrue(any("exceeds fail threshold" in item for item in report.issues))
+
 
 def write_multistate_fixture(
     path: Path,
