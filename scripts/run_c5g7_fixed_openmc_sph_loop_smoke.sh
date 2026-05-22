@@ -208,6 +208,19 @@ if quality.get("final_to_initial_flux_residual_ratio") is None:
     raise SystemExit(f"SPH loop quality is missing residual ratio: {quality}")
 if float(quality["final_to_initial_flux_residual_ratio"]) > 1.25:
     raise SystemExit(f"C5G7 SPH loop residual ratio runaway: {quality}")
+final_worst = quality.get("final_worst_residual_bin")
+if not isinstance(final_worst, dict):
+    raise SystemExit(f"SPH loop quality is missing final worst-bin diagnostics: {quality}")
+if final_worst.get("mixture") is None or final_worst.get("group") is None:
+    raise SystemExit(f"SPH loop final worst-bin diagnostic is incomplete: {final_worst}")
+convergence = loop_summary.get("convergence", [])
+if (
+    not isinstance(convergence, list)
+    or not convergence
+    or not isinstance(convergence[-1], dict)
+    or not convergence[-1].get("worst_residual_bins")
+):
+    raise SystemExit(f"SPH loop convergence is missing worst-bin diagnostics: {loop_summary_path}")
 if len(loop_summary.get("solves", [])) != 3:
     raise SystemExit("configured SPH loop did not run the final solve")
 if len(loop_summary.get("postprocesses", [])) != 2:
@@ -295,6 +308,7 @@ payload = {
     "final_to_initial_flux_residual_ratio": float(
         quality["final_to_initial_flux_residual_ratio"]
     ),
+    "final_worst_residual_bin": quality["final_worst_residual_bin"],
     "final_clipped_count": int(quality["final_clipped_count"]),
     "maximum_clipped_count": int(quality["maximum_clipped_count"]),
     "iter1_flux_max_abs_delta_from_base": flux_delta_10,

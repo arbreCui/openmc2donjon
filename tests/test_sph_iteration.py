@@ -96,6 +96,13 @@ class SphIterationTests(unittest.TestCase):
             self.assertEqual(payload["formula"], "next_sph = previous_sph * (reference_flux / low_order_flux) ** damping")
             self.assertEqual(payload["energy_groups"], 2)
             self.assertEqual(payload["clipped_count"], 0)
+            self.assertEqual(payload["clipped_bins"], [])
+            self.assertEqual(payload["diagnostic_bin_limit"], 10)
+            worst = payload["worst_residual_bins"][0]
+            self.assertEqual(worst["mixture"], "moderator")
+            self.assertEqual(worst["group"], 2)
+            self.assertAlmostEqual(worst["raw_update"], 1.44)
+            self.assertAlmostEqual(worst["residual"], 0.44)
 
     def test_rejects_nonpositive_low_order_flux(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -178,6 +185,47 @@ class SphIterationTests(unittest.TestCase):
             expected = np.asarray([[4.0, 5.0], [2.0, 3.0]])
             with h5py.File(sidecar, "r") as h5:
                 np.testing.assert_allclose(h5["sph"][:], expected)
+
+    def test_summary_records_clipped_bins(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference_flux = root / "reference_flux.csv"
+            low_order_flux = root / "low_order_flux.csv"
+            table = root / "next_sph.csv"
+            summary = root / "summary.json"
+            write_mgxs(mgxs)
+            reference_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,3.0\nfuel,2,1.0\n"
+                "moderator,1,1.0\nmoderator,2,2.0\n",
+                encoding="utf-8",
+            )
+            low_order_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,1.0\nfuel,2,1.0\n"
+                "moderator,1,1.0\nmoderator,2,1.0\n",
+                encoding="utf-8",
+            )
+
+            report = create_sph_update_table(
+                mgxs,
+                table,
+                reference_flux=reference_flux,
+                low_order_flux=low_order_flux,
+                clip_max=1.5,
+                summary_json=summary,
+            )
+
+            self.assertEqual(report.clipped_count, 2)
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+            self.assertEqual(payload["clipped_count"], 2)
+            clipped = payload["clipped_bins"][0]
+            self.assertEqual(clipped["mixture"], "fuel")
+            self.assertEqual(clipped["group"], 1)
+            self.assertAlmostEqual(clipped["unclipped_sph"], 3.0)
+            self.assertAlmostEqual(clipped["sph"], 1.5)
+            self.assertTrue(clipped["clipped"])
 
     def test_cli_accepts_previous_sph_sidecar(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

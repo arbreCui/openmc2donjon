@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 import re
+from typing import Any
 
 from . import __version__
 from .bundle import ArtifactSpec, bundle_artifacts
@@ -147,6 +148,14 @@ def print_report(report: SphLoopReport) -> None:
             f"{quality['maximum_clipped_count']}:"
             f"{_format_optional_float(quality['maximum_clipped_fraction'])}"
         )
+        final_worst = quality["final_worst_residual_bin"]
+        if isinstance(final_worst, dict):
+            print(
+                "    final_worst_bin="
+                f"{final_worst.get('mixture')} g{final_worst.get('group')} "
+                f"raw={_format_optional_float(_optional_float(final_worst.get('raw_update')))} "
+                f"residual={_format_optional_float(_optional_float(final_worst.get('residual')))}"
+            )
     if report.acceptance.enabled:
         print("  acceptance:")
         print(f"    decision={report.acceptance.decision}")
@@ -211,6 +220,8 @@ def write_summary(path: Path, report: SphLoopReport) -> None:
                 "flux_ratio_max_residual": item.flux_ratio_max_residual,
                 "clipped_count": item.clipped_count,
                 "clipped_fraction": item.clipped_fraction,
+                "worst_residual_bins": [dict(bin_item) for bin_item in item.worst_residual_bins],
+                "clipped_bins": [dict(bin_item) for bin_item in item.clipped_bins],
                 "converged": item.converged,
             }
             for item in report.convergence
@@ -455,7 +466,7 @@ def build_audit_rows(
     return tuple(rows)
 
 
-def _quality_payload(report: SphLoopReport) -> dict[str, bool | float | int | None]:
+def _quality_payload(report: SphLoopReport) -> dict[str, Any]:
     if not report.convergence:
         return {
             "initial_flux_ratio_max_residual": None,
@@ -469,6 +480,10 @@ def _quality_payload(report: SphLoopReport) -> dict[str, bool | float | int | No
             "clipping_observed": None,
             "final_sph_minimum": None,
             "final_sph_maximum": None,
+            "initial_worst_residual_bin": None,
+            "final_worst_residual_bin": None,
+            "final_worst_residual_bins": [],
+            "final_clipped_bins": [],
         }
 
     initial = float(report.convergence[0].flux_ratio_max_residual)
@@ -496,7 +511,25 @@ def _quality_payload(report: SphLoopReport) -> dict[str, bool | float | int | No
         "final_sph_maximum": (
             None if final_workflow is None else final_workflow.sph_maximum
         ),
+        "initial_worst_residual_bin": _first_diagnostic_bin(
+            report.convergence[0].worst_residual_bins
+        ),
+        "final_worst_residual_bin": _first_diagnostic_bin(
+            final_item.worst_residual_bins
+        ),
+        "final_worst_residual_bins": [
+            dict(item) for item in final_item.worst_residual_bins
+        ],
+        "final_clipped_bins": [dict(item) for item in final_item.clipped_bins],
     }
+
+
+def _first_diagnostic_bin(
+    bins: tuple[dict[str, object], ...],
+) -> dict[str, object] | None:
+    if not bins:
+        return None
+    return dict(bins[0])
 
 
 def _extract_solve_keff(solve: SphLoopSolveReport) -> float | None:
@@ -532,3 +565,9 @@ def _format_optional_float(value: float | None) -> str:
     if value is None:
         return ""
     return f"{value:.12g}"
+
+
+def _optional_float(value: object) -> float | None:
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None

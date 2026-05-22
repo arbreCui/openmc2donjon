@@ -127,6 +127,10 @@ class SphLoopTests(unittest.TestCase):
             )
             self.assertFalse(payload["quality"]["clipping_observed"])
             self.assertEqual(payload["quality"]["final_clipped_count"], 0)
+            self.assertIsInstance(payload["quality"]["final_worst_residual_bin"], dict)
+            self.assertEqual(len(payload["quality"]["final_worst_residual_bins"]), 4)
+            self.assertEqual(payload["quality"]["final_clipped_bins"], [])
+            self.assertIn("worst_residual_bins", payload["convergence"][0])
             self.assertEqual(payload["iterations"], 2)
             self.assertEqual(len(payload["solves"]), 3)
             self.assertEqual(len(payload["workflows"]), 2)
@@ -268,6 +272,10 @@ class SphLoopTests(unittest.TestCase):
             self.assertAlmostEqual(payload["convergence"][0]["sph_max_rel_change"], 0.0)
             self.assertAlmostEqual(
                 payload["convergence"][0]["flux_ratio_max_residual"],
+                0.0,
+            )
+            self.assertAlmostEqual(
+                payload["quality"]["final_worst_residual_bin"]["residual"],
                 0.0,
             )
             self.assertEqual(len(payload["audit_rows"]), 2)

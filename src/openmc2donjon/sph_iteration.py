@@ -25,6 +25,7 @@ FLUX_DATASETS = (
     "low_order_flux",
     "phi",
 )
+DIAGNOSTIC_BIN_LIMIT = 10
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,21 @@ class LoadedMatrix:
     values: np.ndarray
     path: Path
     dataset_path: str | None = None
+
+
+@dataclass(frozen=True)
+class SphUpdateBinDiagnostic:
+    mixture: str
+    group: int
+    reference_flux: float
+    low_order_flux: float
+    raw_update: float
+    signed_residual: float
+    residual: float
+    previous_sph: float
+    unclipped_sph: float
+    sph: float
+    clipped: bool
 
 
 @dataclass(frozen=True)
@@ -60,6 +76,8 @@ class SphUpdateTableReport:
     sph_minimum: float
     sph_maximum: float
     clipped_count: int
+    worst_residual_bins: tuple[SphUpdateBinDiagnostic, ...]
+    clipped_bins: tuple[SphUpdateBinDiagnostic, ...]
     source_label: str
 
 
@@ -121,15 +139,36 @@ def create_sph_update_table(
     _validate_sph(previous.values, "previous SPH")
 
     raw_update = reference.values / low_order.values
-    updated = previous.values * np.power(raw_update, float(damping))
-    clipped_count = 0
+    unclipped = previous.values * np.power(raw_update, float(damping))
+    updated = unclipped.copy()
+    clipped_mask = np.zeros_like(updated, dtype=bool)
     if clip_min is not None or clip_max is not None:
-        before = updated.copy()
         lower = -np.inf if clip_min is None else float(clip_min)
         upper = np.inf if clip_max is None else float(clip_max)
         updated = np.clip(updated, lower, upper)
-        clipped_count = int(np.count_nonzero(before != updated))
+        clipped_mask = unclipped != updated
+    clipped_count = int(np.count_nonzero(clipped_mask))
     _validate_sph(updated, "updated SPH")
+    worst_residual_bins = _top_residual_bins(
+        mixture_names=mixture_names,
+        reference_flux=reference.values,
+        low_order_flux=low_order.values,
+        raw_update=raw_update,
+        previous_sph=previous.values,
+        unclipped_sph=unclipped,
+        sph=updated,
+        clipped_mask=clipped_mask,
+    )
+    clipped_bins = _top_clipped_bins(
+        mixture_names=mixture_names,
+        reference_flux=reference.values,
+        low_order_flux=low_order.values,
+        raw_update=raw_update,
+        previous_sph=previous.values,
+        unclipped_sph=unclipped,
+        sph=updated,
+        clipped_mask=clipped_mask,
+    )
 
     _write_sph_table(output_table, mixture_names=mixture_names, values=updated)
     report = SphUpdateTableReport(
@@ -157,6 +196,8 @@ def create_sph_update_table(
         sph_minimum=float(np.min(updated)),
         sph_maximum=float(np.max(updated)),
         clipped_count=clipped_count,
+        worst_residual_bins=worst_residual_bins,
+        clipped_bins=clipped_bins,
         source_label=source_label,
     )
     print_report(report)
@@ -189,6 +230,13 @@ def print_report(report: SphUpdateTableReport) -> None:
         f"{report.raw_update_minimum:g}..{report.raw_update_maximum:g} "
         f"SPH range: {report.sph_minimum:g}..{report.sph_maximum:g}"
     )
+    if report.worst_residual_bins:
+        worst = report.worst_residual_bins[0]
+        print(
+            "  worst update bin: "
+            f"{worst.mixture} g{worst.group} raw={worst.raw_update:g} "
+            f"residual={worst.residual:g}"
+        )
     print()
     print("SPH iteration table decision")
     print(f"  {PASS_DECISION}")
@@ -226,10 +274,134 @@ def write_summary(path: Path, report: SphUpdateTableReport) -> None:
         "sph_minimum": report.sph_minimum,
         "sph_maximum": report.sph_maximum,
         "clipped_count": report.clipped_count,
+        "diagnostic_bin_limit": DIAGNOSTIC_BIN_LIMIT,
+        "worst_residual_bins": [
+            _bin_diagnostic_payload(item) for item in report.worst_residual_bins
+        ],
+        "clipped_bins": [
+            _bin_diagnostic_payload(item) for item in report.clipped_bins
+        ],
         "source_label": report.source_label,
         "formula": "next_sph = previous_sph * (reference_flux / low_order_flux) ** damping",
     }
     Path(path).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _top_residual_bins(
+    *,
+    mixture_names: tuple[str, ...],
+    reference_flux: np.ndarray,
+    low_order_flux: np.ndarray,
+    raw_update: np.ndarray,
+    previous_sph: np.ndarray,
+    unclipped_sph: np.ndarray,
+    sph: np.ndarray,
+    clipped_mask: np.ndarray,
+    limit: int = DIAGNOSTIC_BIN_LIMIT,
+) -> tuple[SphUpdateBinDiagnostic, ...]:
+    residual = np.abs(raw_update - 1.0)
+    flat_order = np.argsort(residual.ravel(), kind="stable")[::-1]
+    diagnostics: list[SphUpdateBinDiagnostic] = []
+    for flat_index in flat_order[:limit]:
+        mixture_index, group_index = np.unravel_index(int(flat_index), raw_update.shape)
+        diagnostics.append(
+            _build_bin_diagnostic(
+                mixture_index,
+                group_index,
+                mixture_names=mixture_names,
+                reference_flux=reference_flux,
+                low_order_flux=low_order_flux,
+                raw_update=raw_update,
+                previous_sph=previous_sph,
+                unclipped_sph=unclipped_sph,
+                sph=sph,
+                clipped_mask=clipped_mask,
+            )
+        )
+    return tuple(diagnostics)
+
+
+def _top_clipped_bins(
+    *,
+    mixture_names: tuple[str, ...],
+    reference_flux: np.ndarray,
+    low_order_flux: np.ndarray,
+    raw_update: np.ndarray,
+    previous_sph: np.ndarray,
+    unclipped_sph: np.ndarray,
+    sph: np.ndarray,
+    clipped_mask: np.ndarray,
+    limit: int = DIAGNOSTIC_BIN_LIMIT,
+) -> tuple[SphUpdateBinDiagnostic, ...]:
+    clipped_indices = np.argwhere(clipped_mask)
+    if clipped_indices.size == 0:
+        return ()
+    clipped_delta = np.abs(unclipped_sph[clipped_mask] - sph[clipped_mask])
+    order = np.argsort(clipped_delta, kind="stable")[::-1]
+    diagnostics: list[SphUpdateBinDiagnostic] = []
+    for clipped_position in order[:limit]:
+        mixture_index, group_index = clipped_indices[int(clipped_position)]
+        diagnostics.append(
+            _build_bin_diagnostic(
+                int(mixture_index),
+                int(group_index),
+                mixture_names=mixture_names,
+                reference_flux=reference_flux,
+                low_order_flux=low_order_flux,
+                raw_update=raw_update,
+                previous_sph=previous_sph,
+                unclipped_sph=unclipped_sph,
+                sph=sph,
+                clipped_mask=clipped_mask,
+            )
+        )
+    return tuple(diagnostics)
+
+
+def _build_bin_diagnostic(
+    mixture_index: int,
+    group_index: int,
+    *,
+    mixture_names: tuple[str, ...],
+    reference_flux: np.ndarray,
+    low_order_flux: np.ndarray,
+    raw_update: np.ndarray,
+    previous_sph: np.ndarray,
+    unclipped_sph: np.ndarray,
+    sph: np.ndarray,
+    clipped_mask: np.ndarray,
+) -> SphUpdateBinDiagnostic:
+    raw = float(raw_update[mixture_index, group_index])
+    signed_residual = raw - 1.0
+    return SphUpdateBinDiagnostic(
+        mixture=mixture_names[mixture_index],
+        group=int(group_index) + 1,
+        reference_flux=float(reference_flux[mixture_index, group_index]),
+        low_order_flux=float(low_order_flux[mixture_index, group_index]),
+        raw_update=raw,
+        signed_residual=signed_residual,
+        residual=abs(signed_residual),
+        previous_sph=float(previous_sph[mixture_index, group_index]),
+        unclipped_sph=float(unclipped_sph[mixture_index, group_index]),
+        sph=float(sph[mixture_index, group_index]),
+        clipped=bool(clipped_mask[mixture_index, group_index]),
+    )
+
+
+def _bin_diagnostic_payload(item: SphUpdateBinDiagnostic) -> dict[str, bool | float | int | str]:
+    return {
+        "mixture": item.mixture,
+        "group": item.group,
+        "reference_flux": item.reference_flux,
+        "low_order_flux": item.low_order_flux,
+        "raw_update": item.raw_update,
+        "signed_residual": item.signed_residual,
+        "residual": item.residual,
+        "previous_sph": item.previous_sph,
+        "unclipped_sph": item.unclipped_sph,
+        "sph": item.sph,
+        "clipped": item.clipped,
+    }
 
 
 def _read_mgxs_metadata(path: Path) -> tuple[tuple[str, ...], int]:

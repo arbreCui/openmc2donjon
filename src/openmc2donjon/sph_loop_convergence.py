@@ -22,6 +22,8 @@ class SphLoopConvergenceReport:
     clipped_count: int
     clipped_fraction: float
     converged: bool
+    worst_residual_bins: tuple[dict[str, object], ...] = ()
+    clipped_bins: tuple[dict[str, object], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -29,6 +31,8 @@ class _SphUpdateMetrics:
     flux_ratio_max_residual: float
     clipped_count: int
     clipped_fraction: float
+    worst_residual_bins: tuple[dict[str, object], ...]
+    clipped_bins: tuple[dict[str, object], ...]
 
 
 class _WorkflowLike(Protocol):
@@ -74,6 +78,8 @@ def build_convergence_report(
         clipped_count=update_metrics.clipped_count,
         clipped_fraction=update_metrics.clipped_fraction,
         converged=converged,
+        worst_residual_bins=update_metrics.worst_residual_bins,
+        clipped_bins=update_metrics.clipped_bins,
     )
 
 
@@ -88,11 +94,25 @@ def _read_sph_update_metrics(
     raw_max = float(payload["raw_update_maximum"])
     clipped_count = int(payload.get("clipped_count", 0))
     clipped_fraction = clipped_count / max(total_bins, 1)
+    worst_residual_bins = _read_diagnostic_bins(payload, "worst_residual_bins")
+    clipped_bins = _read_diagnostic_bins(payload, "clipped_bins")
     return _SphUpdateMetrics(
         flux_ratio_max_residual=max(abs(raw_min - 1.0), abs(raw_max - 1.0)),
         clipped_count=clipped_count,
         clipped_fraction=clipped_fraction,
+        worst_residual_bins=worst_residual_bins,
+        clipped_bins=clipped_bins,
     )
+
+
+def _read_diagnostic_bins(
+    payload: dict[str, object],
+    key: str,
+) -> tuple[dict[str, object], ...]:
+    raw = payload.get(key, ())
+    if not isinstance(raw, list):
+        return ()
+    return tuple(dict(item) for item in raw if isinstance(item, dict))
 
 
 def _load_sph_matrix(path: Path, *, input_h5: Path) -> np.ndarray:
