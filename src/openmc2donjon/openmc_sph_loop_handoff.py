@@ -190,6 +190,10 @@ def prepare_openmc_sph_loop_handoff(
         h_factor_default=h_factor_default,
     )
 
+    loop_acceptance = _effective_loop_acceptance(
+        production=production,
+        acceptance=acceptance,
+    )
     scaffold_report = create_sph_loop_scaffold(
         mgxs_h5,
         scaffold_root,
@@ -209,7 +213,7 @@ def prepare_openmc_sph_loop_handoff(
         flux_ratio_tolerance=flux_ratio_tolerance,
         min_iterations=min_iterations,
         fail_on_nonconvergence=fail_on_nonconvergence,
-        acceptance=acceptance,
+        acceptance=loop_acceptance,
         donjon_root=donjon_root,
         apply_template=apply_template,
         python_bin=python_bin,
@@ -609,3 +613,17 @@ def _default_ascii_name(output_format: str) -> str:
     if output_format == "macrolib":
         return "out.macrolib.txt"
     return "out.mcompo.txt"
+
+
+def _effective_loop_acceptance(
+    *,
+    production: bool,
+    acceptance: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if not production:
+        return None if acceptance is None else dict(acceptance)
+    if acceptance is None:
+        return {"preset": "production"}
+    out = dict(acceptance)
+    out.setdefault("preset", "production")
+    return out

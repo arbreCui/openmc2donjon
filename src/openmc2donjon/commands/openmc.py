@@ -69,7 +69,8 @@ def build_prepare_openmc_sph_loop_parser() -> argparse.ArgumentParser:
         "--production",
         action="store_true",
         help=(
-            "enable production preflight defaults for the exported MGXS handoff"
+            "enable production preflight defaults for the exported MGXS handoff "
+            "and default the generated SPH loop config to production acceptance"
         ),
     )
     parser.add_argument("--no-require-volume", action="store_true")

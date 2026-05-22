@@ -31,6 +31,7 @@ printf "fake statepoint for openmc sph loop entrypoint\n" > "$STATEPOINT"
   --run-dir "$HANDOFF_RUN_DIR" \
   --solve-template "$SOLVE_TEMPLATE" \
   --format macrolib \
+  --production \
   --scatter-row-balance-fail 1e-12 \
   --scalar-flux-map FUEL_A=2,MOD_A=4 \
   --case-id-prefix openmc_sph_loop_entrypoint \
@@ -67,9 +68,12 @@ bundle_dir = Path(sys.argv[6])
 with h5py.File(mgxs, "r") as h5:
     assert "openmc_volume_flux" in h5
     np.testing.assert_allclose(h5["openmc_volume_flux"][:], [[80.0, 800.0], [120.0, 600.0]])
+    assert h5["openmc_volume_flux"].attrs["group_order"] == "mgxs_donjon"
+    np.testing.assert_allclose(h5["mixtures/FUEL_A/kappa_fission"][:], [3.2e-12, 3.1e-12])
 
 with h5py.File(scaffold / "reference_flux.h5", "r") as h5:
     np.testing.assert_allclose(h5["openmc_volume_flux"][:], [[80.0, 800.0], [120.0, 600.0]])
+    assert h5["openmc_volume_flux"].attrs["group_order"] == "mgxs_donjon"
 
 with h5py.File(scaffold / "flux_map.h5", "r") as h5:
     np.testing.assert_array_equal(h5["scalar_flux_ids"][:], [2, 4])
@@ -79,7 +83,12 @@ assert config["input_h5"] == str(mgxs)
 assert config["map_h5"] == str(scaffold / "flux_map.h5")
 assert config["run_script"] == str(run_script)
 assert config["reference_flux"] == f"{scaffold / 'reference_flux.h5'}::openmc_volume_flux"
+assert config["flux_normalization"] == "auto"
+assert config["acceptance"] == {"preset": "production"}
 assert "openmc2donjon.donjon_deck_runner" in config["solver"]["command"]
+plan = build_sph_loop_plan(scaffold / "loop_config.json")
+assert plan.normalized_acceptance["require_artifact_metadata_alignment"] is True
+assert plan.normalized_acceptance["require_final_solve"] is True
 assert scaffold_summary["decision"] == "openmc2donjon_sph_loop_scaffold_passed"
 assert scaffold_summary["run_script"] == str(run_script)
 assert scaffold_summary["run_command"][-2:] == ["--config", str(scaffold / "loop_config.json")]
@@ -107,6 +116,8 @@ assert bundle_config["input_h5"] == "mgxs_library.h5"
 assert bundle_config["map_h5"] == "flux_map.h5"
 assert bundle_config["reference_flux"] == "reference_flux.h5::openmc_volume_flux"
 assert bundle_config["run_script"] == "run_sph_loop.sh"
+assert bundle_config["flux_normalization"] == "auto"
+assert bundle_config["acceptance"] == {"preset": "production"}
 relocated = bundle_dir.parent / "relocated_bundle"
 if relocated.exists():
     shutil.rmtree(relocated)

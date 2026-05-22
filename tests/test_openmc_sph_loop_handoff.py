@@ -161,6 +161,52 @@ class OpenMCSphLoopHandoffTests(unittest.TestCase):
             self.assertEqual(plan.loop_dir, relocated / "sph_loop")
             self.assertEqual(plan.run_script, relocated / "run_sph_loop.sh")
 
+    def test_production_handoff_defaults_loop_acceptance_preset(self) -> None:
+        root = _repo_root()
+        recipe = root / "examples/openmc_sph_loop_entrypoint/export_recipe.py"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            solve_template = tmp / "solve.x2m.in"
+            run_dir = tmp / "handoff"
+            bundle_dir = run_dir / "bundle"
+            solve_template.write_text(
+                "SEQ_ASCII MAC :: FILE '{macrolib}' ;\n",
+                encoding="utf-8",
+            )
+
+            report = prepare_openmc_sph_loop_handoff(
+                recipe=recipe,
+                no_load_statepoint=True,
+                run_dir=run_dir,
+                solve_template=solve_template,
+                scalar_flux_ids={"FUEL_A": 2, "MOD_A": 4},
+                production=True,
+                python_bin="python3",
+                bundle_dir=bundle_dir,
+            )
+
+            self.assertEqual(report.check_summary_json, run_dir / "check_summary.json")
+            loop_config = json.loads(report.scaffold.loop_config.read_text(encoding="utf-8"))
+            self.assertEqual(loop_config["flux_normalization"], "auto")
+            self.assertEqual(loop_config["acceptance"], {"preset": "production"})
+            plan = build_sph_loop_plan(report.scaffold.loop_config)
+            self.assertTrue(
+                plan.normalized_acceptance["require_artifact_metadata_alignment"]
+            )
+            self.assertTrue(plan.normalized_acceptance["require_final_solve"])
+            with h5py.File(report.mgxs_h5, "r") as h5:
+                np.testing.assert_allclose(
+                    h5["mixtures/FUEL_A/kappa_fission"][:],
+                    [3.2e-12, 3.1e-12],
+                )
+
+            bundle_config = json.loads(
+                (bundle_dir / "loop_config.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(bundle_config["acceptance"], {"preset": "production"})
+            self.assertEqual(bundle_config["flux_normalization"], "auto")
+
     def test_cli_prepare_handoff_supports_sequential_flux_map(self) -> None:
         root = _repo_root()
         recipe = root / "examples/openmc_sph_loop_entrypoint/export_recipe.py"

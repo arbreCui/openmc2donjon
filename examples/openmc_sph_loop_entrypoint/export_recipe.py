@@ -10,6 +10,16 @@ import numpy as np
 
 
 REFERENCE_FLUX = np.array([[80.0, 800.0], [120.0, 600.0]], dtype=float)
+MGXS_TYPES = [
+    "total",
+    "absorption",
+    "fission",
+    "kappa-fission",
+    "nu-fission",
+    "chi",
+    "scatter matrix",
+    "transport",
+]
 
 
 @dataclass(frozen=True)
@@ -40,10 +50,12 @@ class TinyLibrary:
             Domain("moderator position A", 2, 80.0, False),
         ]
         self.loaded_statepoint = None
+        self.mgxs_types = tuple(MGXS_TYPES)
         self.data = {
             (1, "total"): [0.48, 0.65],
             (1, "absorption"): [0.05, 0.08],
             (1, "fission"): [0.010, 0.020],
+            (1, "kappa-fission"): [3.2e-12, 3.1e-12],
             (1, "nu-fission"): [0.025, 0.050],
             (1, "chi"): [1.0, 0.0],
             (1, "scatter matrix"): [[0.40, 0.03], [0.02, 0.55]],
@@ -79,6 +91,7 @@ def domain_names():
 def root_attrs(library):
     return {
         "domain_mode": "openmc_sph_loop_entrypoint",
+        "energy_group_structure": "OPENMC-SPH-ENTRYPOINT-2G",
         "statepoint_marker": library.loaded_statepoint or "",
     }
 
@@ -88,3 +101,4 @@ def postprocess_hdf5(output_path, summary):
     with h5py.File(output_path, "a") as h5:
         dataset = h5.create_dataset("openmc_volume_flux", data=REFERENCE_FLUX)
         dataset.attrs["mixture_names"] = names
+        dataset.attrs["group_order"] = "mgxs_donjon"

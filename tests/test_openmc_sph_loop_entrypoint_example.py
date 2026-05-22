@@ -43,6 +43,10 @@ class OpenmcSphLoopEntrypointExampleTests(unittest.TestCase):
                     h5["openmc_volume_flux"].attrs["mixture_names"],
                     np.asarray(["FUEL_A", "MOD_A"], dtype="S"),
                 )
+                self.assertEqual(
+                    h5["openmc_volume_flux"].attrs["group_order"],
+                    "mgxs_donjon",
+                )
 
     def test_smoke_script_uses_handoff_entrypoint(self) -> None:
         root = _repo_root()
@@ -51,9 +55,11 @@ class OpenmcSphLoopEntrypointExampleTests(unittest.TestCase):
         )
 
         self.assertIn("prepare-openmc-sph-loop", text)
+        self.assertIn("--production", text)
         self.assertIn("openmc_volume_flux", text)
         self.assertIn("FUEL_A=2,MOD_A=4", text)
         self.assertIn("loop_config.json", text)
+        self.assertIn('"preset": "production"', text)
         self.assertIn("openmc2donjon_openmc_sph_loop_handoff_passed", text)
         self.assertIn("OpenMC SPH loop entrypoint smoke: PASS", text)
 
