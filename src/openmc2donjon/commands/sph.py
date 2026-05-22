@@ -23,6 +23,7 @@ from ..sph_augment import (
 )
 from ..sph_iteration import create_sph_update_table
 from ..sph_loop import run_sph_loop
+from ..sph_loop_scaffold import create_sph_loop_scaffold
 from ..sph_workflow import run_sph_iteration_workflow
 
 
@@ -69,6 +70,12 @@ def command_specs() -> tuple[CommandSpec, ...]:
             build_make_donjon_sph_loop_config_parser,
             make_donjon_sph_loop_config_handler,
             "write a generic DONJON-backed SPH loop config",
+        ),
+        CommandSpec(
+            "make-sph-loop-scaffold",
+            build_make_sph_loop_scaffold_parser,
+            make_sph_loop_scaffold_handler,
+            "write reference flux, flux map, and SPH loop config",
         ),
     )
 
@@ -658,6 +665,106 @@ def build_make_donjon_sph_loop_config_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_make_sph_loop_scaffold_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="openmc2donjon make-sph-loop-scaffold",
+        description=(
+            "Write the OpenMC-side inputs needed by run-sph-loop: canonical "
+            "OpenMC reference flux HDF5, DONJON scalar-flux map HDF5, and a "
+            "DONJON-backed loop_config.json."
+        ),
+    )
+    parser.add_argument("input_h5", type=Path, help="OpenMC MGXS HDF5 handoff")
+    parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument(
+        "--reference-flux",
+        required=True,
+        help="OpenMC reference flux source as CSV, HDF5, or file.h5::dataset",
+    )
+    parser.add_argument(
+        "--solve-template",
+        type=Path,
+        required=True,
+        help="case-specific DONJON solve deck template; must dump L_FLUX",
+    )
+    parser.add_argument(
+        "--scalar-flux-map",
+        default=None,
+        help="comma-separated DONJON scalar unknown ids, e.g. FUEL=1,MOD=2",
+    )
+    parser.add_argument(
+        "--sequential-scalar-flux-map",
+        action="store_true",
+        help=(
+            "write scalar_flux_ids=1..N in MGXS mixture order; suitable only "
+            "for simple decks whose scalar unknowns follow that order"
+        ),
+    )
+    parser.add_argument("--reference-output", type=Path, default=None)
+    parser.add_argument("--flux-map-output", type=Path, default=None)
+    parser.add_argument("--config-output", type=Path, default=None)
+    parser.add_argument("--loop-output-dir", type=Path, default=None)
+    parser.add_argument(
+        "--donjon-root",
+        type=Path,
+        default=Path("/Users/wen/dragon-5.1/Donjon"),
+        help="DONJON installation root containing rdonjon",
+    )
+    parser.add_argument(
+        "--apply-template",
+        type=Path,
+        default=None,
+        help="DONJON DSPH/MAC apply template (default: packaged template)",
+    )
+    parser.add_argument("--python-bin", default=sys.executable)
+    parser.add_argument("--iterations", type=int, default=2)
+    parser.add_argument("--damping", type=float, default=0.5)
+    parser.add_argument("--clip-min", type=float, default=0.5)
+    parser.add_argument("--clip-max", type=float, default=3.0)
+    parser.add_argument("--sph-change-tolerance", type=float, default=None)
+    parser.add_argument("--flux-ratio-tolerance", type=float, default=None)
+    parser.add_argument("--min-iterations", type=int, default=1)
+    parser.add_argument("--fail-on-nonconvergence", action="store_true")
+    parser.add_argument("--case-id-prefix", default="openmc2donjon_sph_loop")
+    parser.add_argument("--stage-prefix", default="odj_sph_loop")
+    parser.add_argument(
+        "--case-dir",
+        default="openmc2donjon/case_runs/openmc2donjon_sph_loop",
+        help="DONJON data-relative directory where rendered decks are written",
+    )
+    parser.add_argument(
+        "--format",
+        choices=("macrolib", "multicompo"),
+        default="macrolib",
+        help="ASCII handoff format used between loop iterations",
+    )
+    parser.add_argument("--root-name", default=None)
+    parser.add_argument("--h-factor-default", type=float, default=None)
+    parser.add_argument("--sph-kind", default="donjon-sph-loop")
+    parser.add_argument(
+        "--sph-real",
+        choices=("true", "false"),
+        default="false",
+        help="SPH provenance flag stored in generated sidecars",
+    )
+    parser.add_argument(
+        "--sph-applied",
+        choices=("true", "false"),
+        default="false",
+        help="SPH provenance flag stored in generated sidecars",
+    )
+    parser.add_argument("--source-label", default="OpenMC SPH loop scaffold")
+    parser.add_argument("--postprocess-output", default="corrected.macrolib.txt")
+    parser.add_argument(
+        "--no-final-solve",
+        action="store_true",
+        help="do not run the final DONJON solve after the last SPH update",
+    )
+    parser.add_argument("--summary-json", type=Path, default=None)
+    parser.add_argument("--force", action="store_true", help="overwrite generated artifacts")
+    return parser
+
+
 def augment_sph_handler(args: argparse.Namespace) -> int:
     parser = parser_from_args(args)
     try:
@@ -860,6 +967,54 @@ def make_donjon_sph_loop_config_handler(args: argparse.Namespace) -> int:
     except USER_FACING_EXCEPTIONS as exc:
         exit_with_command_error(parser, "make-donjon-sph-loop-config", exc)
     print(f"DONJON SPH loop config: {path}")
+    return 0
+
+
+def make_sph_loop_scaffold_handler(args: argparse.Namespace) -> int:
+    parser = parser_from_args(args)
+    try:
+        scalar_flux_ids = None
+        if args.scalar_flux_map is not None:
+            scalar_flux_ids = _parse_scalar_flux_map(args.scalar_flux_map)
+        create_sph_loop_scaffold(
+            args.input_h5,
+            args.output_dir,
+            reference_flux=args.reference_flux,
+            solve_template=args.solve_template,
+            scalar_flux_ids=scalar_flux_ids,
+            sequential_scalar_flux_map=args.sequential_scalar_flux_map,
+            reference_output=args.reference_output,
+            flux_map_output=args.flux_map_output,
+            config_output=args.config_output,
+            loop_output_dir=args.loop_output_dir,
+            output_format=args.format,
+            final_solve=not args.no_final_solve,
+            iterations=args.iterations,
+            damping=args.damping,
+            clip_min=args.clip_min,
+            clip_max=args.clip_max,
+            sph_change_tolerance=args.sph_change_tolerance,
+            flux_ratio_tolerance=args.flux_ratio_tolerance,
+            min_iterations=args.min_iterations,
+            fail_on_nonconvergence=args.fail_on_nonconvergence,
+            donjon_root=args.donjon_root,
+            apply_template=args.apply_template,
+            python_bin=args.python_bin,
+            case_id_prefix=args.case_id_prefix,
+            stage_prefix=args.stage_prefix,
+            case_dir=args.case_dir,
+            sph_kind=args.sph_kind,
+            sph_real=args.sph_real == "true",
+            sph_applied=args.sph_applied == "true",
+            source_label=args.source_label,
+            postprocess_output=args.postprocess_output,
+            root_name=args.root_name,
+            h_factor_default=args.h_factor_default,
+            force=args.force,
+            summary_json=args.summary_json,
+        )
+    except USER_FACING_EXCEPTIONS as exc:
+        exit_with_command_error(parser, "make-sph-loop-scaffold", exc)
     return 0
 
 

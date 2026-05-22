@@ -34,6 +34,7 @@ Default:
   - package tests
   - CLI help/version smoke
   - recipe/statepoint exporter smoke
+  - OpenMC-to-SPH-loop entrypoint smoke
   - DRAGON SPH macrolib handoff smoke when local DRAGON TCM38 inputs exist
   - DONJON DSPH consume smoke when local DONJON is available
   - DONJON SPH solver-response smoke when local DONJON is available
@@ -165,6 +166,7 @@ echo "== CLI smoke =="
 "$PYTHON_BIN" -m openmc2donjon.cli run-sph-iteration --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli run-sph-loop --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli make-donjon-sph-loop-config --help >/dev/null
+"$PYTHON_BIN" -m openmc2donjon.cli make-sph-loop-scaffold --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.donjon_deck_runner --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.export_cli --version
 "$PYTHON_BIN" -m openmc2donjon.export_cli --help >/dev/null
@@ -176,6 +178,12 @@ echo "== Recipe export smoke =="
 RUN_DIR="$RUN_DIR/recipe_export_smoke" \
 PYTHON_BIN="$PYTHON_BIN" \
   bash "$REPO_ROOT/scripts/run_recipe_export_smoke.sh"
+
+echo
+echo "== OpenMC-to-SPH-loop entrypoint smoke =="
+RUN_DIR="$RUN_DIR/openmc_sph_loop_entrypoint" \
+PYTHON_BIN="$PYTHON_BIN" \
+  bash "$REPO_ROOT/examples/openmc_sph_loop_entrypoint/run_smoke.sh"
 
 echo
 echo "== DRAGON SPH macrolib handoff smoke =="
