@@ -23,6 +23,7 @@ from .export_openmc_mgxs import (
     _domain_name,
     _domain_volume,
     _energy_bounds_from_library,
+    _effective_root_attrs,
     _export_specs_from_library,
     _mapped_domain_name,
     _safe_hdf5_name,
@@ -376,7 +377,9 @@ def dry_run_openmc_statepoint_recipe(
 
     mgxs_types = _library_mgxs_types(library)
     warnings.extend(_mgxs_type_warnings(mgxs_types, selected_scatter_mgxs_type))
-    root_attr_keys = tuple(sorted((root_attrs or {}).keys()))
+    root_attr_keys = tuple(
+        sorted(_effective_root_attrs(library, root_attrs=root_attrs).keys())
+    )
     domain_type = _optional_string_attr(library, "domain_type")
     legendre_order = _library_legendre_order(library)
     production_checks = _production_checks(
@@ -504,9 +507,9 @@ def _production_checks(
             "domain-mode",
             "PASS" if "domain_mode" in root_attr_keys else "WARN",
             (
-                "root_attrs include domain_mode"
+                "export root attrs include domain_mode"
                 if "domain_mode" in root_attr_keys
-                else "root_attrs should include domain_mode, e.g. assembly/cell/material"
+                else "export root attrs should include domain_mode, e.g. assembly/cell/material"
             ),
         )
     )
@@ -520,12 +523,12 @@ def _energy_group_identity_check(
         return RecipeProductionCheck(
             "energy-group-identity",
             "PASS",
-            "root_attrs include energy_group_structure; exporter writes bounds hash",
+            "export root attrs include energy_group_structure; exporter writes bounds hash",
         )
     return RecipeProductionCheck(
         "energy-group-identity",
         "WARN",
-        "root_attrs should include energy_group_structure; exporter writes only bounds hash",
+        "export root attrs should include energy_group_structure; exporter writes only bounds hash",
     )
 
 

@@ -197,6 +197,67 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
         np.testing.assert_allclose(mod_scatter[0], np.eye(3))
         np.testing.assert_allclose(mod_scatter[1], np.zeros((3, 3)))
 
+    def test_exporter_derives_production_root_metadata_from_library(self) -> None:
+        library = KeywordOnlyFakeLibrary()
+        library.domain_type = "cell"
+        library.energy_group_structure = "FAKE-3G"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "mgxs.h5"
+            export_openmc_mgxs_library(library, path)
+            with h5py.File(path, "r") as h5:
+                domain_mode = h5.attrs["domain_mode"]
+                domain_type = h5.attrs["domain_type"]
+                energy_group_structure = h5.attrs["energy_group_structure"]
+            report = validate_input(
+                path,
+                require_domain_mode=True,
+                require_source_domain_metadata=True,
+            )
+
+        self.assertEqual(domain_mode, "cell")
+        self.assertEqual(domain_type, "cell")
+        self.assertEqual(energy_group_structure, "FAKE-3G")
+        self.assertTrue(report.ok, report.issues)
+        self.assertEqual(report.domain_mode, "cell")
+        self.assertEqual(report.source_domain_metadata, 2)
+
+    def test_explicit_root_attrs_override_exporter_metadata_defaults(self) -> None:
+        library = KeywordOnlyFakeLibrary()
+        library.domain_type = "cell"
+        library.energy_group_structure = "FAKE-3G"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "mgxs.h5"
+            export_openmc_mgxs_library(
+                library,
+                path,
+                root_attrs={
+                    "domain_mode": "assembly",
+                    "energy_group_structure": "EXPLICIT-3G",
+                },
+            )
+            with h5py.File(path, "r") as h5:
+                domain_mode = h5.attrs["domain_mode"]
+                domain_type = h5.attrs["domain_type"]
+                energy_group_structure = h5.attrs["energy_group_structure"]
+
+        self.assertEqual(domain_mode, "assembly")
+        self.assertEqual(domain_type, "cell")
+        self.assertEqual(energy_group_structure, "EXPLICIT-3G")
+
+    def test_exporter_does_not_treat_library_name_as_energy_group_structure(self) -> None:
+        library = KeywordOnlyFakeLibrary()
+        library.name = "case label, not an energy group structure"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "mgxs.h5"
+            export_openmc_mgxs_library(library, path)
+            with h5py.File(path, "r") as h5:
+                has_energy_group_structure = "energy_group_structure" in h5.attrs
+
+        self.assertFalse(has_energy_group_structure)
+
     def test_exporter_omits_unknown_volume_instead_of_defaulting_to_one(self) -> None:
         class DomainWithoutVolume:
             name = "fuel"
@@ -659,7 +720,7 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
             output,
         )
         self.assertIn("PASS volumes: all selected domains have positive explicit volumes", output)
-        self.assertIn("PASS domain-mode: root_attrs include domain_mode", output)
+        self.assertIn("PASS domain-mode: export root attrs include domain_mode", output)
         self.assertIn("ASM_1", output)
         self.assertIn("volume_source=domain", output)
         self.assertIn("duplicate name 'ASM_1' written as 'ASM_1_2'", output)
@@ -851,7 +912,7 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
         self.assertIn("WARN legendre-order: P0 only", output)
         self.assertIn("WARN volumes: 1 domain(s) are missing volume: fuel", output)
         self.assertIn("strict preflight will fail", output)
-        self.assertIn("WARN domain-mode: root_attrs should include domain_mode", output)
+        self.assertIn("PASS domain-mode: export root attrs include domain_mode", output)
 
     def test_exports_explicit_subdomain_specs(self) -> None:
         library = SubdomainFakeLibrary()

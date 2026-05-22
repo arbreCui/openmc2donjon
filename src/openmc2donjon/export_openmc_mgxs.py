@@ -153,7 +153,10 @@ def export_openmc_mgxs_library(
         h5.attrs["legendre_order"] = legendre_order
         h5.attrs["source"] = "OpenMC mgxs.Library"
         h5.attrs["openmc_scatter_mgxs_type"] = scatter_type_label
-        for attr_key, attr_value in (root_attrs or {}).items():
+        for attr_key, attr_value in _effective_root_attrs(
+            library,
+            root_attrs=root_attrs,
+        ).items():
             _write_hdf5_attr(h5, str(attr_key), attr_value)
         h5.attrs["energy_bounds_sha256"] = energy_bounds_sha256(energy_bounds)
         h5.create_dataset("energy_bounds", data=energy_bounds)
@@ -534,6 +537,53 @@ def _scatter_mgxs_type_candidates(scatter_mgxs_type: str | None) -> tuple[str, .
 
 def _scatter_mgxs_type_label(scatter_mgxs_type: str | None) -> str:
     return _scatter_mgxs_type_candidates(scatter_mgxs_type)[0]
+
+
+def _effective_root_attrs(
+    library: Any,
+    *,
+    root_attrs: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    attrs = _automatic_root_attrs(library)
+    for key, value in (root_attrs or {}).items():
+        attrs[str(key)] = value
+    return attrs
+
+
+def _automatic_root_attrs(library: Any) -> dict[str, Any]:
+    attrs: dict[str, Any] = {}
+    domain_type = _domain_type_label(library)
+    if domain_type:
+        attrs["domain_type"] = domain_type
+        attrs["domain_mode"] = domain_type
+    energy_group_structure = _energy_group_structure_label(library)
+    if energy_group_structure:
+        attrs["energy_group_structure"] = energy_group_structure
+    return attrs
+
+
+def _energy_group_structure_label(library: Any) -> str | None:
+    groups = getattr(library, "energy_groups", None)
+    sources = (
+        (library, ("energy_group_structure", "group_structure", "structure")),
+        (
+            groups,
+            ("energy_group_structure", "group_structure", "structure", "name", "label"),
+        ),
+    )
+    for source, attrs in sources:
+        if source is None:
+            continue
+        for attr in attrs:
+            if not hasattr(source, attr):
+                continue
+            value = getattr(source, attr)
+            if callable(value):
+                value = value()
+            text = str(value).strip()
+            if text:
+                return text
+    return None
 
 
 def _mgxs_values(mgxs: Any, *, xs_kwargs: Mapping[str, Any] | None) -> np.ndarray:
