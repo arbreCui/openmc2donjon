@@ -43,6 +43,10 @@ class OpenMCHexMinicaseExampleTests(unittest.TestCase):
         self.assertIn("mgxs_input_contract_passed", text)
         self.assertIn("did not see seven hex domains", text)
         self.assertIn("did not see one H-FACTOR dataset per domain", text)
+        self.assertIn("h5[\"mixture_names\"]", text)
+        self.assertIn("unexpected declared hex mixture order", text)
+        self.assertIn("source_domain_index", text)
+        self.assertIn("summary mixture names mismatch", text)
         self.assertIn("non-fissionable kappa_fission is not zero", text)
         self.assertIn("unexpected hex fissionable split", text)
 

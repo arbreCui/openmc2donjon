@@ -170,6 +170,12 @@ expected_names = [
     for x_index in range(1, 4)
 ]
 
+def decode_hdf5_strings(values):
+    return [
+        value.decode("utf-8") if isinstance(value, bytes) else str(value)
+        for value in values
+    ]
+
 with h5py.File(mgxs, "r") as h5:
     if h5.attrs["case"] != "openmc_full_core_minicase":
         raise SystemExit("missing openmc_full_core_minicase root attr")
@@ -183,9 +189,14 @@ with h5py.File(mgxs, "r") as h5:
         raise SystemExit("unexpected group count")
     if int(h5.attrs["legendre_order"]) != 1:
         raise SystemExit("unexpected Legendre order")
-    names = sorted(h5["mixtures"])
+    if "mixture_names" not in h5:
+        raise SystemExit("MGXS is missing declared mixture_names order")
+    names = decode_hdf5_strings(h5["mixture_names"][:])
     if names != expected_names:
-        raise SystemExit(f"unexpected mixture names: {names}")
+        raise SystemExit(f"unexpected declared mixture order: {names}")
+    mixture_groups = sorted(h5["mixtures"])
+    if mixture_groups != sorted(expected_names):
+        raise SystemExit(f"unexpected mixture groups: {mixture_groups}")
     if "openmc_volume_flux" not in h5:
         raise SystemExit("full-core MGXS is missing openmc_volume_flux")
     openmc_volume_flux_dataset = h5["openmc_volume_flux"]
@@ -201,8 +212,14 @@ with h5py.File(mgxs, "r") as h5:
         raise SystemExit(f"unexpected OpenMC volume-flux shape: {openmc_volume_flux.shape}")
     if not np.all(np.isfinite(openmc_volume_flux)) or np.any(openmc_volume_flux <= 0.0):
         raise SystemExit("OpenMC volume flux is not positive finite")
-    for name in expected_names:
+    for source_domain_index, name in enumerate(expected_names, start=1):
         mixture = h5[f"mixtures/{name}"]
+        if int(mixture.attrs["source_domain_index"]) != source_domain_index:
+            raise SystemExit(f"{name}: source_domain_index does not match declared order")
+        if int(mixture.attrs["source_domain_id"]) <= 0:
+            raise SystemExit(f"{name}: invalid source_domain_id")
+        if mixture.attrs["source_domain_type"] != "cell":
+            raise SystemExit(f"{name}: source domain is not cell")
         if "transport_total" not in mixture:
             raise SystemExit(f"{name}: missing transport_total")
         if "kappa_fission" not in mixture:
@@ -230,7 +247,7 @@ summary = json.loads(summary_path.read_text(encoding="utf-8"))
 summary_errors = validate_from_openmc_summary(summary)
 if summary_errors:
     raise SystemExit("invalid from-OpenMC summary: " + "; ".join(summary_errors))
-if summary["mixture_names"] != expected_names:
+if summary["mixture_names"] != names:
     raise SystemExit("summary mixture names mismatch")
 if summary["energy_groups"] != 2 or summary["legendre_order"] != 1:
     raise SystemExit("summary group/order mismatch")
