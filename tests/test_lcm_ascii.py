@@ -57,6 +57,16 @@ class LcmAsciiTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "longer than 8 characters"):
             lcm.pack_fixed_strings(["ABCDEFGHI"], 8)
 
+    def test_string_block_rejects_implicit_truncation(self) -> None:
+        with self.assertRaisesRegex(ValueError, "string block 'SIGNATURE'.*longer"):
+            lcm.string_block(1, "SIGNATURE", "L_MULTICOMPO_EXTRA", width=12)
+
+    def test_string_block_allows_explicit_truncation(self) -> None:
+        block = lcm.string_block(1, "COMMENT", "abcdef", width=4, truncate=True)
+
+        self.assertEqual(block.data, "abcd")
+        self.assertEqual(block.count, 1)
+
     def test_reads_realistic_global_fragment(self) -> None:
         fragment = [
             "->       1      12       3       3                                 <-   ",

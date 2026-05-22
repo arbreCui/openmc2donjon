@@ -250,13 +250,27 @@ def block(
     return LcmBlock(level, flags, type_code, count, name=name, data=payload)
 
 
-def string_block(level: int, name: str, text: str, *, width: int | None = None) -> LcmBlock:
+def string_block(
+    level: int,
+    name: str,
+    text: str,
+    *,
+    width: int | None = None,
+    truncate: bool = False,
+) -> LcmBlock:
     """Create a type-3 block from text."""
 
     if width is not None:
         if width % LCM_CHAR_CHUNK_WIDTH != 0:
             raise ValueError("LCM character width must be a multiple of 4")
-        text = text[:width].ljust(width)
+        if len(text) > width:
+            if not truncate:
+                raise ValueError(
+                    f"string block {name!r} text {text!r} is longer than "
+                    f"{width} characters"
+                )
+            text = text[:width]
+        text = text.ljust(width)
     text, count = string_chunks(text)
     return block(level, name, 3, text, count=count)
 
