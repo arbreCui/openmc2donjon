@@ -18,6 +18,11 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         )
         self.assertIn("== OpenMC hex minicase smoke ==", default_section)
         self.assertIn("examples/openmc_hex_minicase/run_smoke.sh", default_section)
+        self.assertIn(
+            "== OpenMC full-core assembly-wise minicase smoke ==",
+            default_section,
+        )
+        self.assertIn("examples/openmc_full_core_minicase/run_smoke.sh", default_section)
         self.assertIn("== External face-flux adapter smoke ==", default_section)
         self.assertIn("examples/external_face_flux_adapter/run_smoke.sh", default_section)
         self.assertIn("== DRAGON SPH macrolib handoff smoke ==", default_section)

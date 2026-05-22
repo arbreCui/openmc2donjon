@@ -178,6 +178,15 @@ a fresh statepoint, see
 bash scripts/run_production_minicase_smoke.sh
 ```
 
+For the minimal full-core version of that workflow, where one 3D OpenMC core
+contains nine assembly domains and each assembly position becomes one DONJON
+mixture, see
+[`examples/openmc_full_core_minicase/`](examples/openmc_full_core_minicase/) or run:
+
+```sh
+bash examples/openmc_full_core_minicase/run_smoke.sh
+```
+
 For a deterministic external low-order/nodal handoff example that exercises
 case-specific driver dataset paths, mixture/face reordering, current sign
 conversion, homogeneous face-flux reconstruction, and flux-ratio ADF injection,
