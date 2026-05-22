@@ -17,6 +17,15 @@ from .sph_augment import load_sph_source
 
 SCHEMA = "openmc2donjon.sph-iteration-table.v1"
 PASS_DECISION = "openmc2donjon_sph_iteration_table_passed"
+FLUX_NORMALIZATIONS = ("none", "total", "power")
+H_FACTOR_DATASETS = (
+    "h_factor",
+    "H-FACTOR",
+    "H_FACTOR",
+    "kappa_fission",
+    "kappa_fission_xs",
+    "kappa_fission_cross_section",
+)
 FLUX_DATASETS = (
     "volume_flux",
     "flux",
@@ -65,10 +74,17 @@ class SphUpdateTableReport:
     damping: float
     clip_min: float | None
     clip_max: float | None
+    flux_normalization: str
+    normalization_factor: float
+    reference_normalization_integral: float | None
+    low_order_normalization_integral: float | None
+    normalization_weight_source: str | None
     reference_flux_minimum: float
     reference_flux_maximum: float
     low_order_flux_minimum: float
     low_order_flux_maximum: float
+    normalized_low_order_flux_minimum: float
+    normalized_low_order_flux_maximum: float
     raw_update_minimum: float
     raw_update_maximum: float
     previous_sph_minimum: float
@@ -91,15 +107,18 @@ def create_sph_update_table(
     damping: float = 1.0,
     clip_min: float | None = None,
     clip_max: float | None = None,
+    flux_normalization: str = "none",
     source_label: str = "external low-order SPH iteration",
     force: bool = False,
     summary_json: Path | None = None,
 ) -> SphUpdateTableReport:
     """Write the next SPH factors as a CSV table.
 
-    The update is multiplicative and damped:
+    The update is multiplicative and damped.  If ``flux_normalization`` is not
+    ``"none"``, the low-order flux is first scaled to the reference flux's
+    global normalization:
 
-    ``next_sph = previous_sph * (reference_flux / low_order_flux) ** damping``.
+    ``next_sph = previous_sph * (reference_flux / normalized_low_order_flux) ** damping``.
 
     If no previous SPH source is supplied, unity factors are used.
     """
@@ -110,6 +129,7 @@ def create_sph_update_table(
         raise FileNotFoundError(f"input HDF5 does not exist: {input_h5}")
     if output_table.exists() and not force:
         raise FileExistsError(f"output already exists; use --force to overwrite: {output_table}")
+    flux_normalization = _normalize_flux_normalization(flux_normalization)
     _validate_update_options(damping=damping, clip_min=clip_min, clip_max=clip_max)
 
     mixture_names, energy_groups = _read_mgxs_metadata(input_h5)
@@ -138,7 +158,15 @@ def create_sph_update_table(
     _validate_flux(low_order.values, "low-order flux")
     _validate_sph(previous.values, "previous SPH")
 
-    raw_update = reference.values / low_order.values
+    normalized_low_order, normalization = _normalized_low_order_flux(
+        input_h5,
+        reference_flux=reference.values,
+        low_order_flux=low_order.values,
+        mixture_names=mixture_names,
+        energy_groups=energy_groups,
+        flux_normalization=flux_normalization,
+    )
+    raw_update = reference.values / normalized_low_order
     unclipped = previous.values * np.power(raw_update, float(damping))
     updated = unclipped.copy()
     clipped_mask = np.zeros_like(updated, dtype=bool)
@@ -152,7 +180,7 @@ def create_sph_update_table(
     worst_residual_bins = _top_residual_bins(
         mixture_names=mixture_names,
         reference_flux=reference.values,
-        low_order_flux=low_order.values,
+        low_order_flux=normalized_low_order,
         raw_update=raw_update,
         previous_sph=previous.values,
         unclipped_sph=unclipped,
@@ -162,7 +190,7 @@ def create_sph_update_table(
     clipped_bins = _top_clipped_bins(
         mixture_names=mixture_names,
         reference_flux=reference.values,
-        low_order_flux=low_order.values,
+        low_order_flux=normalized_low_order,
         raw_update=raw_update,
         previous_sph=previous.values,
         unclipped_sph=unclipped,
@@ -185,10 +213,17 @@ def create_sph_update_table(
         damping=float(damping),
         clip_min=None if clip_min is None else float(clip_min),
         clip_max=None if clip_max is None else float(clip_max),
+        flux_normalization=flux_normalization,
+        normalization_factor=normalization["factor"],
+        reference_normalization_integral=normalization["reference_integral"],
+        low_order_normalization_integral=normalization["low_order_integral"],
+        normalization_weight_source=normalization["weight_source"],
         reference_flux_minimum=float(np.min(reference.values)),
         reference_flux_maximum=float(np.max(reference.values)),
         low_order_flux_minimum=float(np.min(low_order.values)),
         low_order_flux_maximum=float(np.max(low_order.values)),
+        normalized_low_order_flux_minimum=float(np.min(normalized_low_order)),
+        normalized_low_order_flux_maximum=float(np.max(normalized_low_order)),
         raw_update_minimum=float(np.min(raw_update)),
         raw_update_maximum=float(np.max(raw_update)),
         previous_sph_minimum=float(np.min(previous.values)),
@@ -225,6 +260,12 @@ def print_report(report: SphUpdateTableReport) -> None:
         f"  mixtures={len(report.mixture_names)} groups={report.energy_groups} "
         f"damping={report.damping:g} clipped={report.clipped_count}"
     )
+    if report.flux_normalization != "none":
+        print(
+            "  flux_normalization: "
+            f"{report.flux_normalization} factor={report.normalization_factor:g} "
+            f"weights={report.normalization_weight_source}"
+        )
     print(
         "  update range: "
         f"{report.raw_update_minimum:g}..{report.raw_update_maximum:g} "
@@ -263,10 +304,17 @@ def write_summary(path: Path, report: SphUpdateTableReport) -> None:
         "damping": report.damping,
         "clip_min": report.clip_min,
         "clip_max": report.clip_max,
+        "flux_normalization": report.flux_normalization,
+        "normalization_factor": report.normalization_factor,
+        "reference_normalization_integral": report.reference_normalization_integral,
+        "low_order_normalization_integral": report.low_order_normalization_integral,
+        "normalization_weight_source": report.normalization_weight_source,
         "reference_flux_minimum": report.reference_flux_minimum,
         "reference_flux_maximum": report.reference_flux_maximum,
         "low_order_flux_minimum": report.low_order_flux_minimum,
         "low_order_flux_maximum": report.low_order_flux_maximum,
+        "normalized_low_order_flux_minimum": report.normalized_low_order_flux_minimum,
+        "normalized_low_order_flux_maximum": report.normalized_low_order_flux_maximum,
         "raw_update_minimum": report.raw_update_minimum,
         "raw_update_maximum": report.raw_update_maximum,
         "previous_sph_minimum": report.previous_sph_minimum,
@@ -282,7 +330,10 @@ def write_summary(path: Path, report: SphUpdateTableReport) -> None:
             _bin_diagnostic_payload(item) for item in report.clipped_bins
         ],
         "source_label": report.source_label,
-        "formula": "next_sph = previous_sph * (reference_flux / low_order_flux) ** damping",
+        "formula": (
+            "next_sph = previous_sph * "
+            "(reference_flux / normalized_low_order_flux) ** damping"
+        ),
     }
     Path(path).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
@@ -402,6 +453,122 @@ def _bin_diagnostic_payload(item: SphUpdateBinDiagnostic) -> dict[str, bool | fl
         "sph": item.sph,
         "clipped": item.clipped,
     }
+
+
+def _normalize_flux_normalization(value: str) -> str:
+    normalized = str(value).strip().lower().replace("_", "-")
+    aliases = {
+        "off": "none",
+        "false": "none",
+        "no": "none",
+        "unity": "none",
+        "global": "total",
+        "total-flux": "total",
+        "sum": "total",
+        "kappa-fission": "power",
+        "h-factor": "power",
+        "hfactor": "power",
+    }
+    normalized = aliases.get(normalized, normalized)
+    if normalized not in FLUX_NORMALIZATIONS:
+        allowed = ", ".join(FLUX_NORMALIZATIONS)
+        raise ValueError(f"--flux-normalization must be one of: {allowed}")
+    return normalized
+
+
+def _normalized_low_order_flux(
+    input_h5: Path,
+    *,
+    reference_flux: np.ndarray,
+    low_order_flux: np.ndarray,
+    mixture_names: tuple[str, ...],
+    energy_groups: int,
+    flux_normalization: str,
+) -> tuple[np.ndarray, dict[str, float | str | None]]:
+    if flux_normalization == "none":
+        return low_order_flux, {
+            "factor": 1.0,
+            "reference_integral": None,
+            "low_order_integral": None,
+            "weight_source": None,
+        }
+    if flux_normalization == "total":
+        weights = np.ones_like(reference_flux, dtype=float)
+        weight_source = "unit"
+    elif flux_normalization == "power":
+        weights = _read_h_factor_matrix(
+            input_h5,
+            mixture_names=mixture_names,
+            energy_groups=energy_groups,
+        )
+        weight_source = "H-FACTOR/kappa_fission"
+    else:
+        raise AssertionError(f"unhandled flux normalization: {flux_normalization}")
+
+    _validate_normalization_weights(weights, flux_normalization)
+    reference_integral = float(np.sum(reference_flux * weights))
+    low_order_integral = float(np.sum(low_order_flux * weights))
+    if not np.isfinite(reference_integral) or reference_integral <= 0.0:
+        raise ValueError(
+            f"{flux_normalization} normalization reference integral must be positive"
+        )
+    if not np.isfinite(low_order_integral) or low_order_integral <= 0.0:
+        raise ValueError(
+            f"{flux_normalization} normalization low-order integral must be positive"
+        )
+    factor = reference_integral / low_order_integral
+    normalized = low_order_flux * factor
+    _validate_flux(normalized, "normalized low-order flux")
+    return normalized, {
+        "factor": float(factor),
+        "reference_integral": reference_integral,
+        "low_order_integral": low_order_integral,
+        "weight_source": weight_source,
+    }
+
+
+def _read_h_factor_matrix(
+    path: Path,
+    *,
+    mixture_names: tuple[str, ...],
+    energy_groups: int,
+) -> np.ndarray:
+    import h5py
+
+    values = np.empty((len(mixture_names), energy_groups), dtype=float)
+    missing: list[str] = []
+    with h5py.File(path, "r") as h5:
+        for mixture_index, mixture in enumerate(mixture_names):
+            group = h5.get(f"mixtures/{mixture}")
+            if group is None:
+                raise ValueError(f"input HDF5 is missing mixture {mixture!r}")
+            dataset_name = next((name for name in H_FACTOR_DATASETS if name in group), None)
+            if dataset_name is None:
+                missing.append(mixture)
+                continue
+            data = np.asarray(group[dataset_name][:], dtype=float).reshape(-1)
+            if data.size != energy_groups:
+                raise ValueError(
+                    f"mixture {mixture}: {dataset_name} must have "
+                    f"{energy_groups} value(s), got {data.size}"
+                )
+            values[mixture_index, :] = data
+    if missing:
+        raise ValueError(
+            "power flux normalization requires group-wise H-FACTOR/kappa_fission "
+            "for every mixture; missing: "
+            + ", ".join(missing)
+        )
+    return values
+
+
+def _validate_normalization_weights(values: np.ndarray, flux_normalization: str) -> None:
+    if not np.all(np.isfinite(values)):
+        raise ValueError(f"{flux_normalization} normalization weights must be finite")
+    if np.any(values < 0.0):
+        raise ValueError(f"{flux_normalization} normalization weights must be non-negative")
+    if not np.any(values > 0.0):
+        raise ValueError(f"{flux_normalization} normalization weights must include a positive value")
 
 
 def _read_mgxs_metadata(path: Path) -> tuple[tuple[str, ...], int]:

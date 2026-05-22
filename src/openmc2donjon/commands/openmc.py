@@ -15,6 +15,7 @@ from .base import (
 )
 from ..multicompo import DEFAULT_ROOT_NAME
 from ..openmc_sph_loop_handoff import prepare_openmc_sph_loop_handoff
+from ..sph_iteration import FLUX_NORMALIZATIONS
 from ..sph_loop_scaffold import parse_scalar_flux_map
 
 
@@ -121,6 +122,15 @@ def build_prepare_openmc_sph_loop_parser() -> argparse.ArgumentParser:
     parser.add_argument("--damping", type=float, default=0.5)
     parser.add_argument("--clip-min", type=float, default=0.5)
     parser.add_argument("--clip-max", type=float, default=3.0)
+    parser.add_argument(
+        "--flux-normalization",
+        choices=FLUX_NORMALIZATIONS,
+        default="none",
+        help=(
+            "scale DONJON flux before forming SPH ratios: none, total, or power "
+            "using group-wise H-FACTOR/kappa_fission (default: none)"
+        ),
+    )
     parser.add_argument("--sph-change-tolerance", type=float, default=None)
     parser.add_argument("--flux-ratio-tolerance", type=float, default=None)
     parser.add_argument("--min-iterations", type=int, default=1)
@@ -205,6 +215,7 @@ def prepare_openmc_sph_loop_handler(args: argparse.Namespace) -> int:
             damping=args.damping,
             clip_min=args.clip_min,
             clip_max=args.clip_max,
+            flux_normalization=args.flux_normalization,
             sph_change_tolerance=args.sph_change_tolerance,
             flux_ratio_tolerance=args.flux_ratio_tolerance,
             min_iterations=args.min_iterations,

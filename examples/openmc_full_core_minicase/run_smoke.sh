@@ -423,6 +423,7 @@ PY
     --damping 0.1 \
     --clip-min 0.2 \
     --clip-max 5.0 \
+    --flux-normalization power \
     --acceptance-min-completed-iterations 2 \
     --acceptance-require-final-solve \
     --case-id-prefix openmc2donjon_full_core_minicase_real_sph \
@@ -507,6 +508,10 @@ for key in (
         raise SystemExit(f"real DONJON SPH quality field is not finite: {key}")
 if quality["final_sph_minimum"] <= 0.0 or quality["final_sph_maximum"] <= 0.0:
     raise SystemExit("real DONJON SPH factors are not positive")
+if quality["final_clipped_count"] != 0:
+    raise SystemExit("power-normalized real DONJON SPH loop should not clip")
+if float(quality["final_flux_ratio_max_residual"]) >= 1.0:
+    raise SystemExit("power-normalized real DONJON SPH residual did not improve enough")
 
 final_sph = Path(summary["final_sph_sidecar"])
 with h5py.File(final_sph, "r") as h5:
@@ -531,6 +536,7 @@ if not np.all(np.isfinite(macrolib.sph)) or np.any(macrolib.sph <= 0.0):
 print(
     "real DONJON full-core SPH loop mechanical smoke OK: "
     f"iterations=2 solves={len(solves)} "
+    f"normalization={summary['workflows'][0]['flux_normalization']} "
     f"final_sph=[{quality['final_sph_minimum']:.4g}, {quality['final_sph_maximum']:.4g}]"
 )
 PY

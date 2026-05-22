@@ -41,6 +41,8 @@ class SphIterationWorkflowReport:
     mixture_count: int
     energy_groups: int
     damping: float
+    flux_normalization: str
+    normalization_factor: float
     sph_minimum: float
     sph_maximum: float
 
@@ -59,6 +61,7 @@ def run_sph_iteration_workflow(
     damping: float = 1.0,
     clip_min: float | None = None,
     clip_max: float | None = None,
+    flux_normalization: str = "none",
     output_format: str = "macrolib",
     root_name: str = DEFAULT_ROOT_NAME,
     h_factor_default: float | None = None,
@@ -115,6 +118,7 @@ def run_sph_iteration_workflow(
         damping=damping,
         clip_min=clip_min,
         clip_max=clip_max,
+        flux_normalization=flux_normalization,
         source_label=source_label,
         force=force,
         summary_json=paths["sph_table_summary"],
@@ -190,6 +194,11 @@ def print_report(report: SphIterationWorkflowReport) -> None:
         f"  mixtures={report.mixture_count} groups={report.energy_groups} "
         f"damping={report.damping:g} format={report.output_format}"
     )
+    if report.flux_normalization != "none":
+        print(
+            "  flux_normalization: "
+            f"{report.flux_normalization} factor={report.normalization_factor:g}"
+        )
     print(
         f"  outputs: flux={report.donjon_volume_flux_h5.name} "
         f"sph={report.sph_sidecar.name} ascii={report.ascii_output.name}"
@@ -221,9 +230,14 @@ def write_summary(path: Path, report: SphIterationWorkflowReport) -> None:
         "mixture_count": report.mixture_count,
         "energy_groups": report.energy_groups,
         "damping": report.damping,
+        "flux_normalization": report.flux_normalization,
+        "normalization_factor": report.normalization_factor,
         "sph_minimum": report.sph_minimum,
         "sph_maximum": report.sph_maximum,
-        "formula": "next_sph = previous_sph * (reference_flux / donjon_low_order_flux) ** damping",
+        "formula": (
+            "next_sph = previous_sph * "
+            "(reference_flux / normalized_donjon_low_order_flux) ** damping"
+        ),
         "openmc_xs_policy": "fixed base MGXS; only SPH sidecar changes between iterations",
     }
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -291,6 +305,8 @@ def _build_report(
         mixture_count=len(donjon_report.mixture_names),
         energy_groups=donjon_report.energy_groups,
         damping=sph_report.damping,
+        flux_normalization=sph_report.flux_normalization,
+        normalization_factor=sph_report.normalization_factor,
         sph_minimum=sidecar_report.sph_min,
         sph_maximum=sidecar_report.sph_max,
     )

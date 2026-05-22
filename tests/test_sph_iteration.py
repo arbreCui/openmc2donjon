@@ -93,7 +93,13 @@ class SphIterationTests(unittest.TestCase):
                 np.testing.assert_allclose(h5["sph"][:], expected)
             payload = json.loads(summary.read_text(encoding="utf-8"))
             self.assertEqual(payload["decision"], "openmc2donjon_sph_iteration_table_passed")
-            self.assertEqual(payload["formula"], "next_sph = previous_sph * (reference_flux / low_order_flux) ** damping")
+            self.assertEqual(
+                payload["formula"],
+                "next_sph = previous_sph * "
+                "(reference_flux / normalized_low_order_flux) ** damping",
+            )
+            self.assertEqual(payload["flux_normalization"], "none")
+            self.assertEqual(payload["normalization_factor"], 1.0)
             self.assertEqual(payload["energy_groups"], 2)
             self.assertEqual(payload["clipped_count"], 0)
             self.assertEqual(payload["clipped_bins"], [])
@@ -103,6 +109,83 @@ class SphIterationTests(unittest.TestCase):
             self.assertEqual(worst["group"], 2)
             self.assertAlmostEqual(worst["raw_update"], 1.44)
             self.assertAlmostEqual(worst["residual"], 0.44)
+
+    def test_power_normalization_scales_low_order_flux_with_h_factor(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference_flux = root / "reference_flux.csv"
+            low_order_flux = root / "low_order_flux.csv"
+            table = root / "next_sph.csv"
+            summary = root / "summary.json"
+            write_mgxs(
+                mgxs,
+                h_factor={
+                    "fuel": np.asarray([10.0, 100.0]),
+                    "moderator": np.asarray([1.0, 1.0]),
+                },
+            )
+            reference_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,10.0\nfuel,2,20.0\n"
+                "moderator,1,30.0\nmoderator,2,40.0\n",
+                encoding="utf-8",
+            )
+            low_order_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,1.0\nfuel,2,1.0\n"
+                "moderator,1,1.0\nmoderator,2,1.0\n",
+                encoding="utf-8",
+            )
+
+            report = create_sph_update_table(
+                mgxs,
+                table,
+                reference_flux=reference_flux,
+                low_order_flux=low_order_flux,
+                flux_normalization="power",
+                summary_json=summary,
+            )
+
+            factor = (10.0 * 10.0 + 20.0 * 100.0 + 30.0 + 40.0) / (10.0 + 100.0 + 1.0 + 1.0)
+            expected = np.asarray([[10.0 / factor, 20.0 / factor], [30.0 / factor, 40.0 / factor]])
+            self.assertAlmostEqual(report.normalization_factor, factor)
+            self.assertEqual(report.flux_normalization, "power")
+            rows = table.read_text(encoding="utf-8").strip().splitlines()[1:]
+            actual = np.asarray([float(row.split(",")[2]) for row in rows]).reshape(2, 2)
+            np.testing.assert_allclose(actual, expected, rtol=1.0e-11)
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+            self.assertEqual(payload["flux_normalization"], "power")
+            self.assertAlmostEqual(payload["normalization_factor"], factor)
+            self.assertEqual(payload["normalization_weight_source"], "H-FACTOR/kappa_fission")
+            self.assertAlmostEqual(payload["reference_normalization_integral"], 2170.0)
+            self.assertAlmostEqual(payload["low_order_normalization_integral"], 112.0)
+
+    def test_power_normalization_requires_h_factor(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference_flux = root / "reference_flux.csv"
+            low_order_flux = root / "low_order_flux.csv"
+            table = root / "next_sph.csv"
+            write_mgxs(mgxs)
+            reference_flux.write_text(
+                "mixture,group,flux\nfuel,1,1.0\nfuel,2,1.0\nmoderator,1,1.0\nmoderator,2,1.0\n",
+                encoding="utf-8",
+            )
+            low_order_flux.write_text(
+                "mixture,group,flux\nfuel,1,1.0\nfuel,2,1.0\nmoderator,1,1.0\nmoderator,2,1.0\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "requires group-wise H-FACTOR"):
+                create_sph_update_table(
+                    mgxs,
+                    table,
+                    reference_flux=reference_flux,
+                    low_order_flux=low_order_flux,
+                    flux_normalization="power",
+                )
 
     def test_rejects_nonpositive_low_order_flux(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -279,7 +362,7 @@ class SphIterationTests(unittest.TestCase):
             self.assertIn("moderator,2,5", rows)
 
 
-def write_mgxs(path: Path) -> None:
+def write_mgxs(path: Path, *, h_factor: dict[str, np.ndarray] | None = None) -> None:
     with h5py.File(path, "w") as h5:
         h5.attrs["energy_groups"] = 2
         h5.create_dataset("energy_bounds", data=np.array([1.0e-5, 1.0, 1.0e7]))
@@ -294,6 +377,8 @@ def write_mgxs(path: Path) -> None:
             group.create_dataset("nu_fission", data=np.zeros(2))
             group.create_dataset("chi", data=np.zeros(2))
             group.create_dataset("scatter_matrix", data=np.zeros((1, 2, 2)))
+            if h_factor and name in h_factor:
+                group.create_dataset("kappa_fission", data=np.asarray(h_factor[name], dtype=float))
 
 
 if __name__ == "__main__":

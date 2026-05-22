@@ -22,6 +22,7 @@ class DonjonSphConfigTests(unittest.TestCase):
             case_id_prefix="case",
             stage_prefix="stage",
             iterations=3,
+            flux_normalization="power",
             sph_change_tolerance=1.0e-4,
             flux_ratio_tolerance=5.0e-4,
             min_iterations=2,
@@ -38,6 +39,7 @@ class DonjonSphConfigTests(unittest.TestCase):
         self.assertEqual(config["reference_flux"], "flux_map.h5::openmc_volume_flux")
         self.assertEqual(config["map_h5"], "flux_map.h5")
         self.assertEqual(config["iterations"], 3)
+        self.assertEqual(config["flux_normalization"], "power")
         self.assertEqual(
             config["convergence"],
             {
@@ -95,6 +97,8 @@ class DonjonSphConfigTests(unittest.TestCase):
                         "/usr/bin/python3",
                         "--iterations",
                         "1",
+                        "--flux-normalization",
+                        "power",
                         "--flux-ratio-tolerance",
                         "1e-3",
                         "--sph-change-tolerance",
@@ -123,6 +127,7 @@ class DonjonSphConfigTests(unittest.TestCase):
             self.assertEqual(payload["reference_flux"], f"{tmp / 'reference.h5'}::phi")
             self.assertFalse(payload["final_solve"])
             self.assertEqual(payload["iterations"], 1)
+            self.assertEqual(payload["flux_normalization"], "power")
             self.assertEqual(payload["convergence"]["flux_ratio_tolerance"], 1.0e-3)
             self.assertEqual(payload["convergence"]["sph_change_tolerance"], 2.0e-3)
             self.assertEqual(payload["acceptance"]["preset"], "production")

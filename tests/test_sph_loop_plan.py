@@ -29,6 +29,7 @@ class SphLoopPlanTests(unittest.TestCase):
                     "damping": 0.4,
                     "clip_min": 0.5,
                     "clip_max": 2.0,
+                    "flux_normalization": "power",
                     "sph_kind": "case-sph",
                     "sph_real": False,
                     "sph_applied": True,
@@ -82,6 +83,7 @@ class SphLoopPlanTests(unittest.TestCase):
             self.assertEqual(plan.damping, 0.4)
             self.assertEqual(plan.clip_min, 0.5)
             self.assertEqual(plan.clip_max, 2.0)
+            self.assertEqual(plan.flux_normalization, "power")
             self.assertEqual(plan.sph_kind, "case-sph")
             self.assertFalse(plan.sph_real)
             self.assertTrue(plan.sph_applied)

@@ -192,6 +192,7 @@ def _run_workflow(
         damping=plan.damping,
         clip_min=plan.clip_min,
         clip_max=plan.clip_max,
+        flux_normalization=plan.flux_normalization,
         output_format=plan.output_format,
         root_name=plan.root_name,
         h_factor_default=plan.h_factor_default,

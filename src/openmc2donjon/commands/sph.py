@@ -22,7 +22,7 @@ from ..sph_augment import (
     create_table_sph_sidecar,
     create_unity_sph_sidecar,
 )
-from ..sph_iteration import create_sph_update_table
+from ..sph_iteration import FLUX_NORMALIZATIONS, create_sph_update_table
 from ..sph_loop import run_sph_loop
 from ..sph_loop_scaffold import create_sph_loop_scaffold, parse_scalar_flux_map
 from ..sph_workflow import run_sph_iteration_workflow
@@ -220,8 +220,7 @@ def build_make_sph_update_table_parser() -> argparse.ArgumentParser:
         prog="openmc2donjon make-sph-update-table",
         description=(
             "Create the next external SPH CSV table from reference and "
-            "low-order volume fluxes using "
-            "next_sph = previous_sph * (reference_flux / low_order_flux) ** damping."
+            "low-order volume fluxes using a damped flux-ratio update."
         ),
     )
     parser.add_argument("input_h5", type=Path, help="MGXS HDF5 file used for mixture/group metadata")
@@ -258,6 +257,15 @@ def build_make_sph_update_table_parser() -> argparse.ArgumentParser:
         type=float,
         default=None,
         help="maximum SPH value after update",
+    )
+    parser.add_argument(
+        "--flux-normalization",
+        choices=FLUX_NORMALIZATIONS,
+        default="none",
+        help=(
+            "scale low-order flux before forming the SPH ratio: none, total, "
+            "or power using group-wise H-FACTOR/kappa_fission (default: none)"
+        ),
     )
     parser.add_argument(
         "--source-label",
@@ -405,6 +413,15 @@ def build_run_sph_iteration_parser() -> argparse.ArgumentParser:
     parser.add_argument("--clip-min", type=float, default=None, help="minimum SPH value")
     parser.add_argument("--clip-max", type=float, default=None, help="maximum SPH value")
     parser.add_argument(
+        "--flux-normalization",
+        choices=FLUX_NORMALIZATIONS,
+        default="none",
+        help=(
+            "scale DONJON flux before forming the SPH ratio: none, total, "
+            "or power using group-wise H-FACTOR/kappa_fission (default: none)"
+        ),
+    )
+    parser.add_argument(
         "--format",
         choices=("macrolib", "multicompo"),
         default="macrolib",
@@ -549,6 +566,15 @@ def build_make_donjon_sph_loop_config_parser() -> argparse.ArgumentParser:
     parser.add_argument("--clip-min", type=float, default=0.5)
     parser.add_argument("--clip-max", type=float, default=3.0)
     parser.add_argument(
+        "--flux-normalization",
+        choices=FLUX_NORMALIZATIONS,
+        default="none",
+        help=(
+            "scale DONJON flux before forming SPH ratios: none, total, or power "
+            "using group-wise H-FACTOR/kappa_fission (default: none)"
+        ),
+    )
+    parser.add_argument(
         "--sph-change-tolerance",
         type=float,
         default=None,
@@ -667,6 +693,15 @@ def build_make_sph_loop_scaffold_parser() -> argparse.ArgumentParser:
     parser.add_argument("--damping", type=float, default=0.5)
     parser.add_argument("--clip-min", type=float, default=0.5)
     parser.add_argument("--clip-max", type=float, default=3.0)
+    parser.add_argument(
+        "--flux-normalization",
+        choices=FLUX_NORMALIZATIONS,
+        default="none",
+        help=(
+            "scale DONJON flux before forming SPH ratios: none, total, or power "
+            "using group-wise H-FACTOR/kappa_fission (default: none)"
+        ),
+    )
     parser.add_argument("--sph-change-tolerance", type=float, default=None)
     parser.add_argument("--flux-ratio-tolerance", type=float, default=None)
     parser.add_argument("--min-iterations", type=int, default=1)
@@ -790,6 +825,7 @@ def make_sph_update_table_handler(args: argparse.Namespace) -> int:
             damping=args.damping,
             clip_min=args.clip_min,
             clip_max=args.clip_max,
+            flux_normalization=args.flux_normalization,
             source_label=args.source_label,
             force=args.force,
             summary_json=args.summary_json,
@@ -845,6 +881,7 @@ def run_sph_iteration_handler(args: argparse.Namespace) -> int:
             damping=args.damping,
             clip_min=args.clip_min,
             clip_max=args.clip_max,
+            flux_normalization=args.flux_normalization,
             output_format=args.format,
             root_name=args.root_name,
             h_factor_default=args.h_factor_default,
@@ -893,6 +930,7 @@ def make_donjon_sph_loop_config_handler(args: argparse.Namespace) -> int:
             damping=args.damping,
             clip_min=args.clip_min,
             clip_max=args.clip_max,
+            flux_normalization=args.flux_normalization,
             sph_change_tolerance=args.sph_change_tolerance,
             flux_ratio_tolerance=args.flux_ratio_tolerance,
             min_iterations=args.min_iterations,
@@ -941,6 +979,7 @@ def make_sph_loop_scaffold_handler(args: argparse.Namespace) -> int:
             damping=args.damping,
             clip_min=args.clip_min,
             clip_max=args.clip_max,
+            flux_normalization=args.flux_normalization,
             sph_change_tolerance=args.sph_change_tolerance,
             flux_ratio_tolerance=args.flux_ratio_tolerance,
             min_iterations=args.min_iterations,

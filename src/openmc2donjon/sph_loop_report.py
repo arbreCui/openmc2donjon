@@ -208,6 +208,8 @@ def write_summary(path: Path, report: SphLoopReport) -> None:
                 "ascii_output": str(workflow.ascii_output),
                 "sph_minimum": workflow.sph_minimum,
                 "sph_maximum": workflow.sph_maximum,
+                "flux_normalization": workflow.flux_normalization,
+                "normalization_factor": workflow.normalization_factor,
             }
             for index, workflow in enumerate(report.workflows)
         ],

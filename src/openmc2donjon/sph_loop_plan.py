@@ -40,6 +40,7 @@ class SphLoopPlan:
     damping: float
     clip_min: float | None
     clip_max: float | None
+    flux_normalization: str
     sph_kind: str
     sph_real: bool
     sph_applied: bool
@@ -154,6 +155,7 @@ def build_sph_loop_plan(
         damping=float(config.get("damping", 1.0)),
         clip_min=optional_float(config.get("clip_min")),
         clip_max=optional_float(config.get("clip_max")),
+        flux_normalization=str(config.get("flux_normalization", "none")),
         sph_kind=str(config.get("sph_kind", "sph-loop")),
         sph_real=bool(config.get("sph_real", True)),
         sph_applied=bool(config.get("sph_applied", False)),
