@@ -2,109 +2,42 @@
 
 from __future__ import annotations
 
-import csv
-from dataclasses import dataclass
 import json
 from pathlib import Path
-import re
 from typing import Any
 
 from . import __version__
 from .bundle import ArtifactSpec, bundle_artifacts
-from .sph_loop_acceptance import SphLoopAcceptanceReport
-from .sph_loop_convergence import SphLoopConvergenceReport
+from .sph_loop_audit import (
+    first_diagnostic_bin,
+    format_optional_float,
+    optional_float,
+)
 from .sph_loop_preflight import (
-    SphLoopFluxMapPreflightReport,
     payload as flux_map_preflight_payload,
 )
-from .sph_workflow import SphIterationWorkflowReport
+from .sph_loop_records import (
+    SphLoopAuditRow,
+    SphLoopPostprocessReport,
+    SphLoopReport,
+    SphLoopSolveReport,
+)
 
 
 SCHEMA = "openmc2donjon.sph-loop.v1"
 PASS_DECISION = "openmc2donjon_sph_loop_passed"
 
-
-@dataclass(frozen=True)
-class SphLoopSolveReport:
-    iteration: int
-    command: tuple[str, ...]
-    cwd: Path
-    ascii_input: Path
-    result: Path
-    stdout: Path
-    stderr: Path
-    returncode: int
-    result_bytes: int
-    flux_vector_count: int
-    flux_unknown_count: int
-
-
-@dataclass(frozen=True)
-class SphLoopPostprocessReport:
-    iteration: int
-    command: tuple[str, ...]
-    cwd: Path
-    workflow_ascii: Path
-    output: Path
-    sph_sidecar: Path
-    stdout: Path
-    stderr: Path
-    returncode: int
-    output_bytes: int
-    block_count: int
-
-
-@dataclass(frozen=True)
-class SphLoopAuditRow:
-    stage: str
-    iteration: int
-    keff: float | None
-    sph_minimum: float | None
-    sph_maximum: float | None
-    sph_max_abs_change: float | None
-    sph_max_rel_change: float | None
-    flux_ratio_max_residual: float | None
-    worst_residual_mixture: str | None
-    worst_residual_group: int | None
-    worst_residual_raw_update: float | None
-    worst_residual: float | None
-    worst_residual_bins: tuple[dict[str, object], ...]
-    converged: bool | None
-    solve_result: Path | None
-    ascii_output: Path | None
-    postprocess_output: Path | None
-
-
-@dataclass(frozen=True)
-class SphLoopReport:
-    config_path: Path
-    input_h5: Path
-    output_dir: Path
-    reference_flux: str
-    iterations: int
-    completed_iterations: int
-    output_format: str
-    initial_ascii: Path
-    final_ascii: Path
-    final_sph_sidecar: Path | None
-    summary_json: Path
-    audit_csv: Path
-    audit_text: Path
-    bundle_manifest: Path | None
-    convergence_enabled: bool
-    converged: bool
-    stop_reason: str
-    sph_change_tolerance: float | None
-    flux_ratio_tolerance: float | None
-    min_iterations: int
-    flux_map_preflight: SphLoopFluxMapPreflightReport
-    solves: tuple[SphLoopSolveReport, ...]
-    workflows: tuple[SphIterationWorkflowReport, ...]
-    convergence: tuple[SphLoopConvergenceReport, ...]
-    postprocesses: tuple[SphLoopPostprocessReport, ...]
-    final_solve: SphLoopSolveReport | None
-    audit_rows: tuple[SphLoopAuditRow, ...]
-    acceptance: SphLoopAcceptanceReport
+__all__ = [
+    "PASS_DECISION",
+    "SCHEMA",
+    "SphLoopAuditRow",
+    "SphLoopPostprocessReport",
+    "SphLoopReport",
+    "SphLoopSolveReport",
+    "print_report",
+    "write_bundle",
+    "write_summary",
+]
 
 
 def print_report(report: SphLoopReport) -> None:
@@ -157,27 +90,27 @@ def print_report(report: SphLoopReport) -> None:
         print("  quality:")
         print(
             "    flux_residual="
-            f"{_format_optional_float(quality['initial_flux_ratio_max_residual'])}"
+            f"{format_optional_float(quality['initial_flux_ratio_max_residual'])}"
             " -> "
-            f"{_format_optional_float(quality['final_flux_ratio_max_residual'])} "
+            f"{format_optional_float(quality['final_flux_ratio_max_residual'])} "
             "ratio="
-            f"{_format_optional_float(quality['final_to_initial_flux_residual_ratio'])}"
+            f"{format_optional_float(quality['final_to_initial_flux_residual_ratio'])}"
         )
         print(
             "    final_clipped="
             f"{quality['final_clipped_count']}:"
-            f"{_format_optional_float(quality['final_clipped_fraction'])} "
+            f"{format_optional_float(quality['final_clipped_fraction'])} "
             "max_clipped="
             f"{quality['maximum_clipped_count']}:"
-            f"{_format_optional_float(quality['maximum_clipped_fraction'])}"
+            f"{format_optional_float(quality['maximum_clipped_fraction'])}"
         )
         final_worst = quality["final_worst_residual_bin"]
         if isinstance(final_worst, dict):
             print(
                 "    final_worst_bin="
                 f"{final_worst.get('mixture')} g{final_worst.get('group')} "
-                f"raw={_format_optional_float(_optional_float(final_worst.get('raw_update')))} "
-                f"residual={_format_optional_float(_optional_float(final_worst.get('residual')))}"
+                f"raw={format_optional_float(optional_float(final_worst.get('raw_update')))} "
+                f"residual={format_optional_float(optional_float(final_worst.get('residual')))}"
             )
     if report.acceptance.enabled:
         print("  acceptance:")
@@ -372,204 +305,6 @@ def write_bundle(
     )
 
 
-def write_audit_csv(path: Path, rows: tuple[SphLoopAuditRow, ...]) -> None:
-    fieldnames = [
-        "stage",
-        "iteration",
-        "keff",
-        "sph_minimum",
-        "sph_maximum",
-        "sph_max_abs_change",
-        "sph_max_rel_change",
-        "flux_ratio_max_residual",
-        "worst_residual_mixture",
-        "worst_residual_group",
-        "worst_residual_raw_update",
-        "worst_residual",
-        "converged",
-        "solve_result",
-        "ascii_output",
-        "postprocess_output",
-    ]
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=fieldnames)
-        writer.writeheader()
-        for row in rows:
-            writer.writerow(
-                {
-                    "stage": row.stage,
-                    "iteration": row.iteration,
-                    "keff": _format_optional_float(row.keff),
-                    "sph_minimum": _format_optional_float(row.sph_minimum),
-                    "sph_maximum": _format_optional_float(row.sph_maximum),
-                    "sph_max_abs_change": _format_optional_float(
-                        row.sph_max_abs_change
-                    ),
-                    "sph_max_rel_change": _format_optional_float(
-                        row.sph_max_rel_change
-                    ),
-                    "flux_ratio_max_residual": _format_optional_float(
-                        row.flux_ratio_max_residual
-                    ),
-                    "worst_residual_mixture": row.worst_residual_mixture or "",
-                    "worst_residual_group": (
-                        "" if row.worst_residual_group is None else row.worst_residual_group
-                    ),
-                    "worst_residual_raw_update": _format_optional_float(
-                        row.worst_residual_raw_update
-                    ),
-                    "worst_residual": _format_optional_float(row.worst_residual),
-                    "converged": "" if row.converged is None else str(row.converged),
-                    "solve_result": "" if row.solve_result is None else str(row.solve_result),
-                    "ascii_output": "" if row.ascii_output is None else str(row.ascii_output),
-                    "postprocess_output": (
-                        "" if row.postprocess_output is None else str(row.postprocess_output)
-                    ),
-                }
-            )
-
-
-def write_audit_text(
-    path: Path,
-    rows: tuple[SphLoopAuditRow, ...],
-    *,
-    flux_map_preflight: SphLoopFluxMapPreflightReport | None = None,
-) -> None:
-    lines = [
-        "OpenMC-to-DONJON SPH loop audit",
-    ]
-    if flux_map_preflight is not None:
-        lines.extend(_format_preflight_audit_lines(flux_map_preflight))
-    lines.append(
-        (
-            "stage      iter  keff          sph_min       sph_max       "
-            "sph_rel       flux_res      worst_bin            raw_update    "
-            "residual     converged"
-        )
-    )
-    for row in rows:
-        converged = "" if row.converged is None else str(row.converged)
-        lines.append(
-            f"{row.stage:<10} {row.iteration:>4d}  "
-            f"{_format_optional_float(row.keff):<12} "
-            f"{_format_optional_float(row.sph_minimum):<12} "
-            f"{_format_optional_float(row.sph_maximum):<12} "
-            f"{_format_optional_float(row.sph_max_rel_change):<12} "
-            f"{_format_optional_float(row.flux_ratio_max_residual):<12} "
-            f"{_format_audit_bin(row):<20} "
-            f"{_format_optional_float(row.worst_residual_raw_update):<12} "
-            f"{_format_optional_float(row.worst_residual):<12} "
-            f"{converged:<9}"
-        )
-    final_bins = _last_worst_residual_bins(rows)
-    if final_bins:
-        lines.extend(
-            [
-                "",
-                "Final worst residual bins",
-                "rank  mixture          group  raw_update    residual",
-            ]
-        )
-        for rank, item in enumerate(final_bins[:10], start=1):
-            lines.append(
-                f"{rank:<5d} "
-                f"{str(item.get('mixture', '')):<16} "
-                f"{str(item.get('group', '')):<6} "
-                f"{_format_optional_float(_optional_float(item.get('raw_update'))):<12} "
-                f"{_format_optional_float(_optional_float(item.get('residual'))):<12}"
-            )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-
-
-def build_audit_rows(
-    *,
-    solves: tuple[SphLoopSolveReport, ...],
-    workflows: tuple[SphIterationWorkflowReport, ...],
-    convergence: tuple[SphLoopConvergenceReport, ...],
-    postprocesses: tuple[SphLoopPostprocessReport, ...],
-    final_solve: SphLoopSolveReport | None,
-    final_ascii: Path,
-) -> tuple[SphLoopAuditRow, ...]:
-    solve_by_iteration = {solve.iteration: solve for solve in solves}
-    postprocess_by_iteration = {item.iteration: item for item in postprocesses}
-    rows: list[SphLoopAuditRow] = []
-    for index, workflow in enumerate(workflows, start=1):
-        solve = solve_by_iteration.get(index - 1)
-        convergence_report = convergence[index - 1] if index - 1 < len(convergence) else None
-        worst_bin = (
-            None
-            if convergence_report is None
-            else _first_diagnostic_bin(convergence_report.worst_residual_bins)
-        )
-        postprocess = postprocess_by_iteration.get(index)
-        rows.append(
-            SphLoopAuditRow(
-                stage="iteration",
-                iteration=index,
-                keff=None if solve is None else _extract_solve_keff(solve),
-                sph_minimum=workflow.sph_minimum,
-                sph_maximum=workflow.sph_maximum,
-                sph_max_abs_change=(
-                    None if convergence_report is None else convergence_report.sph_max_abs_change
-                ),
-                sph_max_rel_change=(
-                    None if convergence_report is None else convergence_report.sph_max_rel_change
-                ),
-                flux_ratio_max_residual=(
-                    None
-                    if convergence_report is None
-                    else convergence_report.flux_ratio_max_residual
-                ),
-                worst_residual_mixture=_optional_str(
-                    None if worst_bin is None else worst_bin.get("mixture")
-                ),
-                worst_residual_group=_optional_int(
-                    None if worst_bin is None else worst_bin.get("group")
-                ),
-                worst_residual_raw_update=_optional_float(
-                    None if worst_bin is None else worst_bin.get("raw_update")
-                ),
-                worst_residual=_optional_float(
-                    None if worst_bin is None else worst_bin.get("residual")
-                ),
-                worst_residual_bins=(
-                    ()
-                    if convergence_report is None
-                    else tuple(dict(item) for item in convergence_report.worst_residual_bins)
-                ),
-                converged=None if convergence_report is None else convergence_report.converged,
-                solve_result=None if solve is None else solve.result,
-                ascii_output=workflow.ascii_output,
-                postprocess_output=None if postprocess is None else postprocess.output,
-            )
-        )
-    if final_solve is not None:
-        rows.append(
-            SphLoopAuditRow(
-                stage="final",
-                iteration=final_solve.iteration,
-                keff=_extract_solve_keff(final_solve),
-                sph_minimum=None,
-                sph_maximum=None,
-                sph_max_abs_change=None,
-                sph_max_rel_change=None,
-                flux_ratio_max_residual=None,
-                worst_residual_mixture=None,
-                worst_residual_group=None,
-                worst_residual_raw_update=None,
-                worst_residual=None,
-                worst_residual_bins=(),
-                converged=None,
-                solve_result=final_solve.result,
-                ascii_output=final_ascii,
-                postprocess_output=None,
-            )
-        )
-    return tuple(rows)
-
-
 def _quality_payload(report: SphLoopReport) -> dict[str, Any]:
     if not report.convergence:
         return {
@@ -615,10 +350,10 @@ def _quality_payload(report: SphLoopReport) -> dict[str, Any]:
         "final_sph_maximum": (
             None if final_workflow is None else final_workflow.sph_maximum
         ),
-        "initial_worst_residual_bin": _first_diagnostic_bin(
+        "initial_worst_residual_bin": first_diagnostic_bin(
             report.convergence[0].worst_residual_bins
         ),
-        "final_worst_residual_bin": _first_diagnostic_bin(
+        "final_worst_residual_bin": first_diagnostic_bin(
             final_item.worst_residual_bins
         ),
         "final_worst_residual_bins": [
@@ -626,110 +361,3 @@ def _quality_payload(report: SphLoopReport) -> dict[str, Any]:
         ],
         "final_clipped_bins": [dict(item) for item in final_item.clipped_bins],
     }
-
-
-def _first_diagnostic_bin(
-    bins: tuple[dict[str, object], ...],
-) -> dict[str, object] | None:
-    if not bins:
-        return None
-    return dict(bins[0])
-
-
-def _extract_solve_keff(solve: SphLoopSolveReport) -> float | None:
-    for path in (solve.stdout, solve.result, solve.stderr):
-        value = _extract_keff(path)
-        if value is not None:
-            return value
-    return None
-
-
-def _extract_keff(path: Path) -> float | None:
-    if not path.exists():
-        return None
-    text = path.read_text(encoding="utf-8", errors="replace")
-    patterns = (
-        r"EFFECTIVE MULTIPLICATION FACTOR\s*=\s*([0-9.+\-Ee]+)",
-        r"K-EFFECTIVE\s+([0-9.+\-Ee]+)",
-    )
-    matches: list[str] = []
-    for pattern in patterns:
-        matches = re.findall(pattern, text)
-        if matches:
-            break
-    if not matches:
-        return None
-    try:
-        return float(matches[-1])
-    except ValueError:
-        return None
-
-
-def _format_optional_float(value: float | None) -> str:
-    if value is None:
-        return ""
-    return f"{value:.12g}"
-
-
-def _format_preflight_audit_lines(
-    report: SphLoopFluxMapPreflightReport,
-) -> list[str]:
-    status = "PASS" if report.passed else "FAIL"
-    lines = [
-        (
-            f"Flux-map preflight: {status} map={report.map_kind} "
-            f"mixtures={len(report.mixture_names)} groups={report.energy_groups}"
-        )
-    ]
-    if report.minimum_required_flux_unknown_count is not None:
-        lines.append(
-            "  minimum_required_flux_unknown_count="
-            f"{report.minimum_required_flux_unknown_count}"
-        )
-    if report.mesh_shape is not None:
-        shape = "x".join(str(value) for value in report.mesh_shape)
-        lines.append(
-            f"  mesh_shape={shape} cells={report.mesh_cell_count} "
-            f"nonpositive_ids={report.mesh_zero_or_negative_id_count}"
-        )
-    if report.errors:
-        lines.extend(f"  ERROR: {error}" for error in report.errors)
-    if report.warnings:
-        lines.extend(f"  WARN: {warning}" for warning in report.warnings)
-    lines.append("")
-    return lines
-
-
-def _format_audit_bin(row: SphLoopAuditRow) -> str:
-    if row.worst_residual_mixture is None or row.worst_residual_group is None:
-        return ""
-    return f"{row.worst_residual_mixture}:g{row.worst_residual_group}"
-
-
-def _last_worst_residual_bins(
-    rows: tuple[SphLoopAuditRow, ...],
-) -> tuple[dict[str, object], ...]:
-    for row in reversed(rows):
-        if row.worst_residual_bins:
-            return row.worst_residual_bins
-    return ()
-
-
-def _optional_str(value: object) -> str | None:
-    if value is None:
-        return None
-    return str(value)
-
-
-def _optional_int(value: object) -> int | None:
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int):
-        return int(value)
-    return None
-
-
-def _optional_float(value: object) -> float | None:
-    if isinstance(value, (int, float)):
-        return float(value)
-    return None

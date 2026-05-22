@@ -13,7 +13,7 @@ from .sph_loop_contract import (
     validate_postprocess_output,
     validate_solver_result,
 )
-from .sph_loop_report import SphLoopPostprocessReport, SphLoopSolveReport
+from .sph_loop_records import SphLoopPostprocessReport, SphLoopSolveReport
 from .sph_workflow import SphIterationWorkflowReport
 
 
