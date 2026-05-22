@@ -8,12 +8,13 @@ import argparse
 def add_sph_loop_acceptance_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--acceptance-preset",
-        choices=("production",),
+        choices=("mechanical", "production", "physics"),
         default=None,
         help=(
-            "production acceptance preset: require a final solve, no final "
-            "SPH clipping, non-worsening flux residual, and configured "
-            "convergence tolerances"
+            "acceptance preset: 'mechanical' checks loop completion, final solve, "
+            "metadata alignment, and no final clipping; 'production'/'physics' "
+            "also require non-worsening flux residual and configured convergence "
+            "tolerances"
         ),
     )
     parser.add_argument(

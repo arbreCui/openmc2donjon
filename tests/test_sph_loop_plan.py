@@ -163,6 +163,62 @@ class SphLoopPlanTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "mutually exclusive"):
                 build_sph_loop_plan(config)
 
+    def test_mechanical_acceptance_preset_avoids_physics_residual_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = Path(tmpdir) / "loop.json"
+            _write_config(
+                config,
+                {
+                    "convergence": {"min_iterations": 2},
+                    "acceptance": {"preset": "mechanical"},
+                    "iterations": 2,
+                },
+            )
+
+            plan = build_sph_loop_plan(config)
+
+            self.assertEqual(plan.normalized_acceptance["preset"], "mechanical")
+            self.assertTrue(plan.normalized_acceptance["fail_on_violation"])
+            self.assertTrue(plan.normalized_acceptance["require_final_solve"])
+            self.assertTrue(
+                plan.normalized_acceptance["require_artifact_metadata_alignment"]
+            )
+            self.assertEqual(plan.normalized_acceptance["min_completed_iterations"], 2)
+            self.assertEqual(plan.normalized_acceptance["max_final_clipped_count"], 0)
+            self.assertEqual(plan.normalized_acceptance["max_final_clipped_fraction"], 0.0)
+            self.assertNotIn(
+                "max_final_to_initial_flux_residual_ratio",
+                plan.normalized_acceptance,
+            )
+
+    def test_physics_acceptance_preset_keeps_residual_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = Path(tmpdir) / "loop.json"
+            _write_config(
+                config,
+                {
+                    "convergence": {
+                        "sph_change_tolerance": 1.0e-4,
+                        "flux_ratio_tolerance": 2.0e-4,
+                    },
+                    "acceptance": {"preset": "physics"},
+                },
+            )
+
+            plan = build_sph_loop_plan(config)
+
+            self.assertEqual(plan.normalized_acceptance["preset"], "physics")
+            self.assertEqual(
+                plan.normalized_acceptance["max_final_to_initial_flux_residual_ratio"],
+                1.0,
+            )
+            self.assertEqual(plan.normalized_acceptance["max_sph_rel_change"], 1.0e-4)
+            self.assertEqual(
+                plan.normalized_acceptance["max_flux_ratio_residual"],
+                2.0e-4,
+            )
+            self.assertTrue(plan.normalized_acceptance["require_converged"])
+
 
 def _write_config(path: Path, extra: dict[str, object] | None = None) -> None:
     payload: dict[str, object] = {

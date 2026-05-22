@@ -448,8 +448,8 @@ PY
     --clip-min 0.2 \
     --clip-max 5.0 \
     --flux-normalization auto \
+    --acceptance-preset mechanical \
     --acceptance-min-completed-iterations 2 \
-    --acceptance-require-final-solve \
     --case-id-prefix openmc2donjon_full_core_minicase_real_sph \
     --stage-prefix odj_full_core_minicase_real_sph \
     --case-dir openmc2donjon/case_runs/openmc_full_core_minicase_real_sph \
@@ -494,7 +494,14 @@ if summary["acceptance_passed"] is not True:
 acceptance_names = {
     check["name"] for check in summary["acceptance"]["checks"] if check["passed"]
 }
-if acceptance_names != {"min_completed_iterations", "require_final_solve"}:
+expected_acceptance = {
+    "min_completed_iterations",
+    "require_final_solve",
+    "require_artifact_metadata_alignment",
+    "max_final_clipped_fraction",
+    "max_final_clipped_count",
+}
+if acceptance_names != expected_acceptance:
     raise SystemExit(f"unexpected real DONJON SPH acceptance checks: {acceptance_names}")
 
 preflight = summary["flux_map_preflight"]

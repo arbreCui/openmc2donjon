@@ -77,8 +77,12 @@ def acceptance_config(config: dict[str, Any]) -> dict[str, Any]:
     preset = nested.get("preset")
     if preset is None:
         out = dict(nested)
-    elif preset == "production":
-        out = _production_acceptance_defaults(config)
+    elif preset == "mechanical":
+        out = _mechanical_acceptance_defaults(config)
+        out.update({key: value for key, value in nested.items() if key != "preset"})
+        out["preset"] = preset
+    elif preset in {"production", "physics"}:
+        out = _physics_acceptance_defaults(config)
         out.update({key: value for key, value in nested.items() if key != "preset"})
         out["preset"] = preset
     else:
@@ -121,17 +125,22 @@ def acceptance_config(config: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in out.items() if value is not None}
 
 
-def _production_acceptance_defaults(config: dict[str, Any]) -> dict[str, Any]:
+def _mechanical_acceptance_defaults(config: dict[str, Any]) -> dict[str, Any]:
     convergence = convergence_config(config)
-    out: dict[str, Any] = {
+    return {
         "fail_on_violation": True,
         "require_final_solve": True,
         "require_artifact_metadata_alignment": True,
         "min_completed_iterations": int(convergence.get("min_iterations", 1)),
-        "max_final_to_initial_flux_residual_ratio": 1.0,
         "max_final_clipped_count": 0,
         "max_final_clipped_fraction": 0.0,
     }
+
+
+def _physics_acceptance_defaults(config: dict[str, Any]) -> dict[str, Any]:
+    convergence = convergence_config(config)
+    out: dict[str, Any] = _mechanical_acceptance_defaults(config)
+    out["max_final_to_initial_flux_residual_ratio"] = 1.0
     sph_tolerance = optional_float(convergence.get("sph_change_tolerance"))
     flux_tolerance = optional_float(convergence.get("flux_ratio_tolerance"))
     if sph_tolerance is not None:
