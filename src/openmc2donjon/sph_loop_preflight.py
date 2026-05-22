@@ -43,6 +43,7 @@ class SphLoopFluxMapPreflightReport:
     reference_flux_dataset: str | None
     reference_flux_shape: tuple[int, ...] | None
     reference_flux_group_count: int | None
+    reference_flux_mixture_names: tuple[str, ...]
     warnings: tuple[str, ...]
     errors: tuple[str, ...]
     passed: bool
@@ -102,6 +103,7 @@ def build_flux_map_preflight_report(
 
     reference_report = _inspect_reference_flux(
         reference_flux,
+        mixture_names=mixture_names,
         energy_groups=energy_groups,
     )
     warnings.extend(reference_report["warnings"])
@@ -136,6 +138,7 @@ def build_flux_map_preflight_report(
         reference_flux_dataset=reference_report["dataset"],
         reference_flux_shape=reference_report["shape"],
         reference_flux_group_count=reference_report["group_count"],
+        reference_flux_mixture_names=reference_report["mixture_names"],
         warnings=tuple(warnings),
         errors=tuple(errors),
         passed=not errors,
@@ -185,6 +188,7 @@ def payload(report: SphLoopFluxMapPreflightReport) -> dict[str, object]:
             else list(report.reference_flux_shape)
         ),
         "reference_flux_group_count": report.reference_flux_group_count,
+        "reference_flux_mixture_names": list(report.reference_flux_mixture_names),
         "warnings": list(report.warnings),
         "errors": list(report.errors),
     }
@@ -265,6 +269,7 @@ def _mesh_missing_mixture_names(map_diagnostics: dict[str, Any]) -> tuple[str, .
 def _inspect_reference_flux(
     source: str,
     *,
+    mixture_names: tuple[str, ...],
     energy_groups: int,
 ) -> dict[str, Any]:
     path, dataset = _split_dataset_reference(source)
@@ -272,6 +277,7 @@ def _inspect_reference_flux(
     errors: list[str] = []
     shape = None
     group_count = None
+    declared_mixture_names: tuple[str, ...] = ()
     selected_dataset = dataset
     if not path.exists():
         return {
@@ -279,6 +285,7 @@ def _inspect_reference_flux(
             "dataset": selected_dataset,
             "shape": shape,
             "group_count": group_count,
+            "mixture_names": declared_mixture_names,
             "warnings": (),
             "errors": (f"reference flux source does not exist: {path}",),
         }
@@ -289,6 +296,7 @@ def _inspect_reference_flux(
             "dataset": selected_dataset,
             "shape": shape,
             "group_count": group_count,
+            "mixture_names": declared_mixture_names,
             "warnings": tuple(warnings),
             "errors": (),
         }
@@ -308,6 +316,23 @@ def _inspect_reference_flux(
             else:
                 obj = h5[selected_dataset]
                 shape = tuple(int(value) for value in obj.shape)
+                declared = _names_from_hdf5(
+                    obj,
+                    h5,
+                    ("mixture_names", "mixtures", "domain_names"),
+                )
+                if declared is None:
+                    errors.append(
+                        "reference flux HDF5 must declare mixture_names, "
+                        "mixtures, or domain_names"
+                    )
+                else:
+                    declared_mixture_names = tuple(_flatten_names(declared))
+                    if set(declared_mixture_names) != set(mixture_names):
+                        errors.append(
+                            "reference flux mixture names do not match MGXS mixtures: "
+                            f"{declared_mixture_names!r} != {mixture_names!r}"
+                        )
                 if not shape:
                     errors.append(f"{path}: reference flux dataset is scalar")
                 else:
@@ -324,6 +349,7 @@ def _inspect_reference_flux(
         "dataset": selected_dataset,
         "shape": shape,
         "group_count": group_count,
+        "mixture_names": declared_mixture_names,
         "warnings": tuple(warnings),
         "errors": tuple(errors),
     }
@@ -356,3 +382,27 @@ def _split_dataset_reference(reference: str) -> tuple[Path, str | None]:
 
 def _looks_like_hdf5(path: Path) -> bool:
     return path.suffix.lower() in {".h5", ".hdf5", ".hdf"}
+
+
+def _names_from_hdf5(obj: Any, root: Any, candidates: tuple[str, ...]) -> Any:
+    for candidate in candidates:
+        if candidate in obj.attrs:
+            return obj.attrs[candidate]
+    for candidate in candidates:
+        if candidate in root.attrs:
+            return root.attrs[candidate]
+    for candidate in candidates:
+        if candidate in root and not hasattr(root[candidate], "keys"):
+            return root[candidate][:]
+    return None
+
+
+def _flatten_names(raw: Any) -> tuple[str, ...]:
+    arr = np.asarray(raw)
+    out: list[str] = []
+    for item in arr.reshape(-1):
+        if isinstance(item, bytes):
+            out.append(item.decode("utf-8"))
+        else:
+            out.append(str(item))
+    return tuple(out)

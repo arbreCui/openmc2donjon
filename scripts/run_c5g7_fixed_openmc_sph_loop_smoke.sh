@@ -209,6 +209,8 @@ if preflight.get("mixture_count") != 9:
     raise SystemExit(f"C5G7 flux-map preflight mixture count mismatch: {preflight}")
 if len(preflight.get("mixture_flux_map", [])) != 9:
     raise SystemExit(f"C5G7 flux-map preflight is missing mapping rows: {preflight}")
+if len(preflight.get("reference_flux_mixture_names", [])) != 9:
+    raise SystemExit(f"C5G7 reference-flux preflight is missing mixture names: {preflight}")
 if preflight.get("errors"):
     raise SystemExit(f"C5G7 flux-map preflight reported errors: {preflight}")
 if quality.get("clipping_observed"):

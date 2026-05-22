@@ -120,6 +120,7 @@ class SphLoopTests(unittest.TestCase):
             self.assertEqual(preflight["mixture_count"], 2)
             self.assertEqual(preflight["energy_groups"], 2)
             self.assertEqual(preflight["scalar_flux_ids"], [2, 4])
+            self.assertEqual(preflight["reference_flux_mixture_names"], ["fuel", "moderator"])
             self.assertEqual(preflight["errors"], [])
             self.assertTrue(payload["acceptance"]["passed"])
             self.assertEqual(len(payload["acceptance"]["checks"]), 8)
@@ -426,6 +427,107 @@ class SphLoopTests(unittest.TestCase):
             self.assertIn("duplicate scalar flux id mapping", stderr.getvalue())
             self.assertFalse((root / "loop_run/iter00_solve").exists())
 
+    def test_reference_flux_preflight_rejects_missing_mixture_names(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference = root / "reference_flux.h5"
+            solver = root / "fake_donjon_solver.py"
+            config = root / "loop.json"
+            _write_mgxs(mgxs)
+            _write_reference_flux_without_mixture_names(reference)
+            _write_fake_solver(solver)
+            config.write_text(
+                json.dumps(
+                    {
+                        "schema": "openmc2donjon.sph-loop-config.v1",
+                        "input_h5": "mgxs.h5",
+                        "output_dir": "loop_run",
+                        "reference_flux": "reference_flux.h5::openmc_volume_flux",
+                        "iterations": 1,
+                        "format": "macrolib",
+                        "scalar_flux_map": {"fuel": 2, "moderator": 4},
+                        "solver": {
+                            "command": [
+                                sys.executable,
+                                str(solver),
+                                "--macrolib",
+                                "{ascii_input}",
+                                "--result",
+                                "{result}",
+                                "--iteration",
+                                "{iteration}",
+                            ],
+                            "result": "donjon_flux.result",
+                        },
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as raised:
+                    cli_main(["run-sph-loop", "--config", str(config)])
+
+            self.assertEqual(raised.exception.code, 1)
+            self.assertIn("reference flux HDF5 must declare mixture_names", stderr.getvalue())
+            self.assertFalse((root / "loop_run/iter00_solve").exists())
+
+    def test_reference_flux_preflight_rejects_mixture_name_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference = root / "reference_flux.h5"
+            solver = root / "fake_donjon_solver.py"
+            config = root / "loop.json"
+            _write_mgxs(mgxs)
+            _write_reference_flux(reference, mixture_names=("fuel", "wrong"))
+            _write_fake_solver(solver)
+            config.write_text(
+                json.dumps(
+                    {
+                        "schema": "openmc2donjon.sph-loop-config.v1",
+                        "input_h5": "mgxs.h5",
+                        "output_dir": "loop_run",
+                        "reference_flux": "reference_flux.h5::openmc_volume_flux",
+                        "iterations": 1,
+                        "format": "macrolib",
+                        "scalar_flux_map": {"fuel": 2, "moderator": 4},
+                        "solver": {
+                            "command": [
+                                sys.executable,
+                                str(solver),
+                                "--macrolib",
+                                "{ascii_input}",
+                                "--result",
+                                "{result}",
+                                "--iteration",
+                                "{iteration}",
+                            ],
+                            "result": "donjon_flux.result",
+                        },
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as raised:
+                    cli_main(["run-sph-loop", "--config", str(config)])
+
+            self.assertEqual(raised.exception.code, 1)
+            self.assertIn(
+                "reference flux mixture names do not match MGXS mixtures",
+                stderr.getvalue(),
+            )
+            self.assertFalse((root / "loop_run/iter00_solve").exists())
+
 
 def _write_mgxs(path: Path) -> None:
     with h5py.File(path, "w") as h5:
@@ -454,13 +556,25 @@ def _write_mixture(group, *, fissionable: bool) -> None:
     )
 
 
-def _write_reference_flux(path: Path) -> None:
+def _write_reference_flux(
+    path: Path,
+    *,
+    mixture_names: tuple[str, ...] = ("fuel", "moderator"),
+) -> None:
     with h5py.File(path, "w") as h5:
         dataset = h5.create_dataset(
             "openmc_volume_flux",
             data=np.asarray([[80.0, 800.0], [80.0, 800.0]]),
         )
-        dataset.attrs["mixture_names"] = np.asarray(("fuel", "moderator"), dtype="S")
+        dataset.attrs["mixture_names"] = np.asarray(mixture_names, dtype="S")
+
+
+def _write_reference_flux_without_mixture_names(path: Path) -> None:
+    with h5py.File(path, "w") as h5:
+        h5.create_dataset(
+            "openmc_volume_flux",
+            data=np.asarray([[80.0, 800.0], [80.0, 800.0]]),
+        )
 
 
 def _write_fake_solver(path: Path) -> None:
