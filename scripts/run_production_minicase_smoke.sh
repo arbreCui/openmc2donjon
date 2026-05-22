@@ -16,6 +16,12 @@ SCATTER_ROW_BALANCE_ARGS=(--scatter-row-balance-warn "$SCATTER_ROW_BALANCE_WARN"
 if [[ -n "$SCATTER_ROW_BALANCE_FAIL" ]]; then
   SCATTER_ROW_BALANCE_ARGS+=(--scatter-row-balance-fail "$SCATTER_ROW_BALANCE_FAIL")
 fi
+UNCERTAINTY_WARN="${OPENMC2DONJON_UNCERTAINTY_WARN:-5e-2}"
+UNCERTAINTY_FAIL="${OPENMC2DONJON_UNCERTAINTY_FAIL:-}"
+UNCERTAINTY_ARGS=(--uncertainty-warn "$UNCERTAINTY_WARN")
+if [[ -n "$UNCERTAINTY_FAIL" ]]; then
+  UNCERTAINTY_ARGS+=(--uncertainty-fail "$UNCERTAINTY_FAIL")
+fi
 
 if [[ -z "$PYTHON_BIN" ]]; then
   if [[ -x /Users/wen/miniforge3/envs/openmc-dev/bin/python ]]; then
@@ -48,6 +54,7 @@ MCO="$CONVERT_RUN_DIR/out.mcompo.txt"
 SUMMARY="$CONVERT_RUN_DIR/run_summary.json"
 CHECK_SUMMARY="$CONVERT_RUN_DIR/check_summary.json"
 MANIFEST="$CONVERT_RUN_DIR/manifest.json"
+STRICT_UNCERTAINTY_CHECK_SUMMARY="$RUN_DIR/strict_uncertainty_check_summary.json"
 SPH_HANDOFF_RUN_DIR="$RUN_DIR/openmc2donjon_sph_loop_handoff"
 SPH_HANDOFF_MGXS="$SPH_HANDOFF_RUN_DIR/mgxs_library.h5"
 SPH_HANDOFF_SUMMARY="$SPH_HANDOFF_RUN_DIR/openmc_sph_loop_handoff_summary.json"
@@ -167,7 +174,8 @@ OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
   --check \
   --require-volume \
   --require-transport-dataset \
-  "${SCATTER_ROW_BALANCE_ARGS[@]}"
+  "${SCATTER_ROW_BALANCE_ARGS[@]}" \
+  "${UNCERTAINTY_ARGS[@]}"
 
 echo
 echo "== Run OpenMC =="
@@ -191,7 +199,8 @@ OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
   --check \
   --require-volume \
   --require-transport-dataset \
-  "${SCATTER_ROW_BALANCE_ARGS[@]}"
+  "${SCATTER_ROW_BALANCE_ARGS[@]}" \
+  "${UNCERTAINTY_ARGS[@]}"
 
 "$PYTHON_BIN" - "$MGXS" "$MCO" "$SUMMARY" "$CHECK_SUMMARY" "$MANIFEST" <<'PY'
 import json
@@ -229,11 +238,31 @@ with h5py.File(mgxs, "r") as h5:
     if not np.all(np.isfinite(openmc_volume_flux)) or np.any(openmc_volume_flux <= 0.0):
         raise SystemExit("OpenMC volume flux is not positive finite")
     for name in names:
-        if "transport_total" not in h5[f"mixtures/{name}"]:
+        group = h5[f"mixtures/{name}"]
+        if "transport_total" not in group:
             raise SystemExit(f"{name}: missing transport_total")
-        volume = float(h5[f"mixtures/{name}"].attrs["volume"])
+        volume = float(group.attrs["volume"])
         if volume <= 0.0:
             raise SystemExit(f"{name}: non-positive volume")
+        for mean_name in (
+            "total",
+            "absorption",
+            "scatter_matrix",
+            "transport_total",
+        ):
+            std_name = f"{mean_name}_std_dev"
+            if std_name not in group:
+                raise SystemExit(f"{name}: missing real OpenMC {std_name}")
+            mean = group[mean_name][:]
+            std_dev = group[std_name][:]
+            if std_dev.shape != mean.shape:
+                raise SystemExit(
+                    f"{name}: {std_name} shape {std_dev.shape} != {mean_name} {mean.shape}"
+                )
+            if not np.all(np.isfinite(std_dev)) or np.any(std_dev < 0.0):
+                raise SystemExit(f"{name}: invalid {std_name}")
+            if not np.any(std_dev > 0.0):
+                raise SystemExit(f"{name}: {std_name} has no positive bins")
 
 blocks = lcm_ascii.read_lcm_ascii(mco)
 block_names = [block.name for block in blocks if block.name]
@@ -254,6 +283,13 @@ if summary["checked"] is not True or summary["check_passed"] is not True:
 check_summary = json.loads(check_summary_path.read_text(encoding="utf-8"))
 if check_summary["decision"] != "mgxs_input_contract_passed":
     raise SystemExit("production minicase preflight did not pass")
+uncertainty = check_summary["inputs"][0]["uncertainty"]
+if uncertainty["datasets"] <= 0:
+    raise SystemExit("production minicase preflight did not see any *_std_dev datasets")
+if uncertainty["missing_datasets"] >= uncertainty["expected_datasets"]:
+    raise SystemExit("production minicase preflight treated all uncertainty datasets as missing")
+if uncertainty["max_rel"] is None or uncertainty["max_rel"] <= 0.0:
+    raise SystemExit("production minicase preflight did not compute positive relative uncertainty")
 
 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 labels = {artifact["label"]: artifact for artifact in manifest["artifacts"]}
@@ -266,7 +302,39 @@ if labels["check-summary"].get("summary_decision") != "mgxs_input_contract_passe
 print(
     "production minicase readback OK: "
     f"blocks={len(blocks)} mixtures={summary['mixture_count']} "
-    f"groups={summary['energy_groups']} P{summary['legendre_order']}"
+    f"groups={summary['energy_groups']} P{summary['legendre_order']} "
+    f"uncertainty_max_rel={uncertainty['max_rel']:.6g}"
+)
+PY
+
+echo
+echo "== Assert strict uncertainty preflight can fail =="
+if "$PYTHON_BIN" -m openmc2donjon.cli check \
+  "$MGXS" \
+  --uncertainty-fail 0.0 \
+  --summary-json "$STRICT_UNCERTAINTY_CHECK_SUMMARY"; then
+  echo "strict uncertainty check unexpectedly passed" >&2
+  exit 1
+fi
+"$PYTHON_BIN" - "$STRICT_UNCERTAINTY_CHECK_SUMMARY" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+summary = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+if summary["decision"] != "mgxs_input_contract_failed":
+    raise SystemExit("strict uncertainty check did not record a failed decision")
+input_summary = summary["inputs"][0]
+uncertainty = input_summary["uncertainty"]
+if uncertainty["datasets"] <= 0:
+    raise SystemExit("strict uncertainty check did not see *_std_dev datasets")
+if uncertainty["max_rel"] is None or uncertainty["max_rel"] <= 0.0:
+    raise SystemExit("strict uncertainty check did not compute positive max_rel")
+if not any("exceeds fail threshold" in issue for issue in input_summary["issues"]):
+    raise SystemExit("strict uncertainty check did not fail on the uncertainty threshold")
+print(
+    "strict uncertainty preflight failed as expected: "
+    f"max_rel={uncertainty['max_rel']:.6g}"
 )
 PY
 
@@ -293,7 +361,8 @@ OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
   --acceptance-sph-maximum-ceiling 3.0 \
   --fail-on-acceptance-violation \
   --force \
-  "${SCATTER_ROW_BALANCE_ARGS[@]}"
+  "${SCATTER_ROW_BALANCE_ARGS[@]}" \
+  "${UNCERTAINTY_ARGS[@]}"
 
 "$PYTHON_BIN" - "$SPH_HANDOFF_MGXS" "$SPH_SCAFFOLD_DIR" "$SPH_HANDOFF_SUMMARY" <<'PY'
 import json
@@ -458,7 +527,8 @@ OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
   --check \
   --require-volume \
   --require-transport-dataset \
-  "${SCATTER_ROW_BALANCE_ARGS[@]}"
+  "${SCATTER_ROW_BALANCE_ARGS[@]}" \
+  "${UNCERTAINTY_ARGS[@]}"
 
 "$PYTHON_BIN" - "$SURFACE_FLUX" "$SURFACE_FLUX_SUMMARY" "$LOW_ORDER_DRIVER" "$LOW_ORDER_DRIVER_SUMMARY" "$LOW_ORDER_DRIVER_CHECK_SUMMARY" "$HOMOGENEOUS_FACE_FLUX" "$HOMOGENEOUS_FACE_FLUX_SUMMARY" "$FACE_FLUX_CHECK_SUMMARY" "$ADF_SIDECAR" "$ADF_SIDECAR_SUMMARY" "$ADF_H5" "$ADF_MCO" "$ADF_RUN_SUMMARY" "$ADF_CHECK_SUMMARY" "$ADF_INJECT_SUMMARY" "$ADF_MANIFEST" <<'PY'
 import json
@@ -697,7 +767,8 @@ OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
   --check \
   --require-volume \
   --require-transport-dataset \
-  "${SCATTER_ROW_BALANCE_ARGS[@]}"
+  "${SCATTER_ROW_BALANCE_ARGS[@]}" \
+  "${UNCERTAINTY_ARGS[@]}"
 
 "$PYTHON_BIN" - "$ADF_H5" "$ADF_SIDECAR" "$EXTERNAL_ADF_H5" "$EXTERNAL_ADF_SIDECAR" "$EXTERNAL_ADF_MCO" "$EXTERNAL_ADF_RUN_SUMMARY" "$EXTERNAL_ADF_CHECK_SUMMARY" "$EXTERNAL_ADF_INJECT_SUMMARY" "$EXTERNAL_ADF_SIDECAR_SUMMARY" "$EXTERNAL_FACE_FLUX_CHECK_SUMMARY" "$EXTERNAL_ADF_MANIFEST" "$SURFACE_FLUX" "$HOMOGENEOUS_FACE_FLUX" <<'PY'
 import json

@@ -135,6 +135,12 @@ class FromOpenMCCliTests(unittest.TestCase):
                         "--check",
                         "--require-volume",
                         "--require-transport-dataset",
+                        "--uncertainty-warn",
+                        "0.2",
+                        "--uncertainty-fail",
+                        "0.4",
+                        "--uncertainty-mean-abs-floor",
+                        "1e-9",
                         "--check-summary-json",
                         str(check_summary),
                     ]
@@ -156,10 +162,108 @@ class FromOpenMCCliTests(unittest.TestCase):
         self.assertIn("check: enabled after HDF5 export", rendered)
         self.assertIn("require_volume: yes", rendered)
         self.assertIn("require_transport_dataset: yes", rendered)
+        self.assertIn("uncertainty_warn: 0.2", rendered)
+        self.assertIn("uncertainty_fail: 0.4", rendered)
+        self.assertIn("uncertainty_mean_abs_floor: 1e-09", rendered)
         self.assertFalse(hdf5_exists)
         self.assertFalse(output_exists)
         self.assertFalse(summary_exists)
         self.assertFalse(check_summary_exists)
+
+    def test_check_can_fail_on_exported_std_dev_uncertainty(self) -> None:
+        recipe_text = '''
+from dataclasses import dataclass
+import numpy as np
+
+@dataclass(frozen=True)
+class Domain:
+    name: str
+    id: int
+    volume: float = 10.0
+    fissionable: bool = False
+
+class EnergyGroups:
+    group_edges = np.array([1.0e-5, 1.0e7], dtype=float)
+
+class MGXS:
+    def __init__(self, mean, std_dev):
+        self.mean = np.asarray(mean, dtype=float)
+        self.std_dev = np.asarray(std_dev, dtype=float)
+
+    def get_xs(self, value="mean", **_kwargs):
+        if value == "std_dev":
+            return self.std_dev
+        return self.mean
+
+class Library:
+    energy_groups = EnergyGroups()
+    domains = [Domain("fuel", 1)]
+
+    def get_mgxs(self, domain, mgxs_type):
+        if mgxs_type == "total":
+            return MGXS([0.5], [0.05])
+        if mgxs_type == "absorption":
+            return MGXS([0.1], [0.001])
+        if mgxs_type == "scatter matrix":
+            return MGXS([[0.35]], [[0.002]])
+        raise KeyError(mgxs_type)
+
+def build_library():
+    return Library()
+
+def load_statepoint(library, statepoint_path):
+    return None
+'''
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            recipe = tmp / "recipe.py"
+            statepoint = tmp / "statepoint.fake.h5"
+            hdf5 = tmp / "mgxs.h5"
+            output = tmp / "out.mcompo.txt"
+            check_summary = tmp / "check_summary.json"
+            recipe.write_text(recipe_text, encoding="utf-8")
+            statepoint.write_text("fake statepoint\n", encoding="utf-8")
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = from_openmc_main(
+                    [
+                        "--recipe",
+                        str(recipe),
+                        "--statepoint",
+                        str(statepoint),
+                        "--keep-hdf5",
+                        str(hdf5),
+                        "-o",
+                        str(output),
+                        "--check",
+                        "--uncertainty-fail",
+                        "0.01",
+                        "--check-summary-json",
+                        str(check_summary),
+                    ]
+                )
+
+            payload = json.loads(check_summary.read_text(encoding="utf-8"))
+            hdf5_exists = hdf5.exists()
+            output_exists = output.exists()
+            rendered = stream.getvalue()
+
+        self.assertEqual(rc, 1)
+        self.assertTrue(hdf5_exists)
+        self.assertFalse(output_exists)
+        self.assertIn("kept HDF5", rendered)
+        self.assertEqual(payload["decision"], "mgxs_input_contract_failed")
+        uncertainty = payload["inputs"][0]["uncertainty"]
+        self.assertEqual(uncertainty["datasets"], 3)
+        self.assertGreater(uncertainty["max_rel"], 0.01)
+        self.assertTrue(
+            any(
+                "exceeds fail threshold" in issue
+                for issue in payload["inputs"][0]["issues"]
+            )
+        )
 
     def test_strict_dry_run_returns_nonzero_for_recipe_warnings(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]

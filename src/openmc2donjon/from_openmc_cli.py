@@ -265,6 +265,21 @@ def _print_dry_run_checks(args: argparse.Namespace) -> None:
             "    scatter_row_balance_fail: "
             f"{_render_optional_value(args.scatter_row_balance_fail)}"
         )
+        if args.no_uncertainty_check:
+            print("    uncertainty_check: disabled")
+        else:
+            print(
+                "    uncertainty_warn: "
+                f"{_render_optional_value(args.uncertainty_warn)}"
+            )
+            print(
+                "    uncertainty_fail: "
+                f"{_render_optional_value(args.uncertainty_fail)}"
+            )
+            print(
+                "    uncertainty_mean_abs_floor: "
+                f"{_render_optional_value(args.uncertainty_mean_abs_floor)}"
+            )
         if args.check_summary_json is None:
             print("    check_summary_json: none")
         else:
@@ -383,6 +398,9 @@ def _run_pipeline_preflight(
         require_volume=args.require_volume,
         scatter_row_balance_warn=args.scatter_row_balance_warn,
         scatter_row_balance_fail=args.scatter_row_balance_fail,
+        uncertainty_warn=None if args.no_uncertainty_check else args.uncertainty_warn,
+        uncertainty_fail=None if args.no_uncertainty_check else args.uncertainty_fail,
+        uncertainty_mean_abs_floor=args.uncertainty_mean_abs_floor,
         summary_json=args.check_summary_json,
     )
     if not ok and hdf5_kept:
