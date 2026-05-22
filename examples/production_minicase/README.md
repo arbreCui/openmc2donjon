@@ -74,6 +74,10 @@ openmc2donjon prepare-openmc-sph-loop \
   --solve-template examples/sph_loop_minicase/templates/solve_lflux_dump.x2m.in \
   --scalar-flux-map ASM_FUEL_LEFT=2,ASM_MOD_RIGHT=4 \
   --force
+
+openmc2donjon run-sph-loop \
+  --config /tmp/openmc2donjon_minicase/sph_loop_handoff/sph_loop_inputs/loop_config.json \
+  --force
 ```
 
 To exercise the ADF/DF path, provide the low-order driver volume flux and

@@ -53,6 +53,9 @@ SPH_HANDOFF_MGXS="$SPH_HANDOFF_RUN_DIR/mgxs_library.h5"
 SPH_HANDOFF_SUMMARY="$SPH_HANDOFF_RUN_DIR/openmc_sph_loop_handoff_summary.json"
 SPH_SCAFFOLD_DIR="$SPH_HANDOFF_RUN_DIR/sph_loop_inputs"
 SPH_SOLVE_TEMPLATE="$REPO_ROOT/examples/sph_loop_minicase/templates/solve_lflux_dump.x2m.in"
+SPH_LOOP_CONFIG="$SPH_SCAFFOLD_DIR/loop_config.json"
+SPH_LOOP_DIR="$SPH_SCAFFOLD_DIR/sph_loop"
+SPH_LOOP_SUMMARY="$SPH_LOOP_DIR/loop_summary.json"
 LOW_ORDER_RAW="$RUN_DIR/low_order_driver_raw.h5"
 ADF_RUN_DIR="$RUN_DIR/openmc2donjon_adf_run"
 SURFACE_FLUX="$ADF_RUN_DIR/openmc_surface_flux.h5"
@@ -318,6 +321,53 @@ if summary["decision"] != "openmc2donjon_openmc_sph_loop_handoff_passed":
     raise SystemExit("SPH handoff summary did not pass")
 
 print(f"production minicase SPH loop handoff OK: {scaffold}")
+PY
+
+echo
+echo "== Run OpenMC SPH loop handoff through DONJON =="
+"$PYTHON_BIN" -m openmc2donjon.cli run-sph-loop \
+  --config "$SPH_LOOP_CONFIG" \
+  --summary-json "$SPH_LOOP_SUMMARY" \
+  --force
+
+"$PYTHON_BIN" - "$SPH_LOOP_SUMMARY" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+import h5py
+import numpy as np
+
+summary = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+if summary["decision"] != "openmc2donjon_sph_loop_passed":
+    raise SystemExit("SPH loop summary did not pass")
+if summary["completed_iterations"] != 2:
+    raise SystemExit(f"unexpected completed iterations: {summary['completed_iterations']}")
+if len(summary["solves"]) != 3:
+    raise SystemExit(f"expected two iteration solves plus final solve: {len(summary['solves'])}")
+if len(summary["postprocesses"]) != 2:
+    raise SystemExit(f"expected two NSPH apply postprocesses: {len(summary['postprocesses'])}")
+if any(solve["returncode"] != 0 for solve in summary["solves"]):
+    raise SystemExit("at least one DONJON solve failed")
+if any(step["returncode"] != 0 for step in summary["postprocesses"]):
+    raise SystemExit("at least one DONJON NSPH apply step failed")
+
+for key in ("final_ascii", "final_sph_sidecar", "audit_csv", "audit_text"):
+    path = Path(summary[key])
+    if not path.exists():
+        raise SystemExit(f"missing SPH loop artifact {key}: {path}")
+
+with h5py.File(summary["final_sph_sidecar"], "r") as h5:
+    sph = h5["sph"][:]
+    if sph.shape != (2, 2):
+        raise SystemExit(f"unexpected final SPH shape: {sph.shape}")
+    if not np.all(np.isfinite(sph)) or np.any(sph <= 0.0):
+        raise SystemExit("final SPH sidecar contains non-positive or non-finite values")
+
+print(
+    "production minicase DONJON SPH loop OK: "
+    f"iterations={summary['completed_iterations']} final_ascii={summary['final_ascii']}"
+)
 PY
 
 echo

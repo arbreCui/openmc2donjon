@@ -48,6 +48,8 @@ class ProductionMinicaseExampleTests(unittest.TestCase):
         self.assertIn("openmc2donjon_surface_current_mu", text)
         self.assertIn("openmc2donjon_volume_flux", text)
         self.assertIn("prepare-openmc-sph-loop", text)
+        self.assertIn("Run OpenMC SPH loop handoff through DONJON", text)
+        self.assertIn("openmc2donjon_sph_loop_passed", text)
         self.assertIn("Strict production dry-run", text)
         self.assertIn("--strict-dry-run", text)
         self.assertIn("--force-run-dir", text)
