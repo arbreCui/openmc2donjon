@@ -55,6 +55,8 @@ class ProductionMinicaseExampleTests(unittest.TestCase):
         self.assertIn("--acceptance-max-final-to-initial-flux-residual-ratio", text)
         self.assertIn("--acceptance-max-final-clipped-fraction", text)
         self.assertIn("max_final_to_initial_flux_residual_ratio", text)
+        self.assertIn("config.get(\"flux_normalization\") != \"auto\"", text)
+        self.assertIn("auto normalization did not resolve to power", text)
         self.assertIn("Strict production dry-run", text)
         self.assertIn("--strict-dry-run", text)
         self.assertIn("--force-run-dir", text)

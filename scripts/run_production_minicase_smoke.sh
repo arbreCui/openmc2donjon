@@ -417,6 +417,10 @@ with h5py.File(scaffold / "flux_map.h5", "r") as h5:
 config = json.loads((scaffold / "loop_config.json").read_text(encoding="utf-8"))
 if config["input_h5"] != str(mgxs):
     raise SystemExit("SPH loop config input_h5 mismatch")
+if config.get("flux_normalization") != "auto":
+    raise SystemExit(
+        "production SPH loop config should default flux_normalization to auto"
+    )
 if summary["decision"] != "openmc2donjon_openmc_sph_loop_handoff_passed":
     raise SystemExit("SPH handoff summary did not pass")
 
@@ -453,6 +457,15 @@ if any(solve["returncode"] != 0 for solve in summary["solves"]):
     raise SystemExit("at least one DONJON solve failed")
 if any(step["returncode"] != 0 for step in summary["postprocesses"]):
     raise SystemExit("at least one DONJON NSPH apply step failed")
+workflows = summary.get("workflows", [])
+if len(workflows) != 2:
+    raise SystemExit(f"expected two SPH workflows: {len(workflows)}")
+if any(workflow.get("flux_normalization") != "power" for workflow in workflows):
+    raise SystemExit(
+        "production SPH loop auto normalization did not resolve to power"
+    )
+if any(workflow.get("normalization_factor", 0.0) <= 0.0 for workflow in workflows):
+    raise SystemExit("production SPH loop power normalization factor is not positive")
 
 checks = {
     item["name"]: item
