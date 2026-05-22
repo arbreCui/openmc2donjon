@@ -38,7 +38,7 @@ def print_recipe_dry_run_summary(summary: RecipeDryRunSummary) -> None:
         details = [
             f"source={domain.source_label}",
             f"type={domain.source_type}",
-            f"volume={domain.volume:g}",
+            f"volume={_render_volume(domain.volume)}",
             f"volume_source={domain.volume_source}",
         ]
         if domain.xs_kwargs:
@@ -83,3 +83,9 @@ def _render_list(values: tuple[str, ...]) -> str:
     if not values:
         return "none"
     return ", ".join(values)
+
+
+def _render_volume(value: float | None) -> str:
+    if value is None:
+        return "missing"
+    return f"{value:g}"

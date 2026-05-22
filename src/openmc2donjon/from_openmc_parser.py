@@ -374,6 +374,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="with --check, require positive volume attributes",
     )
     parser.add_argument(
+        "--require-h-factor",
+        action="store_true",
+        help="with --check, require group-wise H-FACTOR/kappa-fission data",
+    )
+    parser.add_argument(
         "--scatter-row-balance-warn",
         type=float,
         default=None,

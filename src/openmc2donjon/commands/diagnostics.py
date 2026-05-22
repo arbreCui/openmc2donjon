@@ -104,6 +104,11 @@ def build_check_parser() -> argparse.ArgumentParser:
         help="require a positive volume attribute on every mixture",
     )
     parser.add_argument(
+        "--require-h-factor",
+        action="store_true",
+        help="require group-wise H-FACTOR/kappa-fission data for every calculation",
+    )
+    parser.add_argument(
         "--scatter-row-balance-warn",
         type=float,
         default=None,
@@ -405,6 +410,7 @@ def check_handler(args: argparse.Namespace) -> int:
         expected_adf_faces=args.expected_adf_faces,
         require_transport_dataset=args.require_transport_dataset,
         require_volume=args.require_volume,
+        require_h_factor=args.require_h_factor,
         scatter_row_balance_warn=args.scatter_row_balance_warn,
         scatter_row_balance_fail=args.scatter_row_balance_fail,
         uncertainty_warn=None if args.no_uncertainty_check else args.uncertainty_warn,

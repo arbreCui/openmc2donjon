@@ -65,6 +65,7 @@ def build_prepare_openmc_sph_loop_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-check", action="store_true")
     parser.add_argument("--check-summary-json", type=Path, default=None)
     parser.add_argument("--no-require-volume", action="store_true")
+    parser.add_argument("--require-h-factor", action="store_true")
     parser.add_argument("--no-require-transport-dataset", action="store_true")
     parser.add_argument("--scatter-row-balance-warn", type=float, default=None)
     parser.add_argument("--scatter-row-balance-fail", type=float, default=None)
@@ -165,6 +166,7 @@ def prepare_openmc_sph_loop_handler(args: argparse.Namespace) -> int:
             check=not args.no_check,
             check_summary_json=args.check_summary_json,
             require_volume=not args.no_require_volume,
+            require_h_factor=args.require_h_factor,
             require_transport_dataset=not args.no_require_transport_dataset,
             scatter_row_balance_warn=args.scatter_row_balance_warn,
             scatter_row_balance_fail=args.scatter_row_balance_fail,

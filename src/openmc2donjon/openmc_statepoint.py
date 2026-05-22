@@ -62,7 +62,7 @@ class RecipeDryRunDomain:
     source_label: str
     source_id: Any
     source_type: str
-    volume: float
+    volume: float | None
     volume_source: str
     xs_kwargs: Mapping[str, Any] | None
     attr_keys: tuple[str, ...]
@@ -594,7 +594,24 @@ def _fission_source_check(mgxs_types: tuple[str, ...]) -> RecipeProductionCheck:
 
 
 def _volume_check(domains: tuple[RecipeDryRunDomain, ...]) -> RecipeProductionCheck:
-    non_positive = [domain.name for domain in domains if domain.volume <= 0.0]
+    missing = [domain.name for domain in domains if domain.volume is None]
+    if missing:
+        rendered = ", ".join(missing[:8])
+        if len(missing) > 8:
+            rendered += f", ... ({len(missing)} total)"
+        return RecipeProductionCheck(
+            "volumes",
+            "WARN",
+            (
+                f"{len(missing)} domain(s) are missing volume: {rendered}; "
+                "exported HDF5 will omit volume and strict preflight will fail"
+            ),
+        )
+    non_positive = [
+        domain.name
+        for domain in domains
+        if domain.volume is not None and domain.volume <= 0.0
+    ]
     if non_positive:
         rendered = ", ".join(non_positive[:8])
         if len(non_positive) > 8:
@@ -637,7 +654,7 @@ def _normalize_mgxs_type(value: str) -> str:
     return str(value).lower().replace("_", "-")
 
 
-def _dry_run_volume(domain: Any, explicit_volume: float | None) -> tuple[float, str]:
+def _dry_run_volume(domain: Any, explicit_volume: float | None) -> tuple[float | None, str]:
     if explicit_volume is not None:
         return float(explicit_volume), "spec"
     for attr in ("volume", "vol"):
@@ -649,7 +666,7 @@ def _dry_run_volume(domain: Any, explicit_volume: float | None) -> tuple[float, 
                 return float(value), "domain"
             except (TypeError, ValueError):
                 continue
-    return _domain_volume(domain), "default"
+    return _domain_volume(domain), "missing"
 
 
 def _optional_string_attr(obj: Any, name: str) -> str | None:

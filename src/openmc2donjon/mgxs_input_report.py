@@ -25,6 +25,9 @@ class InputReport:
     burnup_axis_path: str | None = None
     burnup_axis_values: int | None = None
     fissionable_mixtures: int = 0
+    volume_attributes: int = 0
+    volume_defaulted: int = 0
+    h_factor_datasets: int = 0
     scatter_axes: list[str] = field(default_factory=list)
     transport_total_datasets: int = 0
     transport_total_derivable: int = 0
@@ -105,6 +108,12 @@ def print_report(report: InputReport) -> None:
         print("        burnup_axis=none")
     print(
         "        "
+        f"volume={report.volume_attributes}/{calculation_count} "
+        f"defaulted={report.volume_defaulted}/{calculation_count} "
+        f"h_factor={report.h_factor_datasets}/{calculation_count}"
+    )
+    print(
+        "        "
         f"transport_total={report.transport_total_datasets}/{calculation_count} "
         f"strd_ready={report.transport_total_derivable}/{calculation_count}"
     )
@@ -171,6 +180,9 @@ def _report_payload(report: InputReport) -> dict[str, object]:
         "burnup_axis_path": report.burnup_axis_path,
         "burnup_axis_values": report.burnup_axis_values,
         "fissionable_mixtures": report.fissionable_mixtures,
+        "volume_attributes": report.volume_attributes,
+        "volume_defaulted": report.volume_defaulted,
+        "h_factor_datasets": report.h_factor_datasets,
         "scatter_axes": report.scatter_axes,
         "scatter_row_balance": {
             "checked": report.scatter_row_balance_checked,

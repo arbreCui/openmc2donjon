@@ -62,6 +62,14 @@ OPTIONAL_VECTOR_DATASETS = (
     "kappa_fission_xs",
     "kappa_fission_cross_section",
 )
+H_FACTOR_DATASETS = (
+    "h_factor",
+    "H-FACTOR",
+    "H_FACTOR",
+    "kappa_fission",
+    "kappa_fission_xs",
+    "kappa_fission_cross_section",
+)
 
 
 def main() -> int:
@@ -74,6 +82,7 @@ def main() -> int:
             require_sph=args.require_sph,
             require_transport_dataset=args.require_transport_dataset,
             require_volume=args.require_volume,
+            require_h_factor=args.require_h_factor,
             expected_adf_faces=expected_faces,
             scatter_row_balance_warn=args.scatter_row_balance_warn,
             scatter_row_balance_fail=args.scatter_row_balance_fail,
@@ -147,6 +156,11 @@ def parse_args() -> argparse.Namespace:
         "--require-volume",
         action="store_true",
         help="require a positive volume attribute on every mixture",
+    )
+    parser.add_argument(
+        "--require-h-factor",
+        action="store_true",
+        help="require group-wise H-FACTOR/kappa-fission data for every calculation",
     )
     parser.add_argument(
         "--scatter-row-balance-warn",
@@ -225,6 +239,7 @@ def validate_input(
     require_sph: bool = False,
     require_transport_dataset: bool = False,
     require_volume: bool = False,
+    require_h_factor: bool = False,
     expected_adf_faces: list[str] | None = None,
     scatter_row_balance_warn: float | None = None,
     scatter_row_balance_fail: float | None = None,
@@ -250,6 +265,7 @@ def validate_input(
                 require_sph=require_sph,
                 require_transport_dataset=require_transport_dataset,
                 require_volume=require_volume,
+                require_h_factor=require_h_factor,
                 expected_adf_faces=expected_adf_faces,
                 uncertainty=uncertainty or UncertaintyConfig(),
             )
@@ -266,6 +282,7 @@ def validate_open_h5(
     require_sph: bool,
     require_transport_dataset: bool,
     require_volume: bool,
+    require_h_factor: bool,
     expected_adf_faces: list[str] | None,
     uncertainty: UncertaintyConfig,
 ) -> None:
@@ -323,6 +340,7 @@ def validate_open_h5(
                 sph_present_by_calc,
                 require_transport_dataset=require_transport_dataset,
                 require_volume=require_volume,
+                require_h_factor=require_h_factor,
                 uncertainty=uncertainty,
             )
         )
@@ -331,9 +349,21 @@ def validate_open_h5(
 
     validate_adf_layout(report, adf_names_by_mix, require_adf, expected_adf_faces)
     validate_sph_layout(report, sph_present_by_calc, require_sph)
+    finalize_volume_contract(report, require_volume=bool(require_volume))
 
     finalize_scatter_row_balance(report)
     finalize_uncertainty(report)
+
+
+def finalize_volume_contract(report: InputReport, *, require_volume: bool) -> None:
+    if report.volume_defaulted == 0 or require_volume:
+        return
+    calculation_count = report.calculations or report.mixtures
+    report.warn(
+        f"{report.volume_defaulted}/{calculation_count} calculation(s) are missing "
+        "volume; converter readers will use default volume 1.0 for those "
+        "calculations"
+    )
 
 
 def burnup_axis_from_hdf5(h5: h5py.File, report: InputReport) -> np.ndarray | None:
@@ -445,6 +475,7 @@ def validate_mixture(
     *,
     require_transport_dataset: bool,
     require_volume: bool,
+    require_h_factor: bool,
     uncertainty: UncertaintyConfig,
 ) -> int:
     if "states" in group:
@@ -459,6 +490,7 @@ def validate_mixture(
             sph_present_by_calc,
             require_transport_dataset=require_transport_dataset,
             require_volume=require_volume,
+            require_h_factor=require_h_factor,
             uncertainty=uncertainty,
         )
 
@@ -475,6 +507,7 @@ def validate_mixture(
         count_fissionable=True,
         require_transport_dataset=require_transport_dataset,
         require_volume=require_volume,
+        require_h_factor=require_h_factor,
         uncertainty=uncertainty,
     )
     report.calculations += 1
@@ -493,6 +526,7 @@ def validate_mixture_states(
     *,
     require_transport_dataset: bool,
     require_volume: bool,
+    require_h_factor: bool,
     uncertainty: UncertaintyConfig,
 ) -> int:
     states = mixture_group["states"]
@@ -530,6 +564,7 @@ def validate_mixture_states(
             count_fissionable=index == 0,
             require_transport_dataset=require_transport_dataset,
             require_volume=require_volume,
+            require_h_factor=require_h_factor,
             uncertainty=uncertainty,
         )
     return len(state_names)
@@ -549,6 +584,7 @@ def validate_calculation(
     count_fissionable: bool,
     require_transport_dataset: bool,
     require_volume: bool,
+    require_h_factor: bool,
     uncertainty: UncertaintyConfig,
 ) -> None:
     missing = [field for field in REQUIRED_DATASETS if field not in group]
@@ -564,6 +600,10 @@ def validate_calculation(
     volume = attr_with_parent(group, parent_group, "volume")
     if require_volume and volume is None:
         report.fail(f"mixture {name}: volume attribute is missing")
+    if volume is None:
+        report.volume_defaulted += 1
+    else:
+        report.volume_attributes += 1
     if volume is not None and float(volume) <= 0.0:
         report.fail(f"mixture {name}: volume attribute must be positive")
 
@@ -596,6 +636,13 @@ def validate_calculation(
     for field in OPTIONAL_VECTOR_DATASETS:
         if field in group:
             validate_vector(group[field], ngroups, report, f"mixture {name}: {field}")
+
+    if has_h_factor(group):
+        report.h_factor_datasets += 1
+    elif require_h_factor:
+        report.fail(
+            f"mixture {name}: group-wise H-FACTOR/kappa_fission dataset is required"
+        )
 
     validate_uncertainty_for_calculation(
         group,
@@ -634,6 +681,10 @@ def validate_calculation(
     sph_present_by_calc.append(sph_present)
     if sph_present:
         report.sph_calculations += 1
+
+
+def has_h_factor(group: h5py.Group) -> bool:
+    return any(name in group for name in H_FACTOR_DATASETS)
 
 
 def scatter_axes(
@@ -714,6 +765,7 @@ def run_preflight(
     expected_adf_faces: str | list[str] | None = None,
     require_transport_dataset: bool = False,
     require_volume: bool = False,
+    require_h_factor: bool = False,
     scatter_row_balance_warn: float | None = None,
     scatter_row_balance_fail: float | None = None,
     uncertainty_warn: float | None = 0.05,
@@ -734,6 +786,7 @@ def run_preflight(
             require_sph=require_sph,
             require_transport_dataset=require_transport_dataset,
             require_volume=require_volume,
+            require_h_factor=require_h_factor,
             expected_adf_faces=expected_faces,
             scatter_row_balance_warn=scatter_row_balance_warn,
             scatter_row_balance_fail=scatter_row_balance_fail,

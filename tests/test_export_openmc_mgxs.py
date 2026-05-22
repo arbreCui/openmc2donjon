@@ -19,6 +19,7 @@ from openmc2donjon.export_openmc_mgxs import (
     DomainExportSpec,
     export_openmc_mgxs_library,
 )
+from openmc2donjon.mgxs_input_contract import validate_input
 from openmc2donjon.multicompo import read_mgxs_hdf5
 
 
@@ -64,6 +65,7 @@ class KeywordOnlyFakeLibrary:
             (101, "total"): np.array([0.5, 0.6, 0.7]),
             (101, "absorption"): np.array([0.05, 0.06, 0.07]),
             (101, "fission"): np.array([0.01, 0.02, 0.03]),
+            (101, "kappa-fission"): np.array([3.2e-12, 3.1e-12, 3.0e-12]),
             (101, "nu-fission"): np.array([0.025, 0.05, 0.075]),
             (101, "chi"): np.array([1.0, 0.0, 0.0]),
             (101, "scatter matrix"): scatter_openmc_order,
@@ -159,6 +161,10 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
         self.assertEqual(by_name["ASM_Y1_X1"].volume, 4.0)
         np.testing.assert_allclose(by_name["ASM_Y1_X1"].transport_total, [0.45, 0.55, 0.65])
         np.testing.assert_allclose(
+            by_name["ASM_Y1_X1"].h_factor,
+            [3.2e-12, 3.1e-12, 3.0e-12],
+        )
+        np.testing.assert_allclose(
             by_name["ASM_Y1_X1"].inverse_velocity,
             [1.0e-8, 2.0e-7, 3.0e-6],
         )
@@ -171,6 +177,46 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
         self.assertEqual(mod_scatter.shape, (2, 3, 3))
         np.testing.assert_allclose(mod_scatter[0], np.eye(3))
         np.testing.assert_allclose(mod_scatter[1], np.zeros((3, 3)))
+
+    def test_exporter_omits_unknown_volume_instead_of_defaulting_to_one(self) -> None:
+        class DomainWithoutVolume:
+            name = "fuel"
+            id = 1
+            fissionable = True
+
+        class Library:
+            def __init__(self) -> None:
+                self.energy_groups = FakeEnergyGroups()
+                self.domain = DomainWithoutVolume()
+                self.domains = [self.domain]
+                self.data = {
+                    "total": np.array([0.5, 0.6, 0.7]),
+                    "absorption": np.array([0.05, 0.06, 0.07]),
+                    "fission": np.array([0.01, 0.02, 0.03]),
+                    "nu-fission": np.array([0.025, 0.05, 0.075]),
+                    "chi": np.array([1.0, 0.0, 0.0]),
+                    "scatter matrix": np.eye(3),
+                }
+
+            def get_mgxs(self, domain: object, mgxs_type: str) -> FakeMGXS:
+                if domain is not self.domain or mgxs_type not in self.data:
+                    raise KeyError((domain, mgxs_type))
+                return FakeMGXS(self.data[mgxs_type])
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "mgxs.h5"
+            export_openmc_mgxs_library(Library(), path)
+            with h5py.File(path, "r") as h5:
+                has_volume = "volume" in h5["mixtures"]["fuel"].attrs
+            report = validate_input(path)
+            strict_report = validate_input(path, require_volume=True)
+
+        self.assertFalse(has_volume)
+        self.assertTrue(report.ok, report.issues)
+        self.assertEqual(report.volume_defaulted, 1)
+        self.assertTrue(any("default volume 1.0" in item for item in report.warnings))
+        self.assertFalse(strict_report.ok)
+        self.assertIn("mixture fuel: volume attribute is missing", strict_report.issues)
 
     def test_exports_mgxs_standard_deviations_when_available(self) -> None:
         class StdDevMGXS:
@@ -776,7 +822,8 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
         self.assertIn("FAIL mgxs-required: missing required MGXS type(s): absorption", output)
         self.assertIn("scatter matrix", output)
         self.assertIn("WARN legendre-order: P0 only", output)
-        self.assertIn("WARN volumes: 1 domain(s) use default volume=1.0: fuel", output)
+        self.assertIn("WARN volumes: 1 domain(s) are missing volume: fuel", output)
+        self.assertIn("strict preflight will fail", output)
         self.assertIn("WARN domain-mode: root_attrs should include domain_mode", output)
 
     def test_exports_explicit_subdomain_specs(self) -> None:

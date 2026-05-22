@@ -50,6 +50,19 @@ class CliTests(unittest.TestCase):
         self.assertIn("mgxs_input_contract_failed", stream.getvalue())
         self.assertIn("/energy_bounds dataset is missing", stream.getvalue())
 
+    def test_check_command_can_require_h_factor(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "mgxs.h5"
+            write_valid_mgxs(path)
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = cli_main(["check", str(path), "--require-h-factor"])
+
+        self.assertEqual(rc, 1)
+        self.assertIn("mgxs_input_contract_failed", stream.getvalue())
+        self.assertIn("H-FACTOR/kappa_fission", stream.getvalue())
+
     def test_doctor_command_reports_environment_and_recipe(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         recipe = repo_root / "examples/recipe_export_smoke/minimal_recipe.py"

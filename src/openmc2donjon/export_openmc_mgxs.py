@@ -24,6 +24,7 @@ MGXS_TYPE_ALIASES: dict[str, tuple[str, ...]] = {
     "total": ("total",),
     "absorption": ("absorption",),
     "fission": ("fission",),
+    "kappa_fission": ("kappa-fission", "kappa_fission"),
     "nu_fission": ("nu-fission", "nu_fission"),
     "chi": ("chi",),
     "scatter_matrix": ("scatter matrix", "scatter_matrix"),
@@ -159,13 +160,15 @@ def export_openmc_mgxs_library(
             group.attrs["scatter_format"] = "legendre"
             group.attrs["scatter_axes"] = "moment,from,to"
             group.attrs["openmc_scatter_mgxs_type"] = str(data["scatter_mgxs_type"])
-            group.attrs["volume"] = float(data["volume"])
+            if data["volume"] is not None:
+                group.attrs["volume"] = float(data["volume"])
             for attr_key, attr_value in data["attrs"].items():
                 _write_hdf5_attr(group, str(attr_key), attr_value)
             for key in (
                 "total",
                 "absorption",
                 "fission",
+                "kappa_fission",
                 "nu_fission",
                 "chi",
                 "transport_total",
@@ -240,6 +243,13 @@ def _domain_data(
     )
 
     fission = _optional_vector(library, domain, "fission", ngroups, xs_kwargs=xs_kwargs)
+    kappa_fission = _optional_vector(
+        library,
+        domain,
+        "kappa_fission",
+        ngroups,
+        xs_kwargs=xs_kwargs,
+    )
     nu_fission = _optional_vector(library, domain, "nu_fission", ngroups, xs_kwargs=xs_kwargs)
     chi = _optional_vector(library, domain, "chi", ngroups, xs_kwargs=xs_kwargs)
     has_fission_source = (
@@ -277,6 +287,14 @@ def _domain_data(
             library,
             domain,
             "fission",
+            ngroups,
+            xs_kwargs=xs_kwargs,
+        ),
+        "kappa_fission": kappa_fission,
+        "kappa_fission_std_dev": _optional_vector_std_dev(
+            library,
+            domain,
+            "kappa_fission",
             ngroups,
             xs_kwargs=xs_kwargs,
         ),
@@ -669,7 +687,7 @@ def _domain_label(domain: Any) -> str:
     return str(getattr(domain, "name", None) or getattr(domain, "id", None) or domain)
 
 
-def _domain_volume(domain: Any) -> float:
+def _domain_volume(domain: Any) -> float | None:
     for attr in ("volume", "vol"):
         if hasattr(domain, attr):
             value = getattr(domain, attr)
@@ -679,7 +697,7 @@ def _domain_volume(domain: Any) -> float:
                 return float(value)
             except (TypeError, ValueError):
                 continue
-    return 1.0
+    return None
 
 
 def _domain_fissionable(domain: Any, fallback: bool) -> bool:

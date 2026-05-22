@@ -222,6 +222,57 @@ class MgxsInputContractTests(unittest.TestCase):
         self.assertIsNotNone(report.scatter_row_balance_max_rel)
         self.assertLess(float(report.scatter_row_balance_max_rel), 1.0e-15)
 
+    def test_missing_volume_is_reported_before_it_becomes_default_one(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "missing_volume.h5"
+            write_single_state_fixture(path, total=[0.29, 0.38])
+            with h5py.File(path, "a") as h5:
+                del h5["mixtures/fuel"].attrs["volume"]
+
+            report = validator.validate_input(
+                path,
+                require_adf=False,
+                require_transport_dataset=False,
+                require_volume=False,
+                expected_adf_faces=None,
+            )
+
+        self.assertTrue(report.ok, report.issues)
+        self.assertEqual(report.volume_attributes, 0)
+        self.assertEqual(report.volume_defaulted, 1)
+        self.assertTrue(
+            any("default volume 1.0" in warning for warning in report.warnings)
+        )
+
+    def test_require_h_factor_gates_groupwise_kappa_fission_data(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            missing = Path(tmpdir) / "missing_h_factor.h5"
+            present = Path(tmpdir) / "present_h_factor.h5"
+            write_single_state_fixture(missing, total=[0.29, 0.38])
+            write_single_state_fixture(present, total=[0.29, 0.38])
+            with h5py.File(present, "a") as h5:
+                h5["mixtures/fuel"].create_dataset(
+                    "kappa_fission",
+                    data=np.array([3.2e-12, 3.1e-12]),
+                )
+
+            missing_report = validator.validate_input(
+                missing,
+                require_h_factor=True,
+            )
+            present_report = validator.validate_input(
+                present,
+                require_h_factor=True,
+            )
+
+        self.assertFalse(missing_report.ok)
+        self.assertTrue(
+            any("H-FACTOR/kappa_fission" in issue for issue in missing_report.issues)
+        )
+        self.assertEqual(missing_report.h_factor_datasets, 0)
+        self.assertTrue(present_report.ok, present_report.issues)
+        self.assertEqual(present_report.h_factor_datasets, 1)
+
     def test_uncertainty_warns_for_high_relative_std_dev(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "uncertain.h5"
