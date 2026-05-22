@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import shutil
 from pathlib import Path
 import tempfile
 import unittest
@@ -12,6 +13,7 @@ import numpy as np
 
 from openmc2donjon.cli import main as cli_main
 from openmc2donjon.openmc_sph_loop_handoff import prepare_openmc_sph_loop_handoff
+from openmc2donjon.sph_loop_plan import build_sph_loop_plan
 
 
 class OpenMCSphLoopHandoffTests(unittest.TestCase):
@@ -94,13 +96,68 @@ class OpenMCSphLoopHandoffTests(unittest.TestCase):
             )
             self.assertEqual(loop_config["acceptance"]["min_completed_iterations"], 2)
             manifest = json.loads((bundle_dir / "manifest.json").read_text(encoding="utf-8"))
-            labels = {artifact["label"] for artifact in manifest["artifacts"]}
+            labels = {artifact["label"]: artifact for artifact in manifest["artifacts"]}
             self.assertIn("openmc-sph-loop-statepoint", labels)
             self.assertIn("openmc-sph-loop-solve-template", labels)
-            self.assertIn("openmc-sph-loop-config", labels)
-            self.assertIn("openmc-sph-loop-run-script", labels)
+            self.assertIn("openmc-sph-loop-apply-template", labels)
+            self.assertEqual(
+                labels["openmc-sph-loop-config"]["bundled_path"],
+                "loop_config.json",
+            )
+            self.assertEqual(
+                labels["openmc-sph-loop-run-script"]["bundled_path"],
+                "run_sph_loop.sh",
+            )
             self.assertIn("openmc-sph-loop-summary", labels)
             self.assertIn("openmc-sph-loop-check-summary", labels)
+
+            bundle_config = json.loads(
+                (bundle_dir / "loop_config.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(bundle_config["input_h5"], "mgxs_library.h5")
+            self.assertEqual(bundle_config["output_dir"], "sph_loop")
+            self.assertEqual(
+                bundle_config["reference_flux"],
+                "reference_flux.h5::openmc_volume_flux",
+            )
+            self.assertEqual(bundle_config["map_h5"], "flux_map.h5")
+            self.assertEqual(bundle_config["run_script"], "run_sph_loop.sh")
+            self.assertEqual(
+                _command_option(bundle_config["solver"]["command"], "--deck-template"),
+                "solve_template.x2m.in",
+            )
+            self.assertEqual(
+                _command_option(
+                    bundle_config["postprocess"]["command"],
+                    "--deck-template",
+                ),
+                "apply_template.x2m.in",
+            )
+            self.assertEqual(
+                bundle_config["solver"]["command"][:3],
+                [
+                    "python3",
+                    "-m",
+                    "openmc2donjon.donjon_deck_runner",
+                ],
+            )
+            self.assertTrue((bundle_dir / "run_sph_loop.sh").exists())
+            self.assertNotIn(
+                str(run_dir),
+                (bundle_dir / "run_sph_loop.sh").read_text(encoding="utf-8"),
+            )
+
+            relocated = tmp / "relocated_bundle"
+            shutil.copytree(bundle_dir, relocated)
+            plan = build_sph_loop_plan(relocated / "loop_config.json")
+            self.assertEqual(plan.input_h5, relocated / "mgxs_library.h5")
+            self.assertEqual(plan.map_h5, relocated / "flux_map.h5")
+            self.assertEqual(
+                plan.reference_flux,
+                f"{relocated / 'reference_flux.h5'}::openmc_volume_flux",
+            )
+            self.assertEqual(plan.loop_dir, relocated / "sph_loop")
+            self.assertEqual(plan.run_script, relocated / "run_sph_loop.sh")
 
     def test_cli_prepare_handoff_supports_sequential_flux_map(self) -> None:
         root = _repo_root()
@@ -158,6 +215,11 @@ class OpenMCSphLoopHandoffTests(unittest.TestCase):
             self.assertIn("openmc-sph-loop-config", labels)
             self.assertIn("openmc-sph-loop-summary", labels)
             self.assertNotIn("openmc-sph-loop-check-summary", labels)
+            bundle_config = json.loads(
+                (bundle_dir / "loop_config.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(bundle_config["input_h5"], "mgxs_library.h5")
+            self.assertEqual(bundle_config["map_h5"], "flux_map.h5")
             loop_config = json.loads(
                 (run_dir / "sph_loop_inputs/loop_config.json").read_text(
                     encoding="utf-8"
@@ -172,6 +234,13 @@ class OpenMCSphLoopHandoffTests(unittest.TestCase):
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
+
+
+def _command_option(command: list[str], option: str) -> str | None:
+    for index, value in enumerate(command[:-1]):
+        if value == option:
+            return command[index + 1]
+    return None
 
 
 if __name__ == "__main__":

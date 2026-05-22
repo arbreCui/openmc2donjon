@@ -48,10 +48,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import shutil
 import sys
 
 import h5py
 import numpy as np
+
+from openmc2donjon.sph_loop_plan import build_sph_loop_plan
 
 
 mgxs = Path(sys.argv[1])
@@ -87,7 +90,7 @@ assert handoff_summary["bundle_manifest"] == str(bundle_dir / "manifest.json")
 assert run_script.exists()
 assert "run-sph-loop" in run_script.read_text(encoding="utf-8")
 manifest = json.loads((bundle_dir / "manifest.json").read_text(encoding="utf-8"))
-labels = {artifact["label"] for artifact in manifest["artifacts"]}
+labels = {artifact["label"]: artifact for artifact in manifest["artifacts"]}
 for label in {
     "openmc-sph-loop-config",
     "openmc-sph-loop-flux-map",
@@ -97,6 +100,23 @@ for label in {
     "openmc-sph-loop-solve-template",
 }:
     assert label in labels, label
+assert labels["openmc-sph-loop-config"]["bundled_path"] == "loop_config.json"
+assert labels["openmc-sph-loop-run-script"]["bundled_path"] == "run_sph_loop.sh"
+bundle_config = json.loads((bundle_dir / "loop_config.json").read_text(encoding="utf-8"))
+assert bundle_config["input_h5"] == "mgxs_library.h5"
+assert bundle_config["map_h5"] == "flux_map.h5"
+assert bundle_config["reference_flux"] == "reference_flux.h5::openmc_volume_flux"
+assert bundle_config["run_script"] == "run_sph_loop.sh"
+relocated = bundle_dir.parent / "relocated_bundle"
+if relocated.exists():
+    shutil.rmtree(relocated)
+shutil.copytree(bundle_dir, relocated)
+plan = build_sph_loop_plan(relocated / "loop_config.json")
+assert plan.input_h5 == relocated / "mgxs_library.h5"
+assert plan.map_h5 == relocated / "flux_map.h5"
+assert plan.reference_flux == f"{relocated / 'reference_flux.h5'}::openmc_volume_flux"
+assert plan.loop_dir == relocated / "sph_loop"
+assert plan.run_script == relocated / "run_sph_loop.sh"
 print(f"OpenMC SPH loop entrypoint OK: {scaffold}")
 PY
 

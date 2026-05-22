@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -286,28 +287,37 @@ def write_bundle(
     manifest_name: str,
     force: bool,
 ) -> None:
+    local = _write_relocatable_bundle_files(report, output_dir, force=force)
     artifacts = [
-        ArtifactSpec(label="openmc-sph-loop-recipe", source=report.recipe),
-        ArtifactSpec(label="openmc-sph-loop-solve-template", source=report.solve_template),
-        ArtifactSpec(label="openmc-sph-loop-mgxs", source=report.mgxs_h5),
-        ArtifactSpec(label="openmc-sph-loop-ascii", source=report.ascii_output),
+        ArtifactSpec(label="openmc-sph-loop-recipe", source=local.recipe),
+        ArtifactSpec(label="openmc-sph-loop-solve-template", source=local.solve_template),
+        ArtifactSpec(label="openmc-sph-loop-mgxs", source=local.mgxs_h5),
+        ArtifactSpec(label="openmc-sph-loop-ascii", source=local.ascii_output),
         ArtifactSpec(
             label="openmc-sph-loop-reference-flux",
-            source=report.scaffold.reference_flux_h5,
+            source=local.reference_flux_h5,
         ),
-        ArtifactSpec(label="openmc-sph-loop-flux-map", source=report.scaffold.flux_map_h5),
-        ArtifactSpec(label="openmc-sph-loop-config", source=report.scaffold.loop_config),
-        ArtifactSpec(label="openmc-sph-loop-run-script", source=report.scaffold.run_script),
+        ArtifactSpec(label="openmc-sph-loop-flux-map", source=local.flux_map_h5),
+        ArtifactSpec(label="openmc-sph-loop-config", source=local.loop_config),
+        ArtifactSpec(label="openmc-sph-loop-run-script", source=local.run_script),
         ArtifactSpec(
             label="openmc-sph-loop-scaffold-summary",
             source=report.scaffold_summary_json,
         ),
         ArtifactSpec(label="openmc-sph-loop-summary", source=report.summary_json),
     ]
-    if report.statepoint is not None:
+    if local.apply_template is not None:
+        artifacts.insert(
+            2,
+            ArtifactSpec(
+                label="openmc-sph-loop-apply-template",
+                source=local.apply_template,
+            ),
+        )
+    if local.statepoint is not None:
         artifacts.insert(
             1,
-            ArtifactSpec(label="openmc-sph-loop-statepoint", source=report.statepoint),
+            ArtifactSpec(label="openmc-sph-loop-statepoint", source=local.statepoint),
         )
     if report.check_summary_json is not None:
         artifacts.append(
@@ -322,6 +332,167 @@ def write_bundle(
         manifest_name=manifest_name,
         force=force,
     )
+
+
+@dataclass(frozen=True)
+class _BundleLocalFiles:
+    recipe: Path
+    statepoint: Path | None
+    solve_template: Path
+    apply_template: Path | None
+    mgxs_h5: Path
+    ascii_output: Path
+    reference_flux_h5: Path
+    flux_map_h5: Path
+    loop_config: Path
+    run_script: Path
+
+
+def _write_relocatable_bundle_files(
+    report: OpenMCSphLoopHandoffReport,
+    output_dir: Path,
+    *,
+    force: bool,
+) -> _BundleLocalFiles:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    original_config = json.loads(report.scaffold.loop_config.read_text(encoding="utf-8"))
+    apply_template_source = _command_option_path(
+        original_config.get("postprocess", {}).get("command"),
+        "--deck-template",
+    )
+    if apply_template_source is not None and not apply_template_source.is_absolute():
+        apply_template_source = report.scaffold.loop_config.parent / apply_template_source
+    local = _BundleLocalFiles(
+        recipe=output_dir / _bundle_filename("recipe", report.recipe),
+        statepoint=(
+            None
+            if report.statepoint is None
+            else output_dir / _bundle_filename("statepoint", report.statepoint)
+        ),
+        solve_template=output_dir / _bundle_filename("solve_template", report.solve_template),
+        apply_template=(
+            None
+            if apply_template_source is None
+            else output_dir / _bundle_filename("apply_template", apply_template_source)
+        ),
+        mgxs_h5=output_dir / "mgxs_library.h5",
+        ascii_output=output_dir / report.ascii_output.name,
+        reference_flux_h5=output_dir / "reference_flux.h5",
+        flux_map_h5=output_dir / "flux_map.h5",
+        loop_config=output_dir / "loop_config.json",
+        run_script=output_dir / "run_sph_loop.sh",
+    )
+    _copy_bundle_file(report.recipe, local.recipe, force=force)
+    if report.statepoint is not None and local.statepoint is not None:
+        _copy_bundle_file(report.statepoint, local.statepoint, force=force)
+    _copy_bundle_file(report.solve_template, local.solve_template, force=force)
+    if apply_template_source is not None and local.apply_template is not None:
+        _copy_bundle_file(apply_template_source, local.apply_template, force=force)
+    _copy_bundle_file(report.mgxs_h5, local.mgxs_h5, force=force)
+    _copy_bundle_file(report.ascii_output, local.ascii_output, force=force)
+    _copy_bundle_file(
+        report.scaffold.reference_flux_h5,
+        local.reference_flux_h5,
+        force=force,
+    )
+    _copy_bundle_file(report.scaffold.flux_map_h5, local.flux_map_h5, force=force)
+    _write_bundle_loop_config(original_config, local, force=force)
+    _write_bundle_run_script(local.run_script, force=force)
+    return local
+
+
+def _write_bundle_loop_config(
+    original_config: dict[str, Any],
+    local: _BundleLocalFiles,
+    *,
+    force: bool,
+) -> None:
+    _require_output_ok(local.loop_config, force=force)
+    config = dict(original_config)
+    config["input_h5"] = local.mgxs_h5.name
+    config["output_dir"] = "sph_loop"
+    config["reference_flux"] = f"{local.reference_flux_h5.name}::openmc_volume_flux"
+    config["map_h5"] = local.flux_map_h5.name
+    config["run_script"] = local.run_script.name
+
+    solver = dict(config.get("solver", {}))
+    solver["command"] = _bundle_command(
+        solver.get("command"),
+        deck_template=local.solve_template.name,
+    )
+    config["solver"] = solver
+
+    postprocess = config.get("postprocess")
+    if isinstance(postprocess, dict):
+        postprocess = dict(postprocess)
+        postprocess["command"] = _bundle_command(
+            postprocess.get("command"),
+            deck_template=(
+                None if local.apply_template is None else local.apply_template.name
+            ),
+        )
+        config["postprocess"] = postprocess
+
+    local.loop_config.write_text(
+        json.dumps(config, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _write_bundle_run_script(path: Path, *, force: bool) -> None:
+    _require_output_ok(path, force=force)
+    text = """#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PYTHON_BIN="${PYTHON_BIN:-python3}"
+
+exec "$PYTHON_BIN" -m openmc2donjon.cli run-sph-loop --config "$SCRIPT_DIR/loop_config.json" "$@"
+"""
+    path.write_text(text, encoding="utf-8")
+    path.chmod(0o755)
+
+
+def _copy_bundle_file(source: Path, destination: Path, *, force: bool) -> None:
+    _require_output_ok(destination, force=force)
+    if source.resolve() != destination.resolve():
+        shutil.copy2(source, destination)
+
+
+def _bundle_filename(stem: str, source: Path) -> str:
+    suffix = "".join(source.suffixes)
+    return f"{stem}{suffix}" if suffix else stem
+
+
+def _command_option_path(command: object, option: str) -> Path | None:
+    if not isinstance(command, list):
+        return None
+    for index, value in enumerate(command[:-1]):
+        if value == option:
+            return Path(str(command[index + 1]))
+    return None
+
+
+def _bundle_command(command: object, *, deck_template: str | None) -> object:
+    if not isinstance(command, list):
+        return command
+    relocated = [str(part) for part in command]
+    if (
+        len(relocated) >= 3
+        and relocated[1] == "-m"
+        and relocated[2] == "openmc2donjon.donjon_deck_runner"
+    ):
+        relocated[0] = "python3"
+    if deck_template is not None:
+        _replace_command_option(relocated, "--deck-template", deck_template)
+    return relocated
+
+
+def _replace_command_option(command: list[str], option: str, value: str) -> None:
+    for index, item in enumerate(command[:-1]):
+        if item == option:
+            command[index + 1] = value
+            return
 
 
 def _prepare_run_dir(path: Path, *, force: bool) -> None:
