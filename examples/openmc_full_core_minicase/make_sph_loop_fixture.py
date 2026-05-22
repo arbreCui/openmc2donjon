@@ -10,6 +10,8 @@ import sys
 import h5py
 import numpy as np
 
+from openmc2donjon.hdf5_names import read_mixture_names
+
 
 EXPECTED_SPH_VALUE = 2.0
 ASCII_ROUNDTRIP_TOLERANCE = 1.0e-8
@@ -67,7 +69,14 @@ def _read_mgxs(path: Path) -> tuple[tuple[str, ...], int, np.ndarray]:
             raise SystemExit(f"{path}: missing /mixtures")
         if "openmc_volume_flux" not in h5:
             raise SystemExit(f"{path}: missing /openmc_volume_flux")
-        mixture_names = tuple(str(name) for name in h5["mixtures"].keys())
+        mixture_names = read_mixture_names(h5)
+        for index, name in enumerate(mixture_names, start=1):
+            group = h5["mixtures"][name]
+            if int(group.attrs.get("source_domain_index", -1)) != index:
+                raise SystemExit(
+                    f"{path}: mixture {name} source_domain_index does not "
+                    "match /mixture_names order"
+                )
         reference_flux = np.asarray(h5["openmc_volume_flux"][:], dtype=float)
         energy_groups = int(h5.attrs.get("energy_groups", reference_flux.shape[-1]))
     if reference_flux.shape != (len(mixture_names), energy_groups):
@@ -87,6 +96,9 @@ def _write_flux_map(path: Path, *, mixture_names: tuple[str, ...]) -> None:
         h5.attrs["schema"] = "openmc2donjon.low-order-flux-map.v1"
         dataset = h5.create_dataset("scalar_flux_ids", data=scalar_flux_ids)
         dataset.attrs["mixture_names"] = names
+        dataset.attrs["index_order"] = "mixture_names"
+        dataset.attrs["id_base"] = 1
+        dataset.attrs["id_kind"] = "donjon_scalar_flux_unknown"
         h5.create_dataset("mixture_names", data=names)
 
 
@@ -150,6 +162,8 @@ def _write_config(
             "sph_maximum_ceiling": EXPECTED_SPH_VALUE + ASCII_ROUNDTRIP_TOLERANCE,
             "max_final_to_initial_flux_residual_ratio": ASCII_ROUNDTRIP_TOLERANCE,
             "max_final_clipped_count": 0,
+            "require_artifact_metadata_alignment": True,
+            "require_production_audit": True,
             "fail_on_violation": True,
         },
         "solver": {

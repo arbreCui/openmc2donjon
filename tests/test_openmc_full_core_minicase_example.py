@@ -55,6 +55,7 @@ class OpenMCFullCoreMinicaseExampleTests(unittest.TestCase):
 
         self.assertIn("Strict production dry-run", text)
         self.assertIn("--production", text)
+        self.assertIn("--require-openmc-volume-flux", text)
         self.assertIn("OPENMC2DONJON_FULL_CORE_MINICASE_DIR", text)
         self.assertIn("OPENMC2DONJON-FULL-CORE-MINICASE-2G", text)
         self.assertIn('RUN_REAL_DONJON="${RUN_REAL_DONJON:-0}"', text)
@@ -69,6 +70,8 @@ class OpenMCFullCoreMinicaseExampleTests(unittest.TestCase):
         self.assertIn("make_sph_loop_fixture.py", text)
         self.assertIn("run-sph-loop", text)
         self.assertIn("validate-bundle", text)
+        self.assertIn("require_production_audit", text)
+        self.assertIn("production_audit", text)
         self.assertIn("full-core SPH loop readback OK", text)
         self.assertIn("Real DONJON low-order solve smoke", text)
         self.assertIn("openmc2donjon.donjon_deck_runner", text)
@@ -112,7 +115,10 @@ class OpenMCFullCoreMinicaseExampleTests(unittest.TestCase):
         self.assertIn('"reference_flux": f"{mgxs.resolve()}::openmc_volume_flux"', text)
         self.assertIn('"map_h5": str(flux_map.resolve())', text)
         self.assertIn('"iterations": 2', text)
+        self.assertIn("read_mixture_names", text)
+        self.assertIn('"id_kind"] = "donjon_scalar_flux_unknown"', text)
         self.assertIn('"require_converged": True', text)
+        self.assertIn('"require_production_audit": True', text)
 
     def test_full_core_solver_uses_previous_sph_to_close_the_loop(self) -> None:
         text = (_example_dir() / "fake_full_core_low_order_solver.py").read_text(

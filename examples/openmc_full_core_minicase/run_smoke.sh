@@ -135,6 +135,7 @@ OPENMC2DONJON_FULL_CORE_MINICASE_DIR="$CASE_DIR" \
   --run-dir "$CONVERT_RUN_DIR" \
   --force-run-dir \
   --production \
+  --require-openmc-volume-flux \
   --expected-energy-group-structure "$ENERGY_STRUCTURE" \
   --uncertainty-production-fail "$UNCERTAINTY_PRODUCTION_FAIL"
 
@@ -144,6 +145,7 @@ echo "== MACROLIB convert =="
   --format macrolib \
   -o "$MACROLIB" \
   --production \
+  --require-openmc-volume-flux \
   --expected-energy-group-structure "$ENERGY_STRUCTURE" \
   --uncertainty-production-fail "$UNCERTAINTY_PRODUCTION_FAIL"
 
@@ -328,6 +330,16 @@ if not summary["converged"]:
     raise SystemExit("SPH loop did not converge")
 if not summary["acceptance_passed"]:
     raise SystemExit("SPH loop acceptance failed")
+acceptance_checks = {
+    check["name"]: check for check in summary["acceptance"]["checks"]
+}
+if not acceptance_checks["require_production_audit"]["passed"]:
+    raise SystemExit("SPH loop production audit acceptance gate failed")
+production_audit = summary["production_audit"]
+if not production_audit["passed"]:
+    raise SystemExit("SPH loop production audit failed")
+if production_audit["artifact_counts"]["workflows"] != 2:
+    raise SystemExit("SPH loop production audit did not see two workflows")
 preflight = summary["flux_map_preflight"]
 if preflight["map_kind"] != "map_h5:/scalar_flux_ids":
     raise SystemExit("SPH loop did not use the fixture flux map")
@@ -498,6 +510,7 @@ expected_acceptance = {
     "min_completed_iterations",
     "require_final_solve",
     "require_artifact_metadata_alignment",
+    "require_production_audit",
     "max_final_clipped_fraction",
     "max_final_clipped_count",
 }
@@ -511,6 +524,8 @@ if preflight["scalar_flux_ids"] != list(range(1, 10)):
     raise SystemExit("real DONJON SPH scalar flux IDs are not one per assembly")
 if preflight["reference_flux_shape"] != [9, 2]:
     raise SystemExit("real DONJON SPH reference flux shape mismatch")
+if not summary["production_audit"]["passed"]:
+    raise SystemExit("real DONJON SPH production audit failed")
 
 solves = summary["solves"]
 if len(solves) != 3:
