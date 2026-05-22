@@ -125,6 +125,68 @@ class SphLoopMinicaseExampleTests(unittest.TestCase):
             np.testing.assert_allclose(payloads[0], [1.0, 40.0, 3.0, 60.0])
             np.testing.assert_allclose(payloads[1], [10.0, 400.0, 30.0, 300.0])
 
+    def test_make_real_config_writes_packaged_donjon_runner_contract(self) -> None:
+        root = _repo_root()
+        script = root / "examples/sph_loop_minicase/make_real_config.py"
+        solve_template = (
+            root / "examples/sph_loop_minicase/templates/solve_lflux_dump.x2m.in"
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            config = tmp / "real_loop_config.json"
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(script),
+                    "--output",
+                    str(config),
+                    "--output-dir",
+                    str(tmp / "sph_loop_real"),
+                    "--mgxs",
+                    str(tmp / "inputs/mgxs_library.h5"),
+                    "--reference-flux",
+                    str(tmp / "inputs/reference_flux.h5"),
+                    "--flux-map",
+                    str(tmp / "inputs/flux_map.h5"),
+                    "--solve-template",
+                    str(solve_template),
+                    "--python-bin",
+                    sys.executable,
+                ],
+                check=True,
+                cwd=root,
+                env=_pythonpath_env(root),
+            )
+
+            payload = json.loads(config.read_text(encoding="utf-8"))
+            solver = payload["solver"]["command"]
+            postprocess = payload["postprocess"]["command"]
+            self.assertEqual(payload["schema"], "openmc2donjon.sph-loop-config.v1")
+            self.assertEqual(payload["sph_kind"], "sph-loop-minicase-donjon")
+            self.assertIn("-m", solver)
+            self.assertIn("openmc2donjon.donjon_deck_runner", solver)
+            self.assertIn("openmc2donjon.donjon_deck_runner", postprocess)
+            self.assertIn(str(solve_template), solver)
+            self.assertIn("{ascii_input}", solver)
+            self.assertIn("{result}", solver)
+            self.assertIn("{workflow_ascii}", postprocess)
+            self.assertIn("{output}", postprocess)
+            self.assertTrue(
+                any(part.startswith("/tmp/odj_sph_loop_minicase") for part in solver)
+            )
+
+    def test_solve_template_dumps_lflux(self) -> None:
+        root = _repo_root()
+        text = (
+            root / "examples/sph_loop_minicase/templates/solve_lflux_dump.x2m.in"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("CAR2D 2 1", text)
+        self.assertIn("TRIVAT:", text)
+        self.assertIn("TRIVAA:", text)
+        self.assertIn("FLUD:", text)
+        self.assertIn("UTL: FLUX :: IMPR STATE-VECTOR * DUMP ;", text)
+
     def test_smoke_script_is_the_runnable_user_entrypoint(self) -> None:
         root = _repo_root()
         text = (root / "examples/sph_loop_minicase/run_smoke.sh").read_text(
@@ -132,14 +194,23 @@ class SphLoopMinicaseExampleTests(unittest.TestCase):
         )
 
         self.assertIn("make_inputs.py", text)
+        self.assertIn("make_real_config.py", text)
         self.assertIn("run-sph-loop", text)
         self.assertIn("validate-bundle", text)
+        self.assertIn("openmc2donjon.donjon_deck_runner", text)
+        self.assertIn("--dry-run", text)
         self.assertIn("corrected.macrolib.txt", text)
         self.assertIn("openmc2donjon minimal SPH loop minicase: PASS", text)
 
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
+
+
+def _pythonpath_env(root: Path) -> dict[str, str]:
+    env = dict(os.environ)
+    env["PYTHONPATH"] = f"{root / 'src'}{os.pathsep}{env.get('PYTHONPATH', '')}"
+    return env
 
 
 if __name__ == "__main__":

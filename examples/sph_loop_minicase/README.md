@@ -32,3 +32,19 @@ DONJON card/runner that applies `{sph_sidecar}` to `{workflow_ascii}` and writes
 The checked-in `loop_config.json` shows the shape of the user config. The smoke
 script generates an equivalent concrete config with paths resolved for the run
 directory.
+
+For a DONJON-backed handoff, generate the real-runner config:
+
+```bash
+python examples/sph_loop_minicase/make_real_config.py \
+  --output /private/tmp/openmc2donjon_sph_loop_minicase/case/real_loop_config.json \
+  --output-dir /private/tmp/openmc2donjon_sph_loop_minicase/case/sph_loop_real \
+  --mgxs /private/tmp/openmc2donjon_sph_loop_minicase/case/inputs/mgxs_library.h5 \
+  --reference-flux /private/tmp/openmc2donjon_sph_loop_minicase/case/inputs/reference_flux.h5 \
+  --flux-map /private/tmp/openmc2donjon_sph_loop_minicase/case/inputs/flux_map.h5
+```
+
+That config calls `python -m openmc2donjon.donjon_deck_runner`. The included
+`templates/solve_lflux_dump.x2m.in` is intentionally tiny; in a production case,
+replace its geometry and flux-solve body with the DONJON model that matches the
+OpenMC homogenization domains.
