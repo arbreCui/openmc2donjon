@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
 import tempfile
 import unittest
 
 from openmc2donjon import lcm_ascii as lcm
+
+
+FIXTURE_DIR = Path(__file__).with_name("fixtures")
 
 
 class LcmAsciiTests(unittest.TestCase):
@@ -196,6 +200,31 @@ class LcmAsciiTests(unittest.TestCase):
         self.assertEqual(
             [b.semantic_tuple() for b in blocks],
             [b.semantic_tuple() for b in reread],
+        )
+
+    def test_real_donjon_scattering_fragment_semantic_round_trip(self) -> None:
+        fixture = FIXTURE_DIR / "donjon_multicompo_scattering_fragment.txt"
+
+        blocks = lcm.read_lcm_ascii(fixture)
+        reread = lcm.parse_lcm_ascii_text(lcm.format_lcm_ascii(blocks))
+
+        self.assertEqual(
+            [block.semantic_tuple() for block in blocks],
+            [block.semantic_tuple() for block in reread],
+        )
+        by_name = {block.name: block for block in blocks if block.name}
+        self.assertEqual(by_name["STATE-VECTOR"].data[:4], (2, 2, 3, 10))
+        self.assertEqual(by_name["MIXTURES"].type_code, 10)
+        self.assertEqual(by_name["MIXTURES"].count, 2)
+        self.assertEqual(by_name["CALCULATIONS"].count, 10)
+        self.assertEqual(by_name["ISOTOPESLIST"].count, 1)
+        self.assertEqual(by_name["NJJS00"].data, (1, 2))
+        self.assertEqual(by_name["IJJS00"].data, (1, 2))
+        self.assertEqual(by_name["SCAT00"].count, 3)
+        self.assertEqual(by_name["SCAT-SAVED"].data, (1,))
+        self.assertEqual(
+            [block.trailing for block in blocks if block.trailing],
+            ["00000001", "00000001", "00000001"],
         )
 
 
