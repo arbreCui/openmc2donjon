@@ -236,7 +236,12 @@ def extract_volume_flux(statepoint_path: Path) -> np.ndarray:
     with openmc.StatePoint(str(statepoint_path)) as statepoint:
         tally = statepoint.get_tally(name=VOLUME_FLUX_TALLY_NAME)
         values = np.asarray(tally.get_values(scores=["flux"], value="mean"), dtype=float)
-    return np.squeeze(values).reshape((len(DOMAIN_NAME_BY_ID), len(ENERGY_BOUNDS_EV) - 1))
+    energy_filter_order = np.squeeze(values).reshape(
+        (len(DOMAIN_NAME_BY_ID), len(ENERGY_BOUNDS_EV) - 1)
+    )
+    # OpenMC tally bins follow the EnergyFilter bin order; the converter HDF5
+    # contract stores group-wise arrays in MGXS/DONJON group order.
+    return energy_filter_order[:, ::-1]
 
 
 def append_volume_flux_hdf5(
@@ -252,6 +257,8 @@ def append_volume_flux_hdf5(
             del h5["openmc_volume_flux"]
         dataset = h5.create_dataset("openmc_volume_flux", data=values)
         dataset.attrs["mixture_names"] = np.asarray(mixture_names, dtype="S")
+        dataset.attrs["group_order"] = "mgxs_donjon"
+        dataset.attrs["source_group_order"] = "openmc_energy_filter_reversed"
 
 
 def root_attrs() -> dict[str, object]:

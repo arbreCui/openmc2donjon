@@ -188,7 +188,15 @@ with h5py.File(mgxs, "r") as h5:
         raise SystemExit(f"unexpected mixture names: {names}")
     if "openmc_volume_flux" not in h5:
         raise SystemExit("full-core MGXS is missing openmc_volume_flux")
-    openmc_volume_flux = h5["openmc_volume_flux"][:]
+    openmc_volume_flux_dataset = h5["openmc_volume_flux"]
+    if openmc_volume_flux_dataset.attrs.get("group_order") != "mgxs_donjon":
+        raise SystemExit("openmc_volume_flux is not tagged as MGXS/DONJON group order")
+    if (
+        openmc_volume_flux_dataset.attrs.get("source_group_order")
+        != "openmc_energy_filter_reversed"
+    ):
+        raise SystemExit("openmc_volume_flux source group-order metadata mismatch")
+    openmc_volume_flux = openmc_volume_flux_dataset[:]
     if openmc_volume_flux.shape != (9, 2):
         raise SystemExit(f"unexpected OpenMC volume-flux shape: {openmc_volume_flux.shape}")
     if not np.all(np.isfinite(openmc_volume_flux)) or np.any(openmc_volume_flux <= 0.0):
