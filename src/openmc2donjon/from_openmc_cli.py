@@ -258,6 +258,7 @@ def _print_dry_run_checks(args: argparse.Namespace) -> None:
             require_mixture_order=False,
             require_domain_mode=args.require_domain_mode,
             require_source_domain_metadata=args.require_source_domain_metadata,
+            require_openmc_volume_flux=args.require_openmc_volume_flux,
             require_transport_dataset=args.require_transport_dataset,
             require_volume=args.require_volume,
             require_h_factor=args.require_h_factor,
@@ -279,6 +280,10 @@ def _print_dry_run_checks(args: argparse.Namespace) -> None:
         print(
             "    require_source_domain_metadata: "
             f"{_yes_no(settings['require_source_domain_metadata'])}"
+        )
+        print(
+            "    require_openmc_volume_flux: "
+            f"{_yes_no(settings['require_openmc_volume_flux'])}"
         )
         print(
             "    require_transport_dataset: "
@@ -443,6 +448,7 @@ def _run_pipeline_preflight(
         expected_adf_faces=args.expected_adf_faces,
         require_domain_mode=args.require_domain_mode,
         require_source_domain_metadata=args.require_source_domain_metadata,
+        require_openmc_volume_flux=args.require_openmc_volume_flux,
         require_transport_dataset=args.require_transport_dataset,
         require_volume=args.require_volume,
         require_h_factor=args.require_h_factor,

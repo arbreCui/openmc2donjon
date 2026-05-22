@@ -106,6 +106,14 @@ def build_check_parser() -> argparse.ArgumentParser:
         help="require source_domain_id and source_domain_type on every mixture",
     )
     parser.add_argument(
+        "--require-openmc-volume-flux",
+        action="store_true",
+        help=(
+            "require /openmc_volume_flux with MGXS/DONJON group order and "
+            "matching mixture_names"
+        ),
+    )
+    parser.add_argument(
         "--require-adf",
         action="store_true",
         help="require ADF data for every mixture",
@@ -455,6 +463,7 @@ def check_handler(args: argparse.Namespace) -> int:
         require_mixture_order=args.require_mixture_order,
         require_domain_mode=args.require_domain_mode,
         require_source_domain_metadata=args.require_source_domain_metadata,
+        require_openmc_volume_flux=args.require_openmc_volume_flux,
         require_transport_dataset=args.require_transport_dataset,
         require_volume=args.require_volume,
         require_h_factor=args.require_h_factor,

@@ -33,6 +33,11 @@ class InputReport:
     fissionable_mixtures: int = 0
     volume_attributes: int = 0
     volume_defaulted: int = 0
+    openmc_volume_flux_present: bool = False
+    openmc_volume_flux_shape: tuple[int, ...] | None = None
+    openmc_volume_flux_group_order: str | None = None
+    openmc_volume_flux_source_group_order: str | None = None
+    openmc_volume_flux_mixture_names: int = 0
     h_factor_datasets: int = 0
     scatter_axes: list[str] = field(default_factory=list)
     transport_total_datasets: int = 0
@@ -133,6 +138,7 @@ def print_report(report: InputReport) -> None:
         f"defaulted={report.volume_defaulted}/{calculation_count} "
         f"h_factor={report.h_factor_datasets}/{calculation_count}"
     )
+    print(_openmc_volume_flux_line(report))
     print(
         "        "
         f"transport_total={report.transport_total_datasets}/{calculation_count} "
@@ -209,6 +215,13 @@ def _report_payload(report: InputReport) -> dict[str, object]:
         "fissionable_mixtures": report.fissionable_mixtures,
         "volume_attributes": report.volume_attributes,
         "volume_defaulted": report.volume_defaulted,
+        "openmc_volume_flux": {
+            "present": report.openmc_volume_flux_present,
+            "shape": report.openmc_volume_flux_shape,
+            "group_order": report.openmc_volume_flux_group_order,
+            "source_group_order": report.openmc_volume_flux_source_group_order,
+            "mixture_names": report.openmc_volume_flux_mixture_names,
+        },
         "h_factor_datasets": report.h_factor_datasets,
         "scatter_axes": report.scatter_axes,
         "scatter_row_balance": {
@@ -270,6 +283,22 @@ def _uncertainty_line(report: InputReport) -> str:
         f"max_rel={report.uncertainty_max_rel:.6e} "
         f"worst={report.uncertainty_worst}"
         f"{_uncertainty_production_suffix(report)}"
+    )
+
+
+def _openmc_volume_flux_line(report: InputReport) -> str:
+    prefix = "        openmc_volume_flux="
+    if not report.openmc_volume_flux_present:
+        return f"{prefix}missing"
+    shape = (
+        "unknown"
+        if report.openmc_volume_flux_shape is None
+        else "x".join(str(value) for value in report.openmc_volume_flux_shape)
+    )
+    group_order = report.openmc_volume_flux_group_order or "unspecified"
+    return (
+        f"{prefix}present shape={shape} group_order={group_order} "
+        f"mixture_names={report.openmc_volume_flux_mixture_names}/{report.mixtures}"
     )
 
 

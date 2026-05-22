@@ -398,6 +398,51 @@ class MgxsInputContractTests(unittest.TestCase):
         self.assertEqual(valid_report.domain_mode, "assembly")
         self.assertEqual(valid_report.source_domain_metadata, 1)
 
+    def test_openmc_volume_flux_contract_validates_reference_flux_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "reference_flux.h5"
+            bad = Path(tmpdir) / "bad_reference_flux.h5"
+            missing = Path(tmpdir) / "missing_reference_flux.h5"
+            write_single_state_fixture(path, total=[0.29, 0.38])
+            write_single_state_fixture(bad, total=[0.29, 0.38])
+            write_single_state_fixture(missing, total=[0.29, 0.38])
+            append_openmc_volume_flux(path)
+            append_openmc_volume_flux(
+                bad,
+                values=np.array([[10.0, -1.0]]),
+                group_order="openmc_native",
+                mixture_names=("moderator",),
+            )
+
+            valid_report = validator.validate_input(
+                path,
+                require_openmc_volume_flux=True,
+            )
+            bad_report = validator.validate_input(
+                bad,
+                require_openmc_volume_flux=True,
+            )
+            missing_report = validator.validate_input(
+                missing,
+                require_openmc_volume_flux=True,
+            )
+
+        self.assertTrue(valid_report.ok, valid_report.issues)
+        self.assertTrue(valid_report.openmc_volume_flux_present)
+        self.assertEqual(valid_report.openmc_volume_flux_shape, (1, 2))
+        self.assertEqual(valid_report.openmc_volume_flux_group_order, "mgxs_donjon")
+        self.assertEqual(valid_report.openmc_volume_flux_mixture_names, 1)
+        self.assertFalse(bad_report.ok)
+        self.assertTrue(
+            any("group_order must be 'mgxs_donjon'" in item for item in bad_report.issues)
+        )
+        self.assertIn("/openmc_volume_flux values must be positive", bad_report.issues)
+        self.assertTrue(
+            any("mixture_names must match" in item for item in bad_report.issues)
+        )
+        self.assertFalse(missing_report.ok)
+        self.assertIn("/openmc_volume_flux dataset is required", missing_report.issues)
+
     def test_energy_group_identity_gate_accepts_matching_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "c5g7.h5"
@@ -643,6 +688,23 @@ def write_one_state_payload(
             else scatter
         ),
     )
+
+
+def append_openmc_volume_flux(
+    path: Path,
+    *,
+    values: np.ndarray | None = None,
+    group_order: str = "mgxs_donjon",
+    mixture_names: tuple[str, ...] = ("fuel",),
+) -> None:
+    with h5py.File(path, "a") as h5:
+        dataset = h5.create_dataset(
+            "openmc_volume_flux",
+            data=np.array([[10.0, 20.0]]) if values is None else values,
+        )
+        dataset.attrs["group_order"] = group_order
+        dataset.attrs["mixture_names"] = np.asarray(mixture_names, dtype="S")
+        dataset.attrs["source_group_order"] = "unit_test"
 
 
 if __name__ == "__main__":

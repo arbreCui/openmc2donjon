@@ -169,6 +169,9 @@ def prepare_openmc_sph_loop_handoff(
         production=production,
         require_volume=require_volume,
         require_h_factor=effective_require_h_factor,
+        require_openmc_volume_flux=(
+            reference_flux is None and reference_flux_dataset == "openmc_volume_flux"
+        ),
         require_transport_dataset=require_transport_dataset,
         expected_energy_group_structure=expected_energy_group_structure,
         expected_energy_bounds=(
@@ -550,6 +553,7 @@ def _run_optional_preflight(
     production: bool,
     require_volume: bool,
     require_h_factor: bool,
+    require_openmc_volume_flux: bool,
     require_transport_dataset: bool,
     expected_energy_group_structure: str | None,
     expected_energy_bounds: Path | None,
@@ -570,6 +574,7 @@ def _run_optional_preflight(
         production=production,
         require_volume=require_volume,
         require_h_factor=require_h_factor,
+        require_openmc_volume_flux=require_openmc_volume_flux,
         require_transport_dataset=require_transport_dataset,
         expected_energy_group_structure=expected_energy_group_structure,
         expected_energy_bounds=expected_energy_bounds,

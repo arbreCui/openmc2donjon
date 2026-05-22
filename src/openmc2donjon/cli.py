@@ -147,6 +147,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="with --check, require source_domain_id and source_domain_type attributes",
     )
     parser.add_argument(
+        "--require-openmc-volume-flux",
+        action="store_true",
+        help="with --check, require /openmc_volume_flux reference flux metadata",
+    )
+    parser.add_argument(
         "--require-adf",
         action="store_true",
         help="with --check, require ADF data for every mixture",
@@ -332,6 +337,7 @@ def _convert_handler(args: argparse.Namespace) -> int:
             require_mixture_order=args.require_mixture_order,
             require_domain_mode=args.require_domain_mode,
             require_source_domain_metadata=args.require_source_domain_metadata,
+            require_openmc_volume_flux=args.require_openmc_volume_flux,
             require_transport_dataset=args.require_transport_dataset,
             require_volume=args.require_volume,
             require_h_factor=args.require_h_factor,

@@ -368,6 +368,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="with --check, require source_domain_id and source_domain_type attributes",
     )
     parser.add_argument(
+        "--require-openmc-volume-flux",
+        action="store_true",
+        help="with --check, require /openmc_volume_flux reference flux metadata",
+    )
+    parser.add_argument(
         "--require-adf",
         action="store_true",
         help="with --check, require ADF data for every mixture",

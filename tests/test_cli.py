@@ -31,10 +31,18 @@ class CliTests(unittest.TestCase):
 
             stream = io.StringIO()
             with contextlib.redirect_stdout(stream):
-                rc = cli_main(["check", str(path), "--require-volume"])
+                rc = cli_main(
+                    [
+                        "check",
+                        str(path),
+                        "--require-volume",
+                        "--require-openmc-volume-flux",
+                    ]
+                )
 
         self.assertEqual(rc, 0)
         self.assertIn("mgxs_input_contract_passed", stream.getvalue())
+        self.assertIn("openmc_volume_flux=present", stream.getvalue())
 
     def test_check_command_rejects_invalid_hdf5(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -108,6 +116,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["inputs"][0]["source_domain_indices"], 1)
         self.assertEqual(payload["inputs"][0]["domain_mode"], "unit_test")
         self.assertEqual(payload["inputs"][0]["source_domain_metadata"], 1)
+        self.assertTrue(payload["inputs"][0]["openmc_volume_flux"]["present"])
 
     def test_check_command_can_gate_energy_group_identity(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -547,3 +556,7 @@ def write_valid_mgxs(path: Path) -> None:
             "scatter_matrix",
             data=np.array([[[0.2, 0.04], [0.0, 0.3]]]),
         )
+        flux = h5.create_dataset("openmc_volume_flux", data=np.array([[10.0, 20.0]]))
+        flux.attrs["group_order"] = "mgxs_donjon"
+        flux.attrs["mixture_names"] = np.asarray(["fuel"], dtype="S")
+        flux.attrs["source_group_order"] = "unit_test"

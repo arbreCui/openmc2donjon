@@ -10,6 +10,7 @@ from typing import Any
 import h5py
 import numpy as np
 
+from .constants import MGXS_DONJON_GROUP_ORDER
 from .energy_groups import energy_bounds_sha256, load_energy_bounds_text
 from .hdf5_names import read_mixture_names
 from .mgxs_input_equivalence import (
@@ -82,6 +83,7 @@ def production_preflight_defaults(
     require_mixture_order: bool = False,
     require_domain_mode: bool = False,
     require_source_domain_metadata: bool = False,
+    require_openmc_volume_flux: bool = False,
     require_transport_dataset: bool,
     require_volume: bool,
     require_h_factor: bool,
@@ -95,6 +97,7 @@ def production_preflight_defaults(
             "require_mixture_order": require_mixture_order,
             "require_domain_mode": require_domain_mode,
             "require_source_domain_metadata": require_source_domain_metadata,
+            "require_openmc_volume_flux": require_openmc_volume_flux,
             "require_transport_dataset": require_transport_dataset,
             "require_volume": require_volume,
             "require_h_factor": require_h_factor,
@@ -111,6 +114,7 @@ def production_preflight_defaults(
         "require_mixture_order": True,
         "require_domain_mode": True,
         "require_source_domain_metadata": True,
+        "require_openmc_volume_flux": require_openmc_volume_flux,
         "require_transport_dataset": True,
         "require_volume": True,
         "require_h_factor": True,
@@ -127,6 +131,7 @@ def main() -> int:
         require_mixture_order=args.require_mixture_order,
         require_domain_mode=args.require_domain_mode,
         require_source_domain_metadata=args.require_source_domain_metadata,
+        require_openmc_volume_flux=args.require_openmc_volume_flux,
         require_transport_dataset=args.require_transport_dataset,
         require_volume=args.require_volume,
         require_h_factor=args.require_h_factor,
@@ -144,6 +149,7 @@ def main() -> int:
             require_mixture_order=settings["require_mixture_order"],
             require_domain_mode=settings["require_domain_mode"],
             require_source_domain_metadata=settings["require_source_domain_metadata"],
+            require_openmc_volume_flux=settings["require_openmc_volume_flux"],
             require_transport_dataset=settings["require_transport_dataset"],
             require_volume=settings["require_volume"],
             require_h_factor=settings["require_h_factor"],
@@ -230,6 +236,14 @@ def parse_args() -> argparse.Namespace:
         "--require-source-domain-metadata",
         action="store_true",
         help="require source_domain_id and source_domain_type on every mixture",
+    )
+    parser.add_argument(
+        "--require-openmc-volume-flux",
+        action="store_true",
+        help=(
+            "require /openmc_volume_flux with MGXS/DONJON group order and "
+            "matching mixture_names"
+        ),
     )
     parser.add_argument(
         "--require-adf",
@@ -355,6 +369,7 @@ def validate_input(
     require_mixture_order: bool = False,
     require_domain_mode: bool = False,
     require_source_domain_metadata: bool = False,
+    require_openmc_volume_flux: bool = False,
     require_transport_dataset: bool = False,
     require_volume: bool = False,
     require_h_factor: bool = False,
@@ -388,6 +403,7 @@ def validate_input(
                 require_mixture_order=require_mixture_order,
                 require_domain_mode=require_domain_mode,
                 require_source_domain_metadata=require_source_domain_metadata,
+                require_openmc_volume_flux=require_openmc_volume_flux,
                 require_transport_dataset=require_transport_dataset,
                 require_volume=require_volume,
                 require_h_factor=require_h_factor,
@@ -412,6 +428,7 @@ def validate_open_h5(
     require_mixture_order: bool,
     require_domain_mode: bool,
     require_source_domain_metadata: bool,
+    require_openmc_volume_flux: bool,
     require_transport_dataset: bool,
     require_volume: bool,
     require_h_factor: bool,
@@ -477,6 +494,13 @@ def validate_open_h5(
         report,
         require_mixture_order=require_mixture_order,
         require_source_domain_metadata=require_source_domain_metadata,
+    )
+    validate_openmc_volume_flux(
+        h5,
+        mixture_names,
+        ngroups,
+        report,
+        require_openmc_volume_flux=require_openmc_volume_flux,
     )
 
     burnup_axis = burnup_axis_from_hdf5(h5, report)
@@ -618,6 +642,66 @@ def validate_source_domain_metadata(
             report.fail(f"mixture {name}: source_domain_id attribute must be an integer")
     if has_type and not attr_text(group.attrs["source_domain_type"]).strip():
         report.fail(f"mixture {name}: source_domain_type attribute must be non-empty")
+
+
+def validate_openmc_volume_flux(
+    h5: h5py.File,
+    mixture_names: tuple[str, ...],
+    ngroups: int,
+    report: InputReport,
+    *,
+    require_openmc_volume_flux: bool,
+) -> None:
+    if "openmc_volume_flux" not in h5:
+        if require_openmc_volume_flux:
+            report.fail("/openmc_volume_flux dataset is required")
+        return
+
+    obj = h5["openmc_volume_flux"]
+    report.openmc_volume_flux_present = True
+    if not isinstance(obj, h5py.Dataset):
+        report.fail("/openmc_volume_flux must be an HDF5 dataset")
+        return
+
+    report.openmc_volume_flux_shape = tuple(int(value) for value in obj.shape)
+    expected_shape = (len(mixture_names), ngroups)
+    if report.openmc_volume_flux_shape != expected_shape:
+        report.fail(
+            "/openmc_volume_flux shape must match (mixture, group): "
+            f"{report.openmc_volume_flux_shape} != {expected_shape}"
+        )
+    else:
+        values = np.asarray(obj[:], dtype=float)
+        if not np.all(np.isfinite(values)):
+            report.fail("/openmc_volume_flux contains non-finite values")
+        if np.any(values <= 0.0):
+            report.fail("/openmc_volume_flux values must be positive")
+
+    group_order = (
+        attr_text(obj.attrs["group_order"]) if "group_order" in obj.attrs else None
+    )
+    report.openmc_volume_flux_group_order = group_order
+    if group_order != MGXS_DONJON_GROUP_ORDER:
+        report.fail(
+            "/openmc_volume_flux attrs group_order must be "
+            f"{MGXS_DONJON_GROUP_ORDER!r}, got {group_order!r}"
+        )
+
+    if "source_group_order" in obj.attrs:
+        report.openmc_volume_flux_source_group_order = attr_text(
+            obj.attrs["source_group_order"]
+        )
+
+    if "mixture_names" not in obj.attrs:
+        report.fail("/openmc_volume_flux attrs mixture_names is required")
+        return
+    declared = names_from_hdf5_value(obj.attrs["mixture_names"])
+    report.openmc_volume_flux_mixture_names = len(declared)
+    if declared != mixture_names:
+        report.fail(
+            "/openmc_volume_flux attrs mixture_names must match /mixture_names: "
+            f"{declared!r} != {mixture_names!r}"
+        )
 
 
 def validate_energy_identity(
@@ -1037,6 +1121,16 @@ def attr_with_parent(
     return None
 
 
+def names_from_hdf5_value(value: Any) -> tuple[str, ...]:
+    names: list[str] = []
+    for item in np.asarray(value).reshape(-1):
+        if isinstance(item, bytes):
+            names.append(item.decode("utf-8"))
+        else:
+            names.append(str(item))
+    return tuple(names)
+
+
 def sorted_state_names(states: h5py.Group) -> list[str]:
     def key(name: str) -> tuple[int, int | str]:
         try:
@@ -1089,6 +1183,7 @@ def run_preflight(
     require_mixture_order: bool = False,
     require_domain_mode: bool = False,
     require_source_domain_metadata: bool = False,
+    require_openmc_volume_flux: bool = False,
     require_transport_dataset: bool = False,
     require_volume: bool = False,
     require_h_factor: bool = False,
@@ -1116,6 +1211,7 @@ def run_preflight(
         require_mixture_order=require_mixture_order,
         require_domain_mode=require_domain_mode,
         require_source_domain_metadata=require_source_domain_metadata,
+        require_openmc_volume_flux=require_openmc_volume_flux,
         require_transport_dataset=require_transport_dataset,
         require_volume=require_volume,
         require_h_factor=require_h_factor,
@@ -1131,6 +1227,7 @@ def run_preflight(
             require_mixture_order=settings["require_mixture_order"],
             require_domain_mode=settings["require_domain_mode"],
             require_source_domain_metadata=settings["require_source_domain_metadata"],
+            require_openmc_volume_flux=settings["require_openmc_volume_flux"],
             require_transport_dataset=settings["require_transport_dataset"],
             require_volume=settings["require_volume"],
             require_h_factor=settings["require_h_factor"],

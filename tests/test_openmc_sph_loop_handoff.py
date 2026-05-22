@@ -196,6 +196,12 @@ class OpenMCSphLoopHandoffTests(unittest.TestCase):
             )
 
             self.assertEqual(report.check_summary_json, run_dir / "check_summary.json")
+            check_summary = json.loads(report.check_summary_json.read_text(encoding="utf-8"))
+            self.assertTrue(check_summary["inputs"][0]["openmc_volume_flux"]["present"])
+            self.assertEqual(
+                check_summary["inputs"][0]["openmc_volume_flux"]["group_order"],
+                "mgxs_donjon",
+            )
             loop_config = json.loads(report.scaffold.loop_config.read_text(encoding="utf-8"))
             self.assertEqual(loop_config["flux_normalization"], "auto")
             self.assertEqual(loop_config["acceptance"], {"preset": "production"})
