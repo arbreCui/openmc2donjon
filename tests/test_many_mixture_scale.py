@@ -17,6 +17,56 @@ from openmc2donjon.multicompo import convert_mgxs_hdf5, read_mgxs_hdf5
 
 
 class ManyMixtureScaleTests(unittest.TestCase):
+    def test_thousand_mixture_multicompo_converter_only_stress(self) -> None:
+        nmixtures = 1000
+        ngroups = 7
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            hdf5 = root / "thousand_domains.h5"
+            mcompo = root / "thousand_domains.mcompo.txt"
+
+            _write_many_mixture_fixture(hdf5, nmixtures=nmixtures, ngroups=ngroups)
+
+            convert_mgxs_hdf5(hdf5, mcompo)
+            blocks = lcm_ascii.read_lcm_ascii(mcompo)
+
+        state = _first_block(blocks, "STATE-VECTOR", level=2).data
+        mixtures_block = _first_block(blocks, "MIXTURES", level=2)
+        ntot_blocks = [block for block in blocks if block.name == "NTOT0"]
+        scat00_blocks = [block for block in blocks if block.name == "SCAT00"]
+        scat01_blocks = [block for block in blocks if block.name == "SCAT01"]
+        njjs00_blocks = [block for block in blocks if block.name == "NJJS00"]
+        ijjs00_blocks = [block for block in blocks if block.name == "IJJS00"]
+
+        self.assertEqual(state[:4], (nmixtures, ngroups, 1, 1))
+        self.assertEqual(mixtures_block.count, nmixtures)
+        self.assertEqual(len(ntot_blocks), nmixtures)
+        self.assertEqual(len(scat00_blocks), nmixtures)
+        self.assertEqual(len(scat01_blocks), nmixtures)
+        self.assertEqual(len(njjs00_blocks), nmixtures)
+        self.assertEqual(len(ijjs00_blocks), nmixtures)
+        np.testing.assert_allclose(ntot_blocks[0].data, _expected_total(1, ngroups))
+        np.testing.assert_allclose(
+            ntot_blocks[-1].data,
+            _expected_total(nmixtures, ngroups),
+        )
+        for block in (
+            scat00_blocks[0],
+            scat01_blocks[0],
+            scat00_blocks[-1],
+            scat01_blocks[-1],
+        ):
+            self.assertEqual(block.count, len(block.data))
+            self.assertGreater(block.count, ngroups)
+        for block in (
+            njjs00_blocks[0],
+            ijjs00_blocks[0],
+            njjs00_blocks[-1],
+            ijjs00_blocks[-1],
+        ):
+            self.assertEqual(block.count, ngroups)
+
     def test_many_spatial_domains_convert_and_read_back(self) -> None:
         nmixtures = 128
         ngroups = 4

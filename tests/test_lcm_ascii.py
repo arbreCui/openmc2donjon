@@ -26,6 +26,66 @@ class LcmAsciiTests(unittest.TestCase):
             [b.semantic_tuple() for b in parsed],
         )
 
+    def test_block_type_matrix_round_trip(self) -> None:
+        long_text = (
+            "LCM ASCII string payloads keep padding and can cross the "
+            "eighty-character wire line boundary."
+        )
+        blocks = [
+            lcm.block(1, "ROOT", 0, count=-1),
+            lcm.block(2, "MIXTURES", 10, count=2),
+            lcm.list_item(3, 1),
+            lcm.block(4, "INTS", 1, [1, -2, 3, -4, 5, -6, 7, -8, 9]),
+            lcm.block(
+                4,
+                "REALS",
+                2,
+                [1.0, -2.5, 3.125e-12, -4.25e6, 5.5, 6.75],
+            ),
+            lcm.string_block(4, "TEXT", long_text),
+            lcm.list_item(3, 2),
+            lcm.list_placeholder(4, 7),
+            lcm.string_block(4, "ALIAS", "FUEL_A", width=8),
+            lcm.control(-3),
+            lcm.control(-2),
+            lcm.control(-1),
+        ]
+
+        first_read = lcm.parse_lcm_ascii_text(lcm.format_lcm_ascii(blocks))
+        second_read = lcm.parse_lcm_ascii_text(lcm.format_lcm_ascii(first_read))
+
+        self.assertEqual(
+            [block.semantic_tuple() for block in blocks],
+            [block.semantic_tuple() for block in first_read],
+        )
+        self.assertEqual(
+            [block.semantic_tuple() for block in first_read],
+            [block.semantic_tuple() for block in second_read],
+        )
+
+    def test_parser_accepts_fortran_d_real_exponents(self) -> None:
+        text = "\n".join(
+            [
+                "->       1      12       2       3                                 <-   ",
+                "VALUES                                                                          ",
+                "  1.25000000D+00 -2.50000000D-03  3.00000000E+02",
+            ]
+        )
+
+        blocks = lcm.parse_lcm_ascii_text(text)
+
+        self.assertEqual(blocks[0].data, (1.25, -2.5e-3, 300.0))
+        reread = lcm.parse_lcm_ascii_text(lcm.format_lcm_ascii(blocks))
+        self.assertEqual(blocks[0].semantic_tuple(), reread[0].semantic_tuple())
+
+    def test_string_payload_padding_is_semantic(self) -> None:
+        block = lcm.string_block(1, "COMMENT", "ABC", width=12)
+
+        parsed = lcm.parse_lcm_ascii_text(lcm.format_lcm_ascii([block]))
+
+        self.assertEqual(parsed[0].data, "ABC         ")
+        self.assertEqual(block.semantic_tuple(), parsed[0].semantic_tuple())
+
     def test_reads_unnamed_list_payload(self) -> None:
         text = "\n".join(
             [
@@ -66,6 +126,32 @@ class LcmAsciiTests(unittest.TestCase):
 
         self.assertEqual(block.data, "abcd")
         self.assertEqual(block.count, 1)
+
+    def test_rejects_bad_string_chunk_declaration(self) -> None:
+        text = "\n".join(
+            [
+                "->       1      12       3       1                                 <-   ",
+                "COMMENT                                                                         ",
+                "         8",
+                "ABCD",
+            ]
+        )
+
+        with self.assertRaisesRegex(ValueError, "unsupported string chunk width"):
+            lcm.parse_lcm_ascii_text(text)
+
+    def test_format_rejects_string_payload_count_mismatch(self) -> None:
+        block = lcm.LcmBlock(
+            1,
+            12,
+            3,
+            2,
+            name="COMMENT",
+            data="ABCD",
+        )
+
+        with self.assertRaisesRegex(ValueError, "expected 8"):
+            lcm.format_lcm_ascii([block])
 
     def test_rejects_overlong_block_name(self) -> None:
         name = "X" * 81
