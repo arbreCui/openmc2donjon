@@ -43,8 +43,20 @@ class SphLoopMinicaseExampleTests(unittest.TestCase):
             with h5py.File(case_dir / "inputs/mgxs_library.h5", "r") as h5:
                 self.assertEqual(h5.attrs["domain_mode"], "assembly-wise")
                 self.assertEqual(
+                    tuple(value.decode("utf-8") for value in h5["mixture_names"][:]),
+                    ("FUEL_ASM", "REFL_ASM"),
+                )
+                self.assertEqual(
                     tuple(h5["mixtures"].keys()),
                     ("FUEL_ASM", "REFL_ASM"),
+                )
+                self.assertEqual(
+                    int(h5["mixtures/FUEL_ASM"].attrs["source_domain_index"]),
+                    1,
+                )
+                self.assertEqual(
+                    int(h5["mixtures/REFL_ASM"].attrs["source_domain_index"]),
+                    2,
                 )
                 self.assertIn("transport_total", h5["mixtures/FUEL_ASM"])
                 np.testing.assert_allclose(
@@ -89,6 +101,7 @@ class SphLoopMinicaseExampleTests(unittest.TestCase):
             self.assertTrue(plan.convergence_enabled)
             self.assertTrue(plan.fail_on_nonconvergence)
             self.assertTrue(plan.run_final_solve)
+            self.assertTrue(plan.require_mgxs_domain_order)
             self.assertEqual(plan.normalized_acceptance["min_completed_iterations"], 2)
             self.assertEqual(plan.normalized_acceptance["require_converged"], True)
             self.assertEqual(

@@ -126,6 +126,9 @@ class SphLoopTests(unittest.TestCase):
             self.assertEqual(preflight["map_kind"], "scalar_flux_map")
             self.assertEqual(preflight["mixture_count"], 2)
             self.assertEqual(preflight["energy_groups"], 2)
+            self.assertTrue(preflight["mgxs_declared_mixture_order"])
+            self.assertEqual(preflight["mgxs_source_domain_indices"], [1, 2])
+            self.assertEqual(preflight["mgxs_source_domain_order_errors"], [])
             self.assertEqual(preflight["scalar_flux_ids"], [2, 4])
             self.assertEqual(preflight["reference_flux_shape"], [2, 2])
             self.assertEqual(preflight["reference_flux_group_order"], "mgxs_donjon")
@@ -171,6 +174,10 @@ class SphLoopTests(unittest.TestCase):
                     {"mixture": "fuel", "scalar_flux_id": 2},
                     {"mixture": "moderator", "scalar_flux_id": 4},
                 ],
+            )
+            self.assertEqual(
+                production_audit["flux_map"]["mgxs_source_domain_indices"],
+                [1, 2],
             )
             self.assertEqual(production_audit["artifact_counts"]["workflows"], 2)
             self.assertTrue(payload["acceptance"]["passed"])
@@ -710,6 +717,62 @@ class SphLoopTests(unittest.TestCase):
             self.assertIn("reference flux HDF5 must declare mixture_names", stderr.getvalue())
             self.assertFalse((root / "loop_run/iter00_solve").exists())
 
+    def test_production_preflight_rejects_mgxs_source_domain_order_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference = root / "reference_flux.h5"
+            solver = root / "fake_donjon_solver.py"
+            config = root / "loop.json"
+            _write_mgxs(mgxs, source_domain_indices=(2, 1))
+            _write_reference_flux(reference)
+            _write_fake_solver(solver)
+            config.write_text(
+                json.dumps(
+                    {
+                        "schema": "openmc2donjon.sph-loop-config.v1",
+                        "input_h5": "mgxs.h5",
+                        "output_dir": "loop_run",
+                        "reference_flux": "reference_flux.h5::openmc_volume_flux",
+                        "iterations": 1,
+                        "format": "macrolib",
+                        "scalar_flux_map": {"fuel": 2, "moderator": 4},
+                        "acceptance": {
+                            "require_production_audit": True,
+                            "fail_on_violation": True,
+                        },
+                        "solver": {
+                            "command": [
+                                sys.executable,
+                                str(solver),
+                                "--macrolib",
+                                "{ascii_input}",
+                                "--result",
+                                "{result}",
+                                "--iteration",
+                                "{iteration}",
+                            ],
+                            "result": "donjon_flux.result",
+                        },
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as raised:
+                    cli_main(["run-sph-loop", "--config", str(config)])
+
+            self.assertEqual(raised.exception.code, 1)
+            self.assertIn(
+                "source_domain_index 2 does not match /mixture_names position 1",
+                stderr.getvalue(),
+            )
+            self.assertFalse((root / "loop_run/iter00_solve").exists())
+
     def test_reference_flux_preflight_rejects_mixture_name_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -1026,13 +1089,26 @@ class SphLoopTests(unittest.TestCase):
             self.assertTrue((root / "loop_run/iter01_sph/next_sph.sidecar.h5").exists())
 
 
-def _write_mgxs(path: Path) -> None:
+def _write_mgxs(
+    path: Path,
+    *,
+    source_domain_indices: tuple[int, int] = (1, 2),
+) -> None:
     with h5py.File(path, "w") as h5:
         h5.attrs["energy_groups"] = 2
         h5.create_dataset("energy_bounds", data=np.array([1.0e-5, 1.0, 1.0e7]))
+        h5.create_dataset("mixture_names", data=np.asarray(["fuel", "moderator"], dtype="S"))
         mixtures = h5.create_group("mixtures")
-        _write_mixture(mixtures.create_group("fuel"), fissionable=True)
-        _write_mixture(mixtures.create_group("moderator"), fissionable=False)
+        fuel = mixtures.create_group("fuel")
+        moderator = mixtures.create_group("moderator")
+        fuel.attrs["source_domain_index"] = source_domain_indices[0]
+        fuel.attrs["source_domain_id"] = 101
+        fuel.attrs["source_domain_type"] = "cell"
+        moderator.attrs["source_domain_index"] = source_domain_indices[1]
+        moderator.attrs["source_domain_id"] = 102
+        moderator.attrs["source_domain_type"] = "cell"
+        _write_mixture(fuel, fissionable=True)
+        _write_mixture(moderator, fissionable=False)
 
 
 def _write_mixture(group, *, fissionable: bool) -> None:

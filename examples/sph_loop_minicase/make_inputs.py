@@ -81,10 +81,13 @@ def _write_mgxs(path: Path) -> None:
             "one OpenMC homogenized domain -> one DONJON mixture"
         )
         h5.create_dataset("energy_bounds", data=ENERGY_BOUNDS)
+        h5.create_dataset("mixture_names", data=np.asarray(MIXTURE_NAMES, dtype="S"))
         mixtures = h5.create_group("mixtures")
         _write_mixture(
             mixtures,
             "FUEL_ASM",
+            source_domain_index=1,
+            source_domain_id=101,
             fissionable=True,
             total=np.array([0.50, 0.70]),
             absorption=np.array([0.05, 0.10]),
@@ -95,6 +98,8 @@ def _write_mgxs(path: Path) -> None:
         _write_mixture(
             mixtures,
             "REFL_ASM",
+            source_domain_index=2,
+            source_domain_id=102,
             fissionable=False,
             total=np.array([0.30, 0.60]),
             absorption=np.array([0.02, 0.04]),
@@ -108,6 +113,8 @@ def _write_mixture(
     mixtures: h5py.Group,
     name: str,
     *,
+    source_domain_index: int,
+    source_domain_id: int,
     fissionable: bool,
     total: np.ndarray,
     absorption: np.ndarray,
@@ -119,6 +126,9 @@ def _write_mixture(
     group.attrs["fissionable"] = bool(fissionable)
     group.attrs["scatter_axes"] = "moment,from,to"
     group.attrs["volume"] = float(volume)
+    group.attrs["source_domain_index"] = int(source_domain_index)
+    group.attrs["source_domain_id"] = int(source_domain_id)
+    group.attrs["source_domain_type"] = "assembly"
     group.create_dataset("total", data=total)
     group.create_dataset("absorption", data=absorption)
     group.create_dataset(

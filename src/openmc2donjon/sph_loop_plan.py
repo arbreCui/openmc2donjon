@@ -48,6 +48,7 @@ class SphLoopPlan:
     map_h5: Path | None
     scalar_flux_ids: dict[str, int] | None
     scalar_flux_column: int
+    require_mgxs_domain_order: bool
     list_offset: int
     summary_path: Path
     audit_csv: Path
@@ -163,6 +164,10 @@ def build_sph_loop_plan(
         map_h5=map_h5,
         scalar_flux_ids=scalar_flux_ids,
         scalar_flux_column=int(config.get("kn_column", 1)) - 1,
+        require_mgxs_domain_order=bool(
+            config.get("require_mgxs_domain_order", False)
+            or normalized_acceptance.get("require_production_audit", False)
+        ),
         list_offset=int(config.get("list_offset", 0)),
         summary_path=summary_path,
         audit_csv=summary_path.with_name("sph_loop_audit.csv"),

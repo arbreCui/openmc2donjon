@@ -31,6 +31,9 @@ class SphLoopFluxMapPreflightReport:
     map_kind: str
     mixture_names: tuple[str, ...]
     energy_groups: int
+    mgxs_declared_mixture_order: bool
+    mgxs_source_domain_indices: tuple[int | None, ...]
+    mgxs_source_domain_order_errors: tuple[str, ...]
     scalar_flux_ids: tuple[int, ...]
     minimum_required_flux_unknown_count: int | None
     mixture_flux_map: tuple[tuple[str, int], ...]
@@ -63,11 +66,16 @@ def build_flux_map_preflight_report(
     map_h5: Path | None,
     scalar_flux_ids: dict[str, int] | None,
     scalar_flux_column: int,
+    require_mgxs_domain_order: bool = False,
 ) -> SphLoopFluxMapPreflightReport:
     input_path = Path(input_h5)
-    mixture_names, energy_groups = _read_mgxs_metadata(input_path)
+    mgxs_metadata = _read_mgxs_metadata(input_path)
+    mixture_names = mgxs_metadata["mixture_names"]
+    energy_groups = mgxs_metadata["energy_groups"]
     errors: list[str] = []
     warnings: list[str] = []
+    if require_mgxs_domain_order:
+        errors.extend(mgxs_metadata["source_domain_order_errors"])
 
     ids = np.asarray([], dtype=int)
     mesh_payload: dict[str, np.ndarray] | None = None
@@ -120,6 +128,9 @@ def build_flux_map_preflight_report(
         map_kind=map_kind,
         mixture_names=mixture_names,
         energy_groups=energy_groups,
+        mgxs_declared_mixture_order=mgxs_metadata["declared_mixture_order"],
+        mgxs_source_domain_indices=mgxs_metadata["source_domain_indices"],
+        mgxs_source_domain_order_errors=mgxs_metadata["source_domain_order_errors"],
         scalar_flux_ids=scalar_ids,
         minimum_required_flux_unknown_count=(
             None if not scalar_ids else int(max(scalar_ids))
@@ -161,6 +172,11 @@ def payload(report: SphLoopFluxMapPreflightReport) -> dict[str, object]:
         "mixture_count": len(report.mixture_names),
         "mixture_names": list(report.mixture_names),
         "energy_groups": report.energy_groups,
+        "mgxs_declared_mixture_order": report.mgxs_declared_mixture_order,
+        "mgxs_source_domain_indices": list(report.mgxs_source_domain_indices),
+        "mgxs_source_domain_order_errors": list(
+            report.mgxs_source_domain_order_errors
+        ),
         "scalar_flux_ids": list(report.scalar_flux_ids),
         "minimum_required_flux_unknown_count": (
             report.minimum_required_flux_unknown_count
@@ -205,13 +221,19 @@ def format_failure(report: SphLoopFluxMapPreflightReport) -> str:
     return "flux-map preflight failed: " + "; ".join(report.errors)
 
 
-def _read_mgxs_metadata(path: Path) -> tuple[tuple[str, ...], int]:
+def _read_mgxs_metadata(path: Path) -> dict[str, Any]:
     import h5py
 
     with h5py.File(path, "r") as h5:
         if "mixtures" not in h5:
             raise ValueError("input HDF5 is missing /mixtures")
         mixture_names = read_mixture_names(h5)
+        declared_mixture_order = "mixture_names" in h5
+        source_domain_indices, source_domain_errors = _source_domain_order_contract(
+            h5,
+            mixture_names,
+            declared_mixture_order=declared_mixture_order,
+        )
         if "energy_groups" in h5.attrs:
             energy_groups = int(h5.attrs["energy_groups"])
         elif "energy_bounds" in h5:
@@ -222,7 +244,48 @@ def _read_mgxs_metadata(path: Path) -> tuple[tuple[str, ...], int]:
         raise ValueError("input HDF5 contains no mixtures")
     if energy_groups <= 0:
         raise ValueError("energy group count must be positive")
-    return mixture_names, energy_groups
+    return {
+        "mixture_names": mixture_names,
+        "energy_groups": energy_groups,
+        "declared_mixture_order": declared_mixture_order,
+        "source_domain_indices": source_domain_indices,
+        "source_domain_order_errors": source_domain_errors,
+    }
+
+
+def _source_domain_order_contract(
+    h5: Any,
+    mixture_names: tuple[str, ...],
+    *,
+    declared_mixture_order: bool,
+) -> tuple[tuple[int | None, ...], tuple[str, ...]]:
+    errors: list[str] = []
+    indices: list[int | None] = []
+    if not declared_mixture_order:
+        errors.append("MGXS input must declare /mixture_names for production SPH mapping")
+
+    mixtures = h5["mixtures"]
+    for expected_index, name in enumerate(mixture_names, start=1):
+        group = mixtures[name]
+        if "source_domain_index" not in group.attrs:
+            indices.append(None)
+            errors.append(f"MGXS mixture {name}: source_domain_index is required")
+            continue
+        try:
+            source_domain_index = int(group.attrs["source_domain_index"])
+        except (TypeError, ValueError):
+            indices.append(None)
+            errors.append(
+                f"MGXS mixture {name}: source_domain_index must be an integer"
+            )
+            continue
+        indices.append(source_domain_index)
+        if source_domain_index != expected_index:
+            errors.append(
+                f"MGXS mixture {name}: source_domain_index {source_domain_index} "
+                f"does not match /mixture_names position {expected_index}"
+            )
+    return tuple(indices), tuple(errors)
 
 
 def _empty_map_diagnostics() -> dict[str, Any]:

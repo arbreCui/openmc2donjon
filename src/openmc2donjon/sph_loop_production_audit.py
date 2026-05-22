@@ -15,6 +15,9 @@ class FluxMapPreflightLike(Protocol):
     map_kind: str
     mixture_names: tuple[str, ...]
     energy_groups: int
+    mgxs_declared_mixture_order: bool
+    mgxs_source_domain_indices: tuple[int | None, ...]
+    mgxs_source_domain_order_errors: tuple[str, ...]
     scalar_flux_ids: tuple[int, ...]
     minimum_required_flux_unknown_count: int | None
     mixture_flux_map: tuple[tuple[str, int], ...]
@@ -52,6 +55,9 @@ def build_production_audit_payload(
     reference_groups = reference.energy_groups
     expected_names = tuple(flux_map_preflight.mixture_names)
     expected_groups = flux_map_preflight.energy_groups
+    mgxs_domain_order_errors = tuple(
+        getattr(flux_map_preflight, "mgxs_source_domain_order_errors", ())
+    )
 
     _append_audit_check(
         checks,
@@ -83,6 +89,21 @@ def build_production_audit_payload(
         reference_groups == expected_groups,
         "reference_flux energy group count matches MGXS",
         f"reference_flux energy_groups {reference_groups!r} != {expected_groups!r}",
+    )
+    _append_audit_check(
+        checks,
+        "mgxs_mixture_order_declared",
+        bool(getattr(flux_map_preflight, "mgxs_declared_mixture_order", False)),
+        "MGXS declares /mixture_names order",
+        "MGXS does not declare /mixture_names order",
+    )
+    _append_audit_check(
+        checks,
+        "mgxs_source_domain_order",
+        not mgxs_domain_order_errors,
+        "MGXS source_domain_index values match /mixture_names order",
+        "; ".join(mgxs_domain_order_errors)
+        or "MGXS source_domain_index contract unavailable",
     )
 
     for workflow in artifact_metadata.workflows:
@@ -142,6 +163,13 @@ def build_production_audit_payload(
                 {"mixture": mixture, "scalar_flux_id": scalar_id}
                 for mixture, scalar_id in flux_map_preflight.mixture_flux_map
             ],
+            "mgxs_declared_mixture_order": bool(
+                getattr(flux_map_preflight, "mgxs_declared_mixture_order", False)
+            ),
+            "mgxs_source_domain_indices": list(
+                getattr(flux_map_preflight, "mgxs_source_domain_indices", ())
+            ),
+            "mgxs_source_domain_order_errors": list(mgxs_domain_order_errors),
         },
         "artifact_counts": {
             "workflows": len(artifact_metadata.workflows),

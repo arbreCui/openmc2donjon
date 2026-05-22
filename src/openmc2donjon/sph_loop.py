@@ -83,6 +83,7 @@ def _run_preflight(plan: SphLoopPlan) -> SphLoopFluxMapPreflightReport:
         map_h5=plan.map_h5,
         scalar_flux_ids=plan.scalar_flux_ids,
         scalar_flux_column=plan.scalar_flux_column,
+        require_mgxs_domain_order=plan.require_mgxs_domain_order,
     )
     if not preflight.passed:
         raise ValueError(format_preflight_failure(preflight))
