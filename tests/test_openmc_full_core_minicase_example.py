@@ -81,6 +81,8 @@ class OpenMCFullCoreMinicaseExampleTests(unittest.TestCase):
         self.assertIn("--flux-normalization auto", text)
         self.assertIn("--acceptance-min-completed-iterations 2", text)
         self.assertIn("--acceptance-require-final-solve", text)
+        self.assertIn('solve["keff"]', text)
+        self.assertIn('summary["final_solve"]["keff"]', text)
         self.assertIn("power-normalized real DONJON SPH loop should not clip", text)
         self.assertIn("real DONJON SPH residual must be non-negative", text)
         self.assertIn("auto normalization did not resolve to power", text)

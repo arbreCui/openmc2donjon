@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import csv
 from pathlib import Path
-import re
 
 from .hdf5_metadata import Hdf5DatasetMetadata
 from .sph_loop_convergence import SphLoopConvergenceReport
@@ -43,7 +42,7 @@ def build_audit_rows(
             SphLoopAuditRow(
                 stage="iteration",
                 iteration=index,
-                keff=None if solve is None else _extract_solve_keff(solve),
+                keff=None if solve is None else solve.keff,
                 sph_minimum=workflow.sph_minimum,
                 sph_maximum=workflow.sph_maximum,
                 sph_max_abs_change=(
@@ -85,7 +84,7 @@ def build_audit_rows(
             SphLoopAuditRow(
                 stage="final",
                 iteration=final_solve.iteration,
-                keff=_extract_solve_keff(final_solve),
+                keff=final_solve.keff,
                 sph_minimum=None,
                 sph_maximum=None,
                 sph_max_abs_change=None,
@@ -237,35 +236,6 @@ def optional_float(value: object) -> float | None:
     if isinstance(value, (int, float)):
         return float(value)
     return None
-
-
-def _extract_solve_keff(solve: SphLoopSolveReport) -> float | None:
-    for path in (solve.stdout, solve.result, solve.stderr):
-        value = _extract_keff(path)
-        if value is not None:
-            return value
-    return None
-
-
-def _extract_keff(path: Path) -> float | None:
-    if not path.exists():
-        return None
-    text = path.read_text(encoding="utf-8", errors="replace")
-    patterns = (
-        r"EFFECTIVE MULTIPLICATION FACTOR\s*=\s*([0-9.+\-Ee]+)",
-        r"K-EFFECTIVE\s+([0-9.+\-Ee]+)",
-    )
-    matches: list[str] = []
-    for pattern in patterns:
-        matches = re.findall(pattern, text)
-        if matches:
-            break
-    if not matches:
-        return None
-    try:
-        return float(matches[-1])
-    except ValueError:
-        return None
 
 
 def _format_preflight_audit_lines(

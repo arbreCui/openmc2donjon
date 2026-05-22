@@ -75,7 +75,8 @@ def print_report(report: SphLoopReport) -> None:
         print(
             f"  solve[{solve.iteration}]: rc={solve.returncode} "
             f"result={solve.result} "
-            f"vectors={solve.flux_vector_count} unknowns={solve.flux_unknown_count}"
+            f"vectors={solve.flux_vector_count} unknowns={solve.flux_unknown_count} "
+            f"keff={format_optional_float(solve.keff)}"
         )
     for postprocess in report.postprocesses:
         print(
@@ -181,6 +182,7 @@ def write_summary(path: Path, report: SphLoopReport) -> None:
                 "result_bytes": solve.result_bytes,
                 "flux_vector_count": solve.flux_vector_count,
                 "flux_unknown_count": solve.flux_unknown_count,
+                "keff": solve.keff,
             }
             for solve in report.solves
         ],
@@ -205,6 +207,9 @@ def write_summary(path: Path, report: SphLoopReport) -> None:
                 "iteration": report.final_solve.iteration,
                 "result": str(report.final_solve.result),
                 "returncode": report.final_solve.returncode,
+                "keff": report.final_solve.keff,
+                "flux_vector_count": report.final_solve.flux_vector_count,
+                "flux_unknown_count": report.final_solve.flux_unknown_count,
             }
         ),
         "workflows": [

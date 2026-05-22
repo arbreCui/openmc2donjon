@@ -511,11 +511,15 @@ if len(solves) != 3:
 for solve in solves:
     if solve["returncode"] != 0:
         raise SystemExit(f"real DONJON solve failed at iter {solve['iteration']}")
+    if not np.isfinite(float(solve["keff"])) or float(solve["keff"]) <= 0.0:
+        raise SystemExit(f"real DONJON solve keff is invalid at iter {solve['iteration']}")
     if solve["flux_vector_count"] != 2 or solve["flux_unknown_count"] != 21:
         raise SystemExit(
             "real DONJON solve L_FLUX dimensions changed: "
             f"{solve['flux_vector_count']} vectors, {solve['flux_unknown_count']} unknowns"
         )
+if not np.isfinite(float(summary["final_solve"]["keff"])):
+    raise SystemExit("real DONJON final solve keff is missing or invalid")
 if len(summary["workflows"]) != 2 or len(summary["postprocesses"]) != 2:
     raise SystemExit("real DONJON SPH loop did not run two update/apply cycles")
 for workflow in summary["workflows"]:

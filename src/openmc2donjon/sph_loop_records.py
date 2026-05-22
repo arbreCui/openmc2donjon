@@ -25,6 +25,7 @@ class SphLoopSolveReport:
     result_bytes: int
     flux_vector_count: int
     flux_unknown_count: int
+    keff: float | None
 
 
 @dataclass(frozen=True)

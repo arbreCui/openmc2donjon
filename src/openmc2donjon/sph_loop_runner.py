@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import re
 import shlex
 import subprocess
 from typing import Any
@@ -101,6 +102,7 @@ def run_solver(
         result_bytes=result_bytes,
         flux_vector_count=flux_vector_count,
         flux_unknown_count=flux_unknown_count,
+        keff=_extract_solver_keff(stdout, result, stderr),
     )
 
 
@@ -190,6 +192,33 @@ def run_postprocessor(
 def require_absent(path: Path, *, force: bool) -> None:
     if path.exists() and not force:
         raise FileExistsError(f"output already exists; use --force: {path}")
+
+
+def _extract_solver_keff(*paths: Path) -> float | None:
+    for path in paths:
+        value = _extract_keff(path)
+        if value is not None:
+            return value
+    return None
+
+
+def _extract_keff(path: Path) -> float | None:
+    if not path.exists():
+        return None
+    text = path.read_text(encoding="utf-8", errors="replace")
+    patterns = (
+        r"EFFECTIVE MULTIPLICATION FACTOR\s*=\s*([0-9.+\-Ee]+)",
+        r"K-EFFECTIVE\s+([0-9.+\-Ee]+)",
+    )
+    for pattern in patterns:
+        matches = re.findall(pattern, text)
+        if not matches:
+            continue
+        try:
+            return float(matches[-1])
+        except ValueError:
+            return None
+    return None
 
 
 def _postprocess_output_path(
