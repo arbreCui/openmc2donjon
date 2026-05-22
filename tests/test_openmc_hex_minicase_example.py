@@ -38,8 +38,13 @@ class OpenMCHexMinicaseExampleTests(unittest.TestCase):
         self.assertIn("Strict production dry-run", text)
         self.assertIn("--strict-dry-run", text)
         self.assertIn("--force-run-dir", text)
-        self.assertIn("--require-transport-dataset", text)
+        self.assertIn("--production", text)
+        self.assertIn("--uncertainty-production-fail", text)
         self.assertIn("mgxs_input_contract_passed", text)
+        self.assertIn("did not see seven hex domains", text)
+        self.assertIn("did not see one H-FACTOR dataset per domain", text)
+        self.assertIn("non-fissionable kappa_fission is not zero", text)
+        self.assertIn("unexpected hex fissionable split", text)
 
 
 def _repo_root() -> Path:
