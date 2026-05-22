@@ -64,6 +64,8 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         )
         self.assertIn("== C5G7 fixed-OpenMC SPH loop smoke ==", accepted_section)
         self.assertIn("scripts/run_c5g7_fixed_openmc_sph_loop_smoke.sh", accepted_section)
+        self.assertIn("== OpenMC hex DONJON k-eff comparison ==", accepted_section)
+        self.assertIn("examples/openmc_hex_minicase/run_keff_comparison.sh", accepted_section)
         self.assertNotIn("examples/openmc_hex_minicase/run_smoke.sh", candidate_section)
 
     def test_c5g7_sph_solver_response_uses_external_table_entrypoint(self) -> None:

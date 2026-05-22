@@ -56,6 +56,7 @@ Default:
   - C5G7 production ADF source reconstruction smoke
   - C5G7 from-OpenMC flux-ratio ADF smoke when C5G7_STATEPOINT exists
   - C5G7 statepoint exporter parity check when C5G7_STATEPOINT exists
+  - OpenMC hex minicase DONJON k-eff comparison with --run-donjon
 
 Options:
   --skip-tests                 skip pytest
@@ -558,6 +559,11 @@ else
 fi
 
 if [[ "$RUN_DONJON" -eq 1 ]]; then
+  echo
+  echo "== OpenMC hex DONJON k-eff comparison =="
+  PYTHON_BIN="$PYTHON_BIN" \
+    bash "$REPO_ROOT/examples/openmc_hex_minicase/run_keff_comparison.sh"
+
   echo
   echo "== Full DONJON acceptance =="
   RUN_DIR="$RUN_DIR/top_acceptance" \
