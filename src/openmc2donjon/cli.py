@@ -120,6 +120,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="run HDF5 input-contract preflight before conversion",
     )
     parser.add_argument(
+        "--production",
+        action="store_true",
+        help=(
+            "run preflight with production defaults: volume, transport_total, "
+            "fissionable H-FACTOR, row-balance warnings, and production "
+            "uncertainty gate"
+        ),
+    )
+    parser.add_argument(
         "--require-adf",
         action="store_true",
         help="with --check, require ADF data for every mixture",
@@ -283,6 +292,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _convert_handler(args: argparse.Namespace) -> int:
+    if args.production:
+        args.check = True
     input_path = Path(args.input_h5)
     if args.output:
         output_path = Path(args.output)
@@ -296,6 +307,7 @@ def _convert_handler(args: argparse.Namespace) -> int:
             [input_path],
             output_format=args.format,
             output_path=output_path,
+            production=args.production,
             require_adf=args.require_adf,
             require_sph=args.require_sph,
             expected_adf_faces=args.expected_adf_faces,

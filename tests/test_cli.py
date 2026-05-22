@@ -64,6 +64,47 @@ class CliTests(unittest.TestCase):
         self.assertIn("mgxs_input_contract_failed", stream.getvalue())
         self.assertIn("H-FACTOR/kappa_fission", stream.getvalue())
 
+    def test_check_command_production_preset_requires_h_factor(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "mgxs.h5"
+            summary = Path(tmpdir) / "summary.json"
+            write_valid_mgxs(path)
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                missing_rc = cli_main(["check", str(path), "--production"])
+
+            with h5py.File(path, "a") as h5:
+                h5["mixtures/fuel"].create_dataset(
+                    "kappa_fission",
+                    data=np.array([3.2e-12, 3.1e-12]),
+                )
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                present_rc = cli_main(
+                    [
+                        "check",
+                        str(path),
+                        "--production",
+                        "--summary-json",
+                        str(summary),
+                    ]
+                )
+
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+
+        self.assertEqual(missing_rc, 1)
+        self.assertIn("H-FACTOR/kappa_fission", stream.getvalue())
+        self.assertEqual(present_rc, 0)
+        self.assertEqual(
+            payload["inputs"][0]["scatter_row_balance"]["warn_threshold"],
+            5.0e-2,
+        )
+        self.assertEqual(
+            payload["inputs"][0]["uncertainty"]["production_fail_threshold"],
+            1.0,
+        )
+
     def test_check_command_can_gate_energy_group_identity(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "mgxs.h5"

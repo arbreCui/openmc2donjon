@@ -349,6 +349,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="run HDF5 input-contract preflight after export and before conversion",
     )
     parser.add_argument(
+        "--production",
+        action="store_true",
+        help=(
+            "run post-export preflight with production defaults: volume, "
+            "transport_total, fissionable H-FACTOR, row-balance warnings, and "
+            "production uncertainty gate"
+        ),
+    )
+    parser.add_argument(
         "--require-adf",
         action="store_true",
         help="with --check, require ADF data for every mixture",

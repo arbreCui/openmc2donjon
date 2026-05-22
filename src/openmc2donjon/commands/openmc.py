@@ -64,6 +64,13 @@ def build_prepare_openmc_sph_loop_parser() -> argparse.ArgumentParser:
     parser.add_argument("--h-factor-default", type=float, default=None)
     parser.add_argument("--no-check", action="store_true")
     parser.add_argument("--check-summary-json", type=Path, default=None)
+    parser.add_argument(
+        "--production",
+        action="store_true",
+        help=(
+            "enable production preflight defaults for the exported MGXS handoff"
+        ),
+    )
     parser.add_argument("--no-require-volume", action="store_true")
     parser.add_argument("--require-h-factor", action="store_true")
     parser.add_argument("--no-require-transport-dataset", action="store_true")
@@ -152,6 +159,8 @@ def build_prepare_openmc_sph_loop_parser() -> argparse.ArgumentParser:
 def prepare_openmc_sph_loop_handler(args: argparse.Namespace) -> int:
     parser = parser_from_args(args)
     try:
+        if args.production and args.no_check:
+            parser.error("--production cannot be used with --no-check")
         scalar_flux_ids = (
             None if args.scalar_flux_map is None else parse_scalar_flux_map(args.scalar_flux_map)
         )
@@ -168,6 +177,7 @@ def prepare_openmc_sph_loop_handler(args: argparse.Namespace) -> int:
             h_factor_default=args.h_factor_default,
             check=not args.no_check,
             check_summary_json=args.check_summary_json,
+            production=args.production,
             require_volume=not args.no_require_volume,
             require_h_factor=args.require_h_factor,
             require_transport_dataset=not args.no_require_transport_dataset,

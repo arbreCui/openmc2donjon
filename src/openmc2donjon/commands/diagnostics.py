@@ -79,6 +79,15 @@ def build_check_parser() -> argparse.ArgumentParser:
         help="optional intended converter output path; checks production extension",
     )
     parser.add_argument(
+        "--production",
+        action="store_true",
+        help=(
+            "enable production preflight defaults: volume, transport_total, "
+            "fissionable H-FACTOR, row-balance warnings, and production "
+            "uncertainty gate"
+        ),
+    )
+    parser.add_argument(
         "--require-adf",
         action="store_true",
         help="require ADF data for every mixture",
@@ -421,6 +430,7 @@ def check_handler(args: argparse.Namespace) -> int:
         args.input_h5,
         output_format=args.format,
         output_path=args.output,
+        production=args.production,
         require_adf=args.require_adf,
         require_sph=args.require_sph,
         expected_adf_faces=args.expected_adf_faces,

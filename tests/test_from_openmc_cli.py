@@ -173,6 +173,31 @@ class FromOpenMCCliTests(unittest.TestCase):
         self.assertFalse(summary_exists)
         self.assertFalse(check_summary_exists)
 
+    def test_dry_run_production_preset_implies_check(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        recipe = repo_root / "examples/recipe_export_smoke/minimal_recipe.py"
+
+        stream = io.StringIO()
+        with contextlib.redirect_stdout(stream):
+            rc = from_openmc_main(
+                [
+                    "--recipe",
+                    str(recipe),
+                    "--dry-run",
+                    "--production",
+                ]
+            )
+
+        rendered = stream.getvalue()
+        self.assertEqual(rc, 0)
+        self.assertIn("check: enabled after HDF5 export", rendered)
+        self.assertIn("production: yes", rendered)
+        self.assertIn("require_volume: yes", rendered)
+        self.assertIn("require_h_factor: yes", rendered)
+        self.assertIn("require_transport_dataset: yes", rendered)
+        self.assertIn("scatter_row_balance_warn: 0.05", rendered)
+        self.assertIn("uncertainty_production_fail: 1.0", rendered)
+
     def test_check_can_fail_on_exported_std_dev_uncertainty(self) -> None:
         recipe_text = '''
 from dataclasses import dataclass

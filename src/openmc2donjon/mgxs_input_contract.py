@@ -71,19 +71,66 @@ H_FACTOR_DATASETS = (
     "kappa_fission_xs",
     "kappa_fission_cross_section",
 )
+PRODUCTION_SCATTER_ROW_BALANCE_WARN = 5.0e-2
+PRODUCTION_UNCERTAINTY_PRODUCTION_FAIL = 1.0
+
+
+def production_preflight_defaults(
+    *,
+    production: bool,
+    require_transport_dataset: bool,
+    require_volume: bool,
+    require_h_factor: bool,
+    scatter_row_balance_warn: float | None,
+    uncertainty_warn: float | None,
+    uncertainty_production_fail: float | None,
+) -> dict[str, Any]:
+    """Return effective preflight options after applying the production preset."""
+    if not production:
+        return {
+            "require_transport_dataset": require_transport_dataset,
+            "require_volume": require_volume,
+            "require_h_factor": require_h_factor,
+            "scatter_row_balance_warn": scatter_row_balance_warn,
+            "uncertainty_production_fail": uncertainty_production_fail,
+        }
+
+    if scatter_row_balance_warn is None:
+        scatter_row_balance_warn = PRODUCTION_SCATTER_ROW_BALANCE_WARN
+    if uncertainty_warn is not None and uncertainty_production_fail is None:
+        uncertainty_production_fail = PRODUCTION_UNCERTAINTY_PRODUCTION_FAIL
+
+    return {
+        "require_transport_dataset": True,
+        "require_volume": True,
+        "require_h_factor": True,
+        "scatter_row_balance_warn": scatter_row_balance_warn,
+        "uncertainty_production_fail": uncertainty_production_fail,
+    }
 
 
 def main() -> int:
     args = parse_args()
     expected_faces = split_csv(args.expected_adf_faces)
+    settings = production_preflight_defaults(
+        production=args.production,
+        require_transport_dataset=args.require_transport_dataset,
+        require_volume=args.require_volume,
+        require_h_factor=args.require_h_factor,
+        scatter_row_balance_warn=args.scatter_row_balance_warn,
+        uncertainty_warn=None if args.no_uncertainty_check else args.uncertainty_warn,
+        uncertainty_production_fail=(
+            None if args.no_uncertainty_check else args.uncertainty_production_fail
+        ),
+    )
     reports = [
         validate_input(
             path,
             require_adf=args.require_adf,
             require_sph=args.require_sph,
-            require_transport_dataset=args.require_transport_dataset,
-            require_volume=args.require_volume,
-            require_h_factor=args.require_h_factor,
+            require_transport_dataset=settings["require_transport_dataset"],
+            require_volume=settings["require_volume"],
+            require_h_factor=settings["require_h_factor"],
             expected_energy_group_structure=args.expected_energy_group_structure,
             expected_energy_bounds=(
                 None
@@ -97,16 +144,12 @@ def main() -> int:
             ),
             expected_energy_bounds_sha256=args.expected_energy_bounds_sha256,
             expected_adf_faces=expected_faces,
-            scatter_row_balance_warn=args.scatter_row_balance_warn,
+            scatter_row_balance_warn=settings["scatter_row_balance_warn"],
             scatter_row_balance_fail=args.scatter_row_balance_fail,
             uncertainty=UncertaintyConfig(
                 warn_threshold=None if args.no_uncertainty_check else args.uncertainty_warn,
                 fail_threshold=None if args.no_uncertainty_check else args.uncertainty_fail,
-                production_fail_threshold=(
-                    None
-                    if args.no_uncertainty_check
-                    else args.uncertainty_production_fail
-                ),
+                production_fail_threshold=settings["uncertainty_production_fail"],
                 mean_abs_floor=args.uncertainty_mean_abs_floor,
             ),
         )
@@ -127,7 +170,7 @@ def main() -> int:
     if args.summary_json:
         write_summary(args.summary_json, reports, decision, output_issue)
 
-    return 0 if ok or not args.check else 1
+    return 0 if ok or not (args.check or args.production) else 1
 
 
 def parse_args() -> argparse.Namespace:
@@ -144,6 +187,15 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help="optional intended converter output path; checks production extension",
+    )
+    parser.add_argument(
+        "--production",
+        action="store_true",
+        help=(
+            "enable production preflight defaults: require volume, transport_total, "
+            "fissionable H-FACTOR, row-balance warnings, and production uncertainty "
+            "failure threshold"
+        ),
     )
     parser.add_argument(
         "--require-adf",
@@ -878,6 +930,7 @@ def run_preflight(
     *,
     output_format: str = "any",
     output_path: Path | None = None,
+    production: bool = False,
     require_adf: bool = False,
     require_sph: bool = False,
     expected_adf_faces: str | list[str] | None = None,
@@ -903,25 +956,34 @@ def run_preflight(
     expected_bounds, expected_bounds_label = _expected_energy_bounds_input(
         expected_energy_bounds
     )
+    settings = production_preflight_defaults(
+        production=production,
+        require_transport_dataset=require_transport_dataset,
+        require_volume=require_volume,
+        require_h_factor=require_h_factor,
+        scatter_row_balance_warn=scatter_row_balance_warn,
+        uncertainty_warn=uncertainty_warn,
+        uncertainty_production_fail=uncertainty_production_fail,
+    )
     reports = [
         validate_input(
             path,
             require_adf=require_adf,
             require_sph=require_sph,
-            require_transport_dataset=require_transport_dataset,
-            require_volume=require_volume,
-            require_h_factor=require_h_factor,
+            require_transport_dataset=settings["require_transport_dataset"],
+            require_volume=settings["require_volume"],
+            require_h_factor=settings["require_h_factor"],
             expected_energy_group_structure=expected_energy_group_structure,
             expected_energy_bounds=expected_bounds,
             expected_energy_bounds_label=expected_bounds_label,
             expected_energy_bounds_sha256=expected_energy_bounds_sha256,
             expected_adf_faces=expected_faces,
-            scatter_row_balance_warn=scatter_row_balance_warn,
+            scatter_row_balance_warn=settings["scatter_row_balance_warn"],
             scatter_row_balance_fail=scatter_row_balance_fail,
             uncertainty=UncertaintyConfig(
                 warn_threshold=uncertainty_warn,
                 fail_threshold=uncertainty_fail,
-                production_fail_threshold=uncertainty_production_fail,
+                production_fail_threshold=settings["uncertainty_production_fail"],
                 mean_abs_floor=uncertainty_mean_abs_floor,
             ),
         )

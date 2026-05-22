@@ -39,7 +39,7 @@ from .from_openmc_sph import (
 )
 from .from_openmc_summary import FROM_OPENMC_SUMMARY_SCHEMA
 from .macrolib import convert_mgxs_hdf5_to_macrolib
-from .mgxs_input_contract import run_preflight
+from .mgxs_input_contract import production_preflight_defaults, run_preflight
 from .multicompo import convert_mgxs_hdf5, read_mgxs_hdf5_histories
 from .openmc_statepoint import (
     RecipeExportSummary,
@@ -90,6 +90,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _normalize_args(args: argparse.Namespace) -> None:
+    if args.production:
+        args.check = True
     if args.build_flux_ratio_adf:
         args.check = True
         args.require_adf = True
@@ -251,10 +253,25 @@ def _print_dry_run_output(
 
 def _print_dry_run_checks(args: argparse.Namespace) -> None:
     if args.check:
+        settings = production_preflight_defaults(
+            production=args.production,
+            require_transport_dataset=args.require_transport_dataset,
+            require_volume=args.require_volume,
+            require_h_factor=args.require_h_factor,
+            scatter_row_balance_warn=args.scatter_row_balance_warn,
+            uncertainty_warn=None if args.no_uncertainty_check else args.uncertainty_warn,
+            uncertainty_production_fail=(
+                None if args.no_uncertainty_check else args.uncertainty_production_fail
+            ),
+        )
         print("  check: enabled after HDF5 export")
-        print(f"    require_volume: {_yes_no(args.require_volume)}")
-        print(f"    require_h_factor: {_yes_no(args.require_h_factor)}")
-        print(f"    require_transport_dataset: {_yes_no(args.require_transport_dataset)}")
+        print(f"    production: {_yes_no(args.production)}")
+        print(f"    require_volume: {_yes_no(settings['require_volume'])}")
+        print(f"    require_h_factor: {_yes_no(settings['require_h_factor'])}")
+        print(
+            "    require_transport_dataset: "
+            f"{_yes_no(settings['require_transport_dataset'])}"
+        )
         print(
             "    expected_energy_group_structure: "
             f"{_render_optional_value(args.expected_energy_group_structure)}"
@@ -272,7 +289,7 @@ def _print_dry_run_checks(args: argparse.Namespace) -> None:
         print(f"    expected_adf_faces: {_render_optional_value(args.expected_adf_faces)}")
         print(
             "    scatter_row_balance_warn: "
-            f"{_render_optional_value(args.scatter_row_balance_warn)}"
+            f"{_render_optional_value(settings['scatter_row_balance_warn'])}"
         )
         print(
             "    scatter_row_balance_fail: "
@@ -291,7 +308,7 @@ def _print_dry_run_checks(args: argparse.Namespace) -> None:
             )
             print(
                 "    uncertainty_production_fail: "
-                f"{_render_optional_value(args.uncertainty_production_fail)}"
+                f"{_render_optional_value(settings['uncertainty_production_fail'])}"
             )
             print(
                 "    uncertainty_mean_abs_floor: "
@@ -408,6 +425,7 @@ def _run_pipeline_preflight(
         [hdf5_path],
         output_format=args.format,
         output_path=output_path,
+        production=args.production,
         require_adf=args.require_adf,
         require_sph=args.require_sph,
         expected_adf_faces=args.expected_adf_faces,
