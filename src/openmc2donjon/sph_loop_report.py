@@ -13,6 +13,10 @@ from . import __version__
 from .bundle import ArtifactSpec, bundle_artifacts
 from .sph_loop_acceptance import SphLoopAcceptanceReport
 from .sph_loop_convergence import SphLoopConvergenceReport
+from .sph_loop_preflight import (
+    SphLoopFluxMapPreflightReport,
+    payload as flux_map_preflight_payload,
+)
 from .sph_workflow import SphIterationWorkflowReport
 
 
@@ -88,6 +92,7 @@ class SphLoopReport:
     sph_change_tolerance: float | None
     flux_ratio_tolerance: float | None
     min_iterations: int
+    flux_map_preflight: SphLoopFluxMapPreflightReport
     solves: tuple[SphLoopSolveReport, ...]
     workflows: tuple[SphIterationWorkflowReport, ...]
     convergence: tuple[SphLoopConvergenceReport, ...]
@@ -109,6 +114,13 @@ def print_report(report: SphLoopReport) -> None:
     print(f"  final_ascii: {report.final_ascii}")
     print(f"  audit_csv: {report.audit_csv}")
     print(f"  audit_text: {report.audit_text}")
+    print(
+        "  flux_map_preflight: "
+        f"{'PASS' if report.flux_map_preflight.passed else 'FAIL'} "
+        f"map={report.flux_map_preflight.map_kind} "
+        f"mixtures={len(report.flux_map_preflight.mixture_names)} "
+        f"groups={report.flux_map_preflight.energy_groups}"
+    )
     if report.bundle_manifest is not None:
         print(f"  bundle_manifest: {report.bundle_manifest}")
     if report.final_sph_sidecar is not None:
@@ -203,6 +215,9 @@ def write_summary(path: Path, report: SphLoopReport) -> None:
         "sph_change_tolerance": report.sph_change_tolerance,
         "flux_ratio_tolerance": report.flux_ratio_tolerance,
         "min_iterations": report.min_iterations,
+        "flux_map_preflight": flux_map_preflight_payload(
+            report.flux_map_preflight
+        ),
         "quality": _quality_payload(report),
         "solves": [
             {
@@ -404,15 +419,24 @@ def write_audit_csv(path: Path, rows: tuple[SphLoopAuditRow, ...]) -> None:
             )
 
 
-def write_audit_text(path: Path, rows: tuple[SphLoopAuditRow, ...]) -> None:
+def write_audit_text(
+    path: Path,
+    rows: tuple[SphLoopAuditRow, ...],
+    *,
+    flux_map_preflight: SphLoopFluxMapPreflightReport | None = None,
+) -> None:
     lines = [
         "OpenMC-to-DONJON SPH loop audit",
+    ]
+    if flux_map_preflight is not None:
+        lines.extend(_format_preflight_audit_lines(flux_map_preflight))
+    lines.append(
         (
             "stage      iter  keff          sph_min       sph_max       "
             "sph_rel       flux_res      worst_bin            raw_update    "
             "residual     converged"
-        ),
-    ]
+        )
+    )
     for row in rows:
         converged = "" if row.converged is None else str(row.converged)
         lines.append(
@@ -634,6 +658,35 @@ def _format_optional_float(value: float | None) -> str:
     if value is None:
         return ""
     return f"{value:.12g}"
+
+
+def _format_preflight_audit_lines(
+    report: SphLoopFluxMapPreflightReport,
+) -> list[str]:
+    status = "PASS" if report.passed else "FAIL"
+    lines = [
+        (
+            f"Flux-map preflight: {status} map={report.map_kind} "
+            f"mixtures={len(report.mixture_names)} groups={report.energy_groups}"
+        )
+    ]
+    if report.minimum_required_flux_unknown_count is not None:
+        lines.append(
+            "  minimum_required_flux_unknown_count="
+            f"{report.minimum_required_flux_unknown_count}"
+        )
+    if report.mesh_shape is not None:
+        shape = "x".join(str(value) for value in report.mesh_shape)
+        lines.append(
+            f"  mesh_shape={shape} cells={report.mesh_cell_count} "
+            f"nonpositive_ids={report.mesh_zero_or_negative_id_count}"
+        )
+    if report.errors:
+        lines.extend(f"  ERROR: {error}" for error in report.errors)
+    if report.warnings:
+        lines.extend(f"  WARN: {warning}" for warning in report.warnings)
+    lines.append("")
+    return lines
 
 
 def _format_audit_bin(row: SphLoopAuditRow) -> str:

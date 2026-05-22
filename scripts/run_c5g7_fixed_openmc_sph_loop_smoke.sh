@@ -202,6 +202,15 @@ if loop_summary.get("acceptance_decision") != "openmc2donjon_sph_loop_acceptance
 quality = loop_summary.get("quality")
 if not isinstance(quality, dict):
     raise SystemExit(f"SPH loop summary is missing quality diagnostics: {loop_summary_path}")
+preflight = loop_summary.get("flux_map_preflight")
+if not isinstance(preflight, dict) or not preflight.get("passed"):
+    raise SystemExit(f"SPH loop flux-map preflight did not pass: {preflight}")
+if preflight.get("mixture_count") != 9:
+    raise SystemExit(f"C5G7 flux-map preflight mixture count mismatch: {preflight}")
+if len(preflight.get("mixture_flux_map", [])) != 9:
+    raise SystemExit(f"C5G7 flux-map preflight is missing mapping rows: {preflight}")
+if preflight.get("errors"):
+    raise SystemExit(f"C5G7 flux-map preflight reported errors: {preflight}")
 if quality.get("clipping_observed"):
     raise SystemExit(f"C5G7 SPH loop should not clip SPH updates: {quality}")
 if quality.get("final_to_initial_flux_residual_ratio") is None:
@@ -275,7 +284,10 @@ for key in (
     if not audit_rows[-2][key]:
         raise SystemExit(f"SPH loop final iteration audit row has empty {key}: {audit_rows[-2]}")
 audit_text = Path(loop_summary["audit_text"])
-if "Final worst residual bins" not in audit_text.read_text(encoding="utf-8"):
+audit_text_content = audit_text.read_text(encoding="utf-8")
+if "Flux-map preflight: PASS" not in audit_text_content:
+    raise SystemExit(f"SPH loop audit text is missing preflight result: {audit_text}")
+if "Final worst residual bins" not in audit_text_content:
     raise SystemExit(f"SPH loop audit text is missing final worst-bin ranking: {audit_text}")
 audit_keff = [float(row["keff"]) for row in audit_rows]
 np.testing.assert_allclose(audit_keff, [keff0, keff1, keff2], rtol=1.0e-6, atol=1.0e-6)

@@ -13,6 +13,10 @@ from .sph_loop_convergence import (
     build_convergence_report,
 )
 from .sph_loop_plan import build_sph_loop_plan
+from .sph_loop_preflight import (
+    build_flux_map_preflight_report,
+    format_failure as format_preflight_failure,
+)
 from .sph_loop_report import (
     PASS_DECISION,
     SCHEMA,
@@ -55,6 +59,15 @@ def run_sph_loop(
         bundle_manifest_name=bundle_manifest_name,
     )
     plan.loop_dir.mkdir(parents=True, exist_ok=True)
+    flux_map_preflight = build_flux_map_preflight_report(
+        input_h5=plan.input_h5,
+        reference_flux=plan.reference_flux,
+        map_h5=plan.map_h5,
+        scalar_flux_ids=plan.scalar_flux_ids,
+        scalar_flux_column=plan.scalar_flux_column,
+    )
+    if not flux_map_preflight.passed:
+        raise ValueError(format_preflight_failure(flux_map_preflight))
 
     initial_ascii = _write_initial_ascii(
         plan.input_h5,
@@ -195,6 +208,7 @@ def run_sph_loop(
         sph_change_tolerance=plan.sph_change_tolerance,
         flux_ratio_tolerance=plan.flux_ratio_tolerance,
         min_iterations=plan.min_iterations,
+        flux_map_preflight=flux_map_preflight,
         solves=tuple(solves),
         workflows=tuple(workflows),
         convergence=tuple(convergence_reports),
@@ -204,7 +218,11 @@ def run_sph_loop(
         acceptance=acceptance,
     )
     write_audit_csv(plan.audit_csv, report.audit_rows)
-    write_audit_text(plan.audit_text, report.audit_rows)
+    write_audit_text(
+        plan.audit_text,
+        report.audit_rows,
+        flux_map_preflight=report.flux_map_preflight,
+    )
     write_summary(plan.summary_path, report)
     if plan.bundle_dir is not None:
         write_bundle(

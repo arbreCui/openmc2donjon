@@ -114,6 +114,13 @@ class SphLoopTests(unittest.TestCase):
                 payload["acceptance_decision"],
                 "openmc2donjon_sph_loop_acceptance_passed",
             )
+            preflight = payload["flux_map_preflight"]
+            self.assertTrue(preflight["passed"])
+            self.assertEqual(preflight["map_kind"], "scalar_flux_map")
+            self.assertEqual(preflight["mixture_count"], 2)
+            self.assertEqual(preflight["energy_groups"], 2)
+            self.assertEqual(preflight["scalar_flux_ids"], [2, 4])
+            self.assertEqual(preflight["errors"], [])
             self.assertTrue(payload["acceptance"]["passed"])
             self.assertEqual(len(payload["acceptance"]["checks"]), 8)
             self.assertEqual(
@@ -170,6 +177,7 @@ class SphLoopTests(unittest.TestCase):
             self.assertEqual(rows[2]["keff"], "1.002")
             audit_text_content = audit_text.read_text(encoding="utf-8")
             self.assertIn("OpenMC-to-DONJON SPH loop audit", audit_text_content)
+            self.assertIn("Flux-map preflight: PASS", audit_text_content)
             self.assertIn("worst_bin", audit_text_content)
             self.assertIn("Final worst residual bins", audit_text_content)
             manifest = json.loads((bundle_dir / "manifest.json").read_text(encoding="utf-8"))
@@ -368,6 +376,55 @@ class SphLoopTests(unittest.TestCase):
                 _acceptance_actual(payload, "max_final_keff_delta_pcm"),
                 0.001,
             )
+
+    def test_flux_map_preflight_rejects_duplicate_unknowns_before_solving(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference = root / "reference_flux.h5"
+            solver = root / "fake_donjon_solver.py"
+            config = root / "loop.json"
+            _write_mgxs(mgxs)
+            _write_reference_flux(reference)
+            _write_fake_solver(solver)
+            config.write_text(
+                json.dumps(
+                    {
+                        "schema": "openmc2donjon.sph-loop-config.v1",
+                        "input_h5": "mgxs.h5",
+                        "output_dir": "loop_run",
+                        "reference_flux": "reference_flux.h5::openmc_volume_flux",
+                        "iterations": 1,
+                        "format": "macrolib",
+                        "scalar_flux_map": {"fuel": 2, "moderator": 2},
+                        "solver": {
+                            "command": [
+                                sys.executable,
+                                str(solver),
+                                "--macrolib",
+                                "{ascii_input}",
+                                "--result",
+                                "{result}",
+                                "--iteration",
+                                "{iteration}",
+                            ],
+                            "result": "donjon_flux.result",
+                        },
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as raised:
+                    cli_main(["run-sph-loop", "--config", str(config)])
+
+            self.assertEqual(raised.exception.code, 1)
+            self.assertIn("duplicate scalar flux id mapping", stderr.getvalue())
+            self.assertFalse((root / "loop_run/iter00_solve").exists())
 
 
 def _write_mgxs(path: Path) -> None:
