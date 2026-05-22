@@ -12,7 +12,7 @@ import numpy as np
 
 from openmc2donjon import lcm_ascii as lcm
 from openmc2donjon.cli import main as cli_main
-from openmc2donjon.donjon_flux import PASS_DECISION
+from openmc2donjon.donjon_flux import PASS_DECISION, extract_donjon_volume_flux
 
 
 class DonjonFluxTests(unittest.TestCase):
@@ -85,6 +85,15 @@ class DonjonFluxTests(unittest.TestCase):
                 )
                 np.testing.assert_allclose(h5["mixture_flux_minimum"][:], [20.0, 40.0])
                 np.testing.assert_allclose(h5["mixture_flux_maximum"][:], [200.0, 400.0])
+                self.assertEqual(
+                    h5["scalar_flux_ids"].attrs["id_kind"],
+                    "donjon_scalar_flux_unknown",
+                )
+                self.assertEqual(h5["scalar_flux_ids"].attrs["id_base"], 1)
+                self.assertEqual(
+                    h5["scalar_flux_ids"].attrs["index_order"],
+                    "mixture_names",
+                )
                 names = tuple(_decode(value) for value in h5["mixture_names"][:])
             self.assertEqual(names, ("fuel", "moderator"))
 
@@ -160,6 +169,58 @@ class DonjonFluxTests(unittest.TestCase):
                     h5["mesh_volume_flux"].attrs["group_order"],
                     "mgxs_donjon",
                 )
+
+    def test_map_h5_scalar_ids_are_reordered_by_declared_mixture_names(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            dump = root / "flux.result"
+            mapping = root / "map.h5"
+            flux = root / "donjon_volume_flux.h5"
+            summary = root / "summary.json"
+            _write_mgxs(mgxs)
+            _write_flux_dump(dump)
+            with h5py.File(mapping, "w") as h5:
+                dataset = h5.create_dataset(
+                    "scalar_flux_ids",
+                    data=np.asarray([4, 2], dtype=int),
+                )
+                dataset.attrs["mixture_names"] = np.asarray(
+                    ["moderator", "fuel"],
+                    dtype="S",
+                )
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                report = extract_donjon_volume_flux(
+                    mgxs,
+                    dump,
+                    flux,
+                    map_h5=mapping,
+                    summary_json=summary,
+                )
+
+            self.assertEqual(report.scalar_flux_ids, (2, 4))
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+            self.assertEqual(payload["map_kind"], "map_h5:/scalar_flux_ids")
+            self.assertEqual(
+                [(item["mixture"], item["scalar_flux_id"]) for item in payload["mixture_flux"]],
+                [("fuel", 2), ("moderator", 4)],
+            )
+
+    def test_map_h5_scalar_ids_require_declared_mixture_names(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            dump = root / "flux.result"
+            mapping = root / "map.h5"
+            flux = root / "donjon_volume_flux.h5"
+            _write_mgxs(mgxs)
+            _write_flux_dump(dump)
+            with h5py.File(mapping, "w") as h5:
+                h5.create_dataset("scalar_flux_ids", data=np.asarray([2, 4], dtype=int))
+
+            with self.assertRaisesRegex(ValueError, "must declare mixture_names"):
+                extract_donjon_volume_flux(mgxs, dump, flux, map_h5=mapping)
 
     def test_duplicate_scalar_ids_are_reported_as_diagnostics(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -367,14 +367,23 @@ def _normalize_id_vector(
         raise ValueError(
             f"scalar_flux_ids must have {len(mixture_names)} value(s), got {values.size}"
         )
-    if declared_mixtures is not None:
-        declared = tuple(_flatten_names(declared_mixtures))
-        if set(declared) != set(mixture_names):
-            raise ValueError(
-                f"scalar_flux_ids mixture names {declared!r} do not match {mixture_names!r}"
-            )
-        order = [declared.index(name) for name in mixture_names]
-        values = values[order]
+    if declared_mixtures is None:
+        raise ValueError(
+            "scalar_flux_ids maps must declare mixture_names, mixtures, or domain_names"
+        )
+    declared = tuple(_flatten_names(declared_mixtures))
+    if not declared:
+        raise ValueError(
+            "scalar_flux_ids maps must declare at least one mixture name"
+        )
+    if len(declared) != len(set(declared)):
+        raise ValueError(f"scalar_flux_ids mixture names contain duplicates: {declared!r}")
+    if set(declared) != set(mixture_names):
+        raise ValueError(
+            f"scalar_flux_ids mixture names {declared!r} do not match {mixture_names!r}"
+        )
+    order = [declared.index(name) for name in mixture_names]
+    values = values[order]
     _validate_ids(values)
     return values
 
@@ -552,6 +561,9 @@ def _write_output(
         h5.create_dataset("mixture_names", data=np.asarray(mixture_names, dtype="S"))
         ids = h5.create_dataset("scalar_flux_ids", data=np.asarray(scalar_flux_ids, dtype=int))
         ids.attrs["mixture_names"] = np.asarray(mixture_names, dtype="S")
+        ids.attrs["index_order"] = "mixture_names"
+        ids.attrs["id_base"] = 1
+        ids.attrs["id_kind"] = "donjon_scalar_flux_unknown"
         volume = h5.create_dataset("volume_flux", data=np.asarray(volume_flux, dtype=float))
         volume.attrs["mixture_names"] = np.asarray(mixture_names, dtype="S")
         volume.attrs["group_order"] = MGXS_DONJON_GROUP_ORDER

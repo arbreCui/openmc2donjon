@@ -372,6 +372,10 @@ def _write_flux_map(
         h5.attrs["package_version"] = __version__
         h5.attrs["source"] = source_label
         h5.attrs["input_h5"] = str(input_h5)
+        h5.attrs["map_contract"] = (
+            "scalar_flux_ids are one-based DONJON scalar-flux unknown ids "
+            "indexed by /mixture_names"
+        )
         h5.attrs["sequential_scalar_flux_map"] = bool(sequential)
         h5.create_dataset("energy_bounds", data=np.asarray(energy_bounds, dtype=float))
         h5.create_dataset("mixture_names", data=np.asarray(mixture_names, dtype="S"))
@@ -380,6 +384,9 @@ def _write_flux_map(
             data=np.asarray(scalar_flux_ids, dtype=int),
         )
         dataset.attrs["mixture_names"] = np.asarray(mixture_names, dtype="S")
+        dataset.attrs["index_order"] = "mixture_names"
+        dataset.attrs["id_base"] = 1
+        dataset.attrs["id_kind"] = "donjon_scalar_flux_unknown"
 
 
 def _run_sph_loop_command(config_path: Path, *, python_bin: str | Path | None) -> tuple[str, ...]:

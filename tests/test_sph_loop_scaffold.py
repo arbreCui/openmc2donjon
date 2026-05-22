@@ -69,7 +69,12 @@ class SphLoopScaffoldTests(unittest.TestCase):
                 )
             with h5py.File(out / "flux_map.h5", "r") as h5:
                 self.assertEqual(h5.attrs["schema"], "openmc2donjon.low-order-flux-map.v1")
+                self.assertIn("one-based DONJON", h5.attrs["map_contract"])
                 np.testing.assert_array_equal(h5["scalar_flux_ids"][:], [2, 4])
+                self.assertEqual(
+                    h5["scalar_flux_ids"].attrs["id_kind"],
+                    "donjon_scalar_flux_unknown",
+                )
 
             config = json.loads((out / "loop_config.json").read_text(encoding="utf-8"))
             self.assertEqual(config["schema"], "openmc2donjon.sph-loop-config.v1")
