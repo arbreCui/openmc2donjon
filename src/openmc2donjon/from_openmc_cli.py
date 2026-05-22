@@ -255,6 +255,7 @@ def _print_dry_run_checks(args: argparse.Namespace) -> None:
     if args.check:
         settings = production_preflight_defaults(
             production=args.production,
+            require_mixture_order=False,
             require_transport_dataset=args.require_transport_dataset,
             require_volume=args.require_volume,
             require_h_factor=args.require_h_factor,
@@ -268,6 +269,10 @@ def _print_dry_run_checks(args: argparse.Namespace) -> None:
         print(f"    production: {_yes_no(args.production)}")
         print(f"    require_volume: {_yes_no(settings['require_volume'])}")
         print(f"    require_h_factor: {_yes_no(settings['require_h_factor'])}")
+        print(
+            "    require_mixture_order: "
+            f"{_yes_no(settings['require_mixture_order'])}"
+        )
         print(
             "    require_transport_dataset: "
             f"{_yes_no(settings['require_transport_dataset'])}"

@@ -104,6 +104,8 @@ class CliTests(unittest.TestCase):
             payload["inputs"][0]["uncertainty"]["production_fail_threshold"],
             1.0,
         )
+        self.assertTrue(payload["inputs"][0]["declared_mixture_order"])
+        self.assertEqual(payload["inputs"][0]["source_domain_indices"], 1)
 
     def test_check_command_can_gate_energy_group_identity(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -523,11 +525,13 @@ def write_valid_mgxs(path: Path) -> None:
         h5.attrs["energy_groups"] = 2
         h5.attrs["legendre_order"] = 0
         h5.create_dataset("energy_bounds", data=np.array([1.0e-5, 1.0, 1.0e7]))
+        h5.create_dataset("mixture_names", data=np.asarray(["fuel"], dtype="S"))
         mixtures = h5.create_group("mixtures")
         fuel = mixtures.create_group("fuel")
         fuel.attrs["fissionable"] = True
         fuel.attrs["scatter_axes"] = "moment,from,to"
         fuel.attrs["volume"] = 1.0
+        fuel.attrs["source_domain_index"] = 1
         fuel.create_dataset("total", data=np.array([0.5, 0.7]))
         fuel.create_dataset("absorption", data=np.array([0.05, 0.08]))
         fuel.create_dataset("fission", data=np.array([0.01, 0.015]))

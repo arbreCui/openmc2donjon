@@ -79,6 +79,7 @@ PRODUCTION_UNCERTAINTY_PRODUCTION_FAIL = 1.0
 def production_preflight_defaults(
     *,
     production: bool,
+    require_mixture_order: bool = False,
     require_transport_dataset: bool,
     require_volume: bool,
     require_h_factor: bool,
@@ -89,6 +90,7 @@ def production_preflight_defaults(
     """Return effective preflight options after applying the production preset."""
     if not production:
         return {
+            "require_mixture_order": require_mixture_order,
             "require_transport_dataset": require_transport_dataset,
             "require_volume": require_volume,
             "require_h_factor": require_h_factor,
@@ -102,6 +104,7 @@ def production_preflight_defaults(
         uncertainty_production_fail = PRODUCTION_UNCERTAINTY_PRODUCTION_FAIL
 
     return {
+        "require_mixture_order": True,
         "require_transport_dataset": True,
         "require_volume": True,
         "require_h_factor": True,
@@ -115,6 +118,7 @@ def main() -> int:
     expected_faces = split_csv(args.expected_adf_faces)
     settings = production_preflight_defaults(
         production=args.production,
+        require_mixture_order=args.require_mixture_order,
         require_transport_dataset=args.require_transport_dataset,
         require_volume=args.require_volume,
         require_h_factor=args.require_h_factor,
@@ -129,6 +133,7 @@ def main() -> int:
             path,
             require_adf=args.require_adf,
             require_sph=args.require_sph,
+            require_mixture_order=settings["require_mixture_order"],
             require_transport_dataset=settings["require_transport_dataset"],
             require_volume=settings["require_volume"],
             require_h_factor=settings["require_h_factor"],
@@ -194,8 +199,16 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help=(
             "enable production preflight defaults: require volume, transport_total, "
-            "fissionable H-FACTOR, row-balance warnings, and production uncertainty "
-            "failure threshold"
+            "fissionable H-FACTOR, declared mixture order, row-balance warnings, "
+            "and production uncertainty failure threshold"
+        ),
+    )
+    parser.add_argument(
+        "--require-mixture-order",
+        action="store_true",
+        help=(
+            "require /mixture_names and matching 1-based source_domain_index "
+            "attributes"
         ),
     )
     parser.add_argument(
@@ -319,6 +332,7 @@ def validate_input(
     *,
     require_adf: bool = False,
     require_sph: bool = False,
+    require_mixture_order: bool = False,
     require_transport_dataset: bool = False,
     require_volume: bool = False,
     require_h_factor: bool = False,
@@ -349,6 +363,7 @@ def validate_input(
                 report,
                 require_adf=require_adf,
                 require_sph=require_sph,
+                require_mixture_order=require_mixture_order,
                 require_transport_dataset=require_transport_dataset,
                 require_volume=require_volume,
                 require_h_factor=require_h_factor,
@@ -370,6 +385,7 @@ def validate_open_h5(
     *,
     require_adf: bool,
     require_sph: bool,
+    require_mixture_order: bool,
     require_transport_dataset: bool,
     require_volume: bool,
     require_h_factor: bool,
@@ -427,6 +443,13 @@ def validate_open_h5(
     if report.mixtures == 0:
         report.fail("/mixtures group contains no mixtures")
         return
+    validate_mixture_order_contract(
+        h5,
+        mixtures,
+        mixture_names,
+        report,
+        require_mixture_order=require_mixture_order,
+    )
 
     burnup_axis = burnup_axis_from_hdf5(h5, report)
     adf_names_by_mix: list[tuple[str, ...]] = []
@@ -473,6 +496,51 @@ def finalize_volume_contract(report: InputReport, *, require_volume: bool) -> No
         "volume; converter readers will use default volume 1.0 for those "
         "calculations"
     )
+
+
+def validate_mixture_order_contract(
+    h5: h5py.File,
+    mixtures: h5py.Group,
+    mixture_names: tuple[str, ...],
+    report: InputReport,
+    *,
+    require_mixture_order: bool,
+) -> None:
+    report.declared_mixture_order = "mixture_names" in h5
+    if require_mixture_order and not report.declared_mixture_order:
+        report.fail(
+            "/mixture_names dataset is required to declare DONJON mixture order"
+        )
+
+    for expected_index, name in enumerate(mixture_names, start=1):
+        group = mixtures[name]
+        if not isinstance(group, h5py.Group):
+            continue
+        if "source_domain_index" not in group.attrs:
+            if require_mixture_order:
+                report.fail(
+                    f"mixture {name}: source_domain_index attribute is required"
+                )
+            continue
+        try:
+            source_domain_index = int(group.attrs["source_domain_index"])
+        except (TypeError, ValueError):
+            report.fail(
+                f"mixture {name}: source_domain_index attribute must be an integer"
+            )
+            continue
+        report.source_domain_indices += 1
+        if source_domain_index <= 0:
+            report.fail(
+                f"mixture {name}: source_domain_index attribute must be positive"
+            )
+        elif (
+            require_mixture_order or report.declared_mixture_order
+        ) and source_domain_index != expected_index:
+            report.fail(
+                f"mixture {name}: source_domain_index {source_domain_index} "
+                f"does not match declared mixture order position {expected_index}"
+            )
 
 
 def validate_energy_identity(
@@ -941,6 +1009,7 @@ def run_preflight(
     require_adf: bool = False,
     require_sph: bool = False,
     expected_adf_faces: str | list[str] | None = None,
+    require_mixture_order: bool = False,
     require_transport_dataset: bool = False,
     require_volume: bool = False,
     require_h_factor: bool = False,
@@ -965,6 +1034,7 @@ def run_preflight(
     )
     settings = production_preflight_defaults(
         production=production,
+        require_mixture_order=require_mixture_order,
         require_transport_dataset=require_transport_dataset,
         require_volume=require_volume,
         require_h_factor=require_h_factor,
@@ -977,6 +1047,7 @@ def run_preflight(
             path,
             require_adf=require_adf,
             require_sph=require_sph,
+            require_mixture_order=settings["require_mixture_order"],
             require_transport_dataset=settings["require_transport_dataset"],
             require_volume=settings["require_volume"],
             require_h_factor=settings["require_h_factor"],

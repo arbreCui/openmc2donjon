@@ -287,6 +287,62 @@ class MgxsInputContractTests(unittest.TestCase):
         self.assertEqual(report.fissionable_mixtures, 0)
         self.assertEqual(report.h_factor_datasets, 0)
 
+    def test_require_mixture_order_gates_declared_names_and_indices(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "order.h5"
+            write_single_state_fixture(path, total=[0.29, 0.38])
+
+            missing_report = validator.validate_input(
+                path,
+                require_mixture_order=True,
+            )
+
+            with h5py.File(path, "a") as h5:
+                h5.create_dataset(
+                    "mixture_names",
+                    data=np.asarray(["fuel"], dtype="S"),
+                )
+
+            missing_index_report = validator.validate_input(
+                path,
+                require_mixture_order=True,
+            )
+
+            with h5py.File(path, "a") as h5:
+                h5["mixtures/fuel"].attrs["source_domain_index"] = 2
+
+            wrong_index_report = validator.validate_input(
+                path,
+                require_mixture_order=True,
+            )
+
+            with h5py.File(path, "a") as h5:
+                h5["mixtures/fuel"].attrs["source_domain_index"] = 1
+
+            valid_report = validator.validate_input(
+                path,
+                require_mixture_order=True,
+            )
+
+        self.assertFalse(missing_report.ok)
+        self.assertIn(
+            "/mixture_names dataset is required to declare DONJON mixture order",
+            missing_report.issues,
+        )
+        self.assertFalse(missing_index_report.ok)
+        self.assertIn(
+            "mixture fuel: source_domain_index attribute is required",
+            missing_index_report.issues,
+        )
+        self.assertFalse(wrong_index_report.ok)
+        self.assertIn(
+            "mixture fuel: source_domain_index 2 does not match declared mixture order position 1",
+            wrong_index_report.issues,
+        )
+        self.assertTrue(valid_report.ok, valid_report.issues)
+        self.assertTrue(valid_report.declared_mixture_order)
+        self.assertEqual(valid_report.source_domain_indices, 1)
+
     def test_energy_group_identity_gate_accepts_matching_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "c5g7.h5"

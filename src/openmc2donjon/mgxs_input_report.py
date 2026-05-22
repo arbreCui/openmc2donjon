@@ -21,6 +21,8 @@ class InputReport:
     energy_group_structure: str | None = None
     energy_bounds_sha256: str | None = None
     mixtures: int = 0
+    declared_mixture_order: bool = False
+    source_domain_indices: int = 0
     stateful_mixtures: int = 0
     state_points: int = 1
     calculations: int = 0
@@ -108,6 +110,12 @@ def print_report(report: InputReport) -> None:
         f"{report.mixtures} fissionable={report.fissionable_mixtures} "
         f"calculations={calculation_count} state_points={report.state_points}"
     )
+    order = "declared" if report.declared_mixture_order else "group-key-fallback"
+    print(
+        "        "
+        f"mixture_order={order} "
+        f"source_domain_index={report.source_domain_indices}/{report.mixtures}"
+    )
     if report.burnup_axis_path:
         print(
             "        burnup_axis="
@@ -185,6 +193,8 @@ def _report_payload(report: InputReport) -> dict[str, object]:
         "energy_group_structure": report.energy_group_structure,
         "energy_bounds_sha256": report.energy_bounds_sha256,
         "mixtures": report.mixtures,
+        "declared_mixture_order": report.declared_mixture_order,
+        "source_domain_indices": report.source_domain_indices,
         "stateful_mixtures": report.stateful_mixtures,
         "state_points": report.state_points,
         "calculations": report.calculations,
