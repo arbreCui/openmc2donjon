@@ -143,6 +143,7 @@ def _write_reference_flux(path: Path) -> None:
         dataset = h5.create_dataset("openmc_volume_flux", data=REFERENCE_FLUX)
         names = np.asarray(MIXTURE_NAMES, dtype="S")
         dataset.attrs["mixture_names"] = names
+        dataset.attrs["group_order"] = "mgxs_donjon"
         h5.create_dataset("mixture_names", data=names)
 
 
@@ -187,14 +188,7 @@ def _write_config(path: Path, *, driver: Path, python_bin: str) -> None:
             "fail_on_nonconvergence": True,
         },
         "acceptance": {
-            "min_completed_iterations": 2,
-            "require_converged": True,
-            "require_final_solve": True,
-            "max_sph_rel_change": 1.0e-12,
-            "max_flux_ratio_residual": 1.0e-12,
-            "sph_minimum_floor": 1.0,
-            "sph_maximum_ceiling": 2.0,
-            "fail_on_violation": True,
+            "preset": "production",
         },
         "solver": {
             "command": [

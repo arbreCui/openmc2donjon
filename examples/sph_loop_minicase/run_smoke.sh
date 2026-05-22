@@ -155,6 +155,18 @@ assert len(summary["postprocesses"]) == 2
 assert summary["final_solve"]["iteration"] == 2
 assert summary["final_ascii"].endswith("corrected.macrolib.txt")
 
+checks = {item["name"]: item for item in summary["acceptance"]["checks"]}
+assert checks["require_artifact_metadata_alignment"]["passed"] is True
+metadata = summary["artifact_metadata"]
+assert metadata["reference_flux"]["group_order"] == "mgxs_donjon"
+assert metadata["reference_flux"]["mixture_names"] == ["FUEL_ASM", "REFL_ASM"]
+for workflow in metadata["workflows"]:
+    assert workflow["donjon_volume_flux"]["group_order"] == "mgxs_donjon"
+    assert workflow["donjon_volume_flux"]["mixture_names"] == ["FUEL_ASM", "REFL_ASM"]
+    assert workflow["sph_sidecar"]["group_order"] == "mgxs_donjon"
+    assert workflow["sph_sidecar"]["mixture_names"] == ["FUEL_ASM", "REFL_ASM"]
+assert metadata["final_sph_sidecar"]["group_order"] == "mgxs_donjon"
+
 with h5py.File(expected_path, "r") as h5:
     expected_sph = h5["expected_sph"][:]
 

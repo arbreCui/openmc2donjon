@@ -59,6 +59,12 @@ class SphLoopMinicaseExampleTests(unittest.TestCase):
                 )
                 np.testing.assert_array_equal(h5["scalar_flux_ids"][:], [2, 4])
 
+            with h5py.File(case_dir / "inputs/reference_flux.h5", "r") as h5:
+                self.assertEqual(
+                    h5["openmc_volume_flux"].attrs["group_order"],
+                    "mgxs_donjon",
+                )
+
             with h5py.File(case_dir / "expected_sph.h5", "r") as h5:
                 np.testing.assert_allclose(
                     h5["expected_sph"][:],
@@ -70,6 +76,7 @@ class SphLoopMinicaseExampleTests(unittest.TestCase):
             self.assertEqual(payload["format"], "macrolib")
             self.assertEqual(payload["iterations"], 2)
             self.assertEqual(payload["damping"], 0.5)
+            self.assertEqual(payload["acceptance"]["preset"], "production")
             self.assertEqual(payload["solver"]["result"], "low_order_flux.result")
             self.assertIn("{ascii_input}", payload["solver"]["command"])
             self.assertIn("{result}", payload["solver"]["command"])
@@ -84,6 +91,91 @@ class SphLoopMinicaseExampleTests(unittest.TestCase):
             self.assertTrue(plan.run_final_solve)
             self.assertEqual(plan.normalized_acceptance["min_completed_iterations"], 2)
             self.assertEqual(plan.normalized_acceptance["require_converged"], True)
+            self.assertEqual(
+                plan.normalized_acceptance["require_artifact_metadata_alignment"],
+                True,
+            )
+
+    def test_minicase_production_preset_runs_with_artifact_metadata_gate(self) -> None:
+        root = _repo_root()
+        script = root / "examples/sph_loop_minicase/make_inputs.py"
+        driver = root / "examples/sph_loop_minicase/fake_low_order_solver.py"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            case_dir = Path(tmpdir) / "case"
+            config = case_dir / "loop_config.json"
+            summary = case_dir / "sph_loop_summary.json"
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(script),
+                    "--output-dir",
+                    str(case_dir),
+                    "--config",
+                    str(config),
+                    "--driver",
+                    str(driver),
+                    "--python-bin",
+                    sys.executable,
+                ],
+                check=True,
+                cwd=root,
+            )
+
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "openmc2donjon.cli",
+                    "run-sph-loop",
+                    "--config",
+                    str(config),
+                    "--summary-json",
+                    str(summary),
+                ],
+                check=True,
+                cwd=root,
+                env=_pythonpath_env(root),
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertIn("openmc2donjon_sph_loop_passed", completed.stdout)
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+            self.assertTrue(payload["acceptance_passed"])
+            checks = {item["name"]: item for item in payload["acceptance"]["checks"]}
+            self.assertTrue(checks["require_artifact_metadata_alignment"]["passed"])
+            metadata = payload["artifact_metadata"]
+            self.assertEqual(
+                metadata["reference_flux"]["mixture_names"],
+                ["FUEL_ASM", "REFL_ASM"],
+            )
+            self.assertEqual(metadata["reference_flux"]["group_order"], "mgxs_donjon")
+            self.assertEqual(len(metadata["workflows"]), 2)
+            for workflow in metadata["workflows"]:
+                self.assertEqual(
+                    workflow["donjon_volume_flux"]["mixture_names"],
+                    ["FUEL_ASM", "REFL_ASM"],
+                )
+                self.assertEqual(
+                    workflow["donjon_volume_flux"]["group_order"],
+                    "mgxs_donjon",
+                )
+                self.assertEqual(
+                    workflow["sph_sidecar"]["mixture_names"],
+                    ["FUEL_ASM", "REFL_ASM"],
+                )
+                self.assertEqual(
+                    workflow["sph_sidecar"]["group_order"],
+                    "mgxs_donjon",
+                )
+            self.assertEqual(
+                metadata["final_sph_sidecar"]["group_order"],
+                "mgxs_donjon",
+            )
+            with h5py.File(case_dir / "expected_sph.h5", "r") as h5:
+                expected = h5["expected_sph"][:]
+            with h5py.File(payload["final_sph_sidecar"], "r") as h5:
+                np.testing.assert_allclose(h5["sph"][:], expected)
 
     def test_fake_low_order_solver_writes_parseable_lflux_dump(self) -> None:
         root = _repo_root()
