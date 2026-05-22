@@ -93,7 +93,10 @@ def validate_uncertainty_for_calculation(
 
 
 def finalize_uncertainty(report: InputReport) -> None:
-    if not report.uncertainty_checked or report.uncertainty_max_rel is None:
+    if not report.uncertainty_checked:
+        return
+    _warn_missing_std_dev_coverage(report)
+    if report.uncertainty_max_rel is None:
         return
     detail = (
         "MGXS statistical uncertainty max relative sigma "
@@ -117,6 +120,23 @@ def finalize_uncertainty(report: InputReport) -> None:
         report.fail(f"{detail} exceeds fail threshold {fail_threshold:.6e}")
     elif warn_threshold is not None and report.uncertainty_max_rel > warn_threshold:
         report.warn(f"{detail} exceeds warn threshold {warn_threshold:.6e}")
+
+
+def _warn_missing_std_dev_coverage(report: InputReport) -> None:
+    missing = report.uncertainty_expected_datasets - report.uncertainty_datasets
+    if missing <= 0:
+        return
+    if (
+        report.uncertainty_fail_threshold is None
+        and report.uncertainty_production_fail_threshold is None
+    ):
+        return
+    report.warn(
+        "MGXS statistical uncertainty std_dev coverage incomplete: "
+        f"{report.uncertainty_datasets}/{report.uncertainty_expected_datasets} "
+        f"dataset(s) present, {missing} missing; export OpenMC MGXS *_std_dev "
+        "datasets to make tally noise visible in preflight"
+    )
 
 
 def _validate_std_dev_dataset(

@@ -612,6 +612,26 @@ class MgxsInputContractTests(unittest.TestCase):
             any("exceeds production fail threshold" in item for item in report.issues)
         )
 
+    def test_production_uncertainty_warns_when_std_dev_coverage_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "missing_std_dev.h5"
+            write_single_state_fixture(path, total=[0.29, 0.38])
+
+            report = validator.validate_input(
+                path,
+                uncertainty=validator.UncertaintyConfig(
+                    warn_threshold=0.05,
+                    production_fail_threshold=1.0,
+                ),
+            )
+
+        self.assertTrue(report.ok, report.issues)
+        self.assertEqual(report.uncertainty_expected_datasets, 7)
+        self.assertEqual(report.uncertainty_datasets, 0)
+        self.assertTrue(
+            any("std_dev coverage incomplete" in item for item in report.warnings)
+        )
+
 
 def write_multistate_fixture(
     path: Path,
