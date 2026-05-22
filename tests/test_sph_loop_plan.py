@@ -183,6 +183,7 @@ class SphLoopPlanTests(unittest.TestCase):
             self.assertTrue(
                 plan.normalized_acceptance["require_artifact_metadata_alignment"]
             )
+            self.assertTrue(plan.normalized_acceptance["require_production_audit"])
             self.assertEqual(plan.normalized_acceptance["min_completed_iterations"], 2)
             self.assertEqual(plan.normalized_acceptance["max_final_clipped_count"], 0)
             self.assertEqual(plan.normalized_acceptance["max_final_clipped_fraction"], 0.0)

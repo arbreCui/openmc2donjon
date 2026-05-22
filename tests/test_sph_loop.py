@@ -523,6 +523,7 @@ class SphLoopTests(unittest.TestCase):
                     "require_final_solve",
                     "require_converged",
                     "require_artifact_metadata_alignment",
+                    "require_production_audit",
                     "max_sph_rel_change",
                     "max_flux_ratio_residual",
                     "max_final_to_initial_flux_residual_ratio",

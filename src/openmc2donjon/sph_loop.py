@@ -128,6 +128,7 @@ def _build_report(
         converged=converged,
         final_solve=execution.final_solve,
         artifact_metadata=artifact_metadata,
+        flux_map_preflight=preflight,
     )
     return SphLoopReport(
         config_path=plan.config_path,

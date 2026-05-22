@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from .constants import MGXS_DONJON_GROUP_ORDER
+from .sph_loop_production_audit import build_production_audit_payload
 
 
 ACCEPTANCE_PASS_DECISION = "openmc2donjon_sph_loop_acceptance_passed"
@@ -31,6 +32,17 @@ class _ConvergenceLike(Protocol):
 class _DatasetMetadataLike(Protocol):
     group_order: str | None
     mixture_names: tuple[str, ...]
+    energy_groups: int | None
+
+
+class _FluxMapPreflightLike(Protocol):
+    passed: bool
+    map_kind: str
+    mixture_names: tuple[str, ...]
+    energy_groups: int
+    scalar_flux_ids: tuple[int, ...]
+    minimum_required_flux_unknown_count: int | None
+    mixture_flux_map: tuple[tuple[str, int], ...]
 
 
 class _WorkflowMetadataLike(Protocol):
@@ -73,6 +85,7 @@ def build_acceptance_report(
     converged: bool,
     final_solve: object | None,
     artifact_metadata: _ArtifactMetadataLike | None = None,
+    flux_map_preflight: _FluxMapPreflightLike | None = None,
 ) -> SphLoopAcceptanceReport:
     checks: list[SphLoopAcceptanceCheck] = []
     if "min_completed_iterations" in config:
@@ -102,6 +115,8 @@ def build_acceptance_report(
         )
     if bool(config.get("require_artifact_metadata_alignment", False)):
         checks.append(_artifact_metadata_alignment_check(artifact_metadata))
+    if bool(config.get("require_production_audit", False)):
+        checks.append(_production_audit_check(flux_map_preflight, artifact_metadata))
 
     last_convergence = convergence[-1] if convergence else None
     if "max_sph_abs_change" in config:
@@ -354,6 +369,36 @@ def _artifact_metadata_alignment_errors(
             reference_names=reference_names,
         )
     return errors
+
+
+def _production_audit_check(
+    flux_map_preflight: _FluxMapPreflightLike | None,
+    artifact_metadata: _ArtifactMetadataLike | None,
+) -> SphLoopAcceptanceCheck:
+    if flux_map_preflight is None or artifact_metadata is None:
+        errors = []
+        if flux_map_preflight is None:
+            errors.append("flux map preflight unavailable")
+        if artifact_metadata is None:
+            errors.append("artifact metadata unavailable")
+    else:
+        payload = build_production_audit_payload(
+            flux_map_preflight=flux_map_preflight,
+            artifact_metadata=artifact_metadata,
+        )
+        errors = [str(item) for item in payload["errors"]]
+    passed = not errors
+    message = "production audit passed" if passed else "; ".join(errors[:4])
+    if len(errors) > 4:
+        message += f"; ... ({len(errors)} total)"
+    return SphLoopAcceptanceCheck(
+        name="require_production_audit",
+        actual=passed,
+        limit=True,
+        units="boolean",
+        passed=passed,
+        message=message,
+    )
 
 
 def _append_dataset_alignment_errors(

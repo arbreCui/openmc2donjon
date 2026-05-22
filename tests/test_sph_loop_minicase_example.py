@@ -95,6 +95,7 @@ class SphLoopMinicaseExampleTests(unittest.TestCase):
                 plan.normalized_acceptance["require_artifact_metadata_alignment"],
                 True,
             )
+            self.assertEqual(plan.normalized_acceptance["require_production_audit"], True)
 
     def test_minicase_production_preset_runs_with_artifact_metadata_gate(self) -> None:
         root = _repo_root()
@@ -144,6 +145,7 @@ class SphLoopMinicaseExampleTests(unittest.TestCase):
             self.assertTrue(payload["acceptance_passed"])
             checks = {item["name"]: item for item in payload["acceptance"]["checks"]}
             self.assertTrue(checks["require_artifact_metadata_alignment"]["passed"])
+            self.assertTrue(checks["require_production_audit"]["passed"])
             metadata = payload["artifact_metadata"]
             self.assertEqual(
                 metadata["reference_flux"]["mixture_names"],

@@ -178,6 +178,87 @@ class SphLoopAcceptanceTests(unittest.TestCase):
         self.assertIn("donjon_volume_flux group_order", check.message)
         self.assertIn("sph_sidecar mixture_names", check.message)
 
+    def test_builds_production_audit_gate(self) -> None:
+        report = build_acceptance_report(
+            {"require_production_audit": True},
+            audit_rows=(),
+            convergence=(),
+            completed_iterations=1,
+            converged=False,
+            final_solve=None,
+            flux_map_preflight=_preflight(),
+            artifact_metadata=SimpleNamespace(
+                reference_flux=_metadata(
+                    "mgxs_donjon",
+                    ("fuel", "moderator"),
+                    energy_groups=2,
+                ),
+                workflows=(
+                    SimpleNamespace(
+                        iteration=1,
+                        donjon_volume_flux=_metadata(
+                            "mgxs_donjon",
+                            ("fuel", "moderator"),
+                            energy_groups=2,
+                        ),
+                        sph_sidecar=_metadata(
+                            "mgxs_donjon",
+                            ("fuel", "moderator"),
+                            energy_groups=2,
+                        ),
+                    ),
+                ),
+                final_sph_sidecar=_metadata(
+                    "mgxs_donjon",
+                    ("fuel", "moderator"),
+                    energy_groups=2,
+                ),
+            ),
+        )
+
+        self.assertTrue(report.passed)
+        self.assertEqual(report.checks[0].name, "require_production_audit")
+
+    def test_production_audit_gate_reports_mismatch(self) -> None:
+        report = build_acceptance_report(
+            {"require_production_audit": True},
+            audit_rows=(),
+            convergence=(),
+            completed_iterations=1,
+            converged=False,
+            final_solve=None,
+            flux_map_preflight=_preflight(),
+            artifact_metadata=SimpleNamespace(
+                reference_flux=_metadata(
+                    "mgxs_donjon",
+                    ("fuel", "moderator"),
+                    energy_groups=2,
+                ),
+                workflows=(
+                    SimpleNamespace(
+                        iteration=1,
+                        donjon_volume_flux=_metadata(
+                            "mgxs_donjon",
+                            ("fuel", "moderator"),
+                            energy_groups=3,
+                        ),
+                        sph_sidecar=_metadata(
+                            "ascending_energy",
+                            ("fuel", "moderator"),
+                            energy_groups=2,
+                        ),
+                    ),
+                ),
+                final_sph_sidecar=None,
+            ),
+        )
+
+        self.assertFalse(report.passed)
+        check = report.checks[0]
+        self.assertFalse(check.actual)
+        self.assertIn("donjon_volume_flux energy_groups", check.message)
+        self.assertIn("sph_sidecar group_order", check.message)
+
     def test_empty_acceptance_config_is_disabled_and_passes(self) -> None:
         report = build_acceptance_report(
             {},
@@ -209,8 +290,30 @@ def _row(
     )
 
 
-def _metadata(group_order: str, mixture_names: tuple[str, ...]) -> SimpleNamespace:
-    return SimpleNamespace(group_order=group_order, mixture_names=mixture_names)
+def _metadata(
+    group_order: str,
+    mixture_names: tuple[str, ...],
+    *,
+    energy_groups: int = 2,
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        source="test.h5::dataset",
+        group_order=group_order,
+        mixture_names=mixture_names,
+        energy_groups=energy_groups,
+    )
+
+
+def _preflight() -> SimpleNamespace:
+    return SimpleNamespace(
+        passed=True,
+        map_kind="scalar_flux_map",
+        mixture_names=("fuel", "moderator"),
+        energy_groups=2,
+        scalar_flux_ids=(2, 4),
+        minimum_required_flux_unknown_count=4,
+        mixture_flux_map=(("fuel", 2), ("moderator", 4)),
+    )
 
 
 if __name__ == "__main__":

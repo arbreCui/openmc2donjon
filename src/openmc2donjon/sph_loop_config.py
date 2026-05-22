@@ -59,6 +59,7 @@ def acceptance_config(config: dict[str, Any]) -> dict[str, Any]:
         "require_final_solve",
         "require_converged",
         "require_artifact_metadata_alignment",
+        "require_production_audit",
         "max_sph_abs_change",
         "max_sph_rel_change",
         "max_flux_ratio_residual",
@@ -118,6 +119,7 @@ def acceptance_config(config: dict[str, Any]) -> dict[str, Any]:
         "require_final_solve",
         "require_converged",
         "require_artifact_metadata_alignment",
+        "require_production_audit",
         "fail_on_violation",
     ):
         if key in out and out[key] is not None:
@@ -131,6 +133,7 @@ def _mechanical_acceptance_defaults(config: dict[str, Any]) -> dict[str, Any]:
         "fail_on_violation": True,
         "require_final_solve": True,
         "require_artifact_metadata_alignment": True,
+        "require_production_audit": True,
         "min_completed_iterations": int(convergence.get("min_iterations", 1)),
         "max_final_clipped_count": 0,
         "max_final_clipped_fraction": 0.0,
