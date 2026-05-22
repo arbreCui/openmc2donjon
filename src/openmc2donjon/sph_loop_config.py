@@ -53,6 +53,7 @@ def acceptance_config(config: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(nested, dict):
         raise ValueError("acceptance must be a JSON object")
     allowed = {
+        "preset",
         "fail_on_violation",
         "min_completed_iterations",
         "require_final_solve",
@@ -72,7 +73,16 @@ def acceptance_config(config: dict[str, Any]) -> dict[str, Any]:
     if unknown:
         raise ValueError(f"unknown acceptance key(s): {', '.join(unknown)}")
 
-    out = dict(nested)
+    preset = nested.get("preset")
+    if preset is None:
+        out = dict(nested)
+    elif preset == "production":
+        out = _production_acceptance_defaults(config)
+        out.update({key: value for key, value in nested.items() if key != "preset"})
+        out["preset"] = preset
+    else:
+        raise ValueError(f"unsupported acceptance preset {preset!r}")
+
     for key in (
         "max_sph_abs_change",
         "max_sph_rel_change",
@@ -103,6 +113,27 @@ def acceptance_config(config: dict[str, Any]) -> dict[str, Any]:
         if key in out and out[key] is not None:
             out[key] = bool(out[key])
     return {key: value for key, value in out.items() if value is not None}
+
+
+def _production_acceptance_defaults(config: dict[str, Any]) -> dict[str, Any]:
+    convergence = convergence_config(config)
+    out: dict[str, Any] = {
+        "fail_on_violation": True,
+        "require_final_solve": True,
+        "min_completed_iterations": int(convergence.get("min_iterations", 1)),
+        "max_final_to_initial_flux_residual_ratio": 1.0,
+        "max_final_clipped_count": 0,
+        "max_final_clipped_fraction": 0.0,
+    }
+    sph_tolerance = optional_float(convergence.get("sph_change_tolerance"))
+    flux_tolerance = optional_float(convergence.get("flux_ratio_tolerance"))
+    if sph_tolerance is not None:
+        out["max_sph_rel_change"] = sph_tolerance
+    if flux_tolerance is not None:
+        out["max_flux_ratio_residual"] = flux_tolerance
+    if sph_tolerance is not None or flux_tolerance is not None:
+        out["require_converged"] = True
+    return out
 
 
 def solver_config(config: dict[str, Any]) -> dict[str, Any]:

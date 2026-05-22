@@ -393,6 +393,164 @@ class SphLoopTests(unittest.TestCase):
                 0.001,
             )
 
+    def test_production_acceptance_preset_expands_to_hard_gates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference = root / "reference_flux.h5"
+            solver = root / "fake_exact_donjon_solver.py"
+            config = root / "loop.json"
+            summary = root / "loop_summary.json"
+            _write_mgxs(mgxs)
+            _write_reference_flux(reference)
+            _write_exact_fake_solver(solver)
+            config.write_text(
+                json.dumps(
+                    {
+                        "schema": "openmc2donjon.sph-loop-config.v1",
+                        "input_h5": "mgxs.h5",
+                        "output_dir": "loop_run",
+                        "reference_flux": "reference_flux.h5::openmc_volume_flux",
+                        "iterations": 1,
+                        "format": "macrolib",
+                        "final_solve": True,
+                        "damping": 1.0,
+                        "scalar_flux_map": {"fuel": 2, "moderator": 4},
+                        "convergence": {
+                            "sph_change_tolerance": 1.0e-12,
+                            "flux_ratio_tolerance": 1.0e-12,
+                            "min_iterations": 1,
+                        },
+                        "acceptance": {"preset": "production"},
+                        "solver": {
+                            "command": [
+                                sys.executable,
+                                str(solver),
+                                "--macrolib",
+                                "{ascii_input}",
+                                "--result",
+                                "{result}",
+                                "--iteration",
+                                "{iteration}",
+                            ],
+                            "result": "donjon_flux.result",
+                        },
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            rc = cli_main(
+                [
+                    "run-sph-loop",
+                    "--config",
+                    str(config),
+                    "--summary-json",
+                    str(summary),
+                ]
+            )
+
+            self.assertEqual(rc, 0)
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+            self.assertTrue(payload["acceptance_enabled"])
+            self.assertTrue(payload["acceptance_passed"])
+            self.assertEqual(
+                payload["acceptance_decision"],
+                "openmc2donjon_sph_loop_acceptance_passed",
+            )
+            check_names = {
+                item["name"] for item in payload["acceptance"]["checks"]
+            }
+            self.assertEqual(
+                check_names,
+                {
+                    "min_completed_iterations",
+                    "require_final_solve",
+                    "require_converged",
+                    "max_sph_rel_change",
+                    "max_flux_ratio_residual",
+                    "max_final_to_initial_flux_residual_ratio",
+                    "max_final_clipped_fraction",
+                    "max_final_clipped_count",
+                },
+            )
+            self.assertEqual(_acceptance_actual(payload, "max_final_clipped_count"), 0.0)
+            self.assertEqual(
+                _acceptance_actual(payload, "max_final_to_initial_flux_residual_ratio"),
+                0.0,
+            )
+
+    def test_production_acceptance_preset_fails_without_final_solve(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference = root / "reference_flux.h5"
+            solver = root / "fake_exact_donjon_solver.py"
+            config = root / "loop.json"
+            summary = root / "loop_summary.json"
+            _write_mgxs(mgxs)
+            _write_reference_flux(reference)
+            _write_exact_fake_solver(solver)
+            config.write_text(
+                json.dumps(
+                    {
+                        "schema": "openmc2donjon.sph-loop-config.v1",
+                        "input_h5": "mgxs.h5",
+                        "output_dir": "loop_run",
+                        "reference_flux": "reference_flux.h5::openmc_volume_flux",
+                        "iterations": 1,
+                        "format": "macrolib",
+                        "final_solve": False,
+                        "damping": 1.0,
+                        "scalar_flux_map": {"fuel": 2, "moderator": 4},
+                        "acceptance": {"preset": "production"},
+                        "solver": {
+                            "command": [
+                                sys.executable,
+                                str(solver),
+                                "--macrolib",
+                                "{ascii_input}",
+                                "--result",
+                                "{result}",
+                                "--iteration",
+                                "{iteration}",
+                            ],
+                            "result": "donjon_flux.result",
+                        },
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as raised:
+                    cli_main(
+                        [
+                            "run-sph-loop",
+                            "--config",
+                            str(config),
+                            "--summary-json",
+                            str(summary),
+                        ]
+                    )
+
+            self.assertEqual(raised.exception.code, 1)
+            self.assertIn("acceptance criteria failed", stderr.getvalue())
+            self.assertIn("require_final_solve", stderr.getvalue())
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+            self.assertFalse(payload["acceptance_passed"])
+            failed = [
+                item["name"]
+                for item in payload["acceptance"]["checks"]
+                if not item["passed"]
+            ]
+            self.assertIn("require_final_solve", failed)
+
     def test_flux_map_preflight_rejects_duplicate_unknowns_before_solving(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

@@ -27,6 +27,7 @@ class DonjonSphConfigTests(unittest.TestCase):
             min_iterations=2,
             fail_on_nonconvergence=True,
             acceptance={
+                "preset": "production",
                 "min_completed_iterations": 3,
                 "max_final_keff_delta_pcm": 5.0,
                 "fail_on_violation": True,
@@ -49,6 +50,7 @@ class DonjonSphConfigTests(unittest.TestCase):
         self.assertEqual(
             config["acceptance"],
             {
+                "preset": "production",
                 "min_completed_iterations": 3,
                 "max_final_keff_delta_pcm": 5.0,
                 "fail_on_violation": True,
@@ -97,6 +99,8 @@ class DonjonSphConfigTests(unittest.TestCase):
                         "1e-3",
                         "--sph-change-tolerance",
                         "2e-3",
+                        "--acceptance-preset",
+                        "production",
                         "--acceptance-min-completed-iterations",
                         "1",
                         "--acceptance-require-final-solve",
@@ -121,6 +125,7 @@ class DonjonSphConfigTests(unittest.TestCase):
             self.assertEqual(payload["iterations"], 1)
             self.assertEqual(payload["convergence"]["flux_ratio_tolerance"], 1.0e-3)
             self.assertEqual(payload["convergence"]["sph_change_tolerance"], 2.0e-3)
+            self.assertEqual(payload["acceptance"]["preset"], "production")
             self.assertEqual(payload["acceptance"]["min_completed_iterations"], 1)
             self.assertTrue(payload["acceptance"]["require_final_solve"])
             self.assertEqual(payload["acceptance"]["max_final_keff_delta_pcm"], 5.0)

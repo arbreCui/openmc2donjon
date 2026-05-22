@@ -7,6 +7,16 @@ import argparse
 
 def add_sph_loop_acceptance_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
+        "--acceptance-preset",
+        choices=("production",),
+        default=None,
+        help=(
+            "production acceptance preset: require a final solve, no final "
+            "SPH clipping, non-worsening flux residual, and configured "
+            "convergence tolerances"
+        ),
+    )
+    parser.add_argument(
         "--acceptance-min-completed-iterations",
         type=int,
         default=None,
@@ -87,6 +97,8 @@ def sph_loop_acceptance_from_args(
     args: argparse.Namespace,
 ) -> dict[str, object] | None:
     acceptance: dict[str, object] = {}
+    if args.acceptance_preset is not None:
+        acceptance["preset"] = args.acceptance_preset
     optional_values = {
         "min_completed_iterations": args.acceptance_min_completed_iterations,
         "max_sph_rel_change": args.acceptance_max_sph_rel_change,
