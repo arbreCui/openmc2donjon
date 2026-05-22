@@ -12,6 +12,7 @@ import numpy as np
 
 from . import __version__
 from .constants import DONJON_ADF_NAME_WIDTH
+from .hdf5_names import read_mixture_names
 
 
 SCHEMA = "openmc2donjon.adf-augment.v1"
@@ -168,12 +169,7 @@ def write_summary(path: Path, report: AdfAugmentReport) -> None:
 
 
 def _input_mixture_names(h5) -> tuple[str, ...]:
-    if "mixtures" not in h5 or not hasattr(h5["mixtures"], "keys"):
-        raise ValueError("input HDF5 must contain a /mixtures group")
-    names = tuple(str(name) for name in h5["mixtures"])
-    if not names:
-        raise ValueError("input HDF5 contains no mixtures")
-    return names
+    return read_mixture_names(h5)
 
 
 def _energy_groups(h5) -> int:

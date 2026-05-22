@@ -12,6 +12,7 @@ import numpy as np
 from . import __version__
 from .adf_augment import parse_faces
 from .adf_sidecar import DEFAULT_CARTESIAN_FACES
+from .hdf5_names import read_mixture_names
 
 
 SCHEMA = "openmc2donjon.homogeneous-face-flux.v1"
@@ -316,7 +317,7 @@ def _read_mgxs(path: Path) -> dict[str, Any]:
         if "energy_bounds" not in h5:
             raise ValueError("input HDF5 must contain /energy_bounds")
         energy_bounds = np.asarray(h5["energy_bounds"][:], dtype=float)
-        mixture_names = tuple(str(name) for name in h5["mixtures"])
+        mixture_names = read_mixture_names(h5)
         if not mixture_names:
             raise ValueError("input HDF5 contains no mixtures")
         diffusion = np.zeros((len(mixture_names), energy_bounds.size - 1), dtype=float)

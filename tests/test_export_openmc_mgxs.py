@@ -146,7 +146,15 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
 
             with h5py.File(path, "r") as h5:
                 bounds_digest = h5.attrs["energy_bounds_sha256"]
+                mixture_names = tuple(
+                    value.decode("utf-8") if isinstance(value, bytes) else str(value)
+                    for value in h5["mixture_names"][:]
+                )
                 fuel_group = h5["mixtures"]["ASM_Y1_X1"]
+                source_domain_index = int(fuel_group.attrs["source_domain_index"])
+                source_domain_id = int(fuel_group.attrs["source_domain_id"])
+                source_domain_name = fuel_group.attrs["source_domain_name"]
+                source_domain_type = fuel_group.attrs["source_domain_type"]
                 scatter_axes = fuel_group.attrs["scatter_axes"]
                 stored_scatter = fuel_group["scatter_matrix"][:]
                 mod_scatter = h5["mixtures"]["MOD"]["scatter_matrix"][:]
@@ -154,6 +162,11 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
         self.assertEqual(summary.energy_groups, 3)
         self.assertEqual(summary.legendre_order, 1)
         self.assertEqual([domain.name for domain in summary.domains], ["ASM_Y1_X1", "MOD"])
+        self.assertEqual(mixture_names, ("ASM_Y1_X1", "MOD"))
+        self.assertEqual(source_domain_index, 1)
+        self.assertEqual(source_domain_id, 101)
+        self.assertEqual(source_domain_name, "ASM/1")
+        self.assertEqual(source_domain_type, "FakeDomain")
         np.testing.assert_allclose(energy_bounds, [1.0e-5, 1.0, 1.0e3, 1.0e7])
         self.assertEqual(
             bounds_digest,
@@ -871,12 +884,22 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
             with h5py.File(path, "r") as h5:
                 domain_mode = h5.attrs["domain_mode"]
                 mesh_dimension = int(h5.attrs["mesh_dimension"])
+                mixture_names = tuple(
+                    value.decode("utf-8") if isinstance(value, bytes) else str(value)
+                    for value in h5["mixture_names"][:]
+                )
                 mesh_index = h5["mixtures"]["ASM_Y01_X02"].attrs["mesh_index"]
+                source_domain_index = int(
+                    h5["mixtures"]["ASM_Y01_X02"].attrs["source_domain_index"]
+                )
 
         by_name = {mixture.name: mixture for mixture in mixtures}
         self.assertEqual(domain_mode, "assembly")
         self.assertEqual(mesh_dimension, 2)
+        self.assertEqual(mixture_names, ("ASM_Y01_X01", "ASM_Y01_X02"))
+        self.assertEqual([mixture.name for mixture in mixtures], list(mixture_names))
         np.testing.assert_array_equal(mesh_index, [2, 1, 1])
+        self.assertEqual(source_domain_index, 2)
         np.testing.assert_allclose(by_name["ASM_Y01_X01"].total, [0.5, 0.6, 0.7])
         np.testing.assert_allclose(by_name["ASM_Y01_X02"].total, [0.8, 0.9, 1.0])
         self.assertEqual(by_name["ASM_Y01_X01"].volume, 10.0)

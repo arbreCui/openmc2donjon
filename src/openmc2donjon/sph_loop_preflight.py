@@ -14,6 +14,7 @@ from .donjon_flux import (
     _map_diagnostics,
     _normalize_scalar_flux_ids,
 )
+from .hdf5_names import read_mixture_names
 
 
 SCHEMA = "openmc2donjon.sph-loop-flux-map-preflight.v1"
@@ -206,7 +207,7 @@ def _read_mgxs_metadata(path: Path) -> tuple[tuple[str, ...], int]:
     with h5py.File(path, "r") as h5:
         if "mixtures" not in h5:
             raise ValueError("input HDF5 is missing /mixtures")
-        mixture_names = tuple(str(name) for name in h5["mixtures"].keys())
+        mixture_names = read_mixture_names(h5)
         if "energy_groups" in h5.attrs:
             energy_groups = int(h5.attrs["energy_groups"])
         elif "energy_bounds" in h5:

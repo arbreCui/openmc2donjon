@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 
 from . import __version__
+from .hdf5_names import read_mixture_names
 
 
 SCHEMA = "openmc2donjon.surface-flux.v1"
@@ -349,7 +350,7 @@ def _resolve_metadata(
         with h5py.File(mgxs_h5, "r") as h5:
             if "mixtures" not in h5:
                 raise ValueError(f"{mgxs_h5}: missing /mixtures group")
-            mgxs_names = tuple(str(name) for name in h5["mixtures"])
+            mgxs_names = read_mixture_names(h5)
             if "energy_bounds" not in h5:
                 raise ValueError(f"{mgxs_h5}: missing /energy_bounds dataset")
             mgxs_energy = np.asarray(h5["energy_bounds"][:], dtype=float)

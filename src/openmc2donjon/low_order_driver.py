@@ -11,6 +11,7 @@ import numpy as np
 from . import __version__
 from .adf_augment import parse_faces
 from .adf_sidecar import DEFAULT_CARTESIAN_FACES
+from .hdf5_names import read_mixture_names
 from .homogeneous_face_flux import (
     NET_CURRENT_DATASETS,
     VOLUME_FLUX_DATASETS,
@@ -512,7 +513,7 @@ def _read_mgxs_metadata(path: Path) -> dict[str, np.ndarray | tuple[str, ...]]:
         energy_bounds = np.asarray(h5["energy_bounds"][:], dtype=float)
         if energy_bounds.ndim != 1 or energy_bounds.size < 2:
             raise ValueError("/energy_bounds must be a one-dimensional group edge array")
-        mixture_names = tuple(str(name) for name in h5["mixtures"])
+        mixture_names = read_mixture_names(h5)
         if not mixture_names:
             raise ValueError("input HDF5 contains no mixtures")
     return {"energy_bounds": energy_bounds, "mixture_names": mixture_names}

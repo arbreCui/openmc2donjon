@@ -137,6 +137,36 @@ class MultiCompoSmokeTests(unittest.TestCase):
 
         self.assertEqual(blocks[1].name, "CPO")
 
+    def test_read_mgxs_hdf5_respects_declared_mixture_order(self) -> None:
+        import h5py
+
+        def add_mixture(parent, name: str, total: float) -> None:
+            group = parent.create_group(name)
+            group.attrs["fissionable"] = False
+            group.attrs["scatter_axes"] = "moment,from,to"
+            group.create_dataset("total", data=[total])
+            group.create_dataset("absorption", data=[0.01])
+            group.create_dataset("fission", data=[0.0])
+            group.create_dataset("nu_fission", data=[0.0])
+            group.create_dataset("chi", data=[0.0])
+            group.create_dataset("scatter_matrix", data=[[[0.1]]])
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "ordered.h5"
+            with h5py.File(path, "w") as h5:
+                h5.attrs["energy_groups"] = 1
+                h5.attrs["legendre_order"] = 0
+                h5.create_dataset("energy_bounds", data=[1.0e-5, 1.0e7])
+                h5.create_dataset("mixture_names", data=np.asarray(["B", "A"], dtype="S"))
+                mixtures = h5.create_group("mixtures")
+                add_mixture(mixtures, "A", 0.7)
+                add_mixture(mixtures, "B", 0.5)
+
+            mixtures, _energy_bounds = read_mgxs_hdf5(path)
+
+        self.assertEqual([mixture.name for mixture in mixtures], ["B", "A"])
+        np.testing.assert_allclose([mixture.total[0] for mixture in mixtures], [0.5, 0.7])
+
     def test_writes_burnup_axis_with_multiple_calculations(self) -> None:
         calc0 = MixtureXS(
             name="fuel",

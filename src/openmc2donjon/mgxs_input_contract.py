@@ -11,6 +11,7 @@ import h5py
 import numpy as np
 
 from .energy_groups import energy_bounds_sha256, load_energy_bounds_text
+from .hdf5_names import read_mixture_names
 from .mgxs_input_equivalence import (
     SPH_DATASETS,
     adf_names_from_attrs,
@@ -417,7 +418,12 @@ def validate_open_h5(
         report.fail("/mixtures group is missing")
         return
     mixtures = h5["mixtures"]
-    report.mixtures = len(mixtures)
+    try:
+        mixture_names = read_mixture_names(h5)
+    except ValueError as exc:
+        report.fail(str(exc))
+        return
+    report.mixtures = len(mixture_names)
     if report.mixtures == 0:
         report.fail("/mixtures group contains no mixtures")
         return
@@ -426,7 +432,8 @@ def validate_open_h5(
     adf_names_by_mix: list[tuple[str, ...]] = []
     sph_present_by_calc: list[bool] = []
     state_counts: list[int] = []
-    for name, group in mixtures.items():
+    for name in mixture_names:
+        group = mixtures[name]
         if not isinstance(group, h5py.Group):
             report.fail(f"/mixtures/{name} must be an HDF5 group")
             continue

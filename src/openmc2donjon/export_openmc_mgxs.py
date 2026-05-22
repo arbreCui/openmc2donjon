@@ -20,6 +20,7 @@ from typing import Any, Mapping
 import numpy as np
 
 from .energy_groups import energy_bounds_sha256
+from .hdf5_names import write_string_dataset
 
 
 MGXS_TYPE_ALIASES: dict[str, tuple[str, ...]] = {
@@ -156,13 +157,40 @@ def export_openmc_mgxs_library(
             _write_hdf5_attr(h5, str(attr_key), attr_value)
         h5.attrs["energy_bounds_sha256"] = energy_bounds_sha256(energy_bounds)
         h5.create_dataset("energy_bounds", data=energy_bounds)
-        mixtures = h5.create_group("mixtures")
-        for domain_summary, data in exported:
+        write_string_dataset(
+            h5,
+            "mixture_names",
+            [domain_summary.name for domain_summary, _data in exported],
+        )
+        mixtures = h5.create_group("mixtures", track_order=True)
+        domain_type = _domain_type_label(library)
+        for export_index, (domain_summary, data) in enumerate(exported, start=1):
             group = mixtures.create_group(domain_summary.name)
             group.attrs["fissionable"] = bool(data["fissionable"])
             group.attrs["scatter_format"] = "legendre"
             group.attrs["scatter_axes"] = "moment,from,to"
             group.attrs["openmc_scatter_mgxs_type"] = str(data["scatter_mgxs_type"])
+            group.attrs["source_domain_index"] = export_index
+            _write_hdf5_attr_if_present(
+                group,
+                "source_domain_id",
+                getattr(domain_summary.source, "id", None),
+            )
+            _write_hdf5_attr_if_present(
+                group,
+                "source_domain_name",
+                getattr(domain_summary.source, "name", None),
+            )
+            _write_hdf5_attr(
+                group,
+                "source_domain_type",
+                domain_type or type(domain_summary.source).__name__,
+            )
+            _write_hdf5_attr(
+                group,
+                "source_domain_label",
+                _domain_label(domain_summary.source),
+            )
             if data["volume"] is not None:
                 group.attrs["volume"] = float(data["volume"])
             for attr_key, attr_value in data["attrs"].items():
@@ -712,8 +740,20 @@ def _domain_fissionable(domain: Any, fallback: bool) -> bool:
     return fallback
 
 
+def _domain_type_label(library: Any) -> str:
+    value = getattr(library, "domain_type", None)
+    if value is None:
+        return ""
+    return str(value)
+
+
 def _write_hdf5_attr(target: Any, key: str, value: Any) -> None:
     if isinstance(value, (list, tuple)):
         target.attrs[key] = np.asarray(value)
     else:
         target.attrs[key] = value
+
+
+def _write_hdf5_attr_if_present(target: Any, key: str, value: Any) -> None:
+    if value is not None:
+        _write_hdf5_attr(target, key, value)

@@ -15,6 +15,7 @@ from .adf_sidecar import (
     SURFACE_FLUX_DATASETS,
     load_face_flux_payload,
 )
+from .hdf5_names import read_mixture_names
 
 
 SCHEMA = "openmc2donjon.face-flux-contract.v1"
@@ -269,7 +270,7 @@ def _read_mgxs_metadata(path: Path) -> tuple[tuple[str, ...], int]:
     with h5py.File(path, "r") as h5:
         if "mixtures" not in h5 or not hasattr(h5["mixtures"], "keys"):
             raise ValueError("input HDF5 must contain a /mixtures group")
-        mixture_names = tuple(str(name) for name in h5["mixtures"])
+        mixture_names = read_mixture_names(h5)
         if not mixture_names:
             raise ValueError("input HDF5 contains no mixtures")
         if "energy_groups" in h5.attrs:

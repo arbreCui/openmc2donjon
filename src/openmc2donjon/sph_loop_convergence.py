@@ -9,6 +9,7 @@ from typing import Protocol
 
 import numpy as np
 
+from .hdf5_names import read_mixture_names
 from .sph_augment import load_sph_source
 from .sph_workflow import SphIterationWorkflowReport
 
@@ -129,9 +130,7 @@ def _read_input_metadata(path: Path) -> tuple[tuple[str, ...], int]:
     import h5py
 
     with h5py.File(path, "r") as h5:
-        if "mixtures" not in h5 or not hasattr(h5["mixtures"], "keys"):
-            raise ValueError("input HDF5 must contain a /mixtures group")
-        mixture_names = tuple(str(name) for name in h5["mixtures"].keys())
+        mixture_names = read_mixture_names(h5)
         if "energy_groups" in h5.attrs:
             energy_groups = int(h5.attrs["energy_groups"])
         elif "energy_bounds" in h5:

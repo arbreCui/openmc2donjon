@@ -11,6 +11,7 @@ import numpy as np
 
 from . import __version__
 from . import lcm_ascii as lcm
+from .hdf5_names import read_mixture_names
 
 
 SCHEMA = "openmc2donjon.donjon-volume-flux.v1"
@@ -251,7 +252,7 @@ def _read_mgxs_metadata(path: Path) -> tuple[tuple[str, ...], np.ndarray]:
             raise ValueError("input HDF5 is missing /mixtures")
         if "energy_bounds" not in h5:
             raise ValueError("input HDF5 is missing /energy_bounds")
-        mixture_names = tuple(str(name) for name in h5["mixtures"].keys())
+        mixture_names = read_mixture_names(h5)
         energy_bounds = np.asarray(h5["energy_bounds"][:], dtype=float)
     if not mixture_names:
         raise ValueError("input HDF5 has no mixtures")

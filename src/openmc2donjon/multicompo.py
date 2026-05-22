@@ -19,6 +19,7 @@ from .constants import (
     DONJON_PARAMETER_TYPE_WIDTH,
     DONJON_SIGNATURE_WIDTH,
 )
+from .hdf5_names import read_mixture_names
 from .scatter import dense_moments_to_triplets
 
 
@@ -172,7 +173,7 @@ def read_mgxs_hdf5_histories(
         burnup_values = _burnup_values_from_hdf5(h5)
         histories: list[MixtureHistory] = []
         mix_group = h5["mixtures"]
-        for name in mix_group:
+        for name in read_mixture_names(h5):
             g = mix_group[name]
             if "states" in g:
                 states_group = g["states"]
