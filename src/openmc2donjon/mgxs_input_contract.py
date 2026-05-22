@@ -80,6 +80,8 @@ def production_preflight_defaults(
     *,
     production: bool,
     require_mixture_order: bool = False,
+    require_domain_mode: bool = False,
+    require_source_domain_metadata: bool = False,
     require_transport_dataset: bool,
     require_volume: bool,
     require_h_factor: bool,
@@ -91,6 +93,8 @@ def production_preflight_defaults(
     if not production:
         return {
             "require_mixture_order": require_mixture_order,
+            "require_domain_mode": require_domain_mode,
+            "require_source_domain_metadata": require_source_domain_metadata,
             "require_transport_dataset": require_transport_dataset,
             "require_volume": require_volume,
             "require_h_factor": require_h_factor,
@@ -105,6 +109,8 @@ def production_preflight_defaults(
 
     return {
         "require_mixture_order": True,
+        "require_domain_mode": True,
+        "require_source_domain_metadata": True,
         "require_transport_dataset": True,
         "require_volume": True,
         "require_h_factor": True,
@@ -119,6 +125,8 @@ def main() -> int:
     settings = production_preflight_defaults(
         production=args.production,
         require_mixture_order=args.require_mixture_order,
+        require_domain_mode=args.require_domain_mode,
+        require_source_domain_metadata=args.require_source_domain_metadata,
         require_transport_dataset=args.require_transport_dataset,
         require_volume=args.require_volume,
         require_h_factor=args.require_h_factor,
@@ -134,6 +142,8 @@ def main() -> int:
             require_adf=args.require_adf,
             require_sph=args.require_sph,
             require_mixture_order=settings["require_mixture_order"],
+            require_domain_mode=settings["require_domain_mode"],
+            require_source_domain_metadata=settings["require_source_domain_metadata"],
             require_transport_dataset=settings["require_transport_dataset"],
             require_volume=settings["require_volume"],
             require_h_factor=settings["require_h_factor"],
@@ -199,8 +209,8 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help=(
             "enable production preflight defaults: require volume, transport_total, "
-            "fissionable H-FACTOR, declared mixture order, row-balance warnings, "
-            "and production uncertainty failure threshold"
+            "fissionable H-FACTOR, declared mixture order, domain provenance, "
+            "row-balance warnings, and production uncertainty failure threshold"
         ),
     )
     parser.add_argument(
@@ -210,6 +220,16 @@ def parse_args() -> argparse.Namespace:
             "require /mixture_names and matching 1-based source_domain_index "
             "attributes"
         ),
+    )
+    parser.add_argument(
+        "--require-domain-mode",
+        action="store_true",
+        help="require a non-empty /attrs domain_mode such as assembly, cell, or mesh",
+    )
+    parser.add_argument(
+        "--require-source-domain-metadata",
+        action="store_true",
+        help="require source_domain_id and source_domain_type on every mixture",
     )
     parser.add_argument(
         "--require-adf",
@@ -333,6 +353,8 @@ def validate_input(
     require_adf: bool = False,
     require_sph: bool = False,
     require_mixture_order: bool = False,
+    require_domain_mode: bool = False,
+    require_source_domain_metadata: bool = False,
     require_transport_dataset: bool = False,
     require_volume: bool = False,
     require_h_factor: bool = False,
@@ -364,6 +386,8 @@ def validate_input(
                 require_adf=require_adf,
                 require_sph=require_sph,
                 require_mixture_order=require_mixture_order,
+                require_domain_mode=require_domain_mode,
+                require_source_domain_metadata=require_source_domain_metadata,
                 require_transport_dataset=require_transport_dataset,
                 require_volume=require_volume,
                 require_h_factor=require_h_factor,
@@ -386,6 +410,8 @@ def validate_open_h5(
     require_adf: bool,
     require_sph: bool,
     require_mixture_order: bool,
+    require_domain_mode: bool,
+    require_source_domain_metadata: bool,
     require_transport_dataset: bool,
     require_volume: bool,
     require_h_factor: bool,
@@ -429,6 +455,7 @@ def validate_open_h5(
         expected_bounds_label=expected_energy_bounds_label,
         expected_bounds_sha256=expected_energy_bounds_sha256,
     )
+    validate_domain_mode(h5, report, require_domain_mode=require_domain_mode)
 
     if "mixtures" not in h5 or not isinstance(h5["mixtures"], h5py.Group):
         report.fail("/mixtures group is missing")
@@ -449,6 +476,7 @@ def validate_open_h5(
         mixture_names,
         report,
         require_mixture_order=require_mixture_order,
+        require_source_domain_metadata=require_source_domain_metadata,
     )
 
     burnup_axis = burnup_axis_from_hdf5(h5, report)
@@ -505,6 +533,7 @@ def validate_mixture_order_contract(
     report: InputReport,
     *,
     require_mixture_order: bool,
+    require_source_domain_metadata: bool,
 ) -> None:
     report.declared_mixture_order = "mixture_names" in h5
     if require_mixture_order and not report.declared_mixture_order:
@@ -516,6 +545,12 @@ def validate_mixture_order_contract(
         group = mixtures[name]
         if not isinstance(group, h5py.Group):
             continue
+        validate_source_domain_metadata(
+            group,
+            str(name),
+            report,
+            require_source_domain_metadata=require_source_domain_metadata,
+        )
         if "source_domain_index" not in group.attrs:
             if require_mixture_order:
                 report.fail(
@@ -541,6 +576,48 @@ def validate_mixture_order_contract(
                 f"mixture {name}: source_domain_index {source_domain_index} "
                 f"does not match declared mixture order position {expected_index}"
             )
+
+
+def validate_domain_mode(
+    h5: h5py.File,
+    report: InputReport,
+    *,
+    require_domain_mode: bool,
+) -> None:
+    if "domain_mode" not in h5.attrs:
+        if require_domain_mode:
+            report.fail("/attrs domain_mode is required for production handoff provenance")
+        return
+    domain_mode = attr_text(h5.attrs["domain_mode"]).strip()
+    report.domain_mode = domain_mode or None
+    if require_domain_mode and not domain_mode:
+        report.fail("/attrs domain_mode must be a non-empty string")
+
+
+def validate_source_domain_metadata(
+    group: h5py.Group,
+    name: str,
+    report: InputReport,
+    *,
+    require_source_domain_metadata: bool,
+) -> None:
+    has_id = "source_domain_id" in group.attrs
+    has_type = "source_domain_type" in group.attrs
+    if has_id and has_type:
+        report.source_domain_metadata += 1
+
+    if require_source_domain_metadata and not has_id:
+        report.fail(f"mixture {name}: source_domain_id attribute is required")
+    if require_source_domain_metadata and not has_type:
+        report.fail(f"mixture {name}: source_domain_type attribute is required")
+
+    if has_id:
+        try:
+            int(group.attrs["source_domain_id"])
+        except (TypeError, ValueError):
+            report.fail(f"mixture {name}: source_domain_id attribute must be an integer")
+    if has_type and not attr_text(group.attrs["source_domain_type"]).strip():
+        report.fail(f"mixture {name}: source_domain_type attribute must be non-empty")
 
 
 def validate_energy_identity(
@@ -1010,6 +1087,8 @@ def run_preflight(
     require_sph: bool = False,
     expected_adf_faces: str | list[str] | None = None,
     require_mixture_order: bool = False,
+    require_domain_mode: bool = False,
+    require_source_domain_metadata: bool = False,
     require_transport_dataset: bool = False,
     require_volume: bool = False,
     require_h_factor: bool = False,
@@ -1035,6 +1114,8 @@ def run_preflight(
     settings = production_preflight_defaults(
         production=production,
         require_mixture_order=require_mixture_order,
+        require_domain_mode=require_domain_mode,
+        require_source_domain_metadata=require_source_domain_metadata,
         require_transport_dataset=require_transport_dataset,
         require_volume=require_volume,
         require_h_factor=require_h_factor,
@@ -1048,6 +1129,8 @@ def run_preflight(
             require_adf=require_adf,
             require_sph=require_sph,
             require_mixture_order=settings["require_mixture_order"],
+            require_domain_mode=settings["require_domain_mode"],
+            require_source_domain_metadata=settings["require_source_domain_metadata"],
             require_transport_dataset=settings["require_transport_dataset"],
             require_volume=settings["require_volume"],
             require_h_factor=settings["require_h_factor"],

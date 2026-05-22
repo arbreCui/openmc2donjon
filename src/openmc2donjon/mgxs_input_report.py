@@ -20,9 +20,11 @@ class InputReport:
     legendre_order: int | None = None
     energy_group_structure: str | None = None
     energy_bounds_sha256: str | None = None
+    domain_mode: str | None = None
     mixtures: int = 0
     declared_mixture_order: bool = False
     source_domain_indices: int = 0
+    source_domain_metadata: int = 0
     stateful_mixtures: int = 0
     state_points: int = 1
     calculations: int = 0
@@ -105,6 +107,7 @@ def print_report(report: InputReport) -> None:
         else report.energy_bounds_sha256[:12]
     )
     print(f"        energy_group_structure={structure} bounds_sha256={digest}")
+    print(f"        domain_mode={report.domain_mode or 'unspecified'}")
     print(
         "        mixtures="
         f"{report.mixtures} fissionable={report.fissionable_mixtures} "
@@ -114,7 +117,8 @@ def print_report(report: InputReport) -> None:
     print(
         "        "
         f"mixture_order={order} "
-        f"source_domain_index={report.source_domain_indices}/{report.mixtures}"
+        f"source_domain_index={report.source_domain_indices}/{report.mixtures} "
+        f"source_domain_metadata={report.source_domain_metadata}/{report.mixtures}"
     )
     if report.burnup_axis_path:
         print(
@@ -192,9 +196,11 @@ def _report_payload(report: InputReport) -> dict[str, object]:
         "legendre_order": report.legendre_order,
         "energy_group_structure": report.energy_group_structure,
         "energy_bounds_sha256": report.energy_bounds_sha256,
+        "domain_mode": report.domain_mode,
         "mixtures": report.mixtures,
         "declared_mixture_order": report.declared_mixture_order,
         "source_domain_indices": report.source_domain_indices,
+        "source_domain_metadata": report.source_domain_metadata,
         "stateful_mixtures": report.stateful_mixtures,
         "state_points": report.state_points,
         "calculations": report.calculations,

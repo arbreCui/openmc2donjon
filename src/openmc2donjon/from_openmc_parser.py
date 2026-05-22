@@ -353,9 +353,19 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "run post-export preflight with production defaults: volume, "
-            "transport_total, fissionable H-FACTOR, row-balance warnings, and "
-            "production uncertainty gate"
+            "transport_total, fissionable H-FACTOR, domain provenance, "
+            "row-balance warnings, and production uncertainty gate"
         ),
+    )
+    parser.add_argument(
+        "--require-domain-mode",
+        action="store_true",
+        help="with --check, require a non-empty domain_mode root attribute",
+    )
+    parser.add_argument(
+        "--require-source-domain-metadata",
+        action="store_true",
+        help="with --check, require source_domain_id and source_domain_type attributes",
     )
     parser.add_argument(
         "--require-adf",

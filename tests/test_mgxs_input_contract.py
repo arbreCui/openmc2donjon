@@ -343,6 +343,61 @@ class MgxsInputContractTests(unittest.TestCase):
         self.assertTrue(valid_report.declared_mixture_order)
         self.assertEqual(valid_report.source_domain_indices, 1)
 
+    def test_production_domain_provenance_requires_mode_and_source_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "domain_provenance.h5"
+            write_single_state_fixture(path, total=[0.29, 0.38])
+            with h5py.File(path, "a") as h5:
+                h5.create_dataset("mixture_names", data=np.asarray(["fuel"], dtype="S"))
+                fuel = h5["mixtures/fuel"]
+                fuel.attrs["source_domain_index"] = 1
+                fuel.create_dataset(
+                    "kappa_fission",
+                    data=np.array([3.2e-12, 3.1e-12]),
+                )
+
+            missing_report = validator.validate_input(
+                path,
+                require_mixture_order=True,
+                require_domain_mode=True,
+                require_source_domain_metadata=True,
+                require_transport_dataset=True,
+                require_volume=True,
+                require_h_factor=True,
+            )
+
+            with h5py.File(path, "a") as h5:
+                h5.attrs["domain_mode"] = "assembly"
+                h5["mixtures/fuel"].attrs["source_domain_id"] = 101
+                h5["mixtures/fuel"].attrs["source_domain_type"] = "cell"
+
+            valid_report = validator.validate_input(
+                path,
+                require_mixture_order=True,
+                require_domain_mode=True,
+                require_source_domain_metadata=True,
+                require_transport_dataset=True,
+                require_volume=True,
+                require_h_factor=True,
+            )
+
+        self.assertFalse(missing_report.ok)
+        self.assertIn(
+            "/attrs domain_mode is required for production handoff provenance",
+            missing_report.issues,
+        )
+        self.assertIn(
+            "mixture fuel: source_domain_id attribute is required",
+            missing_report.issues,
+        )
+        self.assertIn(
+            "mixture fuel: source_domain_type attribute is required",
+            missing_report.issues,
+        )
+        self.assertTrue(valid_report.ok, valid_report.issues)
+        self.assertEqual(valid_report.domain_mode, "assembly")
+        self.assertEqual(valid_report.source_domain_metadata, 1)
+
     def test_energy_group_identity_gate_accepts_matching_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "c5g7.h5"

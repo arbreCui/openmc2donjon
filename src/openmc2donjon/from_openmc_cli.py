@@ -256,6 +256,8 @@ def _print_dry_run_checks(args: argparse.Namespace) -> None:
         settings = production_preflight_defaults(
             production=args.production,
             require_mixture_order=False,
+            require_domain_mode=args.require_domain_mode,
+            require_source_domain_metadata=args.require_source_domain_metadata,
             require_transport_dataset=args.require_transport_dataset,
             require_volume=args.require_volume,
             require_h_factor=args.require_h_factor,
@@ -272,6 +274,11 @@ def _print_dry_run_checks(args: argparse.Namespace) -> None:
         print(
             "    require_mixture_order: "
             f"{_yes_no(settings['require_mixture_order'])}"
+        )
+        print(f"    require_domain_mode: {_yes_no(settings['require_domain_mode'])}")
+        print(
+            "    require_source_domain_metadata: "
+            f"{_yes_no(settings['require_source_domain_metadata'])}"
         )
         print(
             "    require_transport_dataset: "
@@ -434,6 +441,8 @@ def _run_pipeline_preflight(
         require_adf=args.require_adf,
         require_sph=args.require_sph,
         expected_adf_faces=args.expected_adf_faces,
+        require_domain_mode=args.require_domain_mode,
+        require_source_domain_metadata=args.require_source_domain_metadata,
         require_transport_dataset=args.require_transport_dataset,
         require_volume=args.require_volume,
         require_h_factor=args.require_h_factor,

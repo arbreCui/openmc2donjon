@@ -83,8 +83,8 @@ def build_check_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "enable production preflight defaults: volume, transport_total, "
-            "fissionable H-FACTOR, declared mixture order, row-balance "
-            "warnings, and production uncertainty gate"
+            "fissionable H-FACTOR, declared mixture order, domain provenance, "
+            "row-balance warnings, and production uncertainty gate"
         ),
     )
     parser.add_argument(
@@ -94,6 +94,16 @@ def build_check_parser() -> argparse.ArgumentParser:
             "require /mixture_names and matching 1-based source_domain_index "
             "attributes"
         ),
+    )
+    parser.add_argument(
+        "--require-domain-mode",
+        action="store_true",
+        help="require a non-empty /attrs domain_mode such as assembly, cell, or mesh",
+    )
+    parser.add_argument(
+        "--require-source-domain-metadata",
+        action="store_true",
+        help="require source_domain_id and source_domain_type on every mixture",
     )
     parser.add_argument(
         "--require-adf",
@@ -443,6 +453,8 @@ def check_handler(args: argparse.Namespace) -> int:
         require_sph=args.require_sph,
         expected_adf_faces=args.expected_adf_faces,
         require_mixture_order=args.require_mixture_order,
+        require_domain_mode=args.require_domain_mode,
+        require_source_domain_metadata=args.require_source_domain_metadata,
         require_transport_dataset=args.require_transport_dataset,
         require_volume=args.require_volume,
         require_h_factor=args.require_h_factor,
