@@ -11,6 +11,7 @@ import re
 from . import __version__
 from .bundle import ArtifactSpec, bundle_artifacts
 from .sph_loop_acceptance import SphLoopAcceptanceReport
+from .sph_loop_convergence import SphLoopConvergenceReport
 from .sph_workflow import SphIterationWorkflowReport
 
 
@@ -41,15 +42,6 @@ class SphLoopPostprocessReport:
     stdout: Path
     stderr: Path
     returncode: int
-
-
-@dataclass(frozen=True)
-class SphLoopConvergenceReport:
-    iteration: int
-    sph_max_abs_change: float
-    sph_max_rel_change: float
-    flux_ratio_max_residual: float
-    converged: bool
 
 
 @dataclass(frozen=True)
