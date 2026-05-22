@@ -287,6 +287,42 @@ class SphIterationTests(unittest.TestCase):
                     low_order_flux=low_order_flux,
                 )
 
+    def test_rejects_hdf5_flux_with_wrong_group_order(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference_flux = root / "reference_flux.csv"
+            low_order_flux = root / "low_order_flux.h5"
+            table = root / "next_sph.csv"
+            write_mgxs(mgxs)
+            reference_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,1.0\nfuel,2,1.0\n"
+                "moderator,1,1.0\nmoderator,2,1.0\n",
+                encoding="utf-8",
+            )
+            with h5py.File(low_order_flux, "w") as h5:
+                dataset = h5.create_dataset(
+                    "low_order_flux",
+                    data=np.asarray([[1.0, 1.0], [1.0, 1.0]]),
+                )
+                dataset.attrs["mixture_names"] = np.asarray(
+                    ("fuel", "moderator"),
+                    dtype="S",
+                )
+                dataset.attrs["group_order"] = "ascending_energy"
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "low-order flux: group_order must be 'mgxs_donjon'",
+            ):
+                create_sph_update_table(
+                    mgxs,
+                    table,
+                    reference_flux=reference_flux,
+                    low_order_flux=f"{low_order_flux}::low_order_flux",
+                )
+
     def test_cli_accepts_mesh_shaped_hdf5_flux(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

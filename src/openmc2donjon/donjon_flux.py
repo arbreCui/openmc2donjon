@@ -11,6 +11,7 @@ import numpy as np
 
 from . import __version__
 from . import lcm_ascii as lcm
+from .constants import MGXS_DONJON_GROUP_ORDER
 from .hdf5_names import read_mixture_names
 
 
@@ -553,8 +554,10 @@ def _write_output(
         ids.attrs["mixture_names"] = np.asarray(mixture_names, dtype="S")
         volume = h5.create_dataset("volume_flux", data=np.asarray(volume_flux, dtype=float))
         volume.attrs["mixture_names"] = np.asarray(mixture_names, dtype="S")
+        volume.attrs["group_order"] = MGXS_DONJON_GROUP_ORDER
         donjon = h5.create_dataset("donjon_volume_flux", data=np.asarray(volume_flux, dtype=float))
         donjon.attrs["mixture_names"] = np.asarray(mixture_names, dtype="S")
+        donjon.attrs["group_order"] = MGXS_DONJON_GROUP_ORDER
         min_dataset = h5.create_dataset(
             "mixture_flux_minimum",
             data=np.min(np.asarray(volume_flux, dtype=float), axis=1),
@@ -582,6 +585,7 @@ def _write_output(
                 mesh_payload["mixture_names"],
                 dtype="S",
             )
+            mesh_volume.attrs["group_order"] = MGXS_DONJON_GROUP_ORDER
             mesh_donjon = h5.create_dataset(
                 "mesh_donjon_volume_flux",
                 data=np.asarray(mesh_payload["volume_flux"], dtype=float),
@@ -590,6 +594,7 @@ def _write_output(
                 mesh_payload["mixture_names"],
                 dtype="S",
             )
+            mesh_donjon.attrs["group_order"] = MGXS_DONJON_GROUP_ORDER
 
 
 def _json_safe_diagnostics(map_diagnostics: dict[str, Any]) -> dict[str, Any]:

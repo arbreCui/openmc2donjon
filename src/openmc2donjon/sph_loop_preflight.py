@@ -14,13 +14,13 @@ from .donjon_flux import (
     _map_diagnostics,
     _normalize_scalar_flux_ids,
 )
+from .constants import MGXS_DONJON_GROUP_ORDER
 from .hdf5_names import read_mixture_names
 
 
 SCHEMA = "openmc2donjon.sph-loop-flux-map-preflight.v1"
 PASS_DECISION = "openmc2donjon_sph_loop_flux_map_preflight_passed"
 FAIL_DECISION = "openmc2donjon_sph_loop_flux_map_preflight_failed"
-REFERENCE_FLUX_GROUP_ORDER = "mgxs_donjon"
 
 
 @dataclass(frozen=True)
@@ -327,10 +327,10 @@ def _inspect_reference_flux(
                 group_order = _hdf5_text_attr(obj, h5, "group_order")
                 if group_order is None:
                     errors.append("reference flux HDF5 must declare group_order")
-                elif group_order != REFERENCE_FLUX_GROUP_ORDER:
+                elif group_order != MGXS_DONJON_GROUP_ORDER:
                     errors.append(
                         "reference flux group_order must be "
-                        f"{REFERENCE_FLUX_GROUP_ORDER!r}, got {group_order!r}"
+                        f"{MGXS_DONJON_GROUP_ORDER!r}, got {group_order!r}"
                     )
                 declared = _names_from_hdf5(
                     obj,

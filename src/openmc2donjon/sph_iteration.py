@@ -12,6 +12,7 @@ from typing import Any
 import numpy as np
 
 from . import __version__
+from .constants import MGXS_DONJON_GROUP_ORDER
 from .hdf5_names import read_mixture_names
 from .sph_augment import load_sph_source
 
@@ -710,9 +711,23 @@ def _load_hdf5_matrix(
         obj = h5[dataset_path]
         if hasattr(obj, "keys"):
             raise ValueError(f"{label} path is a group, not a dataset: /{dataset_path}")
+        _validate_hdf5_flux_group_order(obj, h5, label)
         values = np.asarray(obj[:], dtype=float)
         declared = _names_from_hdf5(obj, h5, ("mixture_names", "mixtures", "domain_names"))
     return _normalize_matrix(values, declared, mixture_names, energy_groups, label), dataset_path
+
+
+def _validate_hdf5_flux_group_order(obj: Any, root: Any, label: str) -> None:
+    if "flux" not in label.lower():
+        return
+    group_order = _hdf5_text_attr(obj, root, "group_order")
+    if group_order is None:
+        return
+    if group_order != MGXS_DONJON_GROUP_ORDER:
+        raise ValueError(
+            f"{label}: group_order must be {MGXS_DONJON_GROUP_ORDER!r}, "
+            f"got {group_order!r}"
+        )
 
 
 def _load_csv_matrix(
@@ -977,6 +992,16 @@ def _names_from_hdf5(obj: Any, root: Any, candidates: tuple[str, ...]) -> Any:
     for candidate in candidates:
         if candidate in root and not hasattr(root[candidate], "keys"):
             return root[candidate][:]
+    return None
+
+
+def _hdf5_text_attr(obj: Any, root: Any, name: str) -> str | None:
+    for source in (obj.attrs, root.attrs):
+        if name in source:
+            value = source[name]
+            if isinstance(value, bytes):
+                return value.decode("utf-8")
+            return str(value)
     return None
 
 

@@ -78,6 +78,11 @@ class DonjonFluxTests(unittest.TestCase):
                     h5["donjon_volume_flux"][:],
                     [[20.0, 200.0], [40.0, 400.0]],
                 )
+                self.assertEqual(h5["volume_flux"].attrs["group_order"], "mgxs_donjon")
+                self.assertEqual(
+                    h5["donjon_volume_flux"].attrs["group_order"],
+                    "mgxs_donjon",
+                )
                 np.testing.assert_allclose(h5["mixture_flux_minimum"][:], [20.0, 40.0])
                 np.testing.assert_allclose(h5["mixture_flux_maximum"][:], [200.0, 400.0])
                 names = tuple(_decode(value) for value in h5["mixture_names"][:])
@@ -150,6 +155,10 @@ class DonjonFluxTests(unittest.TestCase):
                     h5["mesh_volume_flux"][:, :, :],
                     [[[40.0, 400.0], [20.0, 200.0], [np.nan, np.nan]]],
                     equal_nan=True,
+                )
+                self.assertEqual(
+                    h5["mesh_volume_flux"].attrs["group_order"],
+                    "mgxs_donjon",
                 )
 
     def test_duplicate_scalar_ids_are_reported_as_diagnostics(self) -> None:

@@ -11,6 +11,7 @@ from typing import Any
 import numpy as np
 
 from . import __version__
+from .constants import MGXS_DONJON_GROUP_ORDER
 from .donjon_sph_config import write_donjon_sph_loop_config
 from .hdf5_names import read_mixture_names
 from .sph_iteration import _load_matrix_source
@@ -350,7 +351,7 @@ def _write_reference_flux(
         for name in ("openmc_volume_flux", "reference_flux", "volume_flux"):
             dataset = h5.create_dataset(name, data=np.asarray(values, dtype=float))
             dataset.attrs["mixture_names"] = np.asarray(mixture_names, dtype="S")
-            dataset.attrs["group_order"] = "mgxs_donjon"
+            dataset.attrs["group_order"] = MGXS_DONJON_GROUP_ORDER
 
 
 def _write_flux_map(
