@@ -81,6 +81,60 @@ class ManyMixtureScaleTests(unittest.TestCase):
             np.testing.assert_allclose(macrolib.h_factor[4], np.zeros(ngroups))
             self.assertTrue(np.all(macrolib.h_factor[5] > 0.0))
 
+    def test_selected_mixture_order_is_preserved_at_scale(self) -> None:
+        ngroups = 4
+        selected = ["M0128", "M0064", "M0005", "M0001"]
+        selected_indices = [128, 64, 5, 1]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            hdf5 = root / "many_domains.h5"
+            mcompo = root / "selected.mcompo.txt"
+            macrolib_path = root / "selected.macrolib.txt"
+
+            _write_many_mixture_fixture(hdf5, nmixtures=128, ngroups=ngroups)
+
+            convert_mgxs_hdf5(hdf5, mcompo, mixture_names=selected)
+            blocks = lcm_ascii.read_lcm_ascii(mcompo)
+            state = _first_block(blocks, "STATE-VECTOR", level=2).data
+            mixtures_block = _first_block(blocks, "MIXTURES", level=2)
+            ntot_blocks = [block for block in blocks if block.name == "NTOT0"]
+
+            self.assertEqual(state[:4], (len(selected), ngroups, 1, 1))
+            self.assertEqual(mixtures_block.count, len(selected))
+            self.assertEqual(len(ntot_blocks), len(selected))
+            for block, index in zip(ntot_blocks, selected_indices, strict=True):
+                np.testing.assert_allclose(block.data, _expected_total(index, ngroups))
+
+            convert_mgxs_hdf5_to_macrolib(
+                hdf5,
+                macrolib_path,
+                mixture_names=selected,
+            )
+            macrolib = read_macrolib_ascii(macrolib_path)
+
+            self.assertEqual(macrolib.nmixtures, len(selected))
+            self.assertEqual(macrolib.ngroups, ngroups)
+            np.testing.assert_allclose(
+                macrolib.volume,
+                [10.0 + 0.01 * index for index in selected_indices],
+            )
+            np.testing.assert_allclose(
+                macrolib.ntot0,
+                np.stack([_expected_total(index, ngroups) for index in selected_indices]),
+            )
+            np.testing.assert_allclose(macrolib.h_factor[2], np.zeros(ngroups))
+            self.assertTrue(np.all(macrolib.h_factor[0] > 0.0))
+
+            with self.assertRaisesRegex(ValueError, "unknown mixture"):
+                convert_mgxs_hdf5(hdf5, root / "missing.mcompo.txt", mixture_names=["M9999"])
+            with self.assertRaisesRegex(ValueError, "unknown mixture"):
+                convert_mgxs_hdf5_to_macrolib(
+                    hdf5,
+                    root / "missing.macrolib.txt",
+                    mixture_names=["M9999"],
+                )
+
 
 def _write_many_mixture_fixture(path: Path, *, nmixtures: int, ngroups: int) -> None:
     with h5py.File(path, "w") as h5:
