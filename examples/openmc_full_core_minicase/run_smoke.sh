@@ -53,6 +53,10 @@ REAL_DONJON_RESULT="$RUN_DIR/full_core_real_donjon.result"
 REAL_DONJON_FLUX="$RUN_DIR/full_core_real_donjon_flux.h5"
 REAL_DONJON_FLUX_SUMMARY="$RUN_DIR/full_core_real_donjon_flux_summary.json"
 REAL_DONJON_SOLVE_TEMPLATE="$EXAMPLE_DIR/templates/solve_lflux_dump.x2m.in"
+REAL_SPH_CONFIG="$RUN_DIR/full_core_real_donjon_sph_loop_config.json"
+REAL_SPH_LOOP_DIR="$RUN_DIR/full_core_real_donjon_sph_loop"
+REAL_SPH_SUMMARY="$RUN_DIR/full_core_real_donjon_sph_loop_summary.json"
+REAL_SPH_BUNDLE="$RUN_DIR/full_core_real_donjon_sph_loop_bundle"
 ENERGY_STRUCTURE="OPENMC2DONJON-FULL-CORE-MINICASE-2G"
 
 echo "== openmc2donjon OpenMC full-core assembly-wise minicase smoke =="
@@ -393,6 +397,133 @@ if summary["mixture_count"] != 9 or summary["energy_groups"] != 2:
 print(
     "real DONJON full-core solve OK: "
     f"keff={keff:.8g} flux_shape=9x2"
+)
+PY
+
+  echo
+  echo "== Real DONJON-backed SPH loop smoke =="
+  "$PYTHON_BIN" -m openmc2donjon.cli make-donjon-sph-loop-config \
+    --output "$REAL_SPH_CONFIG" \
+    --output-dir "$REAL_SPH_LOOP_DIR" \
+    --mgxs "$MGXS" \
+    --reference-flux "$MGXS::openmc_volume_flux" \
+    --flux-map "$SPH_FIXTURE_DIR/flux_map.h5" \
+    --solve-template "$REAL_DONJON_SOLVE_TEMPLATE" \
+    --donjon-root "$DONJON_ROOT" \
+    --python-bin "$PYTHON_BIN" \
+    --iterations 2 \
+    --damping 0.1 \
+    --clip-min 0.2 \
+    --clip-max 5.0 \
+    --acceptance-min-completed-iterations 2 \
+    --acceptance-require-final-solve \
+    --case-id-prefix openmc2donjon_full_core_minicase_real_sph \
+    --stage-prefix odj_full_core_minicase_real_sph \
+    --case-dir openmc2donjon/case_runs/openmc_full_core_minicase_real_sph \
+    --sph-kind full-core-real-donjon-sph-loop \
+    --source-label "OpenMC full-core real DONJON SPH loop smoke"
+
+  "$PYTHON_BIN" -m openmc2donjon.cli run-sph-loop \
+    --config "$REAL_SPH_CONFIG" \
+    --summary-json "$REAL_SPH_SUMMARY" \
+    --bundle-dir "$REAL_SPH_BUNDLE" \
+    --force
+
+  "$PYTHON_BIN" -m openmc2donjon.cli validate-bundle "$REAL_SPH_BUNDLE/manifest.json"
+
+  "$PYTHON_BIN" - "$REAL_SPH_SUMMARY" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+import h5py
+import numpy as np
+
+from openmc2donjon.macrolib import read_macrolib_ascii
+
+
+summary_path = Path(sys.argv[1])
+expected_names = [
+    f"ASM_Y{y_index:02d}_X{x_index:02d}"
+    for y_index in range(1, 4)
+    for x_index in range(1, 4)
+]
+
+summary = json.loads(summary_path.read_text(encoding="utf-8"))
+if summary["decision"] != "openmc2donjon_sph_loop_passed":
+    raise SystemExit("real DONJON SPH loop did not pass mechanically")
+if summary["completed_iterations"] != 2:
+    raise SystemExit("real DONJON SPH loop did not complete two iterations")
+if summary["final_solve"] is None:
+    raise SystemExit("real DONJON SPH loop did not run the final solve")
+if summary["acceptance_passed"] is not True:
+    raise SystemExit("real DONJON SPH loop acceptance failed")
+acceptance_names = {
+    check["name"] for check in summary["acceptance"]["checks"] if check["passed"]
+}
+if acceptance_names != {"min_completed_iterations", "require_final_solve"}:
+    raise SystemExit(f"unexpected real DONJON SPH acceptance checks: {acceptance_names}")
+
+preflight = summary["flux_map_preflight"]
+if preflight["mixture_names"] != expected_names:
+    raise SystemExit("real DONJON SPH loop mixture names mismatch")
+if preflight["scalar_flux_ids"] != list(range(1, 10)):
+    raise SystemExit("real DONJON SPH scalar flux IDs are not one per assembly")
+if preflight["reference_flux_shape"] != [9, 2]:
+    raise SystemExit("real DONJON SPH reference flux shape mismatch")
+
+solves = summary["solves"]
+if len(solves) != 3:
+    raise SystemExit(f"expected three real DONJON solves, got {len(solves)}")
+for solve in solves:
+    if solve["returncode"] != 0:
+        raise SystemExit(f"real DONJON solve failed at iter {solve['iteration']}")
+    if solve["flux_vector_count"] != 2 or solve["flux_unknown_count"] != 21:
+        raise SystemExit(
+            "real DONJON solve L_FLUX dimensions changed: "
+            f"{solve['flux_vector_count']} vectors, {solve['flux_unknown_count']} unknowns"
+        )
+if len(summary["workflows"]) != 2 or len(summary["postprocesses"]) != 2:
+    raise SystemExit("real DONJON SPH loop did not run two update/apply cycles")
+for postprocess in summary["postprocesses"]:
+    if postprocess["returncode"] != 0 or postprocess["block_count"] <= 0:
+        raise SystemExit("real DONJON SPH MACROLIB postprocess failed")
+
+quality = summary["quality"]
+for key in (
+    "final_flux_ratio_max_residual",
+    "final_sph_minimum",
+    "final_sph_maximum",
+):
+    if not np.isfinite(float(quality[key])):
+        raise SystemExit(f"real DONJON SPH quality field is not finite: {key}")
+if quality["final_sph_minimum"] <= 0.0 or quality["final_sph_maximum"] <= 0.0:
+    raise SystemExit("real DONJON SPH factors are not positive")
+
+final_sph = Path(summary["final_sph_sidecar"])
+with h5py.File(final_sph, "r") as h5:
+    sph = h5["sph"][:]
+    if sph.shape != (9, 2):
+        raise SystemExit(f"unexpected real DONJON SPH shape: {sph.shape}")
+    if not np.all(np.isfinite(sph)) or np.any(sph <= 0.0):
+        raise SystemExit("real DONJON SPH sidecar contains invalid values")
+    if h5.attrs["sph_kind"] != "full-core-real-donjon-sph-loop-iter2":
+        raise SystemExit("real DONJON SPH kind metadata mismatch")
+
+macrolib = read_macrolib_ascii(Path(summary["final_ascii"]))
+if macrolib.ngroups != 2 or macrolib.nmixtures != 9:
+    raise SystemExit("real DONJON SPH MACROLIB dimensions changed")
+if macrolib.sph is None:
+    raise SystemExit("real DONJON SPH MACROLIB is missing SPH data")
+if macrolib.sph.shape != (9, 2):
+    raise SystemExit(f"unexpected MACROLIB SPH shape: {macrolib.sph.shape}")
+if not np.all(np.isfinite(macrolib.sph)) or np.any(macrolib.sph <= 0.0):
+    raise SystemExit("real DONJON SPH MACROLIB contains invalid values")
+
+print(
+    "real DONJON full-core SPH loop mechanical smoke OK: "
+    f"iterations=2 solves={len(solves)} "
+    f"final_sph=[{quality['final_sph_minimum']:.4g}, {quality['final_sph_maximum']:.4g}]"
 )
 PY
 else

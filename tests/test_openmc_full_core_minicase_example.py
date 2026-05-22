@@ -66,6 +66,12 @@ class OpenMCFullCoreMinicaseExampleTests(unittest.TestCase):
         self.assertIn('--runner "$DONJON_RUNNER"', text)
         self.assertIn("extract-donjon-volume-flux", text)
         self.assertIn("real DONJON full-core solve OK", text)
+        self.assertIn("Real DONJON-backed SPH loop smoke", text)
+        self.assertIn("make-donjon-sph-loop-config", text)
+        self.assertIn("full-core-real-donjon-sph-loop", text)
+        self.assertIn("--acceptance-min-completed-iterations 2", text)
+        self.assertIn("--acceptance-require-final-solve", text)
+        self.assertIn("real DONJON full-core SPH loop mechanical smoke OK", text)
         self.assertIn(
             "DONJON runner unavailable; skipping real full-core low-order solve smoke",
             text,
