@@ -11,7 +11,7 @@ from openmc2donjon import lcm_ascii
 from openmc2donjon import mgxs_input_contract as validator
 from openmc2donjon.cli import main as cli_main
 from openmc2donjon.macrolib import extract_sph_from_macrolib_ascii, read_macrolib_ascii
-from openmc2donjon.sph_augment import create_table_sph_sidecar
+from openmc2donjon.sph_augment import augment_hdf5_with_sph, create_table_sph_sidecar
 
 
 class SphAugmentTests(unittest.TestCase):
@@ -74,6 +74,7 @@ class SphAugmentTests(unittest.TestCase):
             with h5py.File(sidecar, "r") as h5:
                 self.assertEqual(h5.attrs["schema"], "openmc2donjon.sph-sidecar.v1")
                 np.testing.assert_allclose(h5["sph"][:], np.full((2, 2), 1.25))
+                self.assertEqual(h5["sph"].attrs["group_order"], "mgxs_donjon")
             with h5py.File(augmented, "r") as h5:
                 self.assertEqual(h5.attrs["sph_kind"], "unity")
                 self.assertFalse(bool(h5.attrs["sph_real"]))
@@ -107,10 +108,12 @@ class SphAugmentTests(unittest.TestCase):
                 self.assertTrue(bool(h5.attrs["sph_real"]))
                 self.assertEqual(h5.attrs["source_macrolib"], str(macrolib))
                 np.testing.assert_allclose(h5["sph"][:], np.full((2, 2), 1.25))
+                self.assertEqual(h5["sph"].attrs["group_order"], "mgxs_donjon")
             self.assertIn(
                 "openmc2donjon_sph_sidecar_passed",
                 extracted_summary.read_text(encoding="utf-8"),
             )
+            self.assertIn("mgxs_donjon", extracted_summary.read_text(encoding="utf-8"))
 
     def test_check_rejects_partial_sph(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -222,6 +225,7 @@ class SphAugmentTests(unittest.TestCase):
             for path in (long_sidecar, wide_sidecar):
                 with h5py.File(path, "r") as h5:
                     np.testing.assert_allclose(h5["sph"][:], expected)
+                    self.assertEqual(h5["sph"].attrs["group_order"], "mgxs_donjon")
                     expected_source = long_table if path == long_sidecar else wide_table
                     self.assertEqual(h5.attrs["source_table"], str(expected_source))
             with h5py.File(long_sidecar, "r") as h5:
@@ -247,6 +251,31 @@ class SphAugmentTests(unittest.TestCase):
                     input_h5=mgxs,
                     output_h5=sidecar,
                     table=table,
+                )
+
+    def test_augment_rejects_sph_sidecar_with_wrong_group_order(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            sidecar = root / "bad_sph.h5"
+            output = root / "with_sph.h5"
+            write_mgxs_fixture(mgxs)
+            with h5py.File(sidecar, "w") as h5:
+                dataset = h5.create_dataset("sph", data=np.ones((2, 2)))
+                dataset.attrs["mixture_names"] = np.asarray(
+                    ("fuel", "moderator"),
+                    dtype="S",
+                )
+                dataset.attrs["group_order"] = "ascending_energy"
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "/sph group_order must be 'mgxs_donjon'",
+            ):
+                augment_hdf5_with_sph(
+                    mgxs,
+                    sph_source=sidecar,
+                    output_h5=output,
                 )
 
 

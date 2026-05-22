@@ -131,6 +131,29 @@ class SphLoopTests(unittest.TestCase):
             self.assertEqual(preflight["reference_flux_group_order"], "mgxs_donjon")
             self.assertEqual(preflight["reference_flux_mixture_names"], ["fuel", "moderator"])
             self.assertEqual(preflight["errors"], [])
+            metadata = payload["artifact_metadata"]
+            self.assertEqual(metadata["reference_flux"]["group_order"], "mgxs_donjon")
+            self.assertEqual(
+                metadata["reference_flux"]["mixture_names"],
+                ["fuel", "moderator"],
+            )
+            self.assertEqual(len(metadata["workflows"]), 2)
+            self.assertEqual(
+                metadata["workflows"][0]["donjon_volume_flux"]["group_order"],
+                "mgxs_donjon",
+            )
+            self.assertEqual(
+                metadata["workflows"][0]["donjon_volume_flux"]["mixture_names"],
+                ["fuel", "moderator"],
+            )
+            self.assertEqual(
+                metadata["workflows"][0]["sph_sidecar"]["group_order"],
+                "mgxs_donjon",
+            )
+            self.assertEqual(
+                metadata["final_sph_sidecar"]["group_order"],
+                "mgxs_donjon",
+            )
             self.assertTrue(payload["acceptance"]["passed"])
             self.assertEqual(len(payload["acceptance"]["checks"]), 8)
             self.assertEqual(
@@ -194,6 +217,9 @@ class SphLoopTests(unittest.TestCase):
             audit_text_content = audit_text.read_text(encoding="utf-8")
             self.assertIn("OpenMC-to-DONJON SPH loop audit", audit_text_content)
             self.assertIn("Flux-map preflight: PASS", audit_text_content)
+            self.assertIn("Artifact metadata:", audit_text_content)
+            self.assertIn("iter1 donjon_volume_flux", audit_text_content)
+            self.assertIn("group_order=mgxs_donjon", audit_text_content)
             self.assertIn("worst_bin", audit_text_content)
             self.assertIn("Final worst residual bins", audit_text_content)
             manifest = json.loads((bundle_dir / "manifest.json").read_text(encoding="utf-8"))
@@ -226,6 +252,7 @@ class SphLoopTests(unittest.TestCase):
             with h5py.File(final_sph, "r") as h5:
                 np.testing.assert_allclose(h5["sph"][:], expected)
                 self.assertEqual(h5.attrs["sph_kind"], "sph-loop-iter2")
+                self.assertEqual(h5["sph"].attrs["group_order"], "mgxs_donjon")
 
             final_macrolib = read_macrolib_ascii(
                 root / "loop_run/iter02_sph/corrected.macrolib.txt"

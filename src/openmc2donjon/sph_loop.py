@@ -9,6 +9,7 @@ from .multicompo import convert_mgxs_hdf5
 from .sph_loop_config import CONFIG_SCHEMA
 from .sph_loop_acceptance import build_acceptance_report
 from .sph_loop_execution import SphLoopExecution, execute_loop
+from .sph_loop_metadata import collect_artifact_metadata
 from .sph_loop_plan import SphLoopPlan, build_sph_loop_plan
 from .sph_loop_preflight import (
     SphLoopFluxMapPreflightReport,
@@ -122,6 +123,11 @@ def _build_report(
         converged=converged,
         final_solve=execution.final_solve,
     )
+    artifact_metadata = collect_artifact_metadata(
+        reference_flux=plan.reference_flux,
+        workflows=execution.workflows,
+        final_sph_sidecar=execution.final_sph_sidecar,
+    )
     return SphLoopReport(
         config_path=plan.config_path,
         input_h5=plan.input_h5,
@@ -152,6 +158,7 @@ def _build_report(
         final_solve=execution.final_solve,
         audit_rows=audit_rows,
         acceptance=acceptance,
+        artifact_metadata=artifact_metadata,
     )
 
 
@@ -167,6 +174,7 @@ def _write_report_outputs(
         report.audit_text,
         report.audit_rows,
         flux_map_preflight=report.flux_map_preflight,
+        artifact_metadata=report.artifact_metadata,
     )
     write_summary(report.summary_json, report)
     if bundle_dir is not None:

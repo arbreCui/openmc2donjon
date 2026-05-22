@@ -6,10 +6,12 @@ import csv
 from pathlib import Path
 import re
 
+from .hdf5_metadata import Hdf5DatasetMetadata
 from .sph_loop_convergence import SphLoopConvergenceReport
 from .sph_loop_preflight import SphLoopFluxMapPreflightReport
 from .sph_loop_records import (
     SphLoopAuditRow,
+    SphLoopArtifactMetadata,
     SphLoopPostprocessReport,
     SphLoopSolveReport,
 )
@@ -166,12 +168,15 @@ def write_audit_text(
     rows: tuple[SphLoopAuditRow, ...],
     *,
     flux_map_preflight: SphLoopFluxMapPreflightReport | None = None,
+    artifact_metadata: SphLoopArtifactMetadata | None = None,
 ) -> None:
     lines = [
         "OpenMC-to-DONJON SPH loop audit",
     ]
     if flux_map_preflight is not None:
         lines.extend(_format_preflight_audit_lines(flux_map_preflight))
+    if artifact_metadata is not None:
+        lines.extend(_format_artifact_metadata_lines(artifact_metadata))
     lines.append(
         (
             "stage      iter  keff          sph_min       sph_max       "
@@ -290,6 +295,49 @@ def _format_preflight_audit_lines(
         lines.extend(f"  WARN: {warning}" for warning in report.warnings)
     lines.append("")
     return lines
+
+
+def _format_artifact_metadata_lines(
+    metadata: SphLoopArtifactMetadata,
+) -> list[str]:
+    lines = [
+        "Artifact metadata:",
+        f"  reference_flux: {_format_dataset_metadata(metadata.reference_flux)}",
+    ]
+    for item in metadata.workflows:
+        lines.append(
+            f"  iter{item.iteration} donjon_volume_flux: "
+            f"{_format_dataset_metadata(item.donjon_volume_flux)}"
+        )
+        lines.append(
+            f"  iter{item.iteration} sph_sidecar: "
+            f"{_format_dataset_metadata(item.sph_sidecar)}"
+        )
+    if metadata.final_sph_sidecar is not None:
+        lines.append(
+            "  final_sph_sidecar: "
+            f"{_format_dataset_metadata(metadata.final_sph_sidecar)}"
+        )
+    lines.append("")
+    return lines
+
+
+def _format_dataset_metadata(metadata: Hdf5DatasetMetadata) -> str:
+    shape = "x".join(str(value) for value in metadata.shape)
+    order = metadata.group_order or ""
+    mixtures = _format_mixture_names(metadata.mixture_names)
+    return (
+        f"dataset=/{metadata.dataset} shape={shape} "
+        f"group_order={order} mixtures={mixtures}"
+    )
+
+
+def _format_mixture_names(names: tuple[str, ...]) -> str:
+    if not names:
+        return ""
+    if len(names) <= 4:
+        return ",".join(names)
+    return ",".join(names[:4]) + f",...({len(names)} total)"
 
 
 def _format_audit_bin(row: SphLoopAuditRow) -> str:

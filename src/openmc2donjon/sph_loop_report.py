@@ -8,6 +8,7 @@ from typing import Any
 
 from . import __version__
 from .bundle import ArtifactSpec, bundle_artifacts
+from .hdf5_metadata import Hdf5DatasetMetadata
 from .sph_loop_audit import (
     first_diagnostic_bin,
     format_optional_float,
@@ -18,6 +19,8 @@ from .sph_loop_preflight import (
 )
 from .sph_loop_records import (
     SphLoopAuditRow,
+    SphLoopArtifactMetadata,
+    SphLoopWorkflowMetadata,
     SphLoopPostprocessReport,
     SphLoopReport,
     SphLoopSolveReport,
@@ -63,6 +66,11 @@ def print_report(report: SphLoopReport) -> None:
         print(f"  bundle_manifest: {report.bundle_manifest}")
     if report.final_sph_sidecar is not None:
         print(f"  final_sph_sidecar: {report.final_sph_sidecar}")
+    print(
+        "  artifact_metadata: "
+        f"reference_order={report.artifact_metadata.reference_flux.group_order} "
+        f"workflow_count={len(report.artifact_metadata.workflows)}"
+    )
     for solve in report.solves:
         print(
             f"  solve[{solve.iteration}]: rc={solve.returncode} "
@@ -158,6 +166,7 @@ def write_summary(path: Path, report: SphLoopReport) -> None:
         "flux_map_preflight": flux_map_preflight_payload(
             report.flux_map_preflight
         ),
+        "artifact_metadata": _artifact_metadata_payload(report.artifact_metadata),
         "quality": _quality_payload(report),
         "solves": [
             {
@@ -275,6 +284,48 @@ def write_summary(path: Path, report: SphLoopReport) -> None:
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _artifact_metadata_payload(
+    metadata: SphLoopArtifactMetadata,
+) -> dict[str, Any]:
+    return {
+        "reference_flux": _dataset_metadata_payload(metadata.reference_flux),
+        "workflows": [
+            _workflow_metadata_payload(item) for item in metadata.workflows
+        ],
+        "final_sph_sidecar": (
+            None
+            if metadata.final_sph_sidecar is None
+            else _dataset_metadata_payload(metadata.final_sph_sidecar)
+        ),
+    }
+
+
+def _workflow_metadata_payload(
+    metadata: SphLoopWorkflowMetadata,
+) -> dict[str, Any]:
+    return {
+        "iteration": metadata.iteration,
+        "donjon_volume_flux": _dataset_metadata_payload(
+            metadata.donjon_volume_flux
+        ),
+        "sph_sidecar": _dataset_metadata_payload(metadata.sph_sidecar),
+    }
+
+
+def _dataset_metadata_payload(metadata: Hdf5DatasetMetadata) -> dict[str, Any]:
+    return {
+        "requested_source": metadata.requested_source,
+        "source": metadata.source,
+        "path": str(metadata.path),
+        "dataset": metadata.dataset,
+        "shape": list(metadata.shape),
+        "group_order": metadata.group_order,
+        "energy_groups": metadata.energy_groups,
+        "mixture_count": len(metadata.mixture_names),
+        "mixture_names": list(metadata.mixture_names),
+    }
 
 
 def write_bundle(

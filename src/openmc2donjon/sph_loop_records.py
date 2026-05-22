@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from .hdf5_metadata import Hdf5DatasetMetadata
 from .sph_loop_acceptance import SphLoopAcceptanceReport
 from .sph_loop_convergence import SphLoopConvergenceReport
 from .sph_loop_preflight import SphLoopFluxMapPreflightReport
@@ -63,6 +64,20 @@ class SphLoopAuditRow:
 
 
 @dataclass(frozen=True)
+class SphLoopWorkflowMetadata:
+    iteration: int
+    donjon_volume_flux: Hdf5DatasetMetadata
+    sph_sidecar: Hdf5DatasetMetadata
+
+
+@dataclass(frozen=True)
+class SphLoopArtifactMetadata:
+    reference_flux: Hdf5DatasetMetadata
+    workflows: tuple[SphLoopWorkflowMetadata, ...]
+    final_sph_sidecar: Hdf5DatasetMetadata | None
+
+
+@dataclass(frozen=True)
 class SphLoopReport:
     config_path: Path
     input_h5: Path
@@ -93,3 +108,4 @@ class SphLoopReport:
     final_solve: SphLoopSolveReport | None
     audit_rows: tuple[SphLoopAuditRow, ...]
     acceptance: SphLoopAcceptanceReport
+    artifact_metadata: SphLoopArtifactMetadata

@@ -13,6 +13,7 @@ from typing import Any
 import numpy as np
 
 from . import __version__
+from .constants import MGXS_DONJON_GROUP_ORDER
 from .hdf5_names import read_mixture_names
 
 
@@ -38,6 +39,7 @@ class SphSidecarReport:
     output_h5: Path
     mixture_names: tuple[str, ...]
     energy_groups: int
+    group_order: str
     value: float | None
     source: Path | None
     sph_min: float
@@ -98,6 +100,7 @@ def create_unity_sph_sidecar(
         output_h5=output_h5,
         mixture_names=mixture_names,
         energy_groups=ngroups,
+        group_order=MGXS_DONJON_GROUP_ORDER,
         value=float(value),
         source=None,
         sph_min=float(np.min(values)),
@@ -173,6 +176,7 @@ def create_macrolib_sph_sidecar(
         output_h5=output_h5,
         mixture_names=mixture_names,
         energy_groups=ngroups,
+        group_order=MGXS_DONJON_GROUP_ORDER,
         value=None,
         source=macrolib_ascii,
         sph_min=float(np.min(values)),
@@ -241,6 +245,7 @@ def create_table_sph_sidecar(
         output_h5=output_h5,
         mixture_names=mixture_names,
         energy_groups=ngroups,
+        group_order=MGXS_DONJON_GROUP_ORDER,
         value=None,
         source=table,
         sph_min=float(np.min(values)),
@@ -370,6 +375,7 @@ def print_sidecar_report(report: SphSidecarReport) -> None:
     value = "varies" if report.value is None else f"{report.value:g}"
     print(
         f"  mixtures={len(report.mixture_names)} groups={report.energy_groups} "
+        f"group_order={report.group_order} "
         f"value={value} sph_kind={report.sph_kind} "
         f"range={report.sph_min:g}..{report.sph_max:g}"
     )
@@ -402,6 +408,7 @@ def write_sidecar_summary(path: Path, report: SphSidecarReport) -> None:
         "input_h5": str(report.input_h5),
         "output_h5": str(report.output_h5),
         "energy_groups": report.energy_groups,
+        "group_order": report.group_order,
         "mixture_count": len(report.mixture_names),
         "mixture_names": list(report.mixture_names),
         "value": report.value,
@@ -502,6 +509,12 @@ def _load_from_sph_root(
     declared_mixtures = _names_from_attrs(obj, ("mixture_names", "mixtures"))
     if declared_mixtures is None:
         raise ValueError("/sph dataset must define mixture_names")
+    group_order = _text_attr(obj.attrs, "group_order")
+    if group_order is not None and group_order != MGXS_DONJON_GROUP_ORDER:
+        raise ValueError(
+            f"/sph group_order must be {MGXS_DONJON_GROUP_ORDER!r}, "
+            f"got {group_order!r}"
+        )
     if tuple(declared_mixtures) != mixture_names:
         raise ValueError(
             "/sph mixture_names do not match input mixtures: "
@@ -770,6 +783,17 @@ def _names_from_attrs(obj, keys: tuple[str, ...]) -> tuple[str, ...] | None:
     return None
 
 
+def _text_attr(attrs, name: str) -> str | None:
+    if name not in attrs:
+        return None
+    value = attrs[name]
+    if isinstance(value, bytes):
+        return value.decode("utf-8")
+    if isinstance(value, np.bytes_):
+        return value.astype(str).item()
+    return str(value)
+
+
 def _write_sidecar_file(
     output_h5: Path,
     *,
@@ -796,6 +820,7 @@ def _write_sidecar_file(
             h5.attrs[source_attr] = str(source)
         dataset = h5.create_dataset("sph", data=np.asarray(values, dtype=float))
         _write_string_attr(dataset.attrs, "mixture_names", mixture_names)
+        dataset.attrs["group_order"] = MGXS_DONJON_GROUP_ORDER
 
 
 def _write_string_attr(attrs, name: str, values: tuple[str, ...]) -> None:
