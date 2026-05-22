@@ -494,6 +494,13 @@ for solve in solves:
         )
 if len(summary["workflows"]) != 2 or len(summary["postprocesses"]) != 2:
     raise SystemExit("real DONJON SPH loop did not run two update/apply cycles")
+for workflow in summary["workflows"]:
+    if workflow.get("flux_normalization") != "power":
+        raise SystemExit(
+            "full-core real DONJON SPH auto normalization did not resolve to power"
+        )
+    if workflow.get("normalization_factor", 0.0) <= 0.0:
+        raise SystemExit("full-core real DONJON SPH normalization factor is not positive")
 for postprocess in summary["postprocesses"]:
     if postprocess["returncode"] != 0 or postprocess["block_count"] <= 0:
         raise SystemExit("real DONJON SPH MACROLIB postprocess failed")
