@@ -42,6 +42,7 @@ Default:
   - SPH iteration workflow CLI smoke
   - SPH loop driver CLI smoke
   - generic DONJON SPH loop adapter smoke
+  - minimal SPH loop user-case smoke
   - external SPH table handoff smoke
   - external face-flux adapter smoke
   - production minicase and OpenMC hex minicase smokes
@@ -214,6 +215,12 @@ echo "== Generic DONJON SPH loop adapter smoke =="
 RUN_DIR="$RUN_DIR/donjon_sph_loop_adapter" \
 PYTHON_BIN="$PYTHON_BIN" \
   bash "$REPO_ROOT/examples/donjon_sph_loop_adapter/run_smoke.sh"
+
+echo
+echo "== Minimal SPH loop user-case smoke =="
+RUN_DIR="$RUN_DIR/sph_loop_minicase" \
+PYTHON_BIN="$PYTHON_BIN" \
+  bash "$REPO_ROOT/examples/sph_loop_minicase/run_smoke.sh"
 
 echo
 echo "== External SPH handoff smoke =="
