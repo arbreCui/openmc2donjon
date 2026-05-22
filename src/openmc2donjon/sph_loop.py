@@ -115,6 +115,11 @@ def _build_report(
         final_solve=execution.final_solve,
         final_ascii=execution.final_ascii,
     )
+    artifact_metadata = collect_artifact_metadata(
+        reference_flux=plan.reference_flux,
+        workflows=execution.workflows,
+        final_sph_sidecar=execution.final_sph_sidecar,
+    )
     acceptance = build_acceptance_report(
         plan.normalized_acceptance,
         audit_rows=audit_rows,
@@ -122,11 +127,7 @@ def _build_report(
         completed_iterations=len(execution.workflows),
         converged=converged,
         final_solve=execution.final_solve,
-    )
-    artifact_metadata = collect_artifact_metadata(
-        reference_flux=plan.reference_flux,
-        workflows=execution.workflows,
-        final_sph_sidecar=execution.final_sph_sidecar,
+        artifact_metadata=artifact_metadata,
     )
     return SphLoopReport(
         config_path=plan.config_path,

@@ -109,6 +109,75 @@ class SphLoopAcceptanceTests(unittest.TestCase):
         self.assertEqual(actual["max_final_clipped_count"], 1)
         self.assertEqual(actual["max_final_clipped_fraction"], 0.25)
 
+    def test_builds_artifact_metadata_alignment_gate(self) -> None:
+        report = build_acceptance_report(
+            {"require_artifact_metadata_alignment": True},
+            audit_rows=(),
+            convergence=(),
+            completed_iterations=1,
+            converged=False,
+            final_solve=None,
+            artifact_metadata=SimpleNamespace(
+                reference_flux=_metadata(
+                    "mgxs_donjon",
+                    ("fuel", "moderator"),
+                ),
+                workflows=(
+                    SimpleNamespace(
+                        iteration=1,
+                        donjon_volume_flux=_metadata(
+                            "mgxs_donjon",
+                            ("fuel", "moderator"),
+                        ),
+                        sph_sidecar=_metadata(
+                            "mgxs_donjon",
+                            ("fuel", "moderator"),
+                        ),
+                    ),
+                ),
+                final_sph_sidecar=_metadata("mgxs_donjon", ("fuel", "moderator")),
+            ),
+        )
+
+        self.assertTrue(report.passed)
+        self.assertEqual(report.checks[0].name, "require_artifact_metadata_alignment")
+
+    def test_artifact_metadata_alignment_gate_reports_mismatch(self) -> None:
+        report = build_acceptance_report(
+            {"require_artifact_metadata_alignment": True},
+            audit_rows=(),
+            convergence=(),
+            completed_iterations=1,
+            converged=False,
+            final_solve=None,
+            artifact_metadata=SimpleNamespace(
+                reference_flux=_metadata(
+                    "mgxs_donjon",
+                    ("fuel", "moderator"),
+                ),
+                workflows=(
+                    SimpleNamespace(
+                        iteration=1,
+                        donjon_volume_flux=_metadata(
+                            "ascending_energy",
+                            ("fuel", "moderator"),
+                        ),
+                        sph_sidecar=_metadata(
+                            "mgxs_donjon",
+                            ("moderator", "fuel"),
+                        ),
+                    ),
+                ),
+                final_sph_sidecar=None,
+            ),
+        )
+
+        self.assertFalse(report.passed)
+        check = report.checks[0]
+        self.assertFalse(check.actual)
+        self.assertIn("donjon_volume_flux group_order", check.message)
+        self.assertIn("sph_sidecar mixture_names", check.message)
+
     def test_empty_acceptance_config_is_disabled_and_passes(self) -> None:
         report = build_acceptance_report(
             {},
@@ -138,6 +207,10 @@ def _row(
         sph_minimum=sph_minimum,
         sph_maximum=sph_maximum,
     )
+
+
+def _metadata(group_order: str, mixture_names: tuple[str, ...]) -> SimpleNamespace:
+    return SimpleNamespace(group_order=group_order, mixture_names=mixture_names)
 
 
 if __name__ == "__main__":

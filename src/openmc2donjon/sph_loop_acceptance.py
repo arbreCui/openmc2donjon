@@ -6,6 +6,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Protocol
 
+from .constants import MGXS_DONJON_GROUP_ORDER
+
 
 ACCEPTANCE_PASS_DECISION = "openmc2donjon_sph_loop_acceptance_passed"
 ACCEPTANCE_FAIL_DECISION = "openmc2donjon_sph_loop_acceptance_failed"
@@ -24,6 +26,23 @@ class _ConvergenceLike(Protocol):
     flux_ratio_max_residual: float
     clipped_count: int
     clipped_fraction: float
+
+
+class _DatasetMetadataLike(Protocol):
+    group_order: str | None
+    mixture_names: tuple[str, ...]
+
+
+class _WorkflowMetadataLike(Protocol):
+    iteration: int
+    donjon_volume_flux: _DatasetMetadataLike
+    sph_sidecar: _DatasetMetadataLike
+
+
+class _ArtifactMetadataLike(Protocol):
+    reference_flux: _DatasetMetadataLike
+    workflows: tuple[_WorkflowMetadataLike, ...]
+    final_sph_sidecar: _DatasetMetadataLike | None
 
 
 @dataclass(frozen=True)
@@ -53,6 +72,7 @@ def build_acceptance_report(
     completed_iterations: int,
     converged: bool,
     final_solve: object | None,
+    artifact_metadata: _ArtifactMetadataLike | None = None,
 ) -> SphLoopAcceptanceReport:
     checks: list[SphLoopAcceptanceCheck] = []
     if "min_completed_iterations" in config:
@@ -80,6 +100,8 @@ def build_acceptance_report(
                 limit=bool(config["require_converged"]),
             )
         )
+    if bool(config.get("require_artifact_metadata_alignment", False)):
+        checks.append(_artifact_metadata_alignment_check(artifact_metadata))
 
     last_convergence = convergence[-1] if convergence else None
     if "max_sph_abs_change" in config:
@@ -270,6 +292,86 @@ def _boolean_check(
         passed=passed,
         message=f"actual {actual} == required {limit}",
     )
+
+
+def _artifact_metadata_alignment_check(
+    metadata: _ArtifactMetadataLike | None,
+) -> SphLoopAcceptanceCheck:
+    errors = _artifact_metadata_alignment_errors(metadata)
+    passed = not errors
+    message = "all artifact metadata aligned" if passed else "; ".join(errors[:4])
+    if len(errors) > 4:
+        message += f"; ... ({len(errors)} total)"
+    return SphLoopAcceptanceCheck(
+        name="require_artifact_metadata_alignment",
+        actual=passed,
+        limit=True,
+        units="boolean",
+        passed=passed,
+        message=message,
+    )
+
+
+def _artifact_metadata_alignment_errors(
+    metadata: _ArtifactMetadataLike | None,
+) -> list[str]:
+    if metadata is None:
+        return ["artifact metadata unavailable"]
+    errors: list[str] = []
+    reference = metadata.reference_flux
+    reference_order = reference.group_order
+    reference_names = reference.mixture_names
+    if reference_order != MGXS_DONJON_GROUP_ORDER:
+        errors.append(
+            "reference_flux group_order "
+            f"{reference_order!r} != {MGXS_DONJON_GROUP_ORDER!r}"
+        )
+    if not reference_names:
+        errors.append("reference_flux mixture_names missing")
+    for workflow in metadata.workflows:
+        _append_dataset_alignment_errors(
+            errors,
+            f"iter{workflow.iteration} donjon_volume_flux",
+            workflow.donjon_volume_flux,
+            reference_order=MGXS_DONJON_GROUP_ORDER,
+            reference_names=reference_names,
+        )
+        _append_dataset_alignment_errors(
+            errors,
+            f"iter{workflow.iteration} sph_sidecar",
+            workflow.sph_sidecar,
+            reference_order=MGXS_DONJON_GROUP_ORDER,
+            reference_names=reference_names,
+        )
+    if metadata.workflows and metadata.final_sph_sidecar is None:
+        errors.append("final_sph_sidecar missing")
+    if metadata.final_sph_sidecar is not None:
+        _append_dataset_alignment_errors(
+            errors,
+            "final_sph_sidecar",
+            metadata.final_sph_sidecar,
+            reference_order=MGXS_DONJON_GROUP_ORDER,
+            reference_names=reference_names,
+        )
+    return errors
+
+
+def _append_dataset_alignment_errors(
+    errors: list[str],
+    label: str,
+    metadata: _DatasetMetadataLike,
+    *,
+    reference_order: str,
+    reference_names: tuple[str, ...],
+) -> None:
+    if metadata.group_order != reference_order:
+        errors.append(
+            f"{label} group_order {metadata.group_order!r} != {reference_order!r}"
+        )
+    if tuple(metadata.mixture_names) != tuple(reference_names):
+        errors.append(
+            f"{label} mixture_names do not match reference_flux mixture_names"
+        )
 
 
 def _last_iteration_audit_row(

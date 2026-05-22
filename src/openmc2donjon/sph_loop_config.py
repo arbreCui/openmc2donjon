@@ -58,6 +58,7 @@ def acceptance_config(config: dict[str, Any]) -> dict[str, Any]:
         "min_completed_iterations",
         "require_final_solve",
         "require_converged",
+        "require_artifact_metadata_alignment",
         "max_sph_abs_change",
         "max_sph_rel_change",
         "max_flux_ratio_residual",
@@ -109,7 +110,12 @@ def acceptance_config(config: dict[str, Any]) -> dict[str, Any]:
         if value < 1:
             raise ValueError("acceptance.min_completed_iterations must be >= 1")
         out["min_completed_iterations"] = value
-    for key in ("require_final_solve", "require_converged", "fail_on_violation"):
+    for key in (
+        "require_final_solve",
+        "require_converged",
+        "require_artifact_metadata_alignment",
+        "fail_on_violation",
+    ):
         if key in out and out[key] is not None:
             out[key] = bool(out[key])
     return {key: value for key, value in out.items() if value is not None}
@@ -120,6 +126,7 @@ def _production_acceptance_defaults(config: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {
         "fail_on_violation": True,
         "require_final_solve": True,
+        "require_artifact_metadata_alignment": True,
         "min_completed_iterations": int(convergence.get("min_iterations", 1)),
         "max_final_to_initial_flux_residual_ratio": 1.0,
         "max_final_clipped_count": 0,
