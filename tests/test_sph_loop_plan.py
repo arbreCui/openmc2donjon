@@ -36,6 +36,7 @@ class SphLoopPlanTests(unittest.TestCase):
                     "kn_column": 2,
                     "list_offset": 1,
                     "final_solve": True,
+                    "run_script": "run_sph_loop.sh",
                     "convergence": {
                         "sph_change_tolerance": "0.02",
                         "flux_ratio_tolerance": 0.03,
@@ -107,6 +108,7 @@ class SphLoopPlanTests(unittest.TestCase):
             )
             self.assertEqual(plan.bundle_dir, config_dir / "bundle")
             self.assertEqual(plan.bundle_manifest, config_dir / "bundle/bundle.json")
+            self.assertEqual(plan.run_script, config_dir / "run_sph_loop.sh")
             self.assertEqual(plan.solver["command"], ["python", "solve.py"])
             self.assertIsNotNone(plan.postprocessor)
 

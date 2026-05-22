@@ -78,6 +78,7 @@ class SphLoopReport:
     audit_csv: Path
     audit_text: Path
     bundle_manifest: Path | None
+    run_script: Path | None
     convergence_enabled: bool
     converged: bool
     stop_reason: str

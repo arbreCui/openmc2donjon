@@ -137,6 +137,7 @@ def _build_report(
         audit_csv=plan.audit_csv,
         audit_text=plan.audit_text,
         bundle_manifest=plan.bundle_manifest,
+        run_script=plan.run_script,
         convergence_enabled=plan.convergence_enabled,
         converged=converged,
         stop_reason=execution.stop_reason,

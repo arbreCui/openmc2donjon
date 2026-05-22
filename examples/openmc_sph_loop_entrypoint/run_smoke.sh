@@ -71,6 +71,7 @@ with h5py.File(scaffold / "flux_map.h5", "r") as h5:
 config = json.loads((scaffold / "loop_config.json").read_text(encoding="utf-8"))
 assert config["input_h5"] == str(mgxs)
 assert config["map_h5"] == str(scaffold / "flux_map.h5")
+assert config["run_script"] == str(run_script)
 assert config["reference_flux"] == f"{scaffold / 'reference_flux.h5'}::openmc_volume_flux"
 assert "openmc2donjon.donjon_deck_runner" in config["solver"]["command"]
 assert scaffold_summary["decision"] == "openmc2donjon_sph_loop_scaffold_passed"

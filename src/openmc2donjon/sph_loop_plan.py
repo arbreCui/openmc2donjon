@@ -53,6 +53,7 @@ class SphLoopPlan:
     audit_text: Path
     bundle_dir: Path | None
     bundle_manifest: Path | None
+    run_script: Path | None
     solver: dict[str, Any]
     postprocessor: dict[str, Any] | None
     run_final_solve: bool
@@ -128,6 +129,11 @@ def build_sph_loop_plan(
         if resolved_bundle_dir is None
         else resolved_bundle_dir / bundle_manifest_name
     )
+    run_script = (
+        None
+        if config.get("run_script") is None
+        else resolve_path(config["run_script"], base_dir)
+    )
 
     return SphLoopPlan(
         config_path=config_file,
@@ -161,6 +167,7 @@ def build_sph_loop_plan(
         audit_text=summary_path.with_name("sph_loop_audit.txt"),
         bundle_dir=resolved_bundle_dir,
         bundle_manifest=bundle_manifest,
+        run_script=run_script,
         solver=solver_config(config),
         postprocessor=optional_command_config(config.get("postprocess"), "postprocess"),
         run_final_solve=bool(config.get("final_solve", False)),

@@ -183,6 +183,7 @@ def create_sph_loop_scaffold(
         root_name=root_name,
         h_factor_default=h_factor_default,
         acceptance=acceptance,
+        run_script=run_script_path,
     )
     run_command = _run_sph_loop_command(config_path, python_bin=python_bin)
     _write_run_script(run_script_path, run_command)

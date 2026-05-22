@@ -142,6 +142,7 @@ def write_summary(path: Path, report: SphLoopReport) -> None:
         "bundle_manifest": (
             None if report.bundle_manifest is None else str(report.bundle_manifest)
         ),
+        "run_script": None if report.run_script is None else str(report.run_script),
         "acceptance_enabled": report.acceptance.enabled,
         "acceptance_passed": report.acceptance.passed,
         "acceptance_decision": report.acceptance.decision,
@@ -289,6 +290,11 @@ def write_bundle(
         ArtifactSpec(label="sph-loop-audit-csv", source=report.audit_csv),
         ArtifactSpec(label="sph-loop-audit-text", source=report.audit_text),
     ]
+    if report.run_script is not None:
+        artifacts.insert(
+            1,
+            ArtifactSpec(label="sph-loop-run-script", source=report.run_script),
+        )
     if report.final_sph_sidecar is not None:
         artifacts.insert(
             3,

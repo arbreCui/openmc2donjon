@@ -25,6 +25,7 @@ class SphLoopTests(unittest.TestCase):
             reference = root / "reference_flux.h5"
             solver = root / "fake_donjon_solver.py"
             postprocess = root / "fake_postprocess.py"
+            run_script = root / "run_sph_loop.sh"
             config = root / "loop.json"
             summary = root / "loop_summary.json"
             bundle_dir = root / "sph_loop_bundle"
@@ -32,6 +33,11 @@ class SphLoopTests(unittest.TestCase):
             _write_reference_flux(reference)
             _write_fake_solver(solver)
             _write_fake_postprocess(postprocess)
+            run_script.write_text(
+                "#!/usr/bin/env bash\n"
+                "python -m openmc2donjon.cli run-sph-loop --config loop.json\n",
+                encoding="utf-8",
+            )
             config.write_text(
                 json.dumps(
                     {
@@ -42,6 +48,7 @@ class SphLoopTests(unittest.TestCase):
                         "iterations": 2,
                         "format": "macrolib",
                         "final_solve": True,
+                        "run_script": "run_sph_loop.sh",
                         "damping": 1.0,
                         "scalar_flux_map": {"fuel": 2, "moderator": 4},
                         "acceptance": {
@@ -172,6 +179,7 @@ class SphLoopTests(unittest.TestCase):
             self.assertEqual(Path(payload["audit_csv"]), audit_csv)
             self.assertEqual(Path(payload["audit_text"]), audit_text)
             self.assertEqual(Path(payload["bundle_manifest"]), bundle_dir / "manifest.json")
+            self.assertEqual(Path(payload["run_script"]), run_script)
             self.assertTrue(audit_csv.exists())
             self.assertTrue(audit_text.exists())
             with audit_csv.open(encoding="utf-8", newline="") as stream:
@@ -192,6 +200,7 @@ class SphLoopTests(unittest.TestCase):
                 set(labels),
                 {
                     "sph-loop-config",
+                    "sph-loop-run-script",
                     "sph-input-h5",
                     "sph-loop-final-ascii",
                     "sph-loop-final-sph-sidecar",
@@ -201,6 +210,7 @@ class SphLoopTests(unittest.TestCase):
                 },
             )
             self.assertEqual(labels["sph-loop-summary"]["summary_schema"], "openmc2donjon.sph-loop.v1")
+            self.assertTrue((bundle_dir / labels["sph-loop-run-script"]["bundled_path"]).exists())
             self.assertEqual(labels["sph-loop-summary"]["summary_decision"], PASS_DECISION)
             self.assertTrue(labels["sph-loop-summary"]["acceptance_passed"])
             self.assertEqual(

@@ -82,6 +82,10 @@ class OpenMCSphLoopHandoffTests(unittest.TestCase):
                     encoding="utf-8"
                 )
             )
+            self.assertEqual(
+                loop_config["run_script"],
+                str(run_dir / "sph_loop_inputs/run_sph_loop.sh"),
+            )
             self.assertEqual(loop_config["acceptance"]["min_completed_iterations"], 2)
 
     def test_cli_prepare_handoff_supports_sequential_flux_map(self) -> None:
