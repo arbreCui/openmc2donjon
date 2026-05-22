@@ -57,6 +57,12 @@ class C5G7SphLoopExampleTests(unittest.TestCase):
         self.assertEqual(payload["reference_flux"], f"{tmp / 'reference_flux.h5'}::openmc_volume_flux")
         self.assertEqual(payload["map_h5"], str(tmp / "reference_flux.h5"))
         self.assertTrue(payload["acceptance"]["fail_on_violation"])
+        self.assertEqual(
+            payload["acceptance"]["max_final_to_initial_flux_residual_ratio"],
+            1.25,
+        )
+        self.assertEqual(payload["acceptance"]["max_final_clipped_fraction"], 0.0)
+        self.assertEqual(payload["acceptance"]["max_final_clipped_count"], 0)
         self.assertEqual(payload["acceptance"]["max_final_keff_delta_pcm"], 5.0)
         self.assertEqual(payload["acceptance"]["max_keff_step_pcm"], 5.0)
         self.assertEqual(payload["solver"]["result"], "donjon_flux.result")

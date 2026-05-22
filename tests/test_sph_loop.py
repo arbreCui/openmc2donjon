@@ -116,6 +116,17 @@ class SphLoopTests(unittest.TestCase):
             )
             self.assertTrue(payload["acceptance"]["passed"])
             self.assertEqual(len(payload["acceptance"]["checks"]), 8)
+            self.assertEqual(
+                payload["quality"]["initial_flux_ratio_max_residual"],
+                1.0,
+            )
+            self.assertEqual(payload["quality"]["final_flux_ratio_max_residual"], 1.0)
+            self.assertEqual(
+                payload["quality"]["final_to_initial_flux_residual_ratio"],
+                1.0,
+            )
+            self.assertFalse(payload["quality"]["clipping_observed"])
+            self.assertEqual(payload["quality"]["final_clipped_count"], 0)
             self.assertEqual(payload["iterations"], 2)
             self.assertEqual(len(payload["solves"]), 3)
             self.assertEqual(len(payload["workflows"]), 2)
@@ -328,6 +339,7 @@ class SphLoopTests(unittest.TestCase):
 
             self.assertEqual(raised.exception.code, 1)
             self.assertIn("acceptance criteria failed", stderr.getvalue())
+            self.assertIn("max_final_keff_delta_pcm", stderr.getvalue())
             payload = json.loads(summary.read_text(encoding="utf-8"))
             self.assertTrue(payload["acceptance_enabled"])
             self.assertFalse(payload["acceptance_passed"])

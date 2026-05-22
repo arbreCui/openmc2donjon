@@ -199,6 +199,15 @@ if loop_summary.get("decision") != "openmc2donjon_sph_loop_passed":
     raise SystemExit(f"SPH loop summary did not pass: {loop_summary_path}")
 if loop_summary.get("acceptance_decision") != "openmc2donjon_sph_loop_acceptance_passed":
     raise SystemExit(f"SPH loop acceptance did not pass: {loop_summary_path}")
+quality = loop_summary.get("quality")
+if not isinstance(quality, dict):
+    raise SystemExit(f"SPH loop summary is missing quality diagnostics: {loop_summary_path}")
+if quality.get("clipping_observed"):
+    raise SystemExit(f"C5G7 SPH loop should not clip SPH updates: {quality}")
+if quality.get("final_to_initial_flux_residual_ratio") is None:
+    raise SystemExit(f"SPH loop quality is missing residual ratio: {quality}")
+if float(quality["final_to_initial_flux_residual_ratio"]) > 1.25:
+    raise SystemExit(f"C5G7 SPH loop residual ratio runaway: {quality}")
 if len(loop_summary.get("solves", [])) != 3:
     raise SystemExit("configured SPH loop did not run the final solve")
 if len(loop_summary.get("postprocesses", [])) != 2:
@@ -228,6 +237,16 @@ if summary_artifact.get("acceptance_decision") != "openmc2donjon_sph_loop_accept
     raise SystemExit(f"SPH loop bundle acceptance decision failed: {summary_artifact}")
 if not summary_artifact.get("acceptance_passed"):
     raise SystemExit(f"SPH loop bundle acceptance flag failed: {summary_artifact}")
+checks = {
+    item["name"]: item
+    for item in loop_summary["acceptance"]["checks"]
+}
+if checks["max_final_clipped_count"]["actual"] != 0:
+    raise SystemExit(f"C5G7 final SPH update clipped unexpectedly: {checks}")
+if checks["max_final_clipped_fraction"]["actual"] != 0.0:
+    raise SystemExit(f"C5G7 final SPH update clipped unexpectedly: {checks}")
+if checks["max_final_to_initial_flux_residual_ratio"]["actual"] > 1.25:
+    raise SystemExit(f"C5G7 final residual ratio failed: {checks}")
 with audit_csv.open(encoding="utf-8", newline="") as stream:
     audit_rows = list(csv.DictReader(stream))
 if [row["stage"] for row in audit_rows] != ["iteration", "iteration", "final"]:
@@ -273,6 +292,11 @@ payload = {
     "iter1_sph_maximum": float(np.max(sph1)),
     "iter2_sph_minimum": float(np.min(sph2)),
     "iter2_sph_maximum": float(np.max(sph2)),
+    "final_to_initial_flux_residual_ratio": float(
+        quality["final_to_initial_flux_residual_ratio"]
+    ),
+    "final_clipped_count": int(quality["final_clipped_count"]),
+    "maximum_clipped_count": int(quality["maximum_clipped_count"]),
     "iter1_flux_max_abs_delta_from_base": flux_delta_10,
     "iter2_flux_max_abs_delta_from_iter1": flux_delta_21,
     "formula": "next_sph = previous_sph * (openmc_reference_flux / donjon_low_order_flux) ** damping",

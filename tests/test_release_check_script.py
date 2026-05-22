@@ -97,6 +97,8 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertIn("run-sph-loop", text)
         self.assertIn("c5g7_sph_loop/make_config.py", text)
         self.assertIn("openmc2donjon.donjon_deck_runner", config_writer)
+        self.assertIn("final_to_initial_flux_residual_ratio", text)
+        self.assertIn("max_final_clipped_count", config_writer)
         self.assertIn("solve_lflux_dump.x2m.in", text)
         self.assertIn('"final_solve": True', config_writer)
         self.assertIn('"postprocess"', config_writer)

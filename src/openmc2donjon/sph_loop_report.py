@@ -128,6 +128,25 @@ def print_report(report: SphLoopReport) -> None:
                 f"converged={item.converged}"
             )
         print(f"  stop_reason: {report.stop_reason}")
+    quality = _quality_payload(report)
+    if quality["final_flux_ratio_max_residual"] is not None:
+        print("  quality:")
+        print(
+            "    flux_residual="
+            f"{_format_optional_float(quality['initial_flux_ratio_max_residual'])}"
+            " -> "
+            f"{_format_optional_float(quality['final_flux_ratio_max_residual'])} "
+            "ratio="
+            f"{_format_optional_float(quality['final_to_initial_flux_residual_ratio'])}"
+        )
+        print(
+            "    final_clipped="
+            f"{quality['final_clipped_count']}:"
+            f"{_format_optional_float(quality['final_clipped_fraction'])} "
+            "max_clipped="
+            f"{quality['maximum_clipped_count']}:"
+            f"{_format_optional_float(quality['maximum_clipped_fraction'])}"
+        )
     if report.acceptance.enabled:
         print("  acceptance:")
         print(f"    decision={report.acceptance.decision}")
@@ -170,6 +189,7 @@ def write_summary(path: Path, report: SphLoopReport) -> None:
         "sph_change_tolerance": report.sph_change_tolerance,
         "flux_ratio_tolerance": report.flux_ratio_tolerance,
         "min_iterations": report.min_iterations,
+        "quality": _quality_payload(report),
         "solves": [
             {
                 "iteration": solve.iteration,
@@ -433,6 +453,50 @@ def build_audit_rows(
             )
         )
     return tuple(rows)
+
+
+def _quality_payload(report: SphLoopReport) -> dict[str, bool | float | int | None]:
+    if not report.convergence:
+        return {
+            "initial_flux_ratio_max_residual": None,
+            "final_flux_ratio_max_residual": None,
+            "final_to_initial_flux_residual_ratio": None,
+            "flux_residual_improved": None,
+            "final_clipped_count": None,
+            "final_clipped_fraction": None,
+            "maximum_clipped_count": None,
+            "maximum_clipped_fraction": None,
+            "clipping_observed": None,
+            "final_sph_minimum": None,
+            "final_sph_maximum": None,
+        }
+
+    initial = float(report.convergence[0].flux_ratio_max_residual)
+    final = float(report.convergence[-1].flux_ratio_max_residual)
+    final_item = report.convergence[-1]
+    final_workflow = report.workflows[-1] if report.workflows else None
+    maximum_clipped_count = max(item.clipped_count for item in report.convergence)
+    maximum_clipped_fraction = max(
+        item.clipped_fraction for item in report.convergence
+    )
+    ratio = 0.0 if final == 0.0 else final / max(abs(initial), 1.0e-30)
+    return {
+        "initial_flux_ratio_max_residual": initial,
+        "final_flux_ratio_max_residual": final,
+        "final_to_initial_flux_residual_ratio": ratio,
+        "flux_residual_improved": final <= initial,
+        "final_clipped_count": int(final_item.clipped_count),
+        "final_clipped_fraction": float(final_item.clipped_fraction),
+        "maximum_clipped_count": int(maximum_clipped_count),
+        "maximum_clipped_fraction": float(maximum_clipped_fraction),
+        "clipping_observed": maximum_clipped_count > 0,
+        "final_sph_minimum": (
+            None if final_workflow is None else final_workflow.sph_minimum
+        ),
+        "final_sph_maximum": (
+            None if final_workflow is None else final_workflow.sph_maximum
+        ),
+    }
 
 
 def _extract_solve_keff(solve: SphLoopSolveReport) -> float | None:

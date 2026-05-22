@@ -225,8 +225,12 @@ def run_sph_loop(
         )
     if report.acceptance.enabled and report.acceptance.fail_on_violation:
         if not report.acceptance.passed:
+            failed = ", ".join(
+                check.name for check in report.acceptance.checks if not check.passed
+            )
+            failed_suffix = f": {failed}" if failed else ""
             raise RuntimeError(
-                "SPH loop acceptance criteria failed; see "
+                f"SPH loop acceptance criteria failed{failed_suffix}; see "
                 f"{plan.summary_path} and {plan.audit_csv}"
             )
     return report
