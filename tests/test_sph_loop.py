@@ -140,6 +140,8 @@ class SphLoopTests(unittest.TestCase):
             self.assertEqual(payload["audit_rows"][0]["stage"], "iteration")
             self.assertEqual(payload["audit_rows"][0]["iteration"], 1)
             self.assertAlmostEqual(payload["audit_rows"][0]["keff"], 1.0)
+            self.assertIn("worst_residual_mixture", payload["audit_rows"][0])
+            self.assertIsNotNone(payload["audit_rows"][0]["worst_residual_group"])
             self.assertAlmostEqual(payload["audit_rows"][1]["sph_maximum"], 2.0)
             self.assertLessEqual(
                 _acceptance_actual(payload, "max_final_keff_delta_pcm"),
@@ -162,8 +164,14 @@ class SphLoopTests(unittest.TestCase):
             with audit_csv.open(encoding="utf-8", newline="") as stream:
                 rows = list(csv.DictReader(stream))
             self.assertEqual([row["stage"] for row in rows], ["iteration", "iteration", "final"])
+            self.assertTrue(rows[0]["worst_residual_mixture"])
+            self.assertTrue(rows[0]["worst_residual_group"])
+            self.assertTrue(rows[0]["worst_residual_raw_update"])
             self.assertEqual(rows[2]["keff"], "1.002")
-            self.assertIn("OpenMC-to-DONJON SPH loop audit", audit_text.read_text(encoding="utf-8"))
+            audit_text_content = audit_text.read_text(encoding="utf-8")
+            self.assertIn("OpenMC-to-DONJON SPH loop audit", audit_text_content)
+            self.assertIn("worst_bin", audit_text_content)
+            self.assertIn("Final worst residual bins", audit_text_content)
             manifest = json.loads((bundle_dir / "manifest.json").read_text(encoding="utf-8"))
             labels = {artifact["label"]: artifact for artifact in manifest["artifacts"]}
             self.assertEqual(

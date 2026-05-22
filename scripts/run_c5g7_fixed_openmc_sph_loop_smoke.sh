@@ -264,6 +264,19 @@ with audit_csv.open(encoding="utf-8", newline="") as stream:
     audit_rows = list(csv.DictReader(stream))
 if [row["stage"] for row in audit_rows] != ["iteration", "iteration", "final"]:
     raise SystemExit(f"unexpected SPH loop audit stages: {audit_rows}")
+for key in (
+    "worst_residual_mixture",
+    "worst_residual_group",
+    "worst_residual_raw_update",
+    "worst_residual",
+):
+    if key not in audit_rows[0]:
+        raise SystemExit(f"SPH loop audit CSV is missing {key}: {audit_csv}")
+    if not audit_rows[-2][key]:
+        raise SystemExit(f"SPH loop final iteration audit row has empty {key}: {audit_rows[-2]}")
+audit_text = Path(loop_summary["audit_text"])
+if "Final worst residual bins" not in audit_text.read_text(encoding="utf-8"):
+    raise SystemExit(f"SPH loop audit text is missing final worst-bin ranking: {audit_text}")
 audit_keff = [float(row["keff"]) for row in audit_rows]
 np.testing.assert_allclose(audit_keff, [keff0, keff1, keff2], rtol=1.0e-6, atol=1.0e-6)
 if sph1.shape != (9, 7) or sph2.shape != (9, 7):

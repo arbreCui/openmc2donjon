@@ -55,6 +55,11 @@ class SphLoopAuditRow:
     sph_max_abs_change: float | None
     sph_max_rel_change: float | None
     flux_ratio_max_residual: float | None
+    worst_residual_mixture: str | None
+    worst_residual_group: int | None
+    worst_residual_raw_update: float | None
+    worst_residual: float | None
+    worst_residual_bins: tuple[dict[str, object], ...]
     converged: bool | None
     solve_result: Path | None
     ascii_output: Path | None
@@ -272,6 +277,10 @@ def write_summary(path: Path, report: SphLoopReport) -> None:
                 "sph_max_abs_change": row.sph_max_abs_change,
                 "sph_max_rel_change": row.sph_max_rel_change,
                 "flux_ratio_max_residual": row.flux_ratio_max_residual,
+                "worst_residual_mixture": row.worst_residual_mixture,
+                "worst_residual_group": row.worst_residual_group,
+                "worst_residual_raw_update": row.worst_residual_raw_update,
+                "worst_residual": row.worst_residual,
                 "converged": row.converged,
                 "solve_result": None if row.solve_result is None else str(row.solve_result),
                 "ascii_output": None if row.ascii_output is None else str(row.ascii_output),
@@ -347,6 +356,10 @@ def write_audit_csv(path: Path, rows: tuple[SphLoopAuditRow, ...]) -> None:
         "sph_max_abs_change",
         "sph_max_rel_change",
         "flux_ratio_max_residual",
+        "worst_residual_mixture",
+        "worst_residual_group",
+        "worst_residual_raw_update",
+        "worst_residual",
         "converged",
         "solve_result",
         "ascii_output",
@@ -373,6 +386,14 @@ def write_audit_csv(path: Path, rows: tuple[SphLoopAuditRow, ...]) -> None:
                     "flux_ratio_max_residual": _format_optional_float(
                         row.flux_ratio_max_residual
                     ),
+                    "worst_residual_mixture": row.worst_residual_mixture or "",
+                    "worst_residual_group": (
+                        "" if row.worst_residual_group is None else row.worst_residual_group
+                    ),
+                    "worst_residual_raw_update": _format_optional_float(
+                        row.worst_residual_raw_update
+                    ),
+                    "worst_residual": _format_optional_float(row.worst_residual),
                     "converged": "" if row.converged is None else str(row.converged),
                     "solve_result": "" if row.solve_result is None else str(row.solve_result),
                     "ascii_output": "" if row.ascii_output is None else str(row.ascii_output),
@@ -388,7 +409,8 @@ def write_audit_text(path: Path, rows: tuple[SphLoopAuditRow, ...]) -> None:
         "OpenMC-to-DONJON SPH loop audit",
         (
             "stage      iter  keff          sph_min       sph_max       "
-            "sph_rel       flux_res      converged"
+            "sph_rel       flux_res      worst_bin            raw_update    "
+            "residual     converged"
         ),
     ]
     for row in rows:
@@ -400,8 +422,28 @@ def write_audit_text(path: Path, rows: tuple[SphLoopAuditRow, ...]) -> None:
             f"{_format_optional_float(row.sph_maximum):<12} "
             f"{_format_optional_float(row.sph_max_rel_change):<12} "
             f"{_format_optional_float(row.flux_ratio_max_residual):<12} "
+            f"{_format_audit_bin(row):<20} "
+            f"{_format_optional_float(row.worst_residual_raw_update):<12} "
+            f"{_format_optional_float(row.worst_residual):<12} "
             f"{converged:<9}"
         )
+    final_bins = _last_worst_residual_bins(rows)
+    if final_bins:
+        lines.extend(
+            [
+                "",
+                "Final worst residual bins",
+                "rank  mixture          group  raw_update    residual",
+            ]
+        )
+        for rank, item in enumerate(final_bins[:10], start=1):
+            lines.append(
+                f"{rank:<5d} "
+                f"{str(item.get('mixture', '')):<16} "
+                f"{str(item.get('group', '')):<6} "
+                f"{_format_optional_float(_optional_float(item.get('raw_update'))):<12} "
+                f"{_format_optional_float(_optional_float(item.get('residual'))):<12}"
+            )
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -421,6 +463,11 @@ def build_audit_rows(
     for index, workflow in enumerate(workflows, start=1):
         solve = solve_by_iteration.get(index - 1)
         convergence_report = convergence[index - 1] if index - 1 < len(convergence) else None
+        worst_bin = (
+            None
+            if convergence_report is None
+            else _first_diagnostic_bin(convergence_report.worst_residual_bins)
+        )
         postprocess = postprocess_by_iteration.get(index)
         rows.append(
             SphLoopAuditRow(
@@ -440,6 +487,23 @@ def build_audit_rows(
                     if convergence_report is None
                     else convergence_report.flux_ratio_max_residual
                 ),
+                worst_residual_mixture=_optional_str(
+                    None if worst_bin is None else worst_bin.get("mixture")
+                ),
+                worst_residual_group=_optional_int(
+                    None if worst_bin is None else worst_bin.get("group")
+                ),
+                worst_residual_raw_update=_optional_float(
+                    None if worst_bin is None else worst_bin.get("raw_update")
+                ),
+                worst_residual=_optional_float(
+                    None if worst_bin is None else worst_bin.get("residual")
+                ),
+                worst_residual_bins=(
+                    ()
+                    if convergence_report is None
+                    else tuple(dict(item) for item in convergence_report.worst_residual_bins)
+                ),
                 converged=None if convergence_report is None else convergence_report.converged,
                 solve_result=None if solve is None else solve.result,
                 ascii_output=workflow.ascii_output,
@@ -457,6 +521,11 @@ def build_audit_rows(
                 sph_max_abs_change=None,
                 sph_max_rel_change=None,
                 flux_ratio_max_residual=None,
+                worst_residual_mixture=None,
+                worst_residual_group=None,
+                worst_residual_raw_update=None,
+                worst_residual=None,
+                worst_residual_bins=(),
                 converged=None,
                 solve_result=final_solve.result,
                 ascii_output=final_ascii,
@@ -565,6 +634,35 @@ def _format_optional_float(value: float | None) -> str:
     if value is None:
         return ""
     return f"{value:.12g}"
+
+
+def _format_audit_bin(row: SphLoopAuditRow) -> str:
+    if row.worst_residual_mixture is None or row.worst_residual_group is None:
+        return ""
+    return f"{row.worst_residual_mixture}:g{row.worst_residual_group}"
+
+
+def _last_worst_residual_bins(
+    rows: tuple[SphLoopAuditRow, ...],
+) -> tuple[dict[str, object], ...]:
+    for row in reversed(rows):
+        if row.worst_residual_bins:
+            return row.worst_residual_bins
+    return ()
+
+
+def _optional_str(value: object) -> str | None:
+    if value is None:
+        return None
+    return str(value)
+
+
+def _optional_int(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return int(value)
+    return None
 
 
 def _optional_float(value: object) -> float | None:
