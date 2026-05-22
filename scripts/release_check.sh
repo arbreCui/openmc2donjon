@@ -35,6 +35,7 @@ Default:
   - CLI help/version smoke
   - recipe/statepoint exporter smoke
   - OpenMC-to-SPH-loop entrypoint smoke
+  - OpenMC-to-SPH-loop real DONJON loop smoke with --run-donjon
   - DRAGON SPH macrolib handoff smoke when local DRAGON TCM38 inputs exist
   - DONJON DSPH consume smoke when local DONJON is available
   - DONJON SPH solver-response smoke when local DONJON is available
@@ -185,6 +186,7 @@ echo
 echo "== OpenMC-to-SPH-loop entrypoint smoke =="
 RUN_DIR="$RUN_DIR/openmc_sph_loop_entrypoint" \
 PYTHON_BIN="$PYTHON_BIN" \
+RUN_REAL_DONJON="$RUN_DONJON" \
   bash "$REPO_ROOT/examples/openmc_sph_loop_entrypoint/run_smoke.sh"
 
 echo

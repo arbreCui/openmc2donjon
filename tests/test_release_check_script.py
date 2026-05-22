@@ -41,6 +41,7 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertIn("openmc2donjon.donjon_deck_runner --help", default_section)
         self.assertIn("== OpenMC-to-SPH-loop entrypoint smoke ==", default_section)
         self.assertIn("examples/openmc_sph_loop_entrypoint/run_smoke.sh", default_section)
+        self.assertIn('RUN_REAL_DONJON="$RUN_DONJON"', default_section)
         self.assertIn("== SPH iteration loop smoke ==", default_section)
         self.assertIn("examples/sph_iteration_loop/run_smoke.sh", default_section)
         self.assertIn("== Generic DONJON SPH loop adapter smoke ==", default_section)
