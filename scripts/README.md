@@ -80,3 +80,5 @@ converter, but they are not release entry points unless called from a smoke.
   assembly homogenization output.
 - `validate_ncr_macrolib.py` - validates DONJON NCR macrolib output against
   OpenMC MGXS HDF5.
+- `stress_lcm_ascii_parser.py` - opt-in large-file parser stress gate for
+  external DRAGON/DONJON ASCII samples.
