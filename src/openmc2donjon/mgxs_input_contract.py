@@ -10,6 +10,7 @@ from typing import Any
 import h5py
 import numpy as np
 
+from .energy_groups import energy_bounds_sha256, load_energy_bounds_text
 from .mgxs_input_equivalence import (
     SPH_DATASETS,
     adf_names_from_attrs,
@@ -83,6 +84,18 @@ def main() -> int:
             require_transport_dataset=args.require_transport_dataset,
             require_volume=args.require_volume,
             require_h_factor=args.require_h_factor,
+            expected_energy_group_structure=args.expected_energy_group_structure,
+            expected_energy_bounds=(
+                None
+                if args.expected_energy_bounds is None
+                else load_energy_bounds_text(args.expected_energy_bounds)
+            ),
+            expected_energy_bounds_label=(
+                None
+                if args.expected_energy_bounds is None
+                else str(args.expected_energy_bounds)
+            ),
+            expected_energy_bounds_sha256=args.expected_energy_bounds_sha256,
             expected_adf_faces=expected_faces,
             scatter_row_balance_warn=args.scatter_row_balance_warn,
             scatter_row_balance_fail=args.scatter_row_balance_fail,
@@ -163,6 +176,22 @@ def parse_args() -> argparse.Namespace:
         help="require group-wise H-FACTOR/kappa-fission data for every calculation",
     )
     parser.add_argument(
+        "--expected-energy-group-structure",
+        default=None,
+        help="require /attrs energy_group_structure to match this label",
+    )
+    parser.add_argument(
+        "--expected-energy-bounds",
+        type=Path,
+        default=None,
+        help="text file containing expected ascending energy bounds in eV",
+    )
+    parser.add_argument(
+        "--expected-energy-bounds-sha256",
+        default=None,
+        help="require the actual /energy_bounds SHA-256 digest to match this value",
+    )
+    parser.add_argument(
         "--scatter-row-balance-warn",
         type=float,
         default=None,
@@ -240,6 +269,10 @@ def validate_input(
     require_transport_dataset: bool = False,
     require_volume: bool = False,
     require_h_factor: bool = False,
+    expected_energy_group_structure: str | None = None,
+    expected_energy_bounds: np.ndarray | list[float] | None = None,
+    expected_energy_bounds_label: str | None = None,
+    expected_energy_bounds_sha256: str | None = None,
     expected_adf_faces: list[str] | None = None,
     scatter_row_balance_warn: float | None = None,
     scatter_row_balance_fail: float | None = None,
@@ -266,6 +299,10 @@ def validate_input(
                 require_transport_dataset=require_transport_dataset,
                 require_volume=require_volume,
                 require_h_factor=require_h_factor,
+                expected_energy_group_structure=expected_energy_group_structure,
+                expected_energy_bounds=expected_energy_bounds,
+                expected_energy_bounds_label=expected_energy_bounds_label,
+                expected_energy_bounds_sha256=expected_energy_bounds_sha256,
                 expected_adf_faces=expected_adf_faces,
                 uncertainty=uncertainty or UncertaintyConfig(),
             )
@@ -283,6 +320,10 @@ def validate_open_h5(
     require_transport_dataset: bool,
     require_volume: bool,
     require_h_factor: bool,
+    expected_energy_group_structure: str | None,
+    expected_energy_bounds: np.ndarray | list[float] | None,
+    expected_energy_bounds_label: str | None,
+    expected_energy_bounds_sha256: str | None,
     expected_adf_faces: list[str] | None,
     uncertainty: UncertaintyConfig,
 ) -> None:
@@ -310,6 +351,15 @@ def validate_open_h5(
         report.fail("/energy_bounds must be positive eV values")
     elif not np.all(np.diff(energy) > 0.0):
         report.fail("/energy_bounds must be strictly ascending")
+    validate_energy_identity(
+        h5,
+        report,
+        energy,
+        expected_structure=expected_energy_group_structure,
+        expected_bounds=expected_energy_bounds,
+        expected_bounds_label=expected_energy_bounds_label,
+        expected_bounds_sha256=expected_energy_bounds_sha256,
+    )
 
     if "mixtures" not in h5 or not isinstance(h5["mixtures"], h5py.Group):
         report.fail("/mixtures group is missing")
@@ -364,6 +414,71 @@ def finalize_volume_contract(report: InputReport, *, require_volume: bool) -> No
         "volume; converter readers will use default volume 1.0 for those "
         "calculations"
     )
+
+
+def validate_energy_identity(
+    h5: h5py.File,
+    report: InputReport,
+    energy: np.ndarray,
+    *,
+    expected_structure: str | None,
+    expected_bounds: np.ndarray | list[float] | None,
+    expected_bounds_label: str | None,
+    expected_bounds_sha256: str | None,
+) -> None:
+    structure = (
+        attr_text(h5.attrs["energy_group_structure"])
+        if "energy_group_structure" in h5.attrs
+        else None
+    )
+    report.energy_group_structure = structure
+    digest = energy_bounds_sha256(energy)
+    report.energy_bounds_sha256 = digest
+
+    declared_digest = (
+        attr_text(h5.attrs["energy_bounds_sha256"])
+        if "energy_bounds_sha256" in h5.attrs
+        else None
+    )
+    if declared_digest is not None and declared_digest != digest:
+        report.fail(
+            "/attrs energy_bounds_sha256 does not match /energy_bounds: "
+            f"{declared_digest} != {digest}"
+        )
+
+    if expected_structure is not None:
+        if structure is None:
+            report.fail(
+                "/attrs energy_group_structure is missing; expected "
+                f"{expected_structure!r}"
+            )
+        elif structure != expected_structure:
+            report.fail(
+                "/attrs energy_group_structure mismatch: "
+                f"{structure!r} != {expected_structure!r}"
+            )
+
+    if expected_bounds_sha256 is not None and digest != expected_bounds_sha256:
+        report.fail(
+            "/energy_bounds SHA-256 mismatch: "
+            f"{digest} != {expected_bounds_sha256}"
+        )
+
+    if expected_bounds is not None:
+        expected = np.asarray(expected_bounds, dtype=float).reshape(-1)
+        label = expected_bounds_label or "expected energy bounds"
+        if expected.shape != energy.shape:
+            report.fail(
+                f"/energy_bounds shape does not match {label}: "
+                f"{energy.shape} != {expected.shape}"
+            )
+            return
+        if not np.allclose(energy, expected, rtol=1.0e-10, atol=0.0):
+            index = int(np.argmax(np.abs(energy - expected)))
+            report.fail(
+                f"/energy_bounds differ from {label}: index {index} "
+                f"actual={energy[index]:.12e} expected={expected[index]:.12e}"
+            )
 
 
 def burnup_axis_from_hdf5(h5: h5py.File, report: InputReport) -> np.ndarray | None:
@@ -766,6 +881,9 @@ def run_preflight(
     require_transport_dataset: bool = False,
     require_volume: bool = False,
     require_h_factor: bool = False,
+    expected_energy_group_structure: str | None = None,
+    expected_energy_bounds: str | Path | np.ndarray | list[float] | None = None,
+    expected_energy_bounds_sha256: str | None = None,
     scatter_row_balance_warn: float | None = None,
     scatter_row_balance_fail: float | None = None,
     uncertainty_warn: float | None = 0.05,
@@ -779,6 +897,9 @@ def run_preflight(
         if isinstance(expected_adf_faces, str) or expected_adf_faces is None
         else expected_adf_faces
     )
+    expected_bounds, expected_bounds_label = _expected_energy_bounds_input(
+        expected_energy_bounds
+    )
     reports = [
         validate_input(
             path,
@@ -787,6 +908,10 @@ def run_preflight(
             require_transport_dataset=require_transport_dataset,
             require_volume=require_volume,
             require_h_factor=require_h_factor,
+            expected_energy_group_structure=expected_energy_group_structure,
+            expected_energy_bounds=expected_bounds,
+            expected_energy_bounds_label=expected_bounds_label,
+            expected_energy_bounds_sha256=expected_energy_bounds_sha256,
             expected_adf_faces=expected_faces,
             scatter_row_balance_warn=scatter_row_balance_warn,
             scatter_row_balance_fail=scatter_row_balance_fail,
@@ -814,6 +939,17 @@ def run_preflight(
         write_summary(summary_json, reports, decision, output_issue)
 
     return ok
+
+
+def _expected_energy_bounds_input(
+    value: str | Path | np.ndarray | list[float] | None,
+) -> tuple[np.ndarray | None, str | None]:
+    if value is None:
+        return None, None
+    if isinstance(value, (str, Path)):
+        path = Path(value)
+        return load_energy_bounds_text(path), str(path)
+    return np.asarray(value, dtype=float).reshape(-1), "expected energy bounds"
 
 
 if __name__ == "__main__":

@@ -19,6 +19,7 @@ from openmc2donjon.export_openmc_mgxs import (
     DomainExportSpec,
     export_openmc_mgxs_library,
 )
+from openmc2donjon.energy_groups import energy_bounds_sha256
 from openmc2donjon.mgxs_input_contract import validate_input
 from openmc2donjon.multicompo import read_mgxs_hdf5
 
@@ -144,6 +145,7 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
             mixtures, energy_bounds = read_mgxs_hdf5(path)
 
             with h5py.File(path, "r") as h5:
+                bounds_digest = h5.attrs["energy_bounds_sha256"]
                 fuel_group = h5["mixtures"]["ASM_Y1_X1"]
                 scatter_axes = fuel_group.attrs["scatter_axes"]
                 stored_scatter = fuel_group["scatter_matrix"][:]
@@ -153,6 +155,10 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
         self.assertEqual(summary.legendre_order, 1)
         self.assertEqual([domain.name for domain in summary.domains], ["ASM_Y1_X1", "MOD"])
         np.testing.assert_allclose(energy_bounds, [1.0e-5, 1.0, 1.0e3, 1.0e7])
+        self.assertEqual(
+            bounds_digest,
+            energy_bounds_sha256([1.0e-5, 1.0, 1.0e3, 1.0e7]),
+        )
 
         by_name = {mixture.name: mixture for mixture in mixtures}
         self.assertEqual(set(by_name), {"ASM_Y1_X1", "MOD"})

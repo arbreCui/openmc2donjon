@@ -8,6 +8,7 @@ import h5py
 import numpy as np
 
 from openmc2donjon import mgxs_input_contract as validator
+from openmc2donjon.energy_groups import energy_bounds_sha256
 
 
 class MgxsInputContractTests(unittest.TestCase):
@@ -272,6 +273,57 @@ class MgxsInputContractTests(unittest.TestCase):
         self.assertEqual(missing_report.h_factor_datasets, 0)
         self.assertTrue(present_report.ok, present_report.issues)
         self.assertEqual(present_report.h_factor_datasets, 1)
+
+    def test_energy_group_identity_gate_accepts_matching_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "c5g7.h5"
+            write_single_state_fixture(path, total=[0.29, 0.38])
+            with h5py.File(path, "a") as h5:
+                bounds = h5["energy_bounds"][:]
+                h5.attrs["energy_group_structure"] = "C5G7-2g-test"
+                h5.attrs["energy_bounds_sha256"] = energy_bounds_sha256(bounds)
+
+            report = validator.validate_input(
+                path,
+                expected_energy_group_structure="C5G7-2g-test",
+                expected_energy_bounds=[1.0e-5, 1.0, 1.0e7],
+            )
+
+        self.assertTrue(report.ok, report.issues)
+        self.assertEqual(report.energy_group_structure, "C5G7-2g-test")
+        self.assertEqual(
+            report.energy_bounds_sha256,
+            energy_bounds_sha256([1.0e-5, 1.0, 1.0e7]),
+        )
+
+    def test_energy_group_identity_gate_rejects_mismatches(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "wrong_bounds.h5"
+            write_single_state_fixture(path, total=[0.29, 0.38])
+            with h5py.File(path, "a") as h5:
+                h5.attrs["energy_group_structure"] = "C5G7-2g-test"
+                h5.attrs["energy_bounds_sha256"] = "bad-digest"
+
+            report = validator.validate_input(
+                path,
+                expected_energy_group_structure="WIMS-2g-test",
+                expected_energy_bounds=[1.0e-5, 0.625, 1.0e7],
+                expected_energy_bounds_sha256="also-wrong",
+            )
+
+        self.assertFalse(report.ok)
+        self.assertTrue(
+            any("energy_bounds_sha256 does not match" in item for item in report.issues)
+        )
+        self.assertTrue(
+            any("energy_group_structure mismatch" in item for item in report.issues)
+        )
+        self.assertTrue(
+            any("/energy_bounds SHA-256 mismatch" in item for item in report.issues)
+        )
+        self.assertTrue(
+            any("/energy_bounds differ" in item for item in report.issues)
+        )
 
     def test_uncertainty_warns_for_high_relative_std_dev(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

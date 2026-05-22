@@ -19,6 +19,8 @@ from typing import Any, Mapping
 
 import numpy as np
 
+from .energy_groups import energy_bounds_sha256
+
 
 MGXS_TYPE_ALIASES: dict[str, tuple[str, ...]] = {
     "total": ("total",),
@@ -152,6 +154,7 @@ def export_openmc_mgxs_library(
         h5.attrs["openmc_scatter_mgxs_type"] = scatter_type_label
         for attr_key, attr_value in (root_attrs or {}).items():
             _write_hdf5_attr(h5, str(attr_key), attr_value)
+        h5.attrs["energy_bounds_sha256"] = energy_bounds_sha256(energy_bounds)
         h5.create_dataset("energy_bounds", data=energy_bounds)
         mixtures = h5.create_group("mixtures")
         for domain_summary, data in exported:

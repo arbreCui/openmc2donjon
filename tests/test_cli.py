@@ -12,6 +12,7 @@ import h5py
 import numpy as np
 
 from openmc2donjon.cli import build_parser, main as cli_main
+from openmc2donjon.energy_groups import energy_bounds_sha256
 
 
 class CliTests(unittest.TestCase):
@@ -62,6 +63,36 @@ class CliTests(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn("mgxs_input_contract_failed", stream.getvalue())
         self.assertIn("H-FACTOR/kappa_fission", stream.getvalue())
+
+    def test_check_command_can_gate_energy_group_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "mgxs.h5"
+            bounds_path = Path(tmpdir) / "bounds.txt"
+            write_valid_mgxs(path)
+            bounds = np.array([1.0e-5, 1.0, 1.0e7])
+            np.savetxt(bounds_path, bounds)
+            with h5py.File(path, "a") as h5:
+                h5.attrs["energy_group_structure"] = "C5G7-2g-test"
+                h5.attrs["energy_bounds_sha256"] = energy_bounds_sha256(bounds)
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = cli_main(
+                    [
+                        "check",
+                        str(path),
+                        "--expected-energy-group-structure",
+                        "C5G7-2g-test",
+                        "--expected-energy-bounds",
+                        str(bounds_path),
+                        "--expected-energy-bounds-sha256",
+                        energy_bounds_sha256(bounds),
+                    ]
+                )
+
+        self.assertEqual(rc, 0)
+        self.assertIn("mgxs_input_contract_passed", stream.getvalue())
+        self.assertIn("energy_group_structure=C5G7-2g-test", stream.getvalue())
 
     def test_doctor_command_reports_environment_and_recipe(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]

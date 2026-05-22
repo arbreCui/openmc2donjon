@@ -255,6 +255,18 @@ def _print_dry_run_checks(args: argparse.Namespace) -> None:
         print(f"    require_volume: {_yes_no(args.require_volume)}")
         print(f"    require_h_factor: {_yes_no(args.require_h_factor)}")
         print(f"    require_transport_dataset: {_yes_no(args.require_transport_dataset)}")
+        print(
+            "    expected_energy_group_structure: "
+            f"{_render_optional_value(args.expected_energy_group_structure)}"
+        )
+        print(
+            "    expected_energy_bounds: "
+            f"{_render_optional_value(args.expected_energy_bounds)}"
+        )
+        print(
+            "    expected_energy_bounds_sha256: "
+            f"{_render_optional_value(args.expected_energy_bounds_sha256)}"
+        )
         print(f"    require_adf: {_yes_no(args.require_adf)}")
         print(f"    require_sph: {_yes_no(args.require_sph)}")
         print(f"    expected_adf_faces: {_render_optional_value(args.expected_adf_faces)}")
@@ -402,6 +414,9 @@ def _run_pipeline_preflight(
         require_transport_dataset=args.require_transport_dataset,
         require_volume=args.require_volume,
         require_h_factor=args.require_h_factor,
+        expected_energy_group_structure=args.expected_energy_group_structure,
+        expected_energy_bounds=args.expected_energy_bounds,
+        expected_energy_bounds_sha256=args.expected_energy_bounds_sha256,
         scatter_row_balance_warn=args.scatter_row_balance_warn,
         scatter_row_balance_fail=args.scatter_row_balance_fail,
         uncertainty_warn=None if args.no_uncertainty_check else args.uncertainty_warn,

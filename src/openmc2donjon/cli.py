@@ -150,6 +150,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="with --check, require group-wise H-FACTOR/kappa-fission data",
     )
     parser.add_argument(
+        "--expected-energy-group-structure",
+        default=None,
+        help="with --check, require this energy_group_structure root attribute",
+    )
+    parser.add_argument(
+        "--expected-energy-bounds",
+        type=Path,
+        default=None,
+        help="with --check, text file containing expected energy bounds in eV",
+    )
+    parser.add_argument(
+        "--expected-energy-bounds-sha256",
+        default=None,
+        help="with --check, require this /energy_bounds SHA-256 digest",
+    )
+    parser.add_argument(
         "--scatter-row-balance-warn",
         type=float,
         default=None,
@@ -286,6 +302,9 @@ def _convert_handler(args: argparse.Namespace) -> int:
             require_transport_dataset=args.require_transport_dataset,
             require_volume=args.require_volume,
             require_h_factor=args.require_h_factor,
+            expected_energy_group_structure=args.expected_energy_group_structure,
+            expected_energy_bounds=args.expected_energy_bounds,
+            expected_energy_bounds_sha256=args.expected_energy_bounds_sha256,
             scatter_row_balance_warn=args.scatter_row_balance_warn,
             scatter_row_balance_fail=args.scatter_row_balance_fail,
             uncertainty_warn=None if args.no_uncertainty_check else args.uncertainty_warn,

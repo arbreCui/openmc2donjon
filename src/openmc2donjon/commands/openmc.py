@@ -67,6 +67,9 @@ def build_prepare_openmc_sph_loop_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-require-volume", action="store_true")
     parser.add_argument("--require-h-factor", action="store_true")
     parser.add_argument("--no-require-transport-dataset", action="store_true")
+    parser.add_argument("--expected-energy-group-structure", default=None)
+    parser.add_argument("--expected-energy-bounds", type=Path, default=None)
+    parser.add_argument("--expected-energy-bounds-sha256", default=None)
     parser.add_argument("--scatter-row-balance-warn", type=float, default=None)
     parser.add_argument("--scatter-row-balance-fail", type=float, default=None)
     parser.add_argument("--uncertainty-warn", type=float, default=0.05)
@@ -168,6 +171,9 @@ def prepare_openmc_sph_loop_handler(args: argparse.Namespace) -> int:
             require_volume=not args.no_require_volume,
             require_h_factor=args.require_h_factor,
             require_transport_dataset=not args.no_require_transport_dataset,
+            expected_energy_group_structure=args.expected_energy_group_structure,
+            expected_energy_bounds=args.expected_energy_bounds,
+            expected_energy_bounds_sha256=args.expected_energy_bounds_sha256,
             scatter_row_balance_warn=args.scatter_row_balance_warn,
             scatter_row_balance_fail=args.scatter_row_balance_fail,
             uncertainty_warn=None if args.no_uncertainty_check else args.uncertainty_warn,

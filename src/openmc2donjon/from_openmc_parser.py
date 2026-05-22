@@ -379,6 +379,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="with --check, require group-wise H-FACTOR/kappa-fission data",
     )
     parser.add_argument(
+        "--expected-energy-group-structure",
+        default=None,
+        help="with --check, require this energy_group_structure root attribute",
+    )
+    parser.add_argument(
+        "--expected-energy-bounds",
+        type=Path,
+        default=None,
+        help="with --check, text file containing expected energy bounds in eV",
+    )
+    parser.add_argument(
+        "--expected-energy-bounds-sha256",
+        default=None,
+        help="with --check, require this /energy_bounds SHA-256 digest",
+    )
+    parser.add_argument(
         "--scatter-row-balance-warn",
         type=float,
         default=None,

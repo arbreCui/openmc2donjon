@@ -92,6 +92,7 @@ def root_attrs():
     attrs = {
         "scatter_axes": "moment,G_in,G_out",
         "domain_mode": _domain_mode(),
+        "energy_group_structure": "C5G7-7g",
     }
     if _domain_mode() == "assembly":
         attrs.update(

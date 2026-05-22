@@ -18,6 +18,8 @@ class InputReport:
     ok: bool = True
     energy_groups: int | None = None
     legendre_order: int | None = None
+    energy_group_structure: str | None = None
+    energy_bounds_sha256: str | None = None
     mixtures: int = 0
     stateful_mixtures: int = 0
     state_points: int = 1
@@ -94,6 +96,13 @@ def print_report(report: InputReport) -> None:
     print(f"== {Path(report.path).name} ==")
     print(f"  {status}  path: {report.path}")
     print(f"        energy_groups={report.energy_groups} legendre_order={report.legendre_order}")
+    structure = report.energy_group_structure or "unspecified"
+    digest = (
+        "none"
+        if report.energy_bounds_sha256 is None
+        else report.energy_bounds_sha256[:12]
+    )
+    print(f"        energy_group_structure={structure} bounds_sha256={digest}")
     print(
         "        mixtures="
         f"{report.mixtures} fissionable={report.fissionable_mixtures} "
@@ -173,6 +182,8 @@ def _report_payload(report: InputReport) -> dict[str, object]:
         "ok": report.ok,
         "energy_groups": report.energy_groups,
         "legendre_order": report.legendre_order,
+        "energy_group_structure": report.energy_group_structure,
+        "energy_bounds_sha256": report.energy_bounds_sha256,
         "mixtures": report.mixtures,
         "stateful_mixtures": report.stateful_mixtures,
         "state_points": report.state_points,
