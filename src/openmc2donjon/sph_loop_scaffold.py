@@ -58,7 +58,7 @@ def create_sph_loop_scaffold(
     damping: float = 0.5,
     clip_min: float | None = 0.5,
     clip_max: float | None = 3.0,
-    flux_normalization: str = "none",
+    flux_normalization: str = "auto",
     sph_change_tolerance: float | None = None,
     flux_ratio_tolerance: float | None = None,
     min_iterations: int = 1,

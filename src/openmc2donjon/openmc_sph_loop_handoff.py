@@ -78,7 +78,7 @@ def prepare_openmc_sph_loop_handoff(
     damping: float = 0.5,
     clip_min: float | None = 0.5,
     clip_max: float | None = 3.0,
-    flux_normalization: str = "none",
+    flux_normalization: str | None = None,
     sph_change_tolerance: float | None = None,
     flux_ratio_tolerance: float | None = None,
     min_iterations: int = 1,
@@ -110,6 +110,14 @@ def prepare_openmc_sph_loop_handoff(
         raise ValueError("output_format must be 'macrolib' or 'multicompo'")
     if not no_load_statepoint and statepoint is None:
         raise ValueError("statepoint is required unless no_load_statepoint is true")
+    resolved_flux_normalization = (
+        flux_normalization
+        if flux_normalization is not None
+        else ("auto" if production or require_h_factor else "none")
+    )
+    effective_require_h_factor = require_h_factor or (
+        production and resolved_flux_normalization == "auto"
+    )
 
     run_root = Path(run_dir)
     _prepare_run_dir(run_root, force=force)
@@ -160,7 +168,7 @@ def prepare_openmc_sph_loop_handoff(
         check_summary_json=check_summary,
         production=production,
         require_volume=require_volume,
-        require_h_factor=require_h_factor,
+        require_h_factor=effective_require_h_factor,
         require_transport_dataset=require_transport_dataset,
         expected_energy_group_structure=expected_energy_group_structure,
         expected_energy_bounds=(
@@ -196,7 +204,7 @@ def prepare_openmc_sph_loop_handoff(
         damping=damping,
         clip_min=clip_min,
         clip_max=clip_max,
-        flux_normalization=flux_normalization,
+        flux_normalization=resolved_flux_normalization,
         sph_change_tolerance=sph_change_tolerance,
         flux_ratio_tolerance=flux_ratio_tolerance,
         min_iterations=min_iterations,

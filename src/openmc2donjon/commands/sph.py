@@ -264,7 +264,8 @@ def build_make_sph_update_table_parser() -> argparse.ArgumentParser:
         default="none",
         help=(
             "scale low-order flux before forming the SPH ratio: none, total, "
-            "or power using group-wise H-FACTOR/kappa_fission (default: none)"
+            "power, or auto using group-wise H-FACTOR/kappa_fission "
+            "(default: none)"
         ),
     )
     parser.add_argument(
@@ -418,7 +419,8 @@ def build_run_sph_iteration_parser() -> argparse.ArgumentParser:
         default="none",
         help=(
             "scale DONJON flux before forming the SPH ratio: none, total, "
-            "or power using group-wise H-FACTOR/kappa_fission (default: none)"
+            "power, or auto using group-wise H-FACTOR/kappa_fission "
+            "(default: none)"
         ),
     )
     parser.add_argument(
@@ -568,10 +570,10 @@ def build_make_donjon_sph_loop_config_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--flux-normalization",
         choices=FLUX_NORMALIZATIONS,
-        default="none",
+        default="auto",
         help=(
-            "scale DONJON flux before forming SPH ratios: none, total, or power "
-            "using group-wise H-FACTOR/kappa_fission (default: none)"
+            "scale DONJON flux before forming SPH ratios: auto, none, total, "
+            "or power using group-wise H-FACTOR/kappa_fission (default: auto)"
         ),
     )
     parser.add_argument(
@@ -696,10 +698,10 @@ def build_make_sph_loop_scaffold_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--flux-normalization",
         choices=FLUX_NORMALIZATIONS,
-        default="none",
+        default="auto",
         help=(
-            "scale DONJON flux before forming SPH ratios: none, total, or power "
-            "using group-wise H-FACTOR/kappa_fission (default: none)"
+            "scale DONJON flux before forming SPH ratios: auto, none, total, "
+            "or power using group-wise H-FACTOR/kappa_fission (default: auto)"
         ),
     )
     parser.add_argument("--sph-change-tolerance", type=float, default=None)

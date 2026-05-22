@@ -423,7 +423,7 @@ PY
     --damping 0.1 \
     --clip-min 0.2 \
     --clip-max 5.0 \
-    --flux-normalization power \
+    --flux-normalization auto \
     --acceptance-min-completed-iterations 2 \
     --acceptance-require-final-solve \
     --case-id-prefix openmc2donjon_full_core_minicase_real_sph \

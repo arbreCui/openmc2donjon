@@ -72,7 +72,7 @@ class OpenMCFullCoreMinicaseExampleTests(unittest.TestCase):
         self.assertIn("Real DONJON-backed SPH loop smoke", text)
         self.assertIn("make-donjon-sph-loop-config", text)
         self.assertIn("full-core-real-donjon-sph-loop", text)
-        self.assertIn("--flux-normalization power", text)
+        self.assertIn("--flux-normalization auto", text)
         self.assertIn("--acceptance-min-completed-iterations 2", text)
         self.assertIn("--acceptance-require-final-solve", text)
         self.assertIn("power-normalized real DONJON SPH loop should not clip", text)

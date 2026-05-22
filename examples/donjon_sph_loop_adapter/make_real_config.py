@@ -68,6 +68,7 @@ def main(argv: list[str] | None = None) -> int:
         damping=args.damping,
         clip_min=args.clip_min,
         clip_max=args.clip_max,
+        flux_normalization="none",
         sph_change_tolerance=args.sph_change_tolerance,
         flux_ratio_tolerance=args.flux_ratio_tolerance,
         min_iterations=args.min_iterations,

@@ -72,6 +72,7 @@ class SphLoopScaffoldTests(unittest.TestCase):
             self.assertEqual(config["input_h5"], str(mgxs))
             self.assertEqual(config["map_h5"], str(out / "flux_map.h5"))
             self.assertEqual(config["run_script"], str(out / "run_sph_loop.sh"))
+            self.assertEqual(config["flux_normalization"], "auto")
             self.assertEqual(
                 config["reference_flux"],
                 f"{out / 'reference_flux.h5'}::openmc_volume_flux",

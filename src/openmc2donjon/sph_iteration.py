@@ -17,7 +17,7 @@ from .sph_augment import load_sph_source
 
 SCHEMA = "openmc2donjon.sph-iteration-table.v1"
 PASS_DECISION = "openmc2donjon_sph_iteration_table_passed"
-FLUX_NORMALIZATIONS = ("none", "total", "power")
+FLUX_NORMALIZATIONS = ("none", "total", "power", "auto")
 H_FACTOR_DATASETS = (
     "h_factor",
     "H-FACTOR",
@@ -166,6 +166,7 @@ def create_sph_update_table(
         energy_groups=energy_groups,
         flux_normalization=flux_normalization,
     )
+    resolved_flux_normalization = str(normalization["flux_normalization"])
     raw_update = reference.values / normalized_low_order
     unclipped = previous.values * np.power(raw_update, float(damping))
     updated = unclipped.copy()
@@ -213,7 +214,7 @@ def create_sph_update_table(
         damping=float(damping),
         clip_min=None if clip_min is None else float(clip_min),
         clip_max=None if clip_max is None else float(clip_max),
-        flux_normalization=flux_normalization,
+        flux_normalization=resolved_flux_normalization,
         normalization_factor=normalization["factor"],
         reference_normalization_integral=normalization["reference_integral"],
         low_order_normalization_integral=normalization["low_order_integral"],
@@ -458,6 +459,7 @@ def _bin_diagnostic_payload(item: SphUpdateBinDiagnostic) -> dict[str, bool | fl
 def _normalize_flux_normalization(value: str) -> str:
     normalized = str(value).strip().lower().replace("_", "-")
     aliases = {
+        "automatic": "auto",
         "off": "none",
         "false": "none",
         "no": "none",
@@ -487,6 +489,7 @@ def _normalized_low_order_flux(
 ) -> tuple[np.ndarray, dict[str, float | str | None]]:
     if flux_normalization == "none":
         return low_order_flux, {
+            "flux_normalization": "none",
             "factor": 1.0,
             "reference_integral": None,
             "low_order_integral": None,
@@ -502,6 +505,22 @@ def _normalized_low_order_flux(
             energy_groups=energy_groups,
         )
         weight_source = "H-FACTOR/kappa_fission"
+    elif flux_normalization == "auto":
+        try:
+            weights = _read_h_factor_matrix(
+                input_h5,
+                mixture_names=mixture_names,
+                energy_groups=energy_groups,
+            )
+        except ValueError as exc:
+            raise ValueError(
+                "auto flux normalization requires group-wise "
+                "H-FACTOR/kappa_fission for power normalization; pass "
+                "--flux-normalization total or --flux-normalization none only "
+                "if you intentionally want to bypass power normalization"
+            ) from exc
+        flux_normalization = "power"
+        weight_source = "H-FACTOR/kappa_fission (auto)"
     else:
         raise AssertionError(f"unhandled flux normalization: {flux_normalization}")
 
@@ -520,6 +539,7 @@ def _normalized_low_order_flux(
     normalized = low_order_flux * factor
     _validate_flux(normalized, "normalized low-order flux")
     return normalized, {
+        "flux_normalization": flux_normalization,
         "factor": float(factor),
         "reference_integral": reference_integral,
         "low_order_integral": low_order_integral,

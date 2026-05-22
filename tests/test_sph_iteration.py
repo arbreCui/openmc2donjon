@@ -187,6 +187,81 @@ class SphIterationTests(unittest.TestCase):
                     flux_normalization="power",
                 )
 
+    def test_auto_normalization_resolves_to_power_when_h_factor_exists(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference_flux = root / "reference_flux.csv"
+            low_order_flux = root / "low_order_flux.csv"
+            table = root / "next_sph.csv"
+            summary = root / "summary.json"
+            write_mgxs(
+                mgxs,
+                h_factor={
+                    "fuel": np.asarray([10.0, 100.0]),
+                    "moderator": np.asarray([1.0, 1.0]),
+                },
+            )
+            reference_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,10.0\nfuel,2,20.0\n"
+                "moderator,1,30.0\nmoderator,2,40.0\n",
+                encoding="utf-8",
+            )
+            low_order_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,1.0\nfuel,2,1.0\n"
+                "moderator,1,1.0\nmoderator,2,1.0\n",
+                encoding="utf-8",
+            )
+
+            report = create_sph_update_table(
+                mgxs,
+                table,
+                reference_flux=reference_flux,
+                low_order_flux=low_order_flux,
+                flux_normalization="auto",
+                summary_json=summary,
+            )
+
+            self.assertEqual(report.flux_normalization, "power")
+            self.assertEqual(
+                report.normalization_weight_source,
+                "H-FACTOR/kappa_fission (auto)",
+            )
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+            self.assertEqual(payload["flux_normalization"], "power")
+            self.assertEqual(
+                payload["normalization_weight_source"],
+                "H-FACTOR/kappa_fission (auto)",
+            )
+
+    def test_auto_normalization_requires_h_factor(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference_flux = root / "reference_flux.csv"
+            low_order_flux = root / "low_order_flux.csv"
+            table = root / "next_sph.csv"
+            write_mgxs(mgxs)
+            reference_flux.write_text(
+                "mixture,group,flux\nfuel,1,1.0\nfuel,2,1.0\nmoderator,1,1.0\nmoderator,2,1.0\n",
+                encoding="utf-8",
+            )
+            low_order_flux.write_text(
+                "mixture,group,flux\nfuel,1,1.0\nfuel,2,1.0\nmoderator,1,1.0\nmoderator,2,1.0\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "auto flux normalization requires"):
+                create_sph_update_table(
+                    mgxs,
+                    table,
+                    reference_flux=reference_flux,
+                    low_order_flux=low_order_flux,
+                    flux_normalization="auto",
+                )
+
     def test_rejects_nonpositive_low_order_flux(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

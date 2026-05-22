@@ -94,6 +94,7 @@ class OpenMCSphLoopHandoffTests(unittest.TestCase):
                 loop_config["run_script"],
                 str(run_dir / "sph_loop_inputs/run_sph_loop.sh"),
             )
+            self.assertEqual(loop_config["flux_normalization"], "none")
             self.assertEqual(loop_config["acceptance"]["min_completed_iterations"], 2)
             manifest = json.loads((bundle_dir / "manifest.json").read_text(encoding="utf-8"))
             labels = {artifact["label"]: artifact for artifact in manifest["artifacts"]}
@@ -116,6 +117,7 @@ class OpenMCSphLoopHandoffTests(unittest.TestCase):
             )
             self.assertEqual(bundle_config["input_h5"], "mgxs_library.h5")
             self.assertEqual(bundle_config["output_dir"], "sph_loop")
+            self.assertEqual(bundle_config["flux_normalization"], "none")
             self.assertEqual(
                 bundle_config["reference_flux"],
                 "reference_flux.h5::openmc_volume_flux",
@@ -230,6 +232,34 @@ class OpenMCSphLoopHandoffTests(unittest.TestCase):
                 0.5,
             )
             self.assertEqual(loop_config["acceptance"]["max_final_clipped_fraction"], 1.0)
+
+    def test_require_h_factor_defaults_flux_normalization_to_auto(self) -> None:
+        root = _repo_root()
+        recipe = root / "examples/openmc_sph_loop_entrypoint/export_recipe.py"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            solve_template = tmp / "solve.x2m.in"
+            run_dir = tmp / "handoff"
+            solve_template.write_text("dummy {macrolib}\n", encoding="utf-8")
+
+            prepare_openmc_sph_loop_handoff(
+                recipe=recipe,
+                no_load_statepoint=True,
+                run_dir=run_dir,
+                solve_template=solve_template,
+                scalar_flux_ids={"FUEL_A": 2, "MOD_A": 4},
+                check=False,
+                require_h_factor=True,
+                python_bin="python3",
+            )
+
+            loop_config = json.loads(
+                (run_dir / "sph_loop_inputs/loop_config.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(loop_config["flux_normalization"], "auto")
 
 
 def _repo_root() -> Path:

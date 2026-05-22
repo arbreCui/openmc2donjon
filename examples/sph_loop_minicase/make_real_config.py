@@ -60,6 +60,7 @@ def main(argv: list[str] | None = None) -> int:
         damping=args.damping,
         clip_min=args.clip_min,
         clip_max=args.clip_max,
+        flux_normalization="none",
         case_id_prefix=args.case_id_prefix,
         stage_prefix=args.stage_prefix,
         case_dir=args.case_dir,

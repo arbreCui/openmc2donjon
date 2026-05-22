@@ -12,6 +12,16 @@ from openmc2donjon.donjon_sph_config import build_donjon_sph_loop_config
 
 
 class DonjonSphConfigTests(unittest.TestCase):
+    def test_builder_defaults_to_auto_flux_normalization(self) -> None:
+        config = build_donjon_sph_loop_config(
+            input_h5="mgxs_library.h5",
+            output_dir="sph_loop",
+            solve_template="solve_lflux_dump.x2m.in",
+            flux_map="flux_map.h5",
+        )
+
+        self.assertEqual(config["flux_normalization"], "auto")
+
     def test_builder_writes_packaged_runner_contract(self) -> None:
         config = build_donjon_sph_loop_config(
             input_h5="mgxs_library.h5",

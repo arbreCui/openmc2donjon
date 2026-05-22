@@ -125,10 +125,11 @@ def build_prepare_openmc_sph_loop_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--flux-normalization",
         choices=FLUX_NORMALIZATIONS,
-        default="none",
+        default=None,
         help=(
-            "scale DONJON flux before forming SPH ratios: none, total, or power "
-            "using group-wise H-FACTOR/kappa_fission (default: none)"
+            "scale DONJON flux before forming SPH ratios: auto, none, total, "
+            "or power using group-wise H-FACTOR/kappa_fission (default: auto "
+            "with --production/--require-h-factor, otherwise none)"
         ),
     )
     parser.add_argument("--sph-change-tolerance", type=float, default=None)
