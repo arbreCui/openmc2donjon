@@ -13,6 +13,8 @@ These are stable entry points used directly by the release check.
 - `run_recipe_export_smoke.sh` - portable recipe-to-HDF5-to-ASCII smoke.
 - `run_production_minicase_smoke.sh` - small real OpenMC production-export
   workflow smoke.
+- `run_openmc_full_core_production_smoke.sh` - full-core assembly-wise
+  OpenMC production handoff and SPH loop smoke.
 - `run_dragon_sph_handoff_smoke.sh` - DRAGON NSPH extraction and handoff smoke.
 - `run_donjon_sph_consume_smoke.sh` - DONJON consumes `NSPH` from generated
   macrolib output.

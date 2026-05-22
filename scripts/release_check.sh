@@ -258,7 +258,7 @@ echo "== OpenMC full-core assembly-wise minicase smoke =="
 RUN_DIR="$RUN_DIR/openmc_full_core_minicase" \
 PYTHON_BIN="$PYTHON_BIN" \
 RUN_REAL_DONJON="$RUN_DONJON" \
-  bash "$REPO_ROOT/examples/openmc_full_core_minicase/run_smoke.sh"
+  bash "$REPO_ROOT/scripts/run_openmc_full_core_production_smoke.sh"
 
 echo
 echo "== OpenMC hex minicase smoke =="

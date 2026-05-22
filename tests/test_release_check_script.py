@@ -22,7 +22,10 @@ class ReleaseCheckScriptTests(unittest.TestCase):
             "== OpenMC full-core assembly-wise minicase smoke ==",
             default_section,
         )
-        self.assertIn("examples/openmc_full_core_minicase/run_smoke.sh", default_section)
+        self.assertIn(
+            "scripts/run_openmc_full_core_production_smoke.sh",
+            default_section,
+        )
         self.assertIn('RUN_REAL_DONJON="$RUN_DONJON"', default_section)
         self.assertIn("== External face-flux adapter smoke ==", default_section)
         self.assertIn("examples/external_face_flux_adapter/run_smoke.sh", default_section)
@@ -116,6 +119,20 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertIn("extract-donjon-volume-flux", text)
         self.assertIn("mesh_donjon_volume_flux", text)
         self.assertIn("openmc2donjon_c5g7_fixed_openmc_sph_loop_passed", text)
+
+    def test_openmc_full_core_release_gate_calls_production_smoke(self) -> None:
+        text = (
+            _repo_root() / "scripts/run_openmc_full_core_production_smoke.sh"
+        ).read_text(encoding="utf-8")
+        example = (
+            _repo_root() / "examples/openmc_full_core_minicase/run_smoke.sh"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("examples/openmc_full_core_minicase/run_smoke.sh", text)
+        self.assertIn('RUN_REAL_DONJON="${RUN_REAL_DONJON:-0}"', text)
+        self.assertIn("--require-openmc-volume-flux", example)
+        self.assertIn("require_production_audit", example)
+        self.assertIn("production_audit", example)
 
 
 def _repo_root() -> Path:
