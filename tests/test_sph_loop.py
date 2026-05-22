@@ -127,6 +127,8 @@ class SphLoopTests(unittest.TestCase):
             self.assertEqual(preflight["mixture_count"], 2)
             self.assertEqual(preflight["energy_groups"], 2)
             self.assertEqual(preflight["scalar_flux_ids"], [2, 4])
+            self.assertEqual(preflight["reference_flux_shape"], [2, 2])
+            self.assertEqual(preflight["reference_flux_group_order"], "mgxs_donjon")
             self.assertEqual(preflight["reference_flux_mixture_names"], ["fuel", "moderator"])
             self.assertEqual(preflight["errors"], [])
             self.assertTrue(payload["acceptance"]["passed"])
@@ -696,7 +698,163 @@ class SphLoopTests(unittest.TestCase):
 
             self.assertEqual(raised.exception.code, 1)
             self.assertIn(
-                "reference flux mixture names do not match MGXS mixtures",
+                "reference flux mixture names do not match MGXS declared order",
+                stderr.getvalue(),
+            )
+            self.assertFalse((root / "loop_run/iter00_solve").exists())
+
+    def test_reference_flux_preflight_rejects_reordered_mixture_names(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference = root / "reference_flux.h5"
+            solver = root / "fake_donjon_solver.py"
+            config = root / "loop.json"
+            _write_mgxs(mgxs)
+            _write_reference_flux(reference, mixture_names=("moderator", "fuel"))
+            _write_fake_solver(solver)
+            config.write_text(
+                json.dumps(
+                    {
+                        "schema": "openmc2donjon.sph-loop-config.v1",
+                        "input_h5": "mgxs.h5",
+                        "output_dir": "loop_run",
+                        "reference_flux": "reference_flux.h5::openmc_volume_flux",
+                        "iterations": 1,
+                        "format": "macrolib",
+                        "scalar_flux_map": {"fuel": 2, "moderator": 4},
+                        "solver": {
+                            "command": [
+                                sys.executable,
+                                str(solver),
+                                "--macrolib",
+                                "{ascii_input}",
+                                "--result",
+                                "{result}",
+                                "--iteration",
+                                "{iteration}",
+                            ],
+                            "result": "donjon_flux.result",
+                        },
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as raised:
+                    cli_main(["run-sph-loop", "--config", str(config)])
+
+            self.assertEqual(raised.exception.code, 1)
+            self.assertIn(
+                "reference flux mixture names do not match MGXS declared order",
+                stderr.getvalue(),
+            )
+            self.assertFalse((root / "loop_run/iter00_solve").exists())
+
+    def test_reference_flux_preflight_rejects_missing_group_order(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference = root / "reference_flux.h5"
+            solver = root / "fake_donjon_solver.py"
+            config = root / "loop.json"
+            _write_mgxs(mgxs)
+            _write_reference_flux(reference, group_order=None)
+            _write_fake_solver(solver)
+            config.write_text(
+                json.dumps(
+                    {
+                        "schema": "openmc2donjon.sph-loop-config.v1",
+                        "input_h5": "mgxs.h5",
+                        "output_dir": "loop_run",
+                        "reference_flux": "reference_flux.h5::openmc_volume_flux",
+                        "iterations": 1,
+                        "format": "macrolib",
+                        "scalar_flux_map": {"fuel": 2, "moderator": 4},
+                        "solver": {
+                            "command": [
+                                sys.executable,
+                                str(solver),
+                                "--macrolib",
+                                "{ascii_input}",
+                                "--result",
+                                "{result}",
+                                "--iteration",
+                                "{iteration}",
+                            ],
+                            "result": "donjon_flux.result",
+                        },
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as raised:
+                    cli_main(["run-sph-loop", "--config", str(config)])
+
+            self.assertEqual(raised.exception.code, 1)
+            self.assertIn("reference flux HDF5 must declare group_order", stderr.getvalue())
+            self.assertFalse((root / "loop_run/iter00_solve").exists())
+
+    def test_reference_flux_preflight_rejects_shape_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference = root / "reference_flux.h5"
+            solver = root / "fake_donjon_solver.py"
+            config = root / "loop.json"
+            _write_mgxs(mgxs)
+            _write_reference_flux(
+                reference,
+                values=np.asarray([[[80.0], [800.0]], [[80.0], [800.0]]]),
+            )
+            _write_fake_solver(solver)
+            config.write_text(
+                json.dumps(
+                    {
+                        "schema": "openmc2donjon.sph-loop-config.v1",
+                        "input_h5": "mgxs.h5",
+                        "output_dir": "loop_run",
+                        "reference_flux": "reference_flux.h5::openmc_volume_flux",
+                        "iterations": 1,
+                        "format": "macrolib",
+                        "scalar_flux_map": {"fuel": 2, "moderator": 4},
+                        "solver": {
+                            "command": [
+                                sys.executable,
+                                str(solver),
+                                "--macrolib",
+                                "{ascii_input}",
+                                "--result",
+                                "{result}",
+                                "--iteration",
+                                "{iteration}",
+                            ],
+                            "result": "donjon_flux.result",
+                        },
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as raised:
+                    cli_main(["run-sph-loop", "--config", str(config)])
+
+            self.assertEqual(raised.exception.code, 1)
+            self.assertIn(
+                "reference flux shape does not match MGXS mixture/group order",
                 stderr.getvalue(),
             )
             self.assertFalse((root / "loop_run/iter00_solve").exists())
@@ -840,21 +998,30 @@ def _write_reference_flux(
     path: Path,
     *,
     mixture_names: tuple[str, ...] = ("fuel", "moderator"),
+    group_order: str | None = "mgxs_donjon",
+    values: np.ndarray | None = None,
 ) -> None:
+    with h5py.File(path, "w") as h5:
+        dataset = h5.create_dataset(
+            "openmc_volume_flux",
+            data=(
+                np.asarray([[80.0, 800.0], [80.0, 800.0]])
+                if values is None
+                else np.asarray(values)
+            ),
+        )
+        dataset.attrs["mixture_names"] = np.asarray(mixture_names, dtype="S")
+        if group_order is not None:
+            dataset.attrs["group_order"] = group_order
+
+
+def _write_reference_flux_without_mixture_names(path: Path) -> None:
     with h5py.File(path, "w") as h5:
         dataset = h5.create_dataset(
             "openmc_volume_flux",
             data=np.asarray([[80.0, 800.0], [80.0, 800.0]]),
         )
-        dataset.attrs["mixture_names"] = np.asarray(mixture_names, dtype="S")
-
-
-def _write_reference_flux_without_mixture_names(path: Path) -> None:
-    with h5py.File(path, "w") as h5:
-        h5.create_dataset(
-            "openmc_volume_flux",
-            data=np.asarray([[80.0, 800.0], [80.0, 800.0]]),
-        )
+        dataset.attrs["group_order"] = "mgxs_donjon"
 
 
 def _write_fake_solver(path: Path) -> None:

@@ -63,6 +63,10 @@ class SphLoopScaffoldTests(unittest.TestCase):
                     h5["mixture_names"][:],
                     np.asarray(["FUEL", "MOD"], dtype="S"),
                 )
+                self.assertEqual(
+                    h5["openmc_volume_flux"].attrs["group_order"],
+                    "mgxs_donjon",
+                )
             with h5py.File(out / "flux_map.h5", "r") as h5:
                 self.assertEqual(h5.attrs["schema"], "openmc2donjon.low-order-flux-map.v1")
                 np.testing.assert_array_equal(h5["scalar_flux_ids"][:], [2, 4])

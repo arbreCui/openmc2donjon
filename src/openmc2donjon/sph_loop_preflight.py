@@ -20,6 +20,7 @@ from .hdf5_names import read_mixture_names
 SCHEMA = "openmc2donjon.sph-loop-flux-map-preflight.v1"
 PASS_DECISION = "openmc2donjon_sph_loop_flux_map_preflight_passed"
 FAIL_DECISION = "openmc2donjon_sph_loop_flux_map_preflight_failed"
+REFERENCE_FLUX_GROUP_ORDER = "mgxs_donjon"
 
 
 @dataclass(frozen=True)
@@ -44,6 +45,7 @@ class SphLoopFluxMapPreflightReport:
     reference_flux_dataset: str | None
     reference_flux_shape: tuple[int, ...] | None
     reference_flux_group_count: int | None
+    reference_flux_group_order: str | None
     reference_flux_mixture_names: tuple[str, ...]
     warnings: tuple[str, ...]
     errors: tuple[str, ...]
@@ -139,6 +141,7 @@ def build_flux_map_preflight_report(
         reference_flux_dataset=reference_report["dataset"],
         reference_flux_shape=reference_report["shape"],
         reference_flux_group_count=reference_report["group_count"],
+        reference_flux_group_order=reference_report["group_order"],
         reference_flux_mixture_names=reference_report["mixture_names"],
         warnings=tuple(warnings),
         errors=tuple(errors),
@@ -189,6 +192,7 @@ def payload(report: SphLoopFluxMapPreflightReport) -> dict[str, object]:
             else list(report.reference_flux_shape)
         ),
         "reference_flux_group_count": report.reference_flux_group_count,
+        "reference_flux_group_order": report.reference_flux_group_order,
         "reference_flux_mixture_names": list(report.reference_flux_mixture_names),
         "warnings": list(report.warnings),
         "errors": list(report.errors),
@@ -278,6 +282,7 @@ def _inspect_reference_flux(
     errors: list[str] = []
     shape = None
     group_count = None
+    group_order = None
     declared_mixture_names: tuple[str, ...] = ()
     selected_dataset = dataset
     if not path.exists():
@@ -286,6 +291,7 @@ def _inspect_reference_flux(
             "dataset": selected_dataset,
             "shape": shape,
             "group_count": group_count,
+            "group_order": group_order,
             "mixture_names": declared_mixture_names,
             "warnings": (),
             "errors": (f"reference flux source does not exist: {path}",),
@@ -297,6 +303,7 @@ def _inspect_reference_flux(
             "dataset": selected_dataset,
             "shape": shape,
             "group_count": group_count,
+            "group_order": group_order,
             "mixture_names": declared_mixture_names,
             "warnings": tuple(warnings),
             "errors": (),
@@ -317,6 +324,14 @@ def _inspect_reference_flux(
             else:
                 obj = h5[selected_dataset]
                 shape = tuple(int(value) for value in obj.shape)
+                group_order = _hdf5_text_attr(obj, h5, "group_order")
+                if group_order is None:
+                    errors.append("reference flux HDF5 must declare group_order")
+                elif group_order != REFERENCE_FLUX_GROUP_ORDER:
+                    errors.append(
+                        "reference flux group_order must be "
+                        f"{REFERENCE_FLUX_GROUP_ORDER!r}, got {group_order!r}"
+                    )
                 declared = _names_from_hdf5(
                     obj,
                     h5,
@@ -329,15 +344,22 @@ def _inspect_reference_flux(
                     )
                 else:
                     declared_mixture_names = tuple(_flatten_names(declared))
-                    if set(declared_mixture_names) != set(mixture_names):
+                    if declared_mixture_names != mixture_names:
                         errors.append(
-                            "reference flux mixture names do not match MGXS mixtures: "
+                            "reference flux mixture names do not match MGXS "
+                            "declared order: "
                             f"{declared_mixture_names!r} != {mixture_names!r}"
                         )
                 if not shape:
                     errors.append(f"{path}: reference flux dataset is scalar")
                 else:
                     group_count = int(shape[-1])
+                    expected_shape = (len(mixture_names), energy_groups)
+                    if shape != expected_shape:
+                        errors.append(
+                            "reference flux shape does not match MGXS mixture/group "
+                            f"order: {shape} != {expected_shape}"
+                        )
                     if group_count != energy_groups:
                         errors.append(
                             "reference flux group count does not match MGXS: "
@@ -350,6 +372,7 @@ def _inspect_reference_flux(
         "dataset": selected_dataset,
         "shape": shape,
         "group_count": group_count,
+        "group_order": group_order,
         "mixture_names": declared_mixture_names,
         "warnings": tuple(warnings),
         "errors": tuple(errors),
@@ -395,6 +418,16 @@ def _names_from_hdf5(obj: Any, root: Any, candidates: tuple[str, ...]) -> Any:
     for candidate in candidates:
         if candidate in root and not hasattr(root[candidate], "keys"):
             return root[candidate][:]
+    return None
+
+
+def _hdf5_text_attr(obj: Any, root: Any, name: str) -> str | None:
+    for source in (obj.attrs, root.attrs):
+        if name in source:
+            value = source[name]
+            if isinstance(value, bytes):
+                return value.decode("utf-8")
+            return str(value)
     return None
 
 
