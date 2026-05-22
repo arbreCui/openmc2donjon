@@ -10,6 +10,15 @@ import h5py
 import numpy as np
 
 
+EXPECTED_REFERENCE_FLUX = np.asarray(
+    [
+        [617.96762, 156.844407],
+        [47.4604219, 4.87293612],
+    ],
+    dtype=float,
+)
+
+
 class OpenmcSphLoopEntrypointExampleTests(unittest.TestCase):
     def test_recipe_postprocess_writes_reference_flux(self) -> None:
         root = _repo_root()
@@ -37,7 +46,7 @@ class OpenmcSphLoopEntrypointExampleTests(unittest.TestCase):
             with h5py.File(output, "r") as h5:
                 np.testing.assert_allclose(
                     h5["openmc_volume_flux"][:],
-                    [[80.0, 800.0], [120.0, 600.0]],
+                    EXPECTED_REFERENCE_FLUX,
                 )
                 np.testing.assert_array_equal(
                     h5["openmc_volume_flux"].attrs["mixture_names"],
@@ -60,6 +69,9 @@ class OpenmcSphLoopEntrypointExampleTests(unittest.TestCase):
         self.assertIn("FUEL_A=2,MOD_A=4", text)
         self.assertIn("loop_config.json", text)
         self.assertIn('"preset": "production"', text)
+        self.assertIn("RUN_REAL_DONJON", text)
+        self.assertIn("real_sph_loop_summary.json", text)
+        self.assertIn("OpenMC SPH loop entrypoint real DONJON loop OK", text)
         self.assertIn("openmc2donjon_openmc_sph_loop_handoff_passed", text)
         self.assertIn("OpenMC SPH loop entrypoint smoke: PASS", text)
 

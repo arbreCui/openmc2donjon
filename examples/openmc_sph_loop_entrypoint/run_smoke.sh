@@ -20,6 +20,7 @@ SCAFFOLD_SUMMARY="$SCAFFOLD_DIR/scaffold_summary.json"
 RUN_SCRIPT="$SCAFFOLD_DIR/run_sph_loop.sh"
 BUNDLE_DIR="$HANDOFF_RUN_DIR/bundle"
 SOLVE_TEMPLATE="$REPO_ROOT/examples/sph_loop_minicase/templates/solve_lflux_dump.x2m.in"
+EXPECTED_REFERENCE_FLUX='[[617.96762, 156.844407], [47.4604219, 4.87293612]]'
 
 echo "== openmc2donjon OpenMC SPH loop entrypoint smoke =="
 mkdir -p "$CASE_DIR"
@@ -44,7 +45,7 @@ printf "fake statepoint for openmc sph loop entrypoint\n" > "$STATEPOINT"
   --bundle-dir "$BUNDLE_DIR" \
   --force
 
-"$PYTHON_BIN" - "$MGXS" "$SCAFFOLD_DIR" "$SCAFFOLD_SUMMARY" "$HANDOFF_SUMMARY" "$RUN_SCRIPT" "$BUNDLE_DIR" <<'PY'
+"$PYTHON_BIN" - "$MGXS" "$SCAFFOLD_DIR" "$SCAFFOLD_SUMMARY" "$HANDOFF_SUMMARY" "$RUN_SCRIPT" "$BUNDLE_DIR" "$EXPECTED_REFERENCE_FLUX" <<'PY'
 from __future__ import annotations
 
 import json
@@ -64,15 +65,16 @@ scaffold_summary = json.loads(Path(sys.argv[3]).read_text(encoding="utf-8"))
 handoff_summary = json.loads(Path(sys.argv[4]).read_text(encoding="utf-8"))
 run_script = Path(sys.argv[5])
 bundle_dir = Path(sys.argv[6])
+expected_reference_flux = np.asarray(json.loads(sys.argv[7]), dtype=float)
 
 with h5py.File(mgxs, "r") as h5:
     assert "openmc_volume_flux" in h5
-    np.testing.assert_allclose(h5["openmc_volume_flux"][:], [[80.0, 800.0], [120.0, 600.0]])
+    np.testing.assert_allclose(h5["openmc_volume_flux"][:], expected_reference_flux)
     assert h5["openmc_volume_flux"].attrs["group_order"] == "mgxs_donjon"
     np.testing.assert_allclose(h5["mixtures/FUEL_A/kappa_fission"][:], [3.2e-12, 3.1e-12])
 
 with h5py.File(scaffold / "reference_flux.h5", "r") as h5:
-    np.testing.assert_allclose(h5["openmc_volume_flux"][:], [[80.0, 800.0], [120.0, 600.0]])
+    np.testing.assert_allclose(h5["openmc_volume_flux"][:], expected_reference_flux)
     assert h5["openmc_volume_flux"].attrs["group_order"] == "mgxs_donjon"
 
 with h5py.File(scaffold / "flux_map.h5", "r") as h5:
@@ -130,5 +132,47 @@ assert plan.loop_dir == relocated / "sph_loop"
 assert plan.run_script == relocated / "run_sph_loop.sh"
 print(f"OpenMC SPH loop entrypoint OK: {scaffold}")
 PY
+
+if [[ "${RUN_REAL_DONJON:-0}" == "1" ]]; then
+  REAL_SUMMARY="$HANDOFF_RUN_DIR/real_sph_loop_summary.json"
+  REAL_BUNDLE_DIR="$HANDOFF_RUN_DIR/real_sph_loop_bundle"
+  echo "== OpenMC SPH loop entrypoint real DONJON loop =="
+  "$RUN_SCRIPT" \
+    --summary-json "$REAL_SUMMARY" \
+    --bundle-dir "$REAL_BUNDLE_DIR" \
+    --force
+  "$PYTHON_BIN" -m openmc2donjon.cli validate-bundle "$REAL_BUNDLE_DIR/manifest.json"
+
+  "$PYTHON_BIN" - "$REAL_SUMMARY" <<'PY'
+from __future__ import annotations
+
+import json
+from pathlib import Path
+import sys
+
+import h5py
+import numpy as np
+
+
+summary = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+assert summary["decision"] == "openmc2donjon_sph_loop_passed"
+assert summary["acceptance_passed"] is True
+assert summary["completed_iterations"] == 2
+assert summary["final_solve"]["iteration"] == 2
+checks = {item["name"]: item for item in summary["acceptance"]["checks"]}
+assert checks["require_artifact_metadata_alignment"]["passed"] is True
+assert checks["max_final_clipped_count"]["passed"] is True
+metadata = summary["artifact_metadata"]
+assert metadata["reference_flux"]["group_order"] == "mgxs_donjon"
+for workflow in metadata["workflows"]:
+    assert workflow["donjon_volume_flux"]["group_order"] == "mgxs_donjon"
+    assert workflow["sph_sidecar"]["group_order"] == "mgxs_donjon"
+with h5py.File(summary["final_sph_sidecar"], "r") as h5:
+    sph = h5["sph"][:]
+    assert h5.attrs["sph_kind"] == "openmc-sph-loop-entrypoint-iter2"
+np.testing.assert_allclose(sph, np.ones_like(sph), rtol=1.0e-3, atol=1.0e-3)
+print(f"OpenMC SPH loop entrypoint real DONJON loop OK: {sys.argv[1]}")
+PY
+fi
 
 echo "openmc2donjon OpenMC SPH loop entrypoint smoke: PASS"

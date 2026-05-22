@@ -16,6 +16,15 @@ from openmc2donjon.openmc_sph_loop_handoff import prepare_openmc_sph_loop_handof
 from openmc2donjon.sph_loop_plan import build_sph_loop_plan
 
 
+EXPECTED_ENTRYPOINT_REFERENCE_FLUX = np.asarray(
+    [
+        [617.96762, 156.844407],
+        [47.4604219, 4.87293612],
+    ],
+    dtype=float,
+)
+
+
 class OpenMCSphLoopHandoffTests(unittest.TestCase):
     def test_prepare_handoff_exports_converts_and_scaffolds(self) -> None:
         root = _repo_root()
@@ -59,7 +68,7 @@ class OpenMCSphLoopHandoffTests(unittest.TestCase):
             with h5py.File(report.mgxs_h5, "r") as h5:
                 np.testing.assert_allclose(
                     h5["openmc_volume_flux"][:],
-                    [[80.0, 800.0], [120.0, 600.0]],
+                    EXPECTED_ENTRYPOINT_REFERENCE_FLUX,
                 )
             summary = json.loads(
                 (run_dir / "openmc_sph_loop_handoff_summary.json").read_text(

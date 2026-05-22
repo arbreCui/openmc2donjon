@@ -187,6 +187,54 @@ class SphIterationTests(unittest.TestCase):
                     flux_normalization="power",
                 )
 
+    def test_power_normalization_allows_missing_nonfissionable_h_factor(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference_flux = root / "reference_flux.csv"
+            low_order_flux = root / "low_order_flux.csv"
+            table = root / "next_sph.csv"
+            write_mgxs(
+                mgxs,
+                h_factor={
+                    "fuel": np.asarray([10.0, 100.0]),
+                },
+            )
+            reference_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,10.0\nfuel,2,20.0\n"
+                "moderator,1,30.0\nmoderator,2,40.0\n",
+                encoding="utf-8",
+            )
+            low_order_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,1.0\nfuel,2,1.0\n"
+                "moderator,1,1.0\nmoderator,2,1.0\n",
+                encoding="utf-8",
+            )
+
+            report = create_sph_update_table(
+                mgxs,
+                table,
+                reference_flux=reference_flux,
+                low_order_flux=low_order_flux,
+                flux_normalization="power",
+            )
+
+            factor = (10.0 * 10.0 + 20.0 * 100.0) / (10.0 + 100.0)
+            expected = np.asarray(
+                [
+                    [10.0 / factor, 20.0 / factor],
+                    [30.0 / factor, 40.0 / factor],
+                ]
+            )
+            self.assertAlmostEqual(report.normalization_factor, factor)
+            self.assertAlmostEqual(report.reference_normalization_integral, 2100.0)
+            self.assertAlmostEqual(report.low_order_normalization_integral, 110.0)
+            rows = table.read_text(encoding="utf-8").strip().splitlines()[1:]
+            actual = np.asarray([float(row.split(",")[2]) for row in rows]).reshape(2, 2)
+            np.testing.assert_allclose(actual, expected, rtol=1.0e-11)
+
     def test_auto_normalization_resolves_to_power_when_h_factor_exists(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

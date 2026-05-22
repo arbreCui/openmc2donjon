@@ -557,7 +557,7 @@ def _read_h_factor_matrix(
 ) -> np.ndarray:
     import h5py
 
-    values = np.empty((len(mixture_names), energy_groups), dtype=float)
+    values = np.zeros((len(mixture_names), energy_groups), dtype=float)
     missing: list[str] = []
     with h5py.File(path, "r") as h5:
         for mixture_index, mixture in enumerate(mixture_names):
@@ -566,7 +566,8 @@ def _read_h_factor_matrix(
                 raise ValueError(f"input HDF5 is missing mixture {mixture!r}")
             dataset_name = next((name for name in H_FACTOR_DATASETS if name in group), None)
             if dataset_name is None:
-                missing.append(mixture)
+                if bool(group.attrs.get("fissionable", False)):
+                    missing.append(mixture)
                 continue
             data = np.asarray(group[dataset_name][:], dtype=float).reshape(-1)
             if data.size != energy_groups:
@@ -578,7 +579,7 @@ def _read_h_factor_matrix(
     if missing:
         raise ValueError(
             "power flux normalization requires group-wise H-FACTOR/kappa_fission "
-            "for every mixture; missing: "
+            "for every fissionable mixture; missing: "
             + ", ".join(missing)
         )
     return values

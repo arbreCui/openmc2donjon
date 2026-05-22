@@ -9,7 +9,14 @@ import h5py
 import numpy as np
 
 
-REFERENCE_FLUX = np.array([[80.0, 800.0], [120.0, 600.0]], dtype=float)
+# Scaled to the packaged tiny DONJON solve so the optional real smoke is self-consistent.
+REFERENCE_FLUX = np.array(
+    [
+        [617.96762, 156.844407],
+        [47.4604219, 4.87293612],
+    ],
+    dtype=float,
+)
 MGXS_TYPES = [
     "total",
     "absorption",
