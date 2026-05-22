@@ -9,6 +9,7 @@ from typing import Iterable, Sequence
 import numpy as np
 
 from . import lcm_ascii as lcm
+from .constants import DONJON_ADF_NAME_WIDTH, DONJON_SIGNATURE_WIDTH
 from .scatter import dense_moments_to_triplets
 
 
@@ -135,7 +136,7 @@ def build_macrolib_blocks(
         raise ValueError("all mixtures must use the same number of Legendre moments")
 
     blocks: list[lcm.LcmBlock] = [
-        lcm.string_block(1, "SIGNATURE", "L_MACROLIB", width=12),
+        lcm.string_block(1, "SIGNATURE", "L_MACROLIB", width=DONJON_SIGNATURE_WIDTH),
         lcm.block(1, "STATE-VECTOR", 1, _macrolib_state_vector(mixtures)),
         lcm.block(1, "ENERGY", 2, np.asarray(energy_bounds, dtype=float)[::-1]),
         lcm.block(1, "VOLUME", 2, [mix.volume for mix in mixtures]),
@@ -372,7 +373,10 @@ def _macrolib_adf_blocks(mixtures: list["MixtureXS"]) -> list[lcm.LcmBlock]:
         return []
 
     names = tuple(mixtures[0].adf)
-    packed_names, name_count = lcm.pack_fixed_strings(names, width=8)
+    packed_names, name_count = lcm.pack_fixed_strings(
+        names,
+        width=DONJON_ADF_NAME_WIDTH,
+    )
     blocks: list[lcm.LcmBlock] = [
         lcm.block(1, "ADF", 0, count=-1),
         lcm.block(2, "NTYPE", 1, [len(names)]),
@@ -569,7 +573,13 @@ def _adf_payload(
     hadf_block = _find_named(adf_blocks, "HADF", level=base_level + 1)
     if not isinstance(hadf_block.data, str):
         raise ValueError("L_MACROLIB ADF/HADF is missing string data")
-    names = [name.strip() for name in lcm.unpack_fixed_strings(hadf_block.data, 8)]
+    names = [
+        name.strip()
+        for name in lcm.unpack_fixed_strings(
+            hadf_block.data,
+            DONJON_ADF_NAME_WIDTH,
+        )
+    ]
     names = names[:ntype]
     if len(names) != ntype or any(not name for name in names):
         raise ValueError("L_MACROLIB ADF/HADF has invalid face names")

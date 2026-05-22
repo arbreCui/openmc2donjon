@@ -10,6 +10,7 @@ from typing import Any
 import h5py
 import numpy as np
 
+from .constants import DONJON_ADF_NAME_WIDTH
 from .mgxs_input_report import (
     FAIL_DECISION,
     PASS_DECISION,
@@ -636,8 +637,11 @@ def validate_adf_values(
 def validate_adf_name(name: str, report: InputReport, mix_name: str) -> None:
     if not name:
         report.fail(f"mixture {mix_name}: ADF name must not be empty")
-    if len(name) > 8:
-        report.fail(f"mixture {mix_name}: ADF name {name!r} is longer than 8 characters")
+    if len(name) > DONJON_ADF_NAME_WIDTH:
+        report.fail(
+            f"mixture {mix_name}: ADF name {name!r} is longer than "
+            f"{DONJON_ADF_NAME_WIDTH} characters"
+        )
 
 
 def validate_adf_layout(

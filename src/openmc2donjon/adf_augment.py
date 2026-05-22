@@ -11,6 +11,7 @@ from typing import Any
 import numpy as np
 
 from . import __version__
+from .constants import DONJON_ADF_NAME_WIDTH
 
 
 SCHEMA = "openmc2donjon.adf-augment.v1"
@@ -445,8 +446,10 @@ def _vector(values: Any, energy_groups: int, label: str) -> np.ndarray:
 def _validate_face_name(name: str) -> str:
     if not name:
         raise ValueError("ADF face name must not be empty")
-    if len(name) > 8:
-        raise ValueError(f"ADF face name {name!r} is longer than 8 characters")
+    if len(name) > DONJON_ADF_NAME_WIDTH:
+        raise ValueError(
+            f"ADF face name {name!r} is longer than {DONJON_ADF_NAME_WIDTH} characters"
+        )
     return name
 
 

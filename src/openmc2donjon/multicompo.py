@@ -9,6 +9,16 @@ from typing import Iterable, Sequence
 import numpy as np
 
 from . import lcm_ascii as lcm
+from .constants import (
+    DONJON_ADF_NAME_WIDTH,
+    DONJON_COMMENT_WIDTH,
+    DONJON_MACRO_NAME_WIDTH,
+    DONJON_OBJECT_NAME_WIDTH,
+    DONJON_PARAMETER_FORMAT_WIDTH,
+    DONJON_PARAMETER_KEY_WIDTH,
+    DONJON_PARAMETER_TYPE_WIDTH,
+    DONJON_SIGNATURE_WIDTH,
+)
 from .scatter import dense_moments_to_triplets
 
 
@@ -308,9 +318,14 @@ def build_multicompo_history_blocks(
     burnup_axis = None if burnup_values is None else np.asarray(burnup_values, dtype=float)
     npar = 1 if burnup_axis is not None else 0
     blocks: list[lcm.LcmBlock] = [
-        lcm.string_block(1, "SIGNATURE", "L_MULTICOMPO", width=12),
-        lcm.block(1, root_name[:72], 0, count=-1),
-        lcm.string_block(2, "COMMENT", comment, width=80),
+        lcm.string_block(
+            1,
+            "SIGNATURE",
+            "L_MULTICOMPO",
+            width=DONJON_SIGNATURE_WIDTH,
+        ),
+        lcm.block(1, root_name[:DONJON_OBJECT_NAME_WIDTH], 0, count=-1),
+        lcm.string_block(2, "COMMENT", comment, width=DONJON_COMMENT_WIDTH),
         lcm.block(2, "GLOBAL", 0, count=-1),
         *_global_parameter_blocks(3, burnup_axis),
         lcm.control(-3),
@@ -355,9 +370,18 @@ def _global_parameter_blocks(
         ]
 
     values = np.asarray(burnup_values, dtype=float).reshape(-1)
-    parkey, parkey_count = lcm.pack_fixed_strings(["BURN"], width=12)
-    partyp, partyp_count = lcm.pack_fixed_strings(["VALU"], width=4)
-    parfmt, parfmt_count = lcm.pack_fixed_strings(["REAL"], width=8)
+    parkey, parkey_count = lcm.pack_fixed_strings(
+        ["BURN"],
+        width=DONJON_PARAMETER_KEY_WIDTH,
+    )
+    partyp, partyp_count = lcm.pack_fixed_strings(
+        ["VALU"],
+        width=DONJON_PARAMETER_TYPE_WIDTH,
+    )
+    parfmt, parfmt_count = lcm.pack_fixed_strings(
+        ["REAL"],
+        width=DONJON_PARAMETER_FORMAT_WIDTH,
+    )
     return [
         lcm.block(level, "PARKEY", 3, parkey, count=parkey_count),
         lcm.block(level, "PARTYP", 3, partyp, count=partyp_count),
@@ -492,7 +516,12 @@ def _isotope_blocks(level: int, mix: MixtureXS) -> list[lcm.LcmBlock]:
     blocks.extend(
         [
             lcm.block(level, "SCAT-SAVED", 1, [1] * mix.nmoments),
-            lcm.string_block(level, "ALIAS", "*MAC*RES", width=12),
+            lcm.string_block(
+                level,
+                "ALIAS",
+                "*MAC*RES",
+                width=DONJON_MACRO_NAME_WIDTH,
+            ),
         ]
     )
     return blocks
@@ -503,7 +532,10 @@ def _macrolib_blocks(level: int, mix: MixtureXS) -> list[lcm.LcmBlock]:
         return []
 
     names = tuple(mix.adf)
-    packed_names, name_count = lcm.pack_fixed_strings(names, width=8)
+    packed_names, name_count = lcm.pack_fixed_strings(
+        names,
+        width=DONJON_ADF_NAME_WIDTH,
+    )
     blocks: list[lcm.LcmBlock] = [
         lcm.block(level, "MACROLIB", 0, count=-1),
         lcm.block(level + 1, "ADF", 0, count=-1),
@@ -519,7 +551,12 @@ def _macrolib_blocks(level: int, mix: MixtureXS) -> list[lcm.LcmBlock]:
 def _library_blocks(level: int, mix: MixtureXS, energy_desc: np.ndarray) -> list[lcm.LcmBlock]:
     deltau = np.log(energy_desc[:-1] / energy_desc[1:])
     return [
-        lcm.string_block(level, "SIGNATURE", "L_LIBRARY", width=12),
+        lcm.string_block(
+            level,
+            "SIGNATURE",
+            "L_LIBRARY",
+            width=DONJON_SIGNATURE_WIDTH,
+        ),
         lcm.block(
             level,
             "STATE-VECTOR",
@@ -527,8 +564,18 @@ def _library_blocks(level: int, mix: MixtureXS, energy_desc: np.ndarray) -> list
             _library_state_vector(mix.ngroups, mix.nmoments, _mixture_adf_type(mix)),
         ),
         lcm.block(level, "ISOTOPESMIX", 1, [1]),
-        lcm.string_block(level, "ISOTOPESUSED", "*MAC*RES", width=12),
-        lcm.string_block(level, "ISOTOPERNAME", "*MAC*RES", width=12),
+        lcm.string_block(
+            level,
+            "ISOTOPESUSED",
+            "*MAC*RES",
+            width=DONJON_MACRO_NAME_WIDTH,
+        ),
+        lcm.string_block(
+            level,
+            "ISOTOPERNAME",
+            "*MAC*RES",
+            width=DONJON_MACRO_NAME_WIDTH,
+        ),
         lcm.block(level, "ISOTOPESDENS", 2, [1.0]),
         lcm.block(level, "ISOTOPESTYPE", 1, [1]),
         lcm.block(level, "ISOTOPESTODO", 1, [1]),
@@ -821,9 +868,10 @@ def _adf_names_from_attrs(dataset, values: np.ndarray) -> list[str]:
 def _adf_name(name: str, mix_name: str) -> str:
     if not name:
         raise ValueError(f"mixture {mix_name}: ADF name must not be empty")
-    if len(name) > 8:
+    if len(name) > DONJON_ADF_NAME_WIDTH:
         raise ValueError(
-            f"mixture {mix_name}: ADF name {name!r} is longer than 8 characters"
+            f"mixture {mix_name}: ADF name {name!r} is longer than "
+            f"{DONJON_ADF_NAME_WIDTH} characters"
         )
     return name
 

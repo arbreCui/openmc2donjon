@@ -13,6 +13,19 @@ from pathlib import Path
 import re
 from typing import Iterable, Sequence
 
+from .constants import (
+    LCM_BLOCK_NAME_WIDTH,
+    LCM_CHAR_CHUNK_WIDTH,
+    LCM_DEFAULT_FLAGS,
+    LCM_INT_FIELD_WIDTH,
+    LCM_INTS_PER_LINE,
+    LCM_LIST_TAG_WIDTH,
+    LCM_REAL_FIELD_WIDTH,
+    LCM_REAL_PRECISION,
+    LCM_REALS_PER_LINE,
+    LCM_TEXT_LINE_WIDTH,
+)
+
 
 HEADER_RE = re.compile(
     r"^->\s*(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+<-\s*(.*?)\s*$"
@@ -25,7 +38,7 @@ class LcmBlock:
 
     ``name`` is ``None`` for control records and for unnamed list payload
     records emitted by some UTL dumps. String data is stored exactly as
-    ``count * 4`` characters, including trailing blanks.
+    ``count * LCM_CHAR_CHUNK_WIDTH`` characters, including trailing blanks.
     """
 
     level: int
@@ -58,22 +71,22 @@ class LcmBlock:
 def string_chunks(text: str) -> tuple[str, int]:
     """Pad ``text`` to a 4-character boundary and return (text, chunk_count)."""
 
-    pad = (-len(text)) % 4
+    pad = (-len(text)) % LCM_CHAR_CHUNK_WIDTH
     padded = text + (" " * pad)
-    return padded, len(padded) // 4
+    return padded, len(padded) // LCM_CHAR_CHUNK_WIDTH
 
 
 def pack_fixed_strings(values: Sequence[str], width: int) -> tuple[str, int]:
     """Pack fixed-width character data for an LCM type-3 block."""
 
-    if width % 4 != 0:
+    if width % LCM_CHAR_CHUNK_WIDTH != 0:
         raise ValueError("LCM character width must be a multiple of 4")
     text = "".join(value[:width].ljust(width) for value in values)
-    return text, len(text) // 4
+    return text, len(text) // LCM_CHAR_CHUNK_WIDTH
 
 
 def unpack_fixed_strings(text: str, width: int) -> list[str]:
-    if width % 4 != 0:
+    if width % LCM_CHAR_CHUNK_WIDTH != 0:
         raise ValueError("LCM character width must be a multiple of 4")
     return [text[i : i + width] for i in range(0, len(text), width)]
 
@@ -165,22 +178,31 @@ def format_lcm_ascii(blocks: Iterable[LcmBlock]) -> str:
         if block.is_control:
             continue
         if block.name is not None:
-            lines.append(f"{block.name:<80}")
+            lines.append(f"{block.name:<{LCM_BLOCK_NAME_WIDTH}}")
         if block.type_code == 1:
-            lines.extend(_format_ints(_coerce_ints(block.data), per_line=8))
+            lines.extend(
+                _format_ints(_coerce_ints(block.data), per_line=LCM_INTS_PER_LINE)
+            )
         elif block.type_code == 2:
-            lines.extend(_format_reals(_coerce_reals(block.data), per_line=5))
+            lines.extend(
+                _format_reals(_coerce_reals(block.data), per_line=LCM_REALS_PER_LINE)
+            )
         elif block.type_code == 3:
             if not isinstance(block.data, str):
                 raise TypeError(f"string block {block.name!r} has non-string data")
-            expected = block.count * 4
+            expected = block.count * LCM_CHAR_CHUNK_WIDTH
             if len(block.data) != expected:
                 raise ValueError(
                     f"string block {block.name!r} has {len(block.data)} chars, "
                     f"expected {expected}"
                 )
-            lines.extend(_format_ints((4,) * block.count, per_line=8))
-            lines.extend(_wrap_text(block.data, width=80))
+            lines.extend(
+                _format_ints(
+                    (LCM_CHAR_CHUNK_WIDTH,) * block.count,
+                    per_line=LCM_INTS_PER_LINE,
+                )
+            )
+            lines.extend(_wrap_text(block.data, width=LCM_TEXT_LINE_WIDTH))
         elif block.type_code in (0, 10):
             pass
         else:
@@ -195,7 +217,7 @@ def block(
     data: Sequence[int] | Sequence[float] | str | None = None,
     *,
     count: int | None = None,
-    flags: int = 12,
+    flags: int = LCM_DEFAULT_FLAGS,
 ) -> LcmBlock:
     """Create a named LCM block with a computed count when possible."""
 
@@ -213,9 +235,11 @@ def block(
         if not isinstance(data, str):
             raise TypeError(f"string block {name!r} requires str data")
         payload = data
-        count = len(payload) // 4 if count is None else count
-        if len(payload) != count * 4:
-            raise ValueError(f"string block {name!r} length must equal count*4")
+        count = len(payload) // LCM_CHAR_CHUNK_WIDTH if count is None else count
+        if len(payload) != count * LCM_CHAR_CHUNK_WIDTH:
+            raise ValueError(
+                f"string block {name!r} length must equal count*{LCM_CHAR_CHUNK_WIDTH}"
+            )
     else:
         raise ValueError(f"unsupported LCM type_code={type_code}")
     return LcmBlock(level, flags, type_code, count, name=name, data=payload)
@@ -225,7 +249,7 @@ def string_block(level: int, name: str, text: str, *, width: int | None = None) 
     """Create a type-3 block from text."""
 
     if width is not None:
-        if width % 4 != 0:
+        if width % LCM_CHAR_CHUNK_WIDTH != 0:
             raise ValueError("LCM character width must be a multiple of 4")
         text = text[:width].ljust(width)
     text, count = string_chunks(text)
@@ -238,11 +262,11 @@ def control(level: int, *, trailing: int | str | None = None) -> LcmBlock:
 
 
 def list_item(level: int, index: int) -> LcmBlock:
-    return LcmBlock(level, 0, 0, -1, trailing=f"{index:08d}")
+    return LcmBlock(level, 0, 0, -1, trailing=f"{index:0{LCM_LIST_TAG_WIDTH}d}")
 
 
 def list_placeholder(level: int, index: int) -> LcmBlock:
-    return LcmBlock(level, 0, 99, 0, trailing=f"{index:08d}")
+    return LcmBlock(level, 0, 99, 0, trailing=f"{index:0{LCM_LIST_TAG_WIDTH}d}")
 
 
 def _read_ints(lines: Sequence[str], i: int, count: int) -> tuple[tuple[int, ...], int]:
@@ -273,14 +297,14 @@ def _read_string(lines: Sequence[str], i: int, count: int) -> tuple[str, int]:
         if i >= len(lines):
             raise ValueError("unexpected EOF while reading string declarations")
         for token in lines[i].split():
-            if int(token) != 4:
+            if int(token) != LCM_CHAR_CHUNK_WIDTH:
                 raise ValueError(f"unsupported string chunk width {token!r}")
             ndecl += 1
             if ndecl >= count:
                 break
         i += 1
 
-    nchars = count * 4
+    nchars = count * LCM_CHAR_CHUNK_WIDTH
     text = ""
     while len(text) < nchars:
         if i >= len(lines):
@@ -305,14 +329,20 @@ def _format_header(block: LcmBlock) -> str:
 
 def _format_ints(values: Sequence[int], *, per_line: int) -> list[str]:
     return [
-        "".join(f"{int(value):10d}" for value in values[i : i + per_line])
+        "".join(
+            f"{int(value):{LCM_INT_FIELD_WIDTH}d}"
+            for value in values[i : i + per_line]
+        )
         for i in range(0, len(values), per_line)
     ]
 
 
 def _format_reals(values: Sequence[float], *, per_line: int) -> list[str]:
     return [
-        "".join(f"{float(value):16.8E}" for value in values[i : i + per_line])
+        "".join(
+            f"{float(value):{LCM_REAL_FIELD_WIDTH}.{LCM_REAL_PRECISION}E}"
+            for value in values[i : i + per_line]
+        )
         for i in range(0, len(values), per_line)
     ]
 
@@ -325,7 +355,7 @@ def _wrap_text(text: str, *, width: int) -> list[str]:
 
 def _format_trailing(value: int | str) -> str:
     if isinstance(value, int):
-        return f"{value:08d}"
+        return f"{value:0{LCM_LIST_TAG_WIDTH}d}"
     return value.strip()
 
 
