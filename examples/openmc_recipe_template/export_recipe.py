@@ -29,6 +29,7 @@ ENERGY_BOUNDS_EV = [
     8.21e5,
     2.0e7,
 ]
+ENERGY_GROUP_STRUCTURE = "EDIT-ME-4g"
 
 # The production converter path maps each exported domain or subdomain to one
 # DONJON mixture. For assembly-wise output, make these domains assemblies.
@@ -49,6 +50,7 @@ MGXS_TYPES = [
     "total",
     "absorption",
     "fission",
+    "kappa-fission",
     "nu-fission",
     "chi",
     "scatter matrix",
@@ -150,6 +152,7 @@ def root_attrs():
     return {
         "domain_mode": DOMAIN_MODE,
         "domain_type": DOMAIN_TYPE,
+        "energy_group_structure": ENERGY_GROUP_STRUCTURE,
         "spatial_mapping": "one exported OpenMC MGXS domain -> one DONJON mixture",
         "energy_group_count": len(ENERGY_BOUNDS_EV) - 1,
         "legendre_order": LEGENDRE_ORDER,

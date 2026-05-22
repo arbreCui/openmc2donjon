@@ -15,6 +15,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any, Mapping
 
+from .energy_groups import energy_bounds_sha256
 from .export_openmc_mgxs import (
     MGXS_TYPE_ALIASES,
     NU_SCATTER_MGXS_TYPES,
@@ -86,6 +87,7 @@ class RecipeDryRunSummary:
     statepoint_loaded: bool
     output_path: Path | None
     energy_groups: int
+    energy_bounds_sha256: str
     legendre_order: int
     domain_type: str | None
     mgxs_types: tuple[str, ...]
@@ -386,12 +388,14 @@ def dry_run_openmc_statepoint_recipe(
         domains=tuple(domains),
         root_attr_keys=root_attr_keys,
     )
+    bounds_digest = energy_bounds_sha256(energy_bounds)
     return RecipeDryRunSummary(
         recipe_path=recipe_file,
         statepoint_path=statepoint_file,
         statepoint_loaded=statepoint_loaded,
         output_path=output_file,
         energy_groups=len(energy_bounds) - 1,
+        energy_bounds_sha256=bounds_digest,
         legendre_order=legendre_order,
         domain_type=domain_type,
         mgxs_types=mgxs_types,
@@ -469,9 +473,11 @@ def _production_checks(
             f"{energy_groups} group(s) from recipe energy bounds",
         )
     )
+    checks.append(_energy_group_identity_check(root_attr_keys))
     checks.append(_mgxs_required_check(mgxs_types, scatter_mgxs_type))
     checks.append(_mgxs_transport_check(mgxs_types))
     checks.append(_fission_source_check(mgxs_types))
+    checks.append(_h_factor_source_check(mgxs_types))
     checks.append(
         RecipeProductionCheck(
             "legendre-order",
@@ -505,6 +511,22 @@ def _production_checks(
         )
     )
     return tuple(checks)
+
+
+def _energy_group_identity_check(
+    root_attr_keys: tuple[str, ...],
+) -> RecipeProductionCheck:
+    if "energy_group_structure" in root_attr_keys:
+        return RecipeProductionCheck(
+            "energy-group-identity",
+            "PASS",
+            "root_attrs include energy_group_structure; exporter writes bounds hash",
+        )
+    return RecipeProductionCheck(
+        "energy-group-identity",
+        "WARN",
+        "root_attrs should include energy_group_structure; exporter writes only bounds hash",
+    )
 
 
 def _mgxs_required_check(
@@ -590,6 +612,35 @@ def _fission_source_check(mgxs_types: tuple[str, ...]) -> RecipeProductionCheck:
         "fission-source",
         "WARN",
         "missing " + ", ".join(missing) + "; acceptable only for non-fissile/fixed-source cases",
+    )
+
+
+def _h_factor_source_check(mgxs_types: tuple[str, ...]) -> RecipeProductionCheck:
+    if not mgxs_types:
+        return RecipeProductionCheck(
+            "h-factor",
+            "WARN",
+            "library has no mgxs_types list; kappa-fission availability cannot be checked early",
+        )
+    if not (
+        _has_mgxs_alias(mgxs_types, "fission")
+        or _has_mgxs_alias(mgxs_types, "nu_fission")
+    ):
+        return RecipeProductionCheck(
+            "h-factor",
+            "PASS",
+            "recipe does not declare a fission source; H-FACTOR is not required here",
+        )
+    if _has_mgxs_alias(mgxs_types, "kappa_fission"):
+        return RecipeProductionCheck(
+            "h-factor",
+            "PASS",
+            "kappa-fission MGXS declared; exporter can write group-wise H-FACTOR data",
+        )
+    return RecipeProductionCheck(
+        "h-factor",
+        "WARN",
+        "fission source declared without kappa-fission; downstream power normalization needs H-FACTOR",
     )
 
 

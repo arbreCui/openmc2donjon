@@ -177,6 +177,7 @@ OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
   --run-dir "$DRY_RUN_DIR" \
   --check \
   --require-volume \
+  --expected-energy-group-structure OPENMC2DONJON-PRODUCTION-MINICASE-2G \
   --require-transport-dataset \
   "${SCATTER_ROW_BALANCE_ARGS[@]}" \
   "${UNCERTAINTY_ARGS[@]}"
@@ -202,6 +203,7 @@ OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
   --force-run-dir \
   --check \
   --require-volume \
+  --expected-energy-group-structure OPENMC2DONJON-PRODUCTION-MINICASE-2G \
   --require-transport-dataset \
   "${SCATTER_ROW_BALANCE_ARGS[@]}" \
   "${UNCERTAINTY_ARGS[@]}"

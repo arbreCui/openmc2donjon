@@ -20,6 +20,7 @@ def print_recipe_dry_run_summary(summary: RecipeDryRunSummary) -> None:
     else:
         print(f"  output: {summary.output_path} (not written)")
     print(f"  energy_groups: {summary.energy_groups}")
+    print(f"  energy_bounds_sha256: {summary.energy_bounds_sha256[:12]}")
     print(f"  legendre_order: {summary.legendre_order}")
     print(f"  domain_type: {summary.domain_type or 'unknown'}")
     print(f"  mgxs_types: {_render_list(summary.mgxs_types)}")

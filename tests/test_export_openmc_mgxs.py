@@ -628,6 +628,7 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
         self.assertIn("statepoint: none", output)
         self.assertIn("output: dry run; no HDF5 written", output)
         self.assertIn("energy_groups: 2", output)
+        self.assertIn("energy_bounds_sha256:", output)
         self.assertIn("legendre_order: 1", output)
         self.assertIn("domain_type: cell", output)
         self.assertIn("scatter_mgxs_type: scatter matrix", output)
@@ -637,6 +638,7 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
             "PASS mgxs-required: total, absorption, and scatter matrix MGXS are declared",
             output,
         )
+        self.assertIn("WARN energy-group-identity:", output)
         self.assertIn("PASS transport: transport MGXS declared", output)
         self.assertIn("WARN fission-source: missing fission, nu-fission, chi", output)
         self.assertIn(
@@ -764,6 +766,7 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
                         "scatter matrix",
                         "transport",
                         "fission",
+                        "kappa-fission",
                         "nu-fission",
                         "chi",
                     ]
@@ -773,7 +776,10 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
                 return Library()
 
             def root_attrs():
-                return {"domain_mode": "cell"}
+                return {
+                    "domain_mode": "cell",
+                    "energy_group_structure": "clean-2g",
+                }
         """
         with tempfile.TemporaryDirectory() as tmpdir:
             recipe_path = Path(tmpdir) / "recipe.py"
@@ -788,6 +794,8 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
         output = stream.getvalue()
         self.assertEqual(rc, 0)
         self.assertIn("recipe_dry_run_strict_passed", output)
+        self.assertIn("PASS energy-group-identity:", output)
+        self.assertIn("PASS h-factor:", output)
         self.assertNotIn("recipe_dry_run_strict_failed", output)
 
     def test_export_cli_recipe_dry_run_flags_missing_required_mgxs_types(self) -> None:

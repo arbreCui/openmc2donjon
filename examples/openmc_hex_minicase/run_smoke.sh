@@ -100,6 +100,7 @@ OPENMC2DONJON_HEX_MINICASE_DIR="$CASE_DIR" \
   --run-dir "$DRY_RUN_DIR" \
   --check \
   --require-volume \
+  --expected-energy-group-structure OPENMC2DONJON-HEX-MINICASE-2G \
   --require-transport-dataset \
   "${SCATTER_ROW_BALANCE_ARGS[@]}"
 
@@ -124,6 +125,7 @@ OPENMC2DONJON_HEX_MINICASE_DIR="$CASE_DIR" \
   --force-run-dir \
   --check \
   --require-volume \
+  --expected-energy-group-structure OPENMC2DONJON-HEX-MINICASE-2G \
   --require-transport-dataset \
   "${SCATTER_ROW_BALANCE_ARGS[@]}"
 
@@ -134,6 +136,7 @@ echo "== MACROLIB convert =="
   -o "$MACROLIB" \
   --check \
   --require-volume \
+  --expected-energy-group-structure OPENMC2DONJON-HEX-MINICASE-2G \
   --require-transport-dataset \
   "${SCATTER_ROW_BALANCE_ARGS[@]}"
 

@@ -33,10 +33,12 @@ HEX_CELL_VOLUME_CM3 = math.sqrt(3.0) / 2.0 * HEX_PITCH_CM**2 * HEIGHT_CM
 HEX_OUTER_EDGE_CM = N_RINGS * HEX_PITCH_CM / math.sqrt(3.0)
 LEGENDRE_ORDER = 1
 ENERGY_BOUNDS_EV = [1.0e-5, 6.25e-1, 2.0e7]
+ENERGY_GROUP_STRUCTURE = "OPENMC2DONJON-HEX-MINICASE-2G"
 MGXS_TYPES = [
     "total",
     "absorption",
     "fission",
+    "kappa-fission",
     "nu-fission",
     "chi",
     "scatter matrix",
@@ -233,6 +235,7 @@ def root_attrs() -> dict[str, object]:
         "case": CASE_NAME,
         "domain_mode": DOMAIN_MODE,
         "domain_type": DOMAIN_TYPE,
+        "energy_group_structure": ENERGY_GROUP_STRUCTURE,
         "energy_group_count": len(ENERGY_BOUNDS_EV) - 1,
         "legendre_order": LEGENDRE_ORDER,
         "geometry_kind": "hexagonal",

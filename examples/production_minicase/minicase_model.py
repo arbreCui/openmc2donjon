@@ -37,11 +37,13 @@ DOMAIN_VOLUME_BY_ID = {
     MODERATOR_CELL_ID: 32.0,
 }
 ENERGY_BOUNDS_EV = [1.0e-5, 6.25e-1, 2.0e7]
+ENERGY_GROUP_STRUCTURE = "OPENMC2DONJON-PRODUCTION-MINICASE-2G"
 LEGENDRE_ORDER = 1
 MGXS_TYPES = [
     "total",
     "absorption",
     "fission",
+    "kappa-fission",
     "nu-fission",
     "chi",
     "scatter matrix",
@@ -257,6 +259,7 @@ def root_attrs() -> dict[str, object]:
         "case": CASE_NAME,
         "domain_mode": DOMAIN_MODE,
         "domain_type": DOMAIN_TYPE,
+        "energy_group_structure": ENERGY_GROUP_STRUCTURE,
         "energy_group_count": len(ENERGY_BOUNDS_EV) - 1,
         "legendre_order": LEGENDRE_ORDER,
         "spatial_mapping": "one OpenMC cell domain -> one DONJON mixture",
