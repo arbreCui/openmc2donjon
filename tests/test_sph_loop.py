@@ -154,6 +154,25 @@ class SphLoopTests(unittest.TestCase):
                 metadata["final_sph_sidecar"]["group_order"],
                 "mgxs_donjon",
             )
+            production_audit = payload["production_audit"]
+            self.assertTrue(production_audit["passed"])
+            self.assertEqual(production_audit["errors"], [])
+            self.assertEqual(
+                production_audit["openmc_xs_policy"],
+                "fixed base MGXS; only SPH/NSPH factors are iterated",
+            )
+            self.assertEqual(
+                production_audit["reference"]["mixture_names"],
+                ["fuel", "moderator"],
+            )
+            self.assertEqual(
+                production_audit["flux_map"]["mixture_flux_map"],
+                [
+                    {"mixture": "fuel", "scalar_flux_id": 2},
+                    {"mixture": "moderator", "scalar_flux_id": 4},
+                ],
+            )
+            self.assertEqual(production_audit["artifact_counts"]["workflows"], 2)
             self.assertTrue(payload["acceptance"]["passed"])
             self.assertEqual(len(payload["acceptance"]["checks"]), 8)
             self.assertEqual(
@@ -516,6 +535,12 @@ class SphLoopTests(unittest.TestCase):
                 _acceptance_actual(payload, "max_final_to_initial_flux_residual_ratio"),
                 0.0,
             )
+            self.assertTrue(payload["production_audit"]["passed"])
+            audit_checks = {
+                item["name"]: item for item in payload["production_audit"]["checks"]
+            }
+            self.assertTrue(audit_checks["flux_map_preflight_passed"]["passed"])
+            self.assertTrue(audit_checks["final_sph_sidecar_present"]["passed"])
 
     def test_production_acceptance_preset_fails_without_final_solve(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

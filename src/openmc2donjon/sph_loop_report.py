@@ -8,6 +8,7 @@ from typing import Any
 
 from . import __version__
 from .bundle import ArtifactSpec, bundle_artifacts
+from .constants import MGXS_DONJON_GROUP_ORDER
 from .hdf5_metadata import Hdf5DatasetMetadata
 from .sph_loop_audit import (
     first_diagnostic_bin,
@@ -70,6 +71,13 @@ def print_report(report: SphLoopReport) -> None:
         "  artifact_metadata: "
         f"reference_order={report.artifact_metadata.reference_flux.group_order} "
         f"workflow_count={len(report.artifact_metadata.workflows)}"
+    )
+    production_audit = _production_audit_payload(report)
+    print(
+        "  production_audit: "
+        f"{'PASS' if production_audit['passed'] else 'FAIL'} "
+        f"checks={len(production_audit['checks'])} "
+        f"errors={len(production_audit['errors'])}"
     )
     for solve in report.solves:
         print(
@@ -168,6 +176,7 @@ def write_summary(path: Path, report: SphLoopReport) -> None:
             report.flux_map_preflight
         ),
         "artifact_metadata": _artifact_metadata_payload(report.artifact_metadata),
+        "production_audit": _production_audit_payload(report),
         "quality": _quality_payload(report),
         "solves": [
             {
@@ -331,6 +340,156 @@ def _dataset_metadata_payload(metadata: Hdf5DatasetMetadata) -> dict[str, Any]:
         "mixture_count": len(metadata.mixture_names),
         "mixture_names": list(metadata.mixture_names),
     }
+
+
+def _production_audit_payload(report: SphLoopReport) -> dict[str, Any]:
+    checks: list[dict[str, object]] = []
+    reference = report.artifact_metadata.reference_flux
+    reference_names = tuple(reference.mixture_names)
+    reference_groups = reference.energy_groups
+    expected_names = tuple(report.flux_map_preflight.mixture_names)
+    expected_groups = report.flux_map_preflight.energy_groups
+
+    _append_audit_check(
+        checks,
+        "flux_map_preflight_passed",
+        report.flux_map_preflight.passed,
+        "flux map preflight passed",
+        "flux map preflight failed",
+    )
+    _append_audit_check(
+        checks,
+        "reference_group_order",
+        reference.group_order == MGXS_DONJON_GROUP_ORDER,
+        f"reference_flux group_order={reference.group_order!r}",
+        f"reference_flux group_order {reference.group_order!r} != {MGXS_DONJON_GROUP_ORDER!r}",
+    )
+    _append_audit_check(
+        checks,
+        "reference_mixture_order",
+        reference_names == expected_names,
+        "reference_flux mixture_names match MGXS mixture order",
+        "reference_flux mixture_names do not match MGXS mixture order",
+    )
+    _append_audit_check(
+        checks,
+        "reference_energy_groups",
+        reference_groups == expected_groups,
+        "reference_flux energy group count matches MGXS",
+        f"reference_flux energy_groups {reference_groups!r} != {expected_groups!r}",
+    )
+
+    for workflow in report.artifact_metadata.workflows:
+        label = f"iter{workflow.iteration}"
+        _append_dataset_audit_checks(
+            checks,
+            f"{label}_donjon_volume_flux",
+            workflow.donjon_volume_flux,
+            reference_names=reference_names,
+            reference_groups=reference_groups,
+        )
+        _append_dataset_audit_checks(
+            checks,
+            f"{label}_sph_sidecar",
+            workflow.sph_sidecar,
+            reference_names=reference_names,
+            reference_groups=reference_groups,
+        )
+
+    final_sidecar = report.artifact_metadata.final_sph_sidecar
+    _append_audit_check(
+        checks,
+        "final_sph_sidecar_present",
+        final_sidecar is not None or not report.artifact_metadata.workflows,
+        "final SPH sidecar metadata present",
+        "final SPH sidecar metadata missing",
+    )
+    if final_sidecar is not None:
+        _append_dataset_audit_checks(
+            checks,
+            "final_sph_sidecar",
+            final_sidecar,
+            reference_names=reference_names,
+            reference_groups=reference_groups,
+        )
+
+    errors = tuple(str(item["message"]) for item in checks if not item["passed"])
+    return {
+        "passed": not errors,
+        "errors": list(errors),
+        "checks": checks,
+        "openmc_xs_policy": "fixed base MGXS; only SPH/NSPH factors are iterated",
+        "reference": {
+            "source": reference.source,
+            "group_order": reference.group_order,
+            "energy_groups": reference.energy_groups,
+            "mixture_names": list(reference.mixture_names),
+        },
+        "flux_map": {
+            "passed": report.flux_map_preflight.passed,
+            "map_kind": report.flux_map_preflight.map_kind,
+            "scalar_flux_ids": list(report.flux_map_preflight.scalar_flux_ids),
+            "minimum_required_flux_unknown_count": (
+                report.flux_map_preflight.minimum_required_flux_unknown_count
+            ),
+            "mixture_flux_map": [
+                {"mixture": mixture, "scalar_flux_id": scalar_id}
+                for mixture, scalar_id in report.flux_map_preflight.mixture_flux_map
+            ],
+        },
+        "artifact_counts": {
+            "workflows": len(report.artifact_metadata.workflows),
+            "solves": len(report.solves),
+            "postprocesses": len(report.postprocesses),
+        },
+    }
+
+
+def _append_dataset_audit_checks(
+    checks: list[dict[str, object]],
+    label: str,
+    metadata: Hdf5DatasetMetadata,
+    *,
+    reference_names: tuple[str, ...],
+    reference_groups: int | None,
+) -> None:
+    _append_audit_check(
+        checks,
+        f"{label}_group_order",
+        metadata.group_order == MGXS_DONJON_GROUP_ORDER,
+        f"{label} group_order={metadata.group_order!r}",
+        f"{label} group_order {metadata.group_order!r} != {MGXS_DONJON_GROUP_ORDER!r}",
+    )
+    _append_audit_check(
+        checks,
+        f"{label}_mixture_order",
+        tuple(metadata.mixture_names) == reference_names,
+        f"{label} mixture_names match reference_flux",
+        f"{label} mixture_names do not match reference_flux",
+    )
+    _append_audit_check(
+        checks,
+        f"{label}_energy_groups",
+        metadata.energy_groups == reference_groups,
+        f"{label} energy_groups={metadata.energy_groups!r}",
+        f"{label} energy_groups {metadata.energy_groups!r} != {reference_groups!r}",
+    )
+
+
+def _append_audit_check(
+    checks: list[dict[str, object]],
+    name: str,
+    passed: bool,
+    pass_message: str,
+    fail_message: str,
+) -> None:
+    checks.append(
+        {
+            "name": name,
+            "passed": bool(passed),
+            "message": pass_message if passed else fail_message,
+        }
+    )
 
 
 def write_bundle(
