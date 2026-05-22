@@ -44,17 +44,17 @@ class OpenmcSphLoopEntrypointExampleTests(unittest.TestCase):
                     np.asarray(["FUEL_A", "MOD_A"], dtype="S"),
                 )
 
-    def test_smoke_script_uses_from_openmc_and_scaffold_entrypoints(self) -> None:
+    def test_smoke_script_uses_handoff_entrypoint(self) -> None:
         root = _repo_root()
         text = (root / "examples/openmc_sph_loop_entrypoint/run_smoke.sh").read_text(
             encoding="utf-8"
         )
 
-        self.assertIn("openmc2donjon.from_openmc_cli", text)
-        self.assertIn("make-sph-loop-scaffold", text)
+        self.assertIn("prepare-openmc-sph-loop", text)
         self.assertIn("openmc_volume_flux", text)
         self.assertIn("FUEL_A=2,MOD_A=4", text)
         self.assertIn("loop_config.json", text)
+        self.assertIn("openmc2donjon_openmc_sph_loop_handoff_passed", text)
         self.assertIn("OpenMC SPH loop entrypoint smoke: PASS", text)
 
 

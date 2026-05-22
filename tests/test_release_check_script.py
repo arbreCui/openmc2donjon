@@ -32,6 +32,7 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertIn("run-sph-loop --help", default_section)
         self.assertIn("make-donjon-sph-loop-config --help", default_section)
         self.assertIn("make-sph-loop-scaffold --help", default_section)
+        self.assertIn("prepare-openmc-sph-loop --help", default_section)
         self.assertIn("openmc2donjon.donjon_deck_runner --help", default_section)
         self.assertIn("== OpenMC-to-SPH-loop entrypoint smoke ==", default_section)
         self.assertIn("examples/openmc_sph_loop_entrypoint/run_smoke.sh", default_section)

@@ -23,7 +23,7 @@ from ..sph_augment import (
 )
 from ..sph_iteration import create_sph_update_table
 from ..sph_loop import run_sph_loop
-from ..sph_loop_scaffold import create_sph_loop_scaffold
+from ..sph_loop_scaffold import create_sph_loop_scaffold, parse_scalar_flux_map
 from ..sph_workflow import run_sph_iteration_workflow
 
 
@@ -858,7 +858,7 @@ def extract_donjon_volume_flux_handler(args: argparse.Namespace) -> int:
         if args.map_h5 is not None and args.scalar_flux_map is not None:
             parser.error("--map-h5 and --scalar-flux-map are mutually exclusive")
         scalar_flux_ids = (
-            None if args.scalar_flux_map is None else _parse_scalar_flux_map(args.scalar_flux_map)
+            None if args.scalar_flux_map is None else parse_scalar_flux_map(args.scalar_flux_map)
         )
         extract_donjon_volume_flux(
             args.input_h5,
@@ -883,7 +883,7 @@ def run_sph_iteration_handler(args: argparse.Namespace) -> int:
         if args.map_h5 is not None and args.scalar_flux_map is not None:
             parser.error("--map-h5 and --scalar-flux-map are mutually exclusive")
         scalar_flux_ids = (
-            None if args.scalar_flux_map is None else _parse_scalar_flux_map(args.scalar_flux_map)
+            None if args.scalar_flux_map is None else parse_scalar_flux_map(args.scalar_flux_map)
         )
         run_sph_iteration_workflow(
             args.input_h5,
@@ -975,7 +975,7 @@ def make_sph_loop_scaffold_handler(args: argparse.Namespace) -> int:
     try:
         scalar_flux_ids = None
         if args.scalar_flux_map is not None:
-            scalar_flux_ids = _parse_scalar_flux_map(args.scalar_flux_map)
+            scalar_flux_ids = parse_scalar_flux_map(args.scalar_flux_map)
         create_sph_loop_scaffold(
             args.input_h5,
             args.output_dir,
@@ -1039,27 +1039,3 @@ def _sph_loop_acceptance_from_args(args: argparse.Namespace) -> dict[str, object
     if args.fail_on_acceptance_violation:
         acceptance["fail_on_violation"] = True
     return acceptance or None
-
-
-def _parse_scalar_flux_map(raw: str) -> dict[str, int]:
-    out: dict[str, int] = {}
-    for item in (part.strip() for part in raw.split(",")):
-        if not item:
-            continue
-        if "=" not in item:
-            raise ValueError("--scalar-flux-map entries must look like mixture=id")
-        name, value = (part.strip() for part in item.split("=", 1))
-        if not name:
-            raise ValueError("--scalar-flux-map mixture names must be non-empty")
-        if name in out:
-            raise ValueError(f"--scalar-flux-map repeats mixture {name!r}")
-        try:
-            scalar_id = int(value)
-        except ValueError as exc:
-            raise ValueError(f"--scalar-flux-map id for {name!r} must be an integer") from exc
-        if scalar_id <= 0:
-            raise ValueError(f"--scalar-flux-map id for {name!r} must be positive")
-        out[name] = scalar_id
-    if not out:
-        raise ValueError("--scalar-flux-map must list at least one mixture=id entry")
-    return out

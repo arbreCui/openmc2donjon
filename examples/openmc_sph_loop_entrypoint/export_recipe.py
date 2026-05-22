@@ -79,7 +79,7 @@ def domain_names():
 def root_attrs(library):
     return {
         "domain_mode": "openmc_sph_loop_entrypoint",
-        "statepoint_marker": library.loaded_statepoint,
+        "statepoint_marker": library.loaded_statepoint or "",
     }
 
 

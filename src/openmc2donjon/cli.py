@@ -7,7 +7,7 @@ from pathlib import Path
 import sys
 
 from . import __version__
-from .commands import adf, diagnostics, sph
+from .commands import adf, diagnostics, openmc, sph
 from .commands.base import CommandSpec
 from .macrolib import convert_mgxs_hdf5_to_macrolib
 from .mgxs_input_contract import run_preflight
@@ -47,6 +47,8 @@ def build_parser() -> argparse.ArgumentParser:
             "'openmc2donjon make-sph-loop-scaffold <input_h5> ...' to write "
             "reference flux, scalar-flux map, and loop config from an OpenMC "
             "handoff, "
+            "'openmc2donjon prepare-openmc-sph-loop ...' to export an OpenMC "
+            "recipe and prepare the SPH loop handoff in one run, "
             "'openmc2donjon bundle --output-dir DIR ...' to collect "
             "production artifacts, 'openmc2donjon validate-bundle manifest.json' "
             "to validate a bundle, 'openmc2donjon doctor' for environment checks, or "
@@ -199,6 +201,7 @@ def build_command_parser() -> argparse.ArgumentParser:
 
 def _command_specs() -> tuple[CommandSpec, ...]:
     return (
+        *openmc.command_specs(),
         *adf.command_specs(),
         *sph.command_specs(),
         *diagnostics.command_specs(),

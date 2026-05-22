@@ -20,6 +20,7 @@ from pathlib import Path
 
 import openmc
 import openmc.mgxs as mgxs
+import numpy as np
 
 
 CASE_NAME = "production_minicase"
@@ -47,6 +48,7 @@ MGXS_TYPES = [
     "transport",
 ]
 SURFACE_FLUX_TALLY_NAME = "openmc2donjon_surface_current_mu"
+VOLUME_FLUX_TALLY_NAME = "openmc2donjon_volume_flux"
 SURFACE_FLUX_MESH_SHAPE = (1, 2)
 SURFACE_FLUX_MU_EDGES = [0.0, 0.25, 0.5, 0.75, 1.0]
 SURFACE_FLUX_FACE_AREA = 4.0
@@ -168,8 +170,19 @@ def build_tallies(geometry: openmc.Geometry) -> openmc.Tallies:
         library.add_to_tallies(tallies, merge=True)
     else:
         library.add_to_tallies_file(tallies, merge=True)
+    tallies.append(build_volume_flux_tally())
     tallies.append(build_surface_flux_tally())
     return tallies
+
+
+def build_volume_flux_tally() -> openmc.Tally:
+    tally = openmc.Tally(name=VOLUME_FLUX_TALLY_NAME)
+    tally.filters = [
+        openmc.CellFilter([FUEL_CELL_ID, MODERATOR_CELL_ID]),
+        openmc.EnergyFilter(ENERGY_BOUNDS_EV),
+    ]
+    tally.scores = ["flux"]
+    return tally
 
 
 def build_surface_flux_tally() -> openmc.Tally:
@@ -215,6 +228,28 @@ def load_statepoint(library: mgxs.Library, statepoint_path: Path) -> None:
         keff = getattr(statepoint, "keff", None)
         if keff is not None:
             print(f"OpenMC minicase keff = {keff}")
+
+
+def extract_volume_flux(statepoint_path: Path) -> np.ndarray:
+    with openmc.StatePoint(str(statepoint_path)) as statepoint:
+        tally = statepoint.get_tally(name=VOLUME_FLUX_TALLY_NAME)
+        values = np.asarray(tally.get_values(scores=["flux"], value="mean"), dtype=float)
+    return np.squeeze(values).reshape((len(DOMAIN_NAME_BY_ID), len(ENERGY_BOUNDS_EV) - 1))
+
+
+def append_volume_flux_hdf5(
+    output_path: Path,
+    statepoint_path: Path,
+    mixture_names: list[str],
+) -> None:
+    import h5py
+
+    values = extract_volume_flux(statepoint_path)
+    with h5py.File(output_path, "a") as h5:
+        if "openmc_volume_flux" in h5:
+            del h5["openmc_volume_flux"]
+        dataset = h5.create_dataset("openmc_volume_flux", data=values)
+        dataset.attrs["mixture_names"] = np.asarray(mixture_names, dtype="S")
 
 
 def root_attrs() -> dict[str, object]:

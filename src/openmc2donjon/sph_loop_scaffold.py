@@ -198,6 +198,30 @@ def create_sph_loop_scaffold(
     return report
 
 
+def parse_scalar_flux_map(raw: str) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for item in (part.strip() for part in raw.split(",")):
+        if not item:
+            continue
+        if "=" not in item:
+            raise ValueError("--scalar-flux-map entries must look like mixture=id")
+        name, value = (part.strip() for part in item.split("=", 1))
+        if not name:
+            raise ValueError("--scalar-flux-map mixture names must be non-empty")
+        if name in out:
+            raise ValueError(f"--scalar-flux-map repeats mixture {name!r}")
+        try:
+            scalar_id = int(value)
+        except ValueError as exc:
+            raise ValueError(f"--scalar-flux-map id for {name!r} must be an integer") from exc
+        if scalar_id <= 0:
+            raise ValueError(f"--scalar-flux-map id for {name!r} must be positive")
+        out[name] = scalar_id
+    if not out:
+        raise ValueError("--scalar-flux-map must list at least one mixture=id entry")
+    return out
+
+
 def print_report(report: SphLoopScaffoldReport) -> None:
     print("OpenMC-to-DONJON SPH loop scaffold")
     print(f"  schema: {SCHEMA}")

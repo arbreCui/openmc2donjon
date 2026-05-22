@@ -48,6 +48,11 @@ MCO="$CONVERT_RUN_DIR/out.mcompo.txt"
 SUMMARY="$CONVERT_RUN_DIR/run_summary.json"
 CHECK_SUMMARY="$CONVERT_RUN_DIR/check_summary.json"
 MANIFEST="$CONVERT_RUN_DIR/manifest.json"
+SPH_HANDOFF_RUN_DIR="$RUN_DIR/openmc2donjon_sph_loop_handoff"
+SPH_HANDOFF_MGXS="$SPH_HANDOFF_RUN_DIR/mgxs_library.h5"
+SPH_HANDOFF_SUMMARY="$SPH_HANDOFF_RUN_DIR/openmc_sph_loop_handoff_summary.json"
+SPH_SCAFFOLD_DIR="$SPH_HANDOFF_RUN_DIR/sph_loop_inputs"
+SPH_SOLVE_TEMPLATE="$REPO_ROOT/examples/sph_loop_minicase/templates/solve_lflux_dump.x2m.in"
 LOW_ORDER_RAW="$RUN_DIR/low_order_driver_raw.h5"
 ADF_RUN_DIR="$RUN_DIR/openmc2donjon_adf_run"
 SURFACE_FLUX="$ADF_RUN_DIR/openmc_surface_flux.h5"
@@ -136,11 +141,14 @@ root = ET.parse(tallies_path).getroot()
 names = [element.attrib.get("name", "") for element in root.findall("tally")]
 if "openmc2donjon_surface_current_mu" not in names:
     raise SystemExit("recipe-written tallies.xml is missing the surface-current tally")
+if "openmc2donjon_volume_flux" not in names:
+    raise SystemExit("recipe-written tallies.xml is missing the volume-flux tally")
 if len(names) < 2:
     raise SystemExit(f"recipe-written tallies.xml has too few tallies: {len(names)}")
 print(
     "recipe-written tallies OK: "
-    f"tallies={len(names)} surface_current=openmc2donjon_surface_current_mu"
+    f"tallies={len(names)} volume_flux=openmc2donjon_volume_flux "
+    "surface_current=openmc2donjon_surface_current_mu"
 )
 PY
 
@@ -188,6 +196,7 @@ from pathlib import Path
 import sys
 
 import h5py
+import numpy as np
 from openmc2donjon import lcm_ascii
 from openmc2donjon.from_openmc_summary import validate_from_openmc_summary
 
@@ -209,6 +218,13 @@ with h5py.File(mgxs, "r") as h5:
     names = sorted(h5["mixtures"])
     if names != ["ASM_FUEL_LEFT", "ASM_MOD_RIGHT"]:
         raise SystemExit(f"unexpected mixture names: {names}")
+    if "openmc_volume_flux" not in h5:
+        raise SystemExit("production minicase MGXS is missing openmc_volume_flux")
+    openmc_volume_flux = h5["openmc_volume_flux"][:]
+    if openmc_volume_flux.shape != (2, 2):
+        raise SystemExit(f"unexpected OpenMC volume-flux shape: {openmc_volume_flux.shape}")
+    if not np.all(np.isfinite(openmc_volume_flux)) or np.any(openmc_volume_flux <= 0.0):
+        raise SystemExit("OpenMC volume flux is not positive finite")
     for name in names:
         if "transport_total" not in h5[f"mixtures/{name}"]:
             raise SystemExit(f"{name}: missing transport_total")
@@ -249,6 +265,59 @@ print(
     f"blocks={len(blocks)} mixtures={summary['mixture_count']} "
     f"groups={summary['energy_groups']} P{summary['legendre_order']}"
 )
+PY
+
+echo
+echo "== Prepare OpenMC SPH loop handoff =="
+OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
+"$PYTHON_BIN" -m openmc2donjon.cli prepare-openmc-sph-loop \
+  --recipe "$EXAMPLE_DIR/export_recipe.py" \
+  --statepoint "$STATEPOINT" \
+  --run-dir "$SPH_HANDOFF_RUN_DIR" \
+  --solve-template "$SPH_SOLVE_TEMPLATE" \
+  --scalar-flux-map ASM_FUEL_LEFT=2,ASM_MOD_RIGHT=4 \
+  --case-id-prefix production_minicase_sph_loop \
+  --stage-prefix odj_production_minicase_sph_loop \
+  --case-dir openmc2donjon/case_runs/production_minicase_sph_loop \
+  --sph-kind production-minicase-openmc-sph-loop \
+  --source-label "Production minicase OpenMC SPH loop handoff" \
+  --force \
+  "${SCATTER_ROW_BALANCE_ARGS[@]}"
+
+"$PYTHON_BIN" - "$SPH_HANDOFF_MGXS" "$SPH_SCAFFOLD_DIR" "$SPH_HANDOFF_SUMMARY" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+import h5py
+import numpy as np
+
+mgxs = Path(sys.argv[1])
+scaffold = Path(sys.argv[2])
+summary = json.loads(Path(sys.argv[3]).read_text(encoding="utf-8"))
+
+with h5py.File(mgxs, "r") as h5:
+    if "openmc_volume_flux" not in h5:
+        raise SystemExit("SPH handoff MGXS is missing openmc_volume_flux")
+    flux = h5["openmc_volume_flux"][:]
+    if flux.shape != (2, 2):
+        raise SystemExit(f"unexpected SPH handoff OpenMC flux shape: {flux.shape}")
+    if not np.all(np.isfinite(flux)) or np.any(flux <= 0.0):
+        raise SystemExit("SPH handoff OpenMC flux is not positive finite")
+
+with h5py.File(scaffold / "reference_flux.h5", "r") as h5:
+    np.testing.assert_allclose(h5["openmc_volume_flux"][:], flux)
+
+with h5py.File(scaffold / "flux_map.h5", "r") as h5:
+    np.testing.assert_array_equal(h5["scalar_flux_ids"][:], [2, 4])
+
+config = json.loads((scaffold / "loop_config.json").read_text(encoding="utf-8"))
+if config["input_h5"] != str(mgxs):
+    raise SystemExit("SPH loop config input_h5 mismatch")
+if summary["decision"] != "openmc2donjon_openmc_sph_loop_handoff_passed":
+    raise SystemExit("SPH handoff summary did not pass")
+
+print(f"production minicase SPH loop handoff OK: {scaffold}")
 PY
 
 echo

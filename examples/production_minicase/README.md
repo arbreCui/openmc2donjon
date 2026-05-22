@@ -62,6 +62,20 @@ manifest.json
 export_recipe.py
 ```
 
+The recipe also writes `openmc_volume_flux` from a real OpenMC cell/energy flux
+tally.  That lets the same statepoint prepare a fixed-OpenMC SPH loop handoff:
+
+```sh
+OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
+openmc2donjon prepare-openmc-sph-loop \
+  --recipe examples/production_minicase/export_recipe.py \
+  --statepoint "$CASE_DIR/statepoint.12.h5" \
+  --run-dir /tmp/openmc2donjon_minicase/sph_loop_handoff \
+  --solve-template examples/sph_loop_minicase/templates/solve_lflux_dump.x2m.in \
+  --scalar-flux-map ASM_FUEL_LEFT=2,ASM_MOD_RIGHT=4 \
+  --force
+```
+
 To exercise the ADF/DF path, provide the low-order driver volume flux and
 outward net current density in an HDF5 fixture, then let the one-step workflow
 export the OpenMC surface-flux tally, canonicalize and check the low-order

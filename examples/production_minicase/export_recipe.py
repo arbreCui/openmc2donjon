@@ -52,7 +52,10 @@ def domain_names(library):
 
 
 def extra_tallies(library):
-    return [_minicase.build_surface_flux_tally()]
+    return [
+        _minicase.build_volume_flux_tally(),
+        _minicase.build_surface_flux_tally(),
+    ]
 
 
 def load_statepoint(library, statepoint_path):
@@ -61,3 +64,13 @@ def load_statepoint(library, statepoint_path):
 
 def root_attrs():
     return _minicase.root_attrs()
+
+
+def postprocess_hdf5(output_path, statepoint_path, summary):
+    if statepoint_path is None:
+        return
+    _minicase.append_volume_flux_hdf5(
+        output_path=output_path,
+        statepoint_path=statepoint_path,
+        mixture_names=[domain.name for domain in summary.domains],
+    )
