@@ -43,6 +43,10 @@ MACROLIB="$RUN_DIR/out.macrolib.txt"
 SUMMARY="$CONVERT_RUN_DIR/run_summary.json"
 CHECK_SUMMARY="$CONVERT_RUN_DIR/check_summary.json"
 MANIFEST="$CONVERT_RUN_DIR/manifest.json"
+SPH_FIXTURE_DIR="$RUN_DIR/full_core_sph_fixture"
+SPH_CONFIG="$SPH_FIXTURE_DIR/loop_config.json"
+SPH_SUMMARY="$SPH_FIXTURE_DIR/sph_loop_summary.json"
+SPH_BUNDLE="$SPH_FIXTURE_DIR/bundle"
 ENERGY_STRUCTURE="OPENMC2DONJON-FULL-CORE-MINICASE-2G"
 
 echo "== openmc2donjon OpenMC full-core assembly-wise minicase smoke =="
@@ -237,6 +241,85 @@ print(
     "full-core assembly-wise readback OK: "
     f"mixtures={len(expected_names)} groups=2 mco_blocks={len(mcompo_blocks)}"
 )
+PY
+
+echo
+echo "== Full-core SPH loop handoff =="
+"$PYTHON_BIN" "$EXAMPLE_DIR/make_sph_loop_fixture.py" \
+  --mgxs "$MGXS" \
+  --output-dir "$SPH_FIXTURE_DIR" \
+  --config "$SPH_CONFIG" \
+  --driver "$EXAMPLE_DIR/fake_full_core_low_order_solver.py" \
+  --python-bin "$PYTHON_BIN"
+
+"$PYTHON_BIN" -m openmc2donjon.cli run-sph-loop \
+  --config "$SPH_CONFIG" \
+  --summary-json "$SPH_SUMMARY" \
+  --bundle-dir "$SPH_BUNDLE" \
+  --force
+
+"$PYTHON_BIN" -m openmc2donjon.cli validate-bundle "$SPH_BUNDLE/manifest.json"
+
+"$PYTHON_BIN" - "$SPH_FIXTURE_DIR" "$SPH_SUMMARY" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+import h5py
+import numpy as np
+
+from openmc2donjon.macrolib import read_macrolib_ascii
+
+
+fixture_dir = Path(sys.argv[1])
+summary_path = Path(sys.argv[2])
+expected_names = [
+    f"ASM_Y{y_index:02d}_X{x_index:02d}"
+    for y_index in range(1, 4)
+    for x_index in range(1, 4)
+]
+
+summary = json.loads(summary_path.read_text(encoding="utf-8"))
+if summary["decision"] != "openmc2donjon_sph_loop_passed":
+    raise SystemExit("SPH loop did not pass")
+if summary["completed_iterations"] != 2:
+    raise SystemExit("SPH loop did not complete two iterations")
+if summary["final_solve"] is None:
+    raise SystemExit("SPH loop did not run final solve")
+if not summary["converged"]:
+    raise SystemExit("SPH loop did not converge")
+if not summary["acceptance_passed"]:
+    raise SystemExit("SPH loop acceptance failed")
+preflight = summary["flux_map_preflight"]
+if preflight["map_kind"] != "map_h5:/scalar_flux_ids":
+    raise SystemExit("SPH loop did not use the fixture flux map")
+if preflight["mixture_names"] != expected_names:
+    raise SystemExit("SPH loop mixture names mismatch")
+if preflight["scalar_flux_ids"] != list(range(1, 10)):
+    raise SystemExit("SPH loop scalar flux IDs are not one per assembly")
+if preflight["reference_flux_shape"] != [9, 2]:
+    raise SystemExit("SPH loop reference flux shape mismatch")
+quality = summary["quality"]
+if quality["final_flux_ratio_max_residual"] > 1.0e-8:
+    raise SystemExit("SPH final flux residual exceeds ASCII round-trip tolerance")
+
+final_sph = Path(summary["final_sph_sidecar"])
+with h5py.File(final_sph, "r") as h5:
+    np.testing.assert_allclose(h5["sph"][:], np.full((9, 2), 2.0))
+    assert h5.attrs["sph_kind"] == "full-core-assembly-sph-loop-iter2"
+
+expected_path = fixture_dir / "expected_sph.h5"
+with h5py.File(expected_path, "r") as h5:
+    np.testing.assert_allclose(h5["expected_sph"][:], np.full((9, 2), 2.0))
+
+macrolib = read_macrolib_ascii(Path(summary["final_ascii"]))
+if macrolib.ngroups != 2 or macrolib.nmixtures != 9:
+    raise SystemExit("SPH MACROLIB dimensions changed")
+if macrolib.sph is None:
+    raise SystemExit("SPH MACROLIB is missing SPH data")
+np.testing.assert_allclose(macrolib.sph, np.full((9, 2), 2.0))
+
+print("full-core SPH loop readback OK: mixtures=9 groups=2 final_sph=2")
 PY
 
 echo
