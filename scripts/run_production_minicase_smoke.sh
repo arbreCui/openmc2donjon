@@ -18,9 +18,13 @@ if [[ -n "$SCATTER_ROW_BALANCE_FAIL" ]]; then
 fi
 UNCERTAINTY_WARN="${OPENMC2DONJON_UNCERTAINTY_WARN:-5e-2}"
 UNCERTAINTY_FAIL="${OPENMC2DONJON_UNCERTAINTY_FAIL:-}"
+UNCERTAINTY_PRODUCTION_FAIL="${OPENMC2DONJON_UNCERTAINTY_PRODUCTION_FAIL:-1.0}"
 UNCERTAINTY_ARGS=(--uncertainty-warn "$UNCERTAINTY_WARN")
 if [[ -n "$UNCERTAINTY_FAIL" ]]; then
   UNCERTAINTY_ARGS+=(--uncertainty-fail "$UNCERTAINTY_FAIL")
+fi
+if [[ -n "$UNCERTAINTY_PRODUCTION_FAIL" ]]; then
+  UNCERTAINTY_ARGS+=(--uncertainty-production-fail "$UNCERTAINTY_PRODUCTION_FAIL")
 fi
 
 if [[ -z "$PYTHON_BIN" ]]; then
@@ -290,6 +294,8 @@ if uncertainty["missing_datasets"] >= uncertainty["expected_datasets"]:
     raise SystemExit("production minicase preflight treated all uncertainty datasets as missing")
 if uncertainty["max_rel"] is None or uncertainty["max_rel"] <= 0.0:
     raise SystemExit("production minicase preflight did not compute positive relative uncertainty")
+if uncertainty["production_max_rel"] is None or uncertainty["production_max_rel"] <= 0.0:
+    raise SystemExit("production minicase preflight did not compute positive production uncertainty")
 
 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 labels = {artifact["label"]: artifact for artifact in manifest["artifacts"]}
@@ -303,7 +309,8 @@ print(
     "production minicase readback OK: "
     f"blocks={len(blocks)} mixtures={summary['mixture_count']} "
     f"groups={summary['energy_groups']} P{summary['legendre_order']} "
-    f"uncertainty_max_rel={uncertainty['max_rel']:.6g}"
+    f"uncertainty_max_rel={uncertainty['max_rel']:.6g} "
+    f"production_max_rel={uncertainty['production_max_rel']:.6g}"
 )
 PY
 
@@ -311,7 +318,7 @@ echo
 echo "== Assert strict uncertainty preflight can fail =="
 if "$PYTHON_BIN" -m openmc2donjon.cli check \
   "$MGXS" \
-  --uncertainty-fail 0.0 \
+  --uncertainty-production-fail 0.0 \
   --summary-json "$STRICT_UNCERTAINTY_CHECK_SUMMARY"; then
   echo "strict uncertainty check unexpectedly passed" >&2
   exit 1
@@ -330,11 +337,13 @@ if uncertainty["datasets"] <= 0:
     raise SystemExit("strict uncertainty check did not see *_std_dev datasets")
 if uncertainty["max_rel"] is None or uncertainty["max_rel"] <= 0.0:
     raise SystemExit("strict uncertainty check did not compute positive max_rel")
-if not any("exceeds fail threshold" in issue for issue in input_summary["issues"]):
-    raise SystemExit("strict uncertainty check did not fail on the uncertainty threshold")
+if uncertainty["production_max_rel"] is None or uncertainty["production_max_rel"] <= 0.0:
+    raise SystemExit("strict uncertainty check did not compute positive production max_rel")
+if not any("exceeds production fail threshold" in issue for issue in input_summary["issues"]):
+    raise SystemExit("strict uncertainty check did not fail on the production threshold")
 print(
     "strict uncertainty preflight failed as expected: "
-    f"max_rel={uncertainty['max_rel']:.6g}"
+    f"production_max_rel={uncertainty['production_max_rel']:.6g}"
 )
 PY
 

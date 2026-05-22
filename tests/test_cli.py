@@ -395,6 +395,43 @@ class CliTests(unittest.TestCase):
         self.assertFalse(output_path.exists())
         self.assertIn("mgxs_input_contract_failed", stream.getvalue())
 
+    def test_convert_check_can_fail_on_production_uncertainty(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            input_path = tmp / "mgxs.h5"
+            output_path = tmp / "out.mcompo.txt"
+            summary_path = tmp / "check_summary.json"
+            write_valid_mgxs(input_path)
+            with h5py.File(input_path, "a") as h5:
+                h5["mixtures/fuel"].create_dataset(
+                    "total_std_dev",
+                    data=np.array([0.001, 0.14]),
+                )
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = cli_main(
+                    [
+                        str(input_path),
+                        "-o",
+                        str(output_path),
+                        "--check",
+                        "--uncertainty-production-fail",
+                        "0.1",
+                        "--check-summary-json",
+                        str(summary_path),
+                    ]
+                )
+
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(rc, 1)
+        self.assertFalse(output_path.exists())
+        self.assertEqual(summary["decision"], "mgxs_input_contract_failed")
+        uncertainty = summary["inputs"][0]["uncertainty"]
+        self.assertAlmostEqual(uncertainty["production_max_rel"], 0.2)
+        self.assertIn("production fail threshold", stream.getvalue())
+
 
 def write_valid_mgxs(path: Path) -> None:
     with h5py.File(path, "w") as h5:

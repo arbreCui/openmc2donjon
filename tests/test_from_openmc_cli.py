@@ -139,6 +139,8 @@ class FromOpenMCCliTests(unittest.TestCase):
                         "0.2",
                         "--uncertainty-fail",
                         "0.4",
+                        "--uncertainty-production-fail",
+                        "0.3",
                         "--uncertainty-mean-abs-floor",
                         "1e-9",
                         "--check-summary-json",
@@ -164,6 +166,7 @@ class FromOpenMCCliTests(unittest.TestCase):
         self.assertIn("require_transport_dataset: yes", rendered)
         self.assertIn("uncertainty_warn: 0.2", rendered)
         self.assertIn("uncertainty_fail: 0.4", rendered)
+        self.assertIn("uncertainty_production_fail: 0.3", rendered)
         self.assertIn("uncertainty_mean_abs_floor: 1e-09", rendered)
         self.assertFalse(hdf5_exists)
         self.assertFalse(output_exists)
@@ -238,7 +241,7 @@ def load_statepoint(library, statepoint_path):
                         "-o",
                         str(output),
                         "--check",
-                        "--uncertainty-fail",
+                        "--uncertainty-production-fail",
                         "0.01",
                         "--check-summary-json",
                         str(check_summary),
@@ -257,10 +260,10 @@ def load_statepoint(library, statepoint_path):
         self.assertEqual(payload["decision"], "mgxs_input_contract_failed")
         uncertainty = payload["inputs"][0]["uncertainty"]
         self.assertEqual(uncertainty["datasets"], 3)
-        self.assertGreater(uncertainty["max_rel"], 0.01)
+        self.assertGreater(uncertainty["production_max_rel"], 0.01)
         self.assertTrue(
             any(
-                "exceeds fail threshold" in issue
+                "exceeds production fail threshold" in issue
                 for issue in payload["inputs"][0]["issues"]
             )
         )

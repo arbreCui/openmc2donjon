@@ -411,6 +411,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="with --check, fail if any available *_std_dev / |mean| exceeds REL",
     )
     parser.add_argument(
+        "--uncertainty-production-fail",
+        type=float,
+        default=None,
+        metavar="REL",
+        help=(
+            "with --check, fail if production-critical uncertainty exceeds REL; "
+            "this gates 1D XS and P0 scatter but leaves higher scatter moments "
+            "warning-only"
+        ),
+    )
+    parser.add_argument(
         "--uncertainty-mean-abs-floor",
         type=float,
         default=1.0e-12,

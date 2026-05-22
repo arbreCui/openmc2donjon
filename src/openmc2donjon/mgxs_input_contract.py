@@ -80,6 +80,11 @@ def main() -> int:
             uncertainty=UncertaintyConfig(
                 warn_threshold=None if args.no_uncertainty_check else args.uncertainty_warn,
                 fail_threshold=None if args.no_uncertainty_check else args.uncertainty_fail,
+                production_fail_threshold=(
+                    None
+                    if args.no_uncertainty_check
+                    else args.uncertainty_production_fail
+                ),
                 mean_abs_floor=args.uncertainty_mean_abs_floor,
             ),
         )
@@ -176,6 +181,16 @@ def parse_args() -> argparse.Namespace:
         default=None,
         metavar="REL",
         help="fail if any available *_std_dev / |mean| exceeds REL",
+    )
+    parser.add_argument(
+        "--uncertainty-production-fail",
+        type=float,
+        default=None,
+        metavar="REL",
+        help=(
+            "fail if production-critical uncertainty exceeds REL; this gates "
+            "1D XS and P0 scatter but leaves higher scatter moments warning-only"
+        ),
     )
     parser.add_argument(
         "--uncertainty-mean-abs-floor",
@@ -703,6 +718,7 @@ def run_preflight(
     scatter_row_balance_fail: float | None = None,
     uncertainty_warn: float | None = 0.05,
     uncertainty_fail: float | None = None,
+    uncertainty_production_fail: float | None = None,
     uncertainty_mean_abs_floor: float = 1.0e-12,
     summary_json: Path | None = None,
 ) -> bool:
@@ -724,6 +740,7 @@ def run_preflight(
             uncertainty=UncertaintyConfig(
                 warn_threshold=uncertainty_warn,
                 fail_threshold=uncertainty_fail,
+                production_fail_threshold=uncertainty_production_fail,
                 mean_abs_floor=uncertainty_mean_abs_floor,
             ),
         )

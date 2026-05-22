@@ -165,6 +165,43 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--uncertainty-warn",
+        type=float,
+        default=0.05,
+        metavar="REL",
+        help="with --check, warn if any available *_std_dev / |mean| exceeds REL",
+    )
+    parser.add_argument(
+        "--uncertainty-fail",
+        type=float,
+        default=None,
+        metavar="REL",
+        help="with --check, fail if any available *_std_dev / |mean| exceeds REL",
+    )
+    parser.add_argument(
+        "--uncertainty-production-fail",
+        type=float,
+        default=None,
+        metavar="REL",
+        help=(
+            "with --check, fail if production-critical uncertainty exceeds REL; "
+            "this gates 1D XS and P0 scatter but leaves higher scatter moments "
+            "warning-only"
+        ),
+    )
+    parser.add_argument(
+        "--uncertainty-mean-abs-floor",
+        type=float,
+        default=1.0e-12,
+        metavar="ABS",
+        help="with --check, skip relative uncertainty bins with |mean| <= ABS",
+    )
+    parser.add_argument(
+        "--no-uncertainty-check",
+        action="store_true",
+        help="with --check, disable *_std_dev relative uncertainty checks",
+    )
+    parser.add_argument(
         "--check-summary-json",
         type=Path,
         default=None,
@@ -245,6 +282,12 @@ def _convert_handler(args: argparse.Namespace) -> int:
             require_volume=args.require_volume,
             scatter_row_balance_warn=args.scatter_row_balance_warn,
             scatter_row_balance_fail=args.scatter_row_balance_fail,
+            uncertainty_warn=None if args.no_uncertainty_check else args.uncertainty_warn,
+            uncertainty_fail=None if args.no_uncertainty_check else args.uncertainty_fail,
+            uncertainty_production_fail=(
+                None if args.no_uncertainty_check else args.uncertainty_production_fail
+            ),
+            uncertainty_mean_abs_floor=args.uncertainty_mean_abs_floor,
             summary_json=args.check_summary_json,
         )
         if not ok:

@@ -277,6 +277,10 @@ def _print_dry_run_checks(args: argparse.Namespace) -> None:
                 f"{_render_optional_value(args.uncertainty_fail)}"
             )
             print(
+                "    uncertainty_production_fail: "
+                f"{_render_optional_value(args.uncertainty_production_fail)}"
+            )
+            print(
                 "    uncertainty_mean_abs_floor: "
                 f"{_render_optional_value(args.uncertainty_mean_abs_floor)}"
             )
@@ -400,6 +404,9 @@ def _run_pipeline_preflight(
         scatter_row_balance_fail=args.scatter_row_balance_fail,
         uncertainty_warn=None if args.no_uncertainty_check else args.uncertainty_warn,
         uncertainty_fail=None if args.no_uncertainty_check else args.uncertainty_fail,
+        uncertainty_production_fail=(
+            None if args.no_uncertainty_check else args.uncertainty_production_fail
+        ),
         uncertainty_mean_abs_floor=args.uncertainty_mean_abs_floor,
         summary_json=args.check_summary_json,
     )

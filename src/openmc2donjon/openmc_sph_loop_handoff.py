@@ -58,6 +58,7 @@ def prepare_openmc_sph_loop_handoff(
     scatter_row_balance_fail: float | None = None,
     uncertainty_warn: float | None = 0.05,
     uncertainty_fail: float | None = None,
+    uncertainty_production_fail: float | None = None,
     uncertainty_mean_abs_floor: float = 1.0e-12,
     reference_flux: str | Path | None = None,
     reference_flux_dataset: str = "openmc_volume_flux",
@@ -157,6 +158,7 @@ def prepare_openmc_sph_loop_handoff(
         scatter_row_balance_fail=scatter_row_balance_fail,
         uncertainty_warn=uncertainty_warn,
         uncertainty_fail=uncertainty_fail,
+        uncertainty_production_fail=uncertainty_production_fail,
         uncertainty_mean_abs_floor=uncertainty_mean_abs_floor,
     )
     _write_ascii(
@@ -525,6 +527,7 @@ def _run_optional_preflight(
     scatter_row_balance_fail: float | None,
     uncertainty_warn: float | None,
     uncertainty_fail: float | None,
+    uncertainty_production_fail: float | None,
     uncertainty_mean_abs_floor: float,
 ) -> None:
     if not check:
@@ -539,6 +542,7 @@ def _run_optional_preflight(
         scatter_row_balance_fail=scatter_row_balance_fail,
         uncertainty_warn=uncertainty_warn,
         uncertainty_fail=uncertainty_fail,
+        uncertainty_production_fail=uncertainty_production_fail,
         uncertainty_mean_abs_floor=uncertainty_mean_abs_floor,
         summary_json=check_summary_json,
     )

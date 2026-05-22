@@ -138,6 +138,16 @@ def build_check_parser() -> argparse.ArgumentParser:
         help="fail if any available *_std_dev / |mean| exceeds REL",
     )
     parser.add_argument(
+        "--uncertainty-production-fail",
+        type=float,
+        default=None,
+        metavar="REL",
+        help=(
+            "fail if production-critical uncertainty exceeds REL; this gates "
+            "1D XS and P0 scatter but leaves higher scatter moments warning-only"
+        ),
+    )
+    parser.add_argument(
         "--uncertainty-mean-abs-floor",
         type=float,
         default=1.0e-12,
@@ -399,6 +409,9 @@ def check_handler(args: argparse.Namespace) -> int:
         scatter_row_balance_fail=args.scatter_row_balance_fail,
         uncertainty_warn=None if args.no_uncertainty_check else args.uncertainty_warn,
         uncertainty_fail=None if args.no_uncertainty_check else args.uncertainty_fail,
+        uncertainty_production_fail=(
+            None if args.no_uncertainty_check else args.uncertainty_production_fail
+        ),
         uncertainty_mean_abs_floor=args.uncertainty_mean_abs_floor,
         summary_json=args.summary_json,
     )

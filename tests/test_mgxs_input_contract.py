@@ -280,6 +280,66 @@ class MgxsInputContractTests(unittest.TestCase):
         self.assertTrue(any("absorption_std_dev shape" in item for item in report.issues))
         self.assertTrue(any("exceeds fail threshold" in item for item in report.issues))
 
+    def test_uncertainty_production_fail_ignores_higher_scatter_moments(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "p1_uncertain.h5"
+            scatter = np.array(
+                [
+                    [[0.2, 0.04], [0.01, 0.3]],
+                    [[0.01, 0.02], [0.03, 0.01]],
+                ]
+            )
+            write_single_state_fixture(
+                path,
+                total=[0.5, 0.7],
+                legendre_order=1,
+                scatter=scatter,
+            )
+            with h5py.File(path, "a") as h5:
+                std = np.zeros((2, 2, 2), dtype=float)
+                std[0] = np.array([[0.0005, 0.0005], [0.0005, 0.0005]])
+                std[1, 1, 1] = 0.5
+                h5["mixtures/fuel"].create_dataset("scatter_matrix_std_dev", data=std)
+
+            report = validator.validate_input(
+                path,
+                uncertainty=validator.UncertaintyConfig(
+                    warn_threshold=0.05,
+                    production_fail_threshold=0.1,
+                ),
+            )
+
+        self.assertTrue(report.ok, report.issues)
+        self.assertGreater(report.uncertainty_max_rel or 0.0, 10.0)
+        self.assertLess(report.uncertainty_production_max_rel or 1.0, 0.1)
+        self.assertIn("moment=1", report.uncertainty_worst or "")
+        self.assertNotIn("moment=1", report.uncertainty_production_worst or "")
+        self.assertTrue(any("statistical uncertainty" in item for item in report.warnings))
+
+    def test_uncertainty_production_fail_gates_primary_xs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "primary_uncertain.h5"
+            write_single_state_fixture(path, total=[0.5, 0.7])
+            with h5py.File(path, "a") as h5:
+                h5["mixtures/fuel"].create_dataset(
+                    "total_std_dev",
+                    data=np.array([0.001, 0.14]),
+                )
+
+            report = validator.validate_input(
+                path,
+                uncertainty=validator.UncertaintyConfig(
+                    warn_threshold=0.05,
+                    production_fail_threshold=0.1,
+                ),
+            )
+
+        self.assertFalse(report.ok)
+        self.assertAlmostEqual(report.uncertainty_production_max_rel or 0.0, 0.2)
+        self.assertTrue(
+            any("exceeds production fail threshold" in item for item in report.issues)
+        )
+
 
 def write_multistate_fixture(
     path: Path,

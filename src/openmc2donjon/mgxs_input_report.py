@@ -40,6 +40,7 @@ class InputReport:
     uncertainty_checked: bool = False
     uncertainty_warn_threshold: float | None = None
     uncertainty_fail_threshold: float | None = None
+    uncertainty_production_fail_threshold: float | None = None
     uncertainty_mean_abs_floor: float = 1.0e-12
     uncertainty_expected_datasets: int = 0
     uncertainty_datasets: int = 0
@@ -47,6 +48,9 @@ class InputReport:
     uncertainty_max_rel: float | None = None
     uncertainty_worst: str | None = None
     uncertainty_top: list[str] = field(default_factory=list)
+    uncertainty_production_bins_checked: int = 0
+    uncertainty_production_max_rel: float | None = None
+    uncertainty_production_worst: str | None = None
     issues: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -180,6 +184,9 @@ def _report_payload(report: InputReport) -> dict[str, object]:
             "checked": report.uncertainty_checked,
             "warn_threshold": report.uncertainty_warn_threshold,
             "fail_threshold": report.uncertainty_fail_threshold,
+            "production_fail_threshold": (
+                report.uncertainty_production_fail_threshold
+            ),
             "mean_abs_floor": report.uncertainty_mean_abs_floor,
             "expected_datasets": report.uncertainty_expected_datasets,
             "datasets": report.uncertainty_datasets,
@@ -190,6 +197,9 @@ def _report_payload(report: InputReport) -> dict[str, object]:
             "max_rel": report.uncertainty_max_rel,
             "worst": report.uncertainty_worst,
             "top": report.uncertainty_top,
+            "production_bins_checked": report.uncertainty_production_bins_checked,
+            "production_max_rel": report.uncertainty_production_max_rel,
+            "production_worst": report.uncertainty_production_worst,
         },
         "transport_total_datasets": report.transport_total_datasets,
         "transport_total_derivable": report.transport_total_derivable,
@@ -220,4 +230,11 @@ def _uncertainty_line(report: InputReport) -> str:
         f"bins={report.uncertainty_bins_checked} "
         f"max_rel={report.uncertainty_max_rel:.6e} "
         f"worst={report.uncertainty_worst}"
+        f"{_uncertainty_production_suffix(report)}"
     )
+
+
+def _uncertainty_production_suffix(report: InputReport) -> str:
+    if report.uncertainty_production_max_rel is None:
+        return ""
+    return f" production_max_rel={report.uncertainty_production_max_rel:.6e}"
