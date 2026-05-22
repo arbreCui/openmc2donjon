@@ -96,6 +96,8 @@ def run_sph_loop(
             input_h5=plan.input_h5,
             ascii_input=current_ascii,
             previous_sph=previous_sph,
+            energy_groups=flux_map_preflight.energy_groups,
+            list_offset=plan.list_offset,
             force=force,
         )
         solves.append(solve_report)
@@ -166,6 +168,8 @@ def run_sph_loop(
             input_h5=plan.input_h5,
             ascii_input=current_ascii,
             previous_sph=previous_sph,
+            energy_groups=flux_map_preflight.energy_groups,
+            list_offset=plan.list_offset,
             force=force,
         )
         solves.append(final_solve)

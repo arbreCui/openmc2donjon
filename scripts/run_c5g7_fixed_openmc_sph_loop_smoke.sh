@@ -234,8 +234,16 @@ if (
     raise SystemExit(f"SPH loop convergence is missing worst-bin diagnostics: {loop_summary_path}")
 if len(loop_summary.get("solves", [])) != 3:
     raise SystemExit("configured SPH loop did not run the final solve")
+for solve in loop_summary["solves"]:
+    if solve.get("result_bytes", 0) <= 0:
+        raise SystemExit(f"SPH loop solve result is empty: {solve}")
+    if solve.get("flux_vector_count") != 7 or solve.get("flux_unknown_count") != 27:
+        raise SystemExit(f"SPH loop solve contract fields are inconsistent: {solve}")
 if len(loop_summary.get("postprocesses", [])) != 2:
     raise SystemExit("configured SPH loop did not apply two postprocess steps")
+for postprocess in loop_summary["postprocesses"]:
+    if postprocess.get("output_bytes", 0) <= 0 or postprocess.get("block_count", 0) <= 0:
+        raise SystemExit(f"SPH loop postprocess contract fields are missing: {postprocess}")
 if len(loop_summary.get("audit_rows", [])) != 3:
     raise SystemExit("configured SPH loop summary is missing audit rows")
 if not audit_csv.exists():

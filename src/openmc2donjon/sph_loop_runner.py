@@ -8,6 +8,10 @@ import shlex
 import subprocess
 from typing import Any
 
+import numpy as np
+
+from . import lcm_ascii as lcm
+from .macrolib import read_macrolib_ascii
 from .sph_loop_report import SphLoopPostprocessReport, SphLoopSolveReport
 from .sph_workflow import SphIterationWorkflowReport
 
@@ -21,6 +25,8 @@ def run_solver(
     input_h5: Path,
     ascii_input: Path,
     previous_sph: Path | None,
+    energy_groups: int,
+    list_offset: int,
     force: bool,
 ) -> SphLoopSolveReport:
     solve_dir = loop_dir / f"iter{iteration:02d}_solve"
@@ -54,6 +60,7 @@ def run_solver(
     cwd = _solver_cwd(solver, base_dir, context, solve_dir)
     env = _solver_env(solver, context)
 
+    _require_existing_file(ascii_input, label=f"solver input for iteration {iteration}")
     with stdout.open("w", encoding="utf-8") as out, stderr.open("w", encoding="utf-8") as err:
         completed = subprocess.run(
             command,
@@ -74,6 +81,12 @@ def run_solver(
         raise FileNotFoundError(
             f"solver command for iteration {iteration} did not create result {result}"
         )
+    result_bytes, flux_vector_count, flux_unknown_count = _validate_solver_result(
+        result,
+        iteration=iteration,
+        energy_groups=energy_groups,
+        list_offset=list_offset,
+    )
 
     return SphLoopSolveReport(
         iteration=iteration,
@@ -84,6 +97,9 @@ def run_solver(
         stdout=stdout,
         stderr=stderr,
         returncode=completed.returncode,
+        result_bytes=result_bytes,
+        flux_vector_count=flux_vector_count,
+        flux_unknown_count=flux_unknown_count,
     )
 
 
@@ -149,6 +165,11 @@ def run_postprocessor(
         raise FileNotFoundError(
             f"postprocess command for iteration {iteration + 1} did not create {output}"
         )
+    output_bytes, block_count = _validate_postprocess_output(
+        output,
+        output_format=output_format,
+        iteration=iteration + 1,
+    )
 
     return SphLoopPostprocessReport(
         iteration=iteration + 1,
@@ -160,12 +181,108 @@ def run_postprocessor(
         stdout=stdout,
         stderr=stderr,
         returncode=completed.returncode,
+        output_bytes=output_bytes,
+        block_count=block_count,
     )
 
 
 def require_absent(path: Path, *, force: bool) -> None:
     if path.exists() and not force:
         raise FileExistsError(f"output already exists; use --force: {path}")
+
+
+def _require_existing_file(path: Path, *, label: str) -> int:
+    if not path.exists():
+        raise FileNotFoundError(f"{label} does not exist: {path}")
+    if not path.is_file():
+        raise ValueError(f"{label} is not a regular file: {path}")
+    size = path.stat().st_size
+    if size <= 0:
+        raise ValueError(f"{label} is empty: {path}")
+    return int(size)
+
+
+def _validate_solver_result(
+    path: Path,
+    *,
+    iteration: int,
+    energy_groups: int,
+    list_offset: int,
+) -> tuple[int, int, int]:
+    try:
+        size = _require_existing_file(
+            path,
+            label=f"solver result for iteration {iteration}",
+        )
+        blocks = lcm.read_lcm_ascii(path)
+    except (OSError, ValueError) as exc:
+        raise ValueError(
+            f"solver result contract failed for iteration {iteration}: {exc}"
+        ) from exc
+
+    vectors = [
+        np.asarray(block.data, dtype=float)
+        for block in blocks
+        if block.name is None
+        and block.data is not None
+        and block.type_code == 2
+        and block.trailing
+    ]
+    needed = int(list_offset) + int(energy_groups)
+    if len(vectors) < needed:
+        raise ValueError(
+            f"solver result contract failed for iteration {iteration}: {path} "
+            f"contains {len(vectors)} unnamed real flux vector(s), need {needed} "
+            f"for list_offset={list_offset} and {energy_groups} group(s)"
+        )
+    selected = vectors[int(list_offset) : needed]
+    lengths = {int(vector.size) for vector in selected}
+    if len(lengths) != 1:
+        raise ValueError(
+            f"solver result contract failed for iteration {iteration}: "
+            f"inconsistent flux vector lengths {sorted(lengths)}"
+        )
+    flux_unknown_count = lengths.pop()
+    if flux_unknown_count <= 0:
+        raise ValueError(
+            f"solver result contract failed for iteration {iteration}: "
+            "flux vectors contain no unknowns"
+        )
+    return size, len(vectors), flux_unknown_count
+
+
+def _validate_postprocess_output(
+    path: Path,
+    *,
+    output_format: str,
+    iteration: int,
+) -> tuple[int, int]:
+    try:
+        size = _require_existing_file(
+            path,
+            label=f"postprocess output for iteration {iteration}",
+        )
+        blocks = lcm.read_lcm_ascii(path)
+        if not blocks:
+            raise ValueError("no LCM ASCII blocks found")
+        if output_format == "macrolib":
+            read_macrolib_ascii(path)
+        elif not _has_signature(blocks, "L_MULTICOMPO"):
+            raise ValueError("missing L_MULTICOMPO SIGNATURE")
+    except (OSError, ValueError) as exc:
+        raise ValueError(
+            f"postprocess output contract failed for iteration {iteration}: {exc}"
+        ) from exc
+    return size, len(blocks)
+
+
+def _has_signature(blocks: list[lcm.LcmBlock], value: str) -> bool:
+    return any(
+        block.name == "SIGNATURE"
+        and isinstance(block.data, str)
+        and block.data.strip() == value
+        for block in blocks
+    )
 
 
 def _postprocess_output_path(

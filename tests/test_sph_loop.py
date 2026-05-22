@@ -141,8 +141,13 @@ class SphLoopTests(unittest.TestCase):
             self.assertIn("worst_residual_bins", payload["convergence"][0])
             self.assertEqual(payload["iterations"], 2)
             self.assertEqual(len(payload["solves"]), 3)
+            self.assertGreater(payload["solves"][0]["result_bytes"], 0)
+            self.assertEqual(payload["solves"][0]["flux_vector_count"], 2)
+            self.assertEqual(payload["solves"][0]["flux_unknown_count"], 4)
             self.assertEqual(len(payload["workflows"]), 2)
             self.assertEqual(len(payload["postprocesses"]), 2)
+            self.assertGreater(payload["postprocesses"][0]["output_bytes"], 0)
+            self.assertGreater(payload["postprocesses"][0]["block_count"], 0)
             self.assertEqual(payload["final_solve"]["iteration"], 2)
             self.assertEqual(len(payload["audit_rows"]), 3)
             self.assertEqual(payload["audit_rows"][0]["stage"], "iteration")
@@ -528,6 +533,113 @@ class SphLoopTests(unittest.TestCase):
             )
             self.assertFalse((root / "loop_run/iter00_solve").exists())
 
+    def test_solver_contract_rejects_empty_flux_dump(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference = root / "reference_flux.h5"
+            solver = root / "empty_result_solver.py"
+            config = root / "loop.json"
+            _write_mgxs(mgxs)
+            _write_reference_flux(reference)
+            _write_empty_result_solver(solver)
+            config.write_text(
+                json.dumps(
+                    {
+                        "schema": "openmc2donjon.sph-loop-config.v1",
+                        "input_h5": "mgxs.h5",
+                        "output_dir": "loop_run",
+                        "reference_flux": "reference_flux.h5::openmc_volume_flux",
+                        "iterations": 1,
+                        "format": "macrolib",
+                        "scalar_flux_map": {"fuel": 2, "moderator": 4},
+                        "solver": {
+                            "command": [
+                                sys.executable,
+                                str(solver),
+                                "--macrolib",
+                                "{ascii_input}",
+                                "--result",
+                                "{result}",
+                            ],
+                            "result": "donjon_flux.result",
+                        },
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as raised:
+                    cli_main(["run-sph-loop", "--config", str(config)])
+
+            self.assertEqual(raised.exception.code, 1)
+            self.assertIn("solver result contract failed for iteration 0", stderr.getvalue())
+            self.assertFalse((root / "loop_run/iter01_sph").exists())
+
+    def test_postprocess_contract_rejects_empty_ascii_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference = root / "reference_flux.h5"
+            solver = root / "fake_donjon_solver.py"
+            postprocess = root / "empty_postprocess.py"
+            config = root / "loop.json"
+            _write_mgxs(mgxs)
+            _write_reference_flux(reference)
+            _write_fake_solver(solver)
+            _write_empty_postprocess(postprocess)
+            config.write_text(
+                json.dumps(
+                    {
+                        "schema": "openmc2donjon.sph-loop-config.v1",
+                        "input_h5": "mgxs.h5",
+                        "output_dir": "loop_run",
+                        "reference_flux": "reference_flux.h5::openmc_volume_flux",
+                        "iterations": 1,
+                        "format": "macrolib",
+                        "scalar_flux_map": {"fuel": 2, "moderator": 4},
+                        "solver": {
+                            "command": [
+                                sys.executable,
+                                str(solver),
+                                "--macrolib",
+                                "{ascii_input}",
+                                "--result",
+                                "{result}",
+                                "--iteration",
+                                "{iteration}",
+                            ],
+                            "result": "donjon_flux.result",
+                        },
+                        "postprocess": {
+                            "command": [
+                                sys.executable,
+                                str(postprocess),
+                                "--output",
+                                "{output}",
+                            ],
+                            "output": "corrected.macrolib.txt",
+                        },
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as raised:
+                    cli_main(["run-sph-loop", "--config", str(config)])
+
+            self.assertEqual(raised.exception.code, 1)
+            self.assertIn("postprocess output contract failed for iteration 1", stderr.getvalue())
+            self.assertTrue((root / "loop_run/iter01_sph/next_sph.sidecar.h5").exists())
+
 
 def _write_mgxs(path: Path) -> None:
     with h5py.File(path, "w") as h5:
@@ -696,6 +808,59 @@ def main() -> int:
     output.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(args.input, output)
     print(f"fake postprocess iteration={args.iteration} output={output}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+
+def _write_empty_result_solver(path: Path) -> None:
+    path.write_text(
+        """
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--macrolib", required=True)
+    parser.add_argument("--result", required=True)
+    args = parser.parse_args()
+    if not Path(args.macrolib).exists():
+        raise SystemExit(f"missing macrolib input: {args.macrolib}")
+    Path(args.result).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.result).write_text("", encoding="utf-8")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+
+def _write_empty_postprocess(path: Path) -> None:
+    path.write_text(
+        """
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output", required=True)
+    args = parser.parse_args()
+    Path(args.output).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.output).write_text("", encoding="utf-8")
     return 0
 
 

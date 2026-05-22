@@ -34,6 +34,9 @@ class SphLoopSolveReport:
     stdout: Path
     stderr: Path
     returncode: int
+    result_bytes: int
+    flux_vector_count: int
+    flux_unknown_count: int
 
 
 @dataclass(frozen=True)
@@ -47,6 +50,8 @@ class SphLoopPostprocessReport:
     stdout: Path
     stderr: Path
     returncode: int
+    output_bytes: int
+    block_count: int
 
 
 @dataclass(frozen=True)
@@ -128,12 +133,13 @@ def print_report(report: SphLoopReport) -> None:
     for solve in report.solves:
         print(
             f"  solve[{solve.iteration}]: rc={solve.returncode} "
-            f"result={solve.result}"
+            f"result={solve.result} "
+            f"vectors={solve.flux_vector_count} unknowns={solve.flux_unknown_count}"
         )
     for postprocess in report.postprocesses:
         print(
             f"  postprocess[{postprocess.iteration}]: rc={postprocess.returncode} "
-            f"output={postprocess.output}"
+            f"output={postprocess.output} blocks={postprocess.block_count}"
         )
     if report.convergence_enabled:
         print("  convergence:")
@@ -229,6 +235,9 @@ def write_summary(path: Path, report: SphLoopReport) -> None:
                 "stdout": str(solve.stdout),
                 "stderr": str(solve.stderr),
                 "returncode": solve.returncode,
+                "result_bytes": solve.result_bytes,
+                "flux_vector_count": solve.flux_vector_count,
+                "flux_unknown_count": solve.flux_unknown_count,
             }
             for solve in report.solves
         ],
@@ -279,6 +288,8 @@ def write_summary(path: Path, report: SphLoopReport) -> None:
                 "stdout": str(postprocess.stdout),
                 "stderr": str(postprocess.stderr),
                 "returncode": postprocess.returncode,
+                "output_bytes": postprocess.output_bytes,
+                "block_count": postprocess.block_count,
             }
             for postprocess in report.postprocesses
         ],
