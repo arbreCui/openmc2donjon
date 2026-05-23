@@ -18,6 +18,10 @@ LOGGER_NAME = "openmc2donjon"
 LOG_LEVEL_NAMES = ("CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG")
 _CLI_HANDLER_ATTR = "_openmc2donjon_cli_handler"
 
+# Flag names that consume the following argv token (e.g. ``--log-level INFO``).
+# Used by command dispatchers that scan argv before invoking argparse.
+CLI_LOGGING_VALUE_FLAGS: tuple[str, ...] = ("--log-level",)
+
 
 def get_logger(name: str | None = None) -> logging.Logger:
     """Return a package-scoped logger."""
@@ -91,6 +95,30 @@ def configure_cli_logging_from_args(args: argparse.Namespace) -> logging.Logger:
         quiet=bool(getattr(args, "quiet", False)),
         log_level=getattr(args, "log_level", None),
     )
+
+
+def is_cli_logging_flag(token: str) -> bool:
+    """Return True if ``token`` is one of the CLI logging argparse flags.
+
+    Command dispatchers use this to skip logging flags while scanning argv
+    for a subcommand name. Keeping the recognition rules here means new
+    logging flags do not need to be mirrored into the dispatcher.
+    """
+
+    if token in ("--verbose", "-q", "--quiet"):
+        return True
+    if token in CLI_LOGGING_VALUE_FLAGS:
+        return True
+    if any(token.startswith(f"{flag}=") for flag in CLI_LOGGING_VALUE_FLAGS):
+        return True
+    if (
+        token.startswith("-")
+        and not token.startswith("--")
+        and len(token) > 1
+        and set(token[1:]) == {"v"}
+    ):
+        return True
+    return False
 
 
 def _resolve_log_level(verbose: int, quiet: bool, log_level: str | None) -> int:

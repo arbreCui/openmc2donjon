@@ -6,9 +6,11 @@ import logging
 import unittest
 
 from openmc2donjon._logging import (
+    CLI_LOGGING_VALUE_FLAGS,
     add_cli_logging_arguments,
     configure_cli_logging,
     get_logger,
+    is_cli_logging_flag,
 )
 from openmc2donjon.cli import (
     _is_command_invocation,
@@ -132,6 +134,26 @@ class LoggingTests(unittest.TestCase):
         self.assertTrue(_is_command_invocation(["-v", "check", "input.h5"]))
         self.assertTrue(_is_command_invocation(["--log-level", "INFO", "doctor"]))
         self.assertFalse(_is_command_invocation(["-v", "input.h5"]))
+
+    def test_is_cli_logging_flag_recognizes_supported_forms(self) -> None:
+        self.assertTrue(is_cli_logging_flag("-v"))
+        self.assertTrue(is_cli_logging_flag("-vv"))
+        self.assertTrue(is_cli_logging_flag("-vvv"))
+        self.assertTrue(is_cli_logging_flag("-q"))
+        self.assertTrue(is_cli_logging_flag("--verbose"))
+        self.assertTrue(is_cli_logging_flag("--quiet"))
+        self.assertTrue(is_cli_logging_flag("--log-level"))
+        self.assertTrue(is_cli_logging_flag("--log-level=INFO"))
+
+    def test_is_cli_logging_flag_rejects_non_logging_tokens(self) -> None:
+        self.assertFalse(is_cli_logging_flag("check"))
+        self.assertFalse(is_cli_logging_flag("input.h5"))
+        self.assertFalse(is_cli_logging_flag("--format"))
+        self.assertFalse(is_cli_logging_flag("-"))
+        self.assertFalse(is_cli_logging_flag(""))
+
+    def test_cli_logging_value_flags_includes_log_level(self) -> None:
+        self.assertIn("--log-level", CLI_LOGGING_VALUE_FLAGS)
 
 
 if __name__ == "__main__":

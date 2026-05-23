@@ -7,7 +7,12 @@ from pathlib import Path
 import sys
 
 from . import __version__
-from ._logging import add_cli_logging_arguments, configure_cli_logging_from_args
+from ._logging import (
+    CLI_LOGGING_VALUE_FLAGS,
+    add_cli_logging_arguments,
+    configure_cli_logging_from_args,
+    is_cli_logging_flag,
+)
 from .commands import adf, diagnostics, openmc, sph
 from .commands.base import CommandSpec
 from .macrolib import convert_mgxs_hdf5_to_macrolib
@@ -350,14 +355,9 @@ def _is_command_invocation(raw_argv: list[str]) -> bool:
             return True
         if token == "--":
             return False
-        if token in ("--verbose", "-q", "--quiet"):
-            continue
-        if token.startswith("-") and len(token) > 1 and set(token[1:]) == {"v"}:
-            continue
-        if token == "--log-level":
-            skip_next = True
-            continue
-        if token.startswith("--log-level="):
+        if is_cli_logging_flag(token):
+            if token in CLI_LOGGING_VALUE_FLAGS:
+                skip_next = True
             continue
         return False
     return False
