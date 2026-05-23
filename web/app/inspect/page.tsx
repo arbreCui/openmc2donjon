@@ -25,9 +25,33 @@ type State =
 
 type MixtureState =
   | { kind: "idle" }
-  | { kind: "loading"; mixture: string }
+  | {
+      kind: "loading";
+      mixture: string;
+      moment: number;
+      /** Last successful detail, kept so the panel keeps drawing while
+       * the next request is in flight (avoids the chart flashing out
+       * on every moment switch). */
+      previous?: MixtureDetail;
+    }
   | { kind: "ok"; data: MixtureDetail }
-  | { kind: "error"; mixture: string; message: string; status?: number };
+  | {
+      kind: "error";
+      mixture: string;
+      moment: number;
+      message: string;
+      status?: number;
+      /** As above: keep the previous good payload on screen with an
+       * error banner so the user has a clear recovery path (click
+       * another moment, or another mixture). */
+      previous?: MixtureDetail;
+    };
+
+function carryOverPrevious(state: MixtureState): MixtureDetail | undefined {
+  if (state.kind === "ok") return state.data;
+  if (state.kind === "loading" || state.kind === "error") return state.previous;
+  return undefined;
+}
 
 export default function InspectPage() {
   const [path, setPath] = useState("");
@@ -84,7 +108,12 @@ export default function InspectPage() {
     if (state.kind !== "ok" || selectedMixture == null) return;
     const requested = selectedMixture;
     const requestedMoment = scatterMoment;
-    setMixtureState({ kind: "loading", mixture: requested });
+    setMixtureState((prev) => ({
+      kind: "loading",
+      mixture: requested,
+      moment: requestedMoment,
+      previous: carryOverPrevious(prev),
+    }));
     let cancelled = false;
     api
       .inspectMixture(state.path, requested, requestedMoment)
@@ -96,12 +125,14 @@ export default function InspectPage() {
         if (cancelled) return;
         const base = toErrorState(err);
         if (base.kind === "error") {
-          setMixtureState({
+          setMixtureState((prev) => ({
             kind: "error",
             mixture: requested,
+            moment: requestedMoment,
             message: base.message,
             status: base.status,
-          });
+            previous: carryOverPrevious(prev),
+          }));
         }
       });
     return () => {
@@ -237,31 +268,34 @@ function MixturePanel({
       </p>
     );
   }
-  if (mixtureState.kind === "idle" || mixtureState.kind === "loading") {
+
+  const detail = displayedDetail(mixtureState);
+  // First-time load (no previous): show the simple loading line.
+  if (detail == null && mixtureState.kind === "loading") {
     return (
       <p className="text-sm text-[var(--fg-2)] tab-num">
         Loading <span className="font-mono">{selectedMixture}</span>…
       </p>
     );
   }
-  if (mixtureState.kind === "error") {
-    return (
-      <div className="glass rounded-xl p-5 border-rose-500/20">
-        <div className="text-sm font-semibold text-rose-300">
-          {mixtureState.status
-            ? `HTTP ${mixtureState.status}`
-            : "Mixture read failed"}
-        </div>
-        <div className="mt-1 text-sm text-[var(--fg-1)]">
-          {mixtureState.message}
-        </div>
-      </div>
-    );
+  // First-time error (no previous): show a full error card and let the
+  // user pick another mixture.
+  if (detail == null && mixtureState.kind === "error") {
+    return <MixtureErrorCard state={mixtureState} />;
   }
-  const detail = mixtureState.data;
+  if (detail == null) {
+    return null;
+  }
+
   const bounds = handoff.energy_bounds ?? [];
+  const scatterLoading =
+    mixtureState.kind === "loading" &&
+    mixtureState.previous != null;
   return (
     <div className="space-y-3">
+      {mixtureState.kind === "error" && mixtureState.previous != null ? (
+        <MixtureErrorBanner state={mixtureState} />
+      ) : null}
       <MixtureMeta detail={detail} />
       {bounds.length >= 2 ? (
         <CrossSectionPlot
@@ -284,8 +318,50 @@ function MixturePanel({
           availableMoments={availableMoments(handoff)}
           onMomentChange={onScatterMomentChange}
           onScaleChange={onScatterScaleChange}
+          loading={scatterLoading}
         />
       ) : null}
+    </div>
+  );
+}
+
+function displayedDetail(state: MixtureState): MixtureDetail | null {
+  if (state.kind === "ok") return state.data;
+  if (state.kind === "loading" || state.kind === "error") {
+    return state.previous ?? null;
+  }
+  return null;
+}
+
+function MixtureErrorCard({
+  state,
+}: {
+  state: Extract<MixtureState, { kind: "error" }>;
+}) {
+  return (
+    <div className="glass rounded-xl p-5 border-rose-500/20">
+      <div className="text-sm font-semibold text-rose-300">
+        {state.status ? `HTTP ${state.status}` : "Mixture read failed"}
+      </div>
+      <div className="mt-1 text-sm text-[var(--fg-1)]">{state.message}</div>
+    </div>
+  );
+}
+
+function MixtureErrorBanner({
+  state,
+}: {
+  state: Extract<MixtureState, { kind: "error" }>;
+}) {
+  return (
+    <div className="glass rounded-md px-3 py-2 border-rose-500/20 text-[13px] flex items-baseline gap-2 flex-wrap">
+      <span className="font-semibold text-rose-300">
+        {state.status ? `HTTP ${state.status}` : "Refresh failed"}
+      </span>
+      <span className="text-[var(--fg-1)]">{state.message}</span>
+      <span className="text-[var(--fg-3)] text-[12px]">
+        — keeping previous payload (P{state.previous?.scatter?.moment_index ?? 0}).
+      </span>
     </div>
   );
 }

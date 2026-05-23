@@ -19,6 +19,10 @@ export interface ScatterHeatmapProps {
   availableMoments: readonly number[];
   onMomentChange: (moment: number) => void;
   onScaleChange: (scale: Scale) => void;
+  /** ``true`` while a refetch is in flight - we keep showing the old
+   * scatter trace but flag the in-flight request in the header so the
+   * user sees something is happening without the chart blinking out. */
+  loading?: boolean;
   className?: string;
 }
 
@@ -52,6 +56,7 @@ export default function ScatterHeatmap({
   availableMoments,
   onMomentChange,
   onScaleChange,
+  loading = false,
   className,
 }: ScatterHeatmapProps) {
   const traces = useMemo(() => buildTraces(scatter, scale), [scatter, scale]);
@@ -67,9 +72,19 @@ export default function ScatterHeatmap({
   return (
     <div className={className ?? "glass rounded-xl p-3"}>
       <div className="flex items-center justify-between gap-3 px-2 pt-1 pb-2 flex-wrap">
-        <h3 className="text-sm font-semibold text-[var(--fg-1)]">
-          Scatter matrix (P{scatter.moment_index}) —{" "}
-          <span className="font-mono">{mixtureName}</span>
+        <h3 className="text-sm font-semibold text-[var(--fg-1)] flex items-center gap-2 flex-wrap">
+          <span>
+            Scatter matrix (P{scatter.moment_index}) —{" "}
+            <span className="font-mono">{mixtureName}</span>
+          </span>
+          {loading ? (
+            <span
+              className="text-[11px] font-normal text-[var(--fg-3)] tab-num"
+              aria-live="polite"
+            >
+              · loading…
+            </span>
+          ) : null}
         </h3>
         <div className="flex items-center gap-2 flex-wrap">
           {availableMoments.length > 1 ? (
@@ -95,7 +110,7 @@ export default function ScatterHeatmap({
         columns are outgoing (<code className="font-mono">to</code>) groups.{" "}
         <code className="font-mono">g1</code> is the highest-energy group.{" "}
         {scale === "log10"
-          ? "Colour bar shows σ on a log₁₀ scale; cells with zero scatter are shown in grey."
+          ? "Colour bar shows σ on a log₁₀ scale; zero or non-positive cells are shown in grey (Legendre moments above P₀ can be negative)."
           : "Colour bar shows σ directly; switch to log₁₀ to see weak couplings off the diagonal."}
       </p>
     </div>
