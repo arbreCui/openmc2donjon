@@ -6,11 +6,31 @@ build-backend = "setuptools.build_meta"
 name = "openmc2donjon"
 version = "0.1.2"
 description = "Convert OpenMC MGXS library HDF5 files to DRAGON/DONJON L_MULTICOMPO ASCII."
+readme = "README.md"
 requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+  {name = "Bowen Cui"},
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Physics",
+]
 dependencies = [
   "h5py",
   "numpy",
 ]
+
+[project.urls]
+Homepage = "https://github.com/arbreCui/openmc2donjon"
+Repository = "https://github.com/arbreCui/openmc2donjon"
+Issues = "https://github.com/arbreCui/openmc2donjon/issues"
 
 [project.scripts]
 openmc2donjon = "openmc2donjon.cli:main"
