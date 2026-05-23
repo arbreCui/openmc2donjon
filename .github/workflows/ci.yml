@@ -57,3 +57,31 @@ jobs:
 
       - name: Run Ruff
         run: ruff check .
+
+  typecheck:
+    name: mypy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install mypy (pinned via dev extra)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Run mypy on whitelisted modules
+        run: |
+          mypy --no-incremental \
+            src/openmc2donjon/constants.py \
+            src/openmc2donjon/scatter.py \
+            src/openmc2donjon/energy_groups.py \
+            src/openmc2donjon/mgxs_physics_checks.py
