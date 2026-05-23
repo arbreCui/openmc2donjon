@@ -6,30 +6,46 @@
 Build production handoffs from OpenMC multi-group cross sections to
 DRAGON/DONJON deterministic workflows.
 
-The core converter writes OpenMC MGXS HDF5 data as DONJON ASCII LCM files, but
-the project also includes the surrounding user workflow: recipe/statepoint
-export, one-step or two-step conversion, production preflight gates, and
-optional ADF/DF or SPH equivalence-factor carry-through.
-
-It is aimed at homogenization workflows where OpenMC generates spatially
-resolved MGXS data and DONJON consumes deterministic macroscopic cross sections:
+The project bridges a high-fidelity OpenMC reference and a low-order
+DRAGON/DONJON solve at the assembly / domain level:
 
 ```text
-OpenMC recipe + statepoint
-  -> MGXS HDF5 handoff
-  -> optional ADF/DF or SPH sidecars
+OpenMC (high-fidelity reference, full geometry)
+  -> assembly- / domain-wise homogenization (MGXS HDF5 handoff)
+  -> equivalence stage
   -> L_MULTICOMPO or L_MACROLIB ASCII
-  -> DONJON mixture map / deterministic solve
+  -> DONJON low-order solve (diffusion / SPN)
 ```
 
-Supported handoff styles:
+## Equivalence Methods
+
+All three methods are implemented and exercised by the production smokes.
+
+| Method | What it does | Entry point |
+| --- | --- | --- |
+| Direct | No equivalence factors; accept the homogenization bias. | Convert without equivalence flags. |
+| One-shot equivalence | Inject ADF/DF and/or SPH factors from a sidecar before conversion. Examples include flux-ratio ADF built from OpenMC surface flux plus a low-order driver, or an SPH table from a previous run. | `make-adf-sidecar` + `augment-adf`, `make-sph-sidecar` + `augment-sph`, or `openmc2donjon-from-openmc --build-flux-ratio-adf` / `--sph-source` / `--sph-macrolib`. |
+| Iterative SPH | Fix the OpenMC reference, then iterate: DONJON solve -> extract low-order flux -> recompute SPH -> reconvert, until convergence. | `openmc2donjon run-sph-loop --config loop.json` |
+
+## Export And Convert Modes
+
+Both invocation styles ship:
 
 - two-step: `openmc2donjon-export` writes `mgxs_library.h5`, then
-  `openmc2donjon` converts it;
+  `openmc2donjon` converts it to ASCII. This is useful when the HDF5 is shared,
+  archived, or post-processed between stages.
 - one-step: `openmc2donjon-from-openmc` exports, checks, converts, and bundles
-  a managed run directory;
+  a managed run directory in a single command.
+
+Either invocation style composes with any of the equivalence methods above.
+
+## Output Formats
+
 - `L_MULTICOMPO` as `.mcompo.txt` for mapped domain-wise libraries.
 - `L_MACROLIB` as `.macrolib.txt` for direct one-state macrolib handoffs.
+
+Accepted validation: C5G7 assembly-wise OpenMC -> DONJON handoff with
+documented k-effective comparisons; see [Validation Status](#validation-status).
 
 ## Quick Start
 
