@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import {
   ApiError,
   HandoffInspection,
@@ -84,6 +84,10 @@ export default function InspectPage() {
   const [scatterMoment, setScatterMoment] = useState(0);
   const [scatterScale, setScatterScale] = useState<ScatterScale>("linear");
   const [browserOpen, setBrowserOpen] = useState(false);
+  // After the browser modal selects a file we hand keyboard focus to
+  // the Inspect submit button (Enter submits, far more useful than
+  // bouncing focus back to Browse).
+  const inspectButtonRef = useRef<HTMLButtonElement | null>(null);
   const [settings, , , settingsHydrated] = useSettings();
   const savedPrefix = settings.default_inspect_path.trim();
   // Show the saved default as a *placeholder* only - never pre-fill the
@@ -196,6 +200,7 @@ export default function InspectPage() {
             Browse…
           </button>
           <button
+            ref={inspectButtonRef}
             type="submit"
             className="btn btn-primary"
             disabled={state.kind === "loading"}
@@ -217,6 +222,11 @@ export default function InspectPage() {
           onSelect={(picked) => {
             setPath(picked);
             setBrowserOpen(false);
+            // The modal already suppresses its own focus restore when
+            // closing via select, so this ``focus()`` is the final word
+            // on where the keyboard lands - the Inspect button, primed
+            // for Enter.
+            inspectButtonRef.current?.focus();
           }}
         />
 

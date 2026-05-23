@@ -25,17 +25,28 @@ type State =
   | { kind: "error"; path: string; message: string; status?: number };
 
 /**
- * Minimal directory picker for the Inspect page.
+ * Directory picker for the Inspect page.
  *
- * Scope (M3 first iteration):
+ * Scope:
  * - Lists one directory at a time via ``/api/files``.
  * - Click a directory to navigate into it; click an HDF5 file to
  *   select it and close.
  * - Hides non-HDF5 files (with a count footer so the user knows the
  *   listing isn't lying about emptiness).
  * - ESC and backdrop click cancel without selecting.
- * - No focus trap, no breadcrumb, no recently-used list - those are
- *   M3 follow-ups if real usage demands them.
+ *
+ * Focus management:
+ * - On open, captures the previously-focused element (typically the
+ *   Browse button on the Inspect form) and focuses the dialog itself.
+ * - ``Tab`` / ``Shift+Tab`` cycle through focusable descendants and
+ *   bounce back when focus has somehow ended up outside the dialog
+ *   (browser GC of a freshly-removed entry button, for example).
+ * - On cancel (ESC / backdrop / Cancel button), focus restores to the
+ *   captured element. On select, focus restoration is skipped so the
+ *   parent can move focus to a more useful target (Inspect button).
+ *
+ * Not yet shipped (real candidates for follow-up): breadcrumb,
+ * recently-used list, arrow-key row navigation, editable path bar.
  */
 export default function FileBrowserModal({
   open,
@@ -50,6 +61,12 @@ export default function FileBrowserModal({
   const [currentPath, setCurrentPath] = useState(initialPath);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  // Tracks whether the current open instance is closing because the
+  // user selected a file (vs. cancelled). The focus-restore effect
+  // skips the previousFocus restore when this is true so the parent
+  // can land focus on a more useful "next action" target instead of
+  // the Browse button.
+  const closedViaSelectRef = useRef(false);
 
   // Re-anchor to ``initialPath`` whenever the modal opens fresh.
   useEffect(() => {
@@ -99,12 +116,14 @@ export default function FileBrowserModal({
   useEffect(() => {
     if (!open) return;
     previousFocusRef.current = document.activeElement as HTMLElement | null;
+    closedViaSelectRef.current = false;
     // The dialog container itself is focusable (``tabIndex={-1}``) so
     // a programmatic ``focus()`` lands here without inserting an entry
     // in the tab order; the user's first Tab then moves to the first
     // real focusable child (Cancel, ↑ parent, then entries).
     dialogRef.current?.focus();
     return () => {
+      if (closedViaSelectRef.current) return;
       previousFocusRef.current?.focus?.();
     };
   }, [open]);
@@ -126,6 +145,17 @@ export default function FileBrowserModal({
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
       const active = document.activeElement as HTMLElement | null;
+      // Pull focus back into the dialog when it has somehow drifted
+      // outside (e.g. the entry button that had focus was removed
+      // mid-loading and the browser fell back to ``body``). Without
+      // this, the next Tab would walk into the page behind the modal.
+      const activeInside =
+        active != null && (active === dialog || dialog.contains(active));
+      if (!activeInside) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+        return;
+      }
       if (event.shiftKey && (active === first || active === dialog)) {
         event.preventDefault();
         last.focus();
@@ -142,6 +172,18 @@ export default function FileBrowserModal({
     if (state.kind !== "ok") return;
     if (state.data.parent != null) setCurrentPath(state.data.parent);
   }, [state]);
+
+  // Wrap the parent's ``onSelect`` so the focus-restore effect cleanup
+  // can tell "user cancelled" from "user picked a file" and leave the
+  // parent free to land focus somewhere more useful (the Inspect
+  // button) instead of bouncing back to Browse.
+  const handleSelect = useCallback(
+    (picked: string) => {
+      closedViaSelectRef.current = true;
+      onSelect(picked);
+    },
+    [onSelect],
+  );
 
   if (!open) return null;
 
@@ -203,7 +245,7 @@ export default function FileBrowserModal({
         </div>
 
         <div className="flex-1 overflow-y-auto px-1 py-1">
-          <BrowserBody state={state} onPickDir={setCurrentPath} onPickFile={onSelect} />
+          <BrowserBody state={state} onPickDir={setCurrentPath} onPickFile={handleSelect} />
         </div>
       </div>
     </div>
