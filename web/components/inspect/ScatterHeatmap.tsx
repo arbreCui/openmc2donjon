@@ -19,10 +19,11 @@ export interface ScatterHeatmapProps {
   availableMoments: readonly number[];
   onMomentChange: (moment: number) => void;
   onScaleChange: (scale: Scale) => void;
-  /** ``true`` while a refetch is in flight - we keep showing the old
-   * scatter trace but flag the in-flight request in the header so the
-   * user sees something is happening without the chart blinking out. */
-  loading?: boolean;
+  /** When non-null, an ``api.inspectMixture`` request for this moment is
+   * in flight. The chart keeps showing the previous moment's data and
+   * the header gets a ``loading P{loadingMoment}…`` indicator so the
+   * user can tell which moment they're waiting on. */
+  loadingMoment?: number | null;
   className?: string;
 }
 
@@ -56,7 +57,7 @@ export default function ScatterHeatmap({
   availableMoments,
   onMomentChange,
   onScaleChange,
-  loading = false,
+  loadingMoment = null,
   className,
 }: ScatterHeatmapProps) {
   const traces = useMemo(() => buildTraces(scatter, scale), [scatter, scale]);
@@ -77,12 +78,12 @@ export default function ScatterHeatmap({
             Scatter matrix (P{scatter.moment_index}) —{" "}
             <span className="font-mono">{mixtureName}</span>
           </span>
-          {loading ? (
+          {loadingMoment != null ? (
             <span
               className="text-[11px] font-normal text-[var(--fg-3)] tab-num"
               aria-live="polite"
             >
-              · loading…
+              · loading P{loadingMoment}…
             </span>
           ) : null}
         </h3>

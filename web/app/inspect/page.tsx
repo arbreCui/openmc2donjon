@@ -53,6 +53,22 @@ function carryOverPrevious(state: MixtureState): MixtureDetail | undefined {
   return undefined;
 }
 
+/**
+ * Same as {@link carryOverPrevious} but scoped to a specific mixture:
+ * only returns the previous payload if it really came from the mixture
+ * the new request is targeting. This avoids flashing the old row's
+ * meta / spectrum / heatmap while a brand-new mixture is loading -
+ * the carryover is intentional for moment-only refetches on one
+ * mixture, not for jumping between rows.
+ */
+function carryOverPreviousFor(
+  state: MixtureState,
+  mixture: string,
+): MixtureDetail | undefined {
+  const previous = carryOverPrevious(state);
+  return previous?.mixture === mixture ? previous : undefined;
+}
+
 export default function InspectPage() {
   const [path, setPath] = useState("");
   const [state, setState] = useState<State>({ kind: "idle" });
@@ -112,7 +128,7 @@ export default function InspectPage() {
       kind: "loading",
       mixture: requested,
       moment: requestedMoment,
-      previous: carryOverPrevious(prev),
+      previous: carryOverPreviousFor(prev, requested),
     }));
     let cancelled = false;
     api
@@ -131,7 +147,7 @@ export default function InspectPage() {
             moment: requestedMoment,
             message: base.message,
             status: base.status,
-            previous: carryOverPrevious(prev),
+            previous: carryOverPreviousFor(prev, requested),
           }));
         }
       });
@@ -288,9 +304,14 @@ function MixturePanel({
   }
 
   const bounds = handoff.energy_bounds ?? [];
-  const scatterLoading =
-    mixtureState.kind === "loading" &&
-    mixtureState.previous != null;
+  // Only flag the heatmap as loading when we have a previous payload
+  // to keep on screen; first-time loads already took the earlier
+  // ``Loading…`` branch. The flagged moment is the *requested* one,
+  // which differs from the currently-rendered ``previous.scatter``.
+  const scatterLoadingMoment =
+    mixtureState.kind === "loading" && mixtureState.previous != null
+      ? mixtureState.moment
+      : null;
   return (
     <div className="space-y-3">
       {mixtureState.kind === "error" && mixtureState.previous != null ? (
@@ -318,7 +339,7 @@ function MixturePanel({
           availableMoments={availableMoments(handoff)}
           onMomentChange={onScatterMomentChange}
           onScaleChange={onScatterScaleChange}
-          loading={scatterLoading}
+          loadingMoment={scatterLoadingMoment}
         />
       ) : null}
     </div>
