@@ -146,6 +146,14 @@ def create_app(
         bounds, mesh_match = _read_bounds_and_mesh(real_path)
         payload["energy_bounds"] = bounds
         payload["mesh_match"] = mesh_match
+        # Generic HDF5 peek (root attrs + top-level entries) makes the
+        # response useful even for files that don't match the MGXS
+        # contract (boundary currents, ADF sidecars, etc.): the user
+        # at least sees what KIND of HDF5 they pointed at instead of
+        # a bare "0 mixtures, FAIL".
+        peek = _read_top_level_peek(real_path)
+        payload["root_attrs"] = peek["root_attrs"]
+        payload["top_level_keys"] = peek["top_level_keys"]
         return payload
 
     @app.get("/api/files")
@@ -197,6 +205,102 @@ def _validate_hdf5_path(raw: str, http_exception: Any) -> Path:
     if not is_hdf5:
         raise http_exception(status_code=400, detail=f"not an HDF5 file: {raw}")
     return real
+
+
+def _read_top_level_peek(real_path: Path) -> dict[str, Any]:
+    """Read root attrs and one-level group/dataset names for a peek panel.
+
+    Returns ``{"root_attrs": [...], "top_level_keys": [...]}`` where
+    each ``root_attrs`` entry is ``{name, value}`` for scalar / short
+    attrs (long arrays / blobs are omitted to keep the payload light)
+    and each ``top_level_keys`` entry is ``{name, kind, shape, dtype}``.
+    Returns empty lists if the file can't be opened.
+    """
+
+    import h5py
+
+    try:
+        with h5py.File(real_path, "r") as h5:
+            root_attrs: list[dict[str, Any]] = []
+            for name, raw in h5.attrs.items():
+                value = _attr_to_jsonable(raw)
+                if value is None:
+                    continue
+                root_attrs.append({"name": str(name), "value": value})
+            top_level_keys: list[dict[str, Any]] = []
+            for name in sorted(h5):
+                node = h5[name]
+                if isinstance(node, h5py.Group):
+                    top_level_keys.append(
+                        {
+                            "name": str(name),
+                            "kind": "group",
+                            "shape": None,
+                            "dtype": None,
+                        }
+                    )
+                else:
+                    dataset = node
+                    try:
+                        shape = list(dataset.shape)
+                        dtype = str(dataset.dtype)
+                    except (AttributeError, OSError):
+                        shape = None
+                        dtype = None
+                    top_level_keys.append(
+                        {
+                            "name": str(name),
+                            "kind": "dataset",
+                            "shape": shape,
+                            "dtype": dtype,
+                        }
+                    )
+    except (OSError, ValueError, KeyError):
+        return {"root_attrs": [], "top_level_keys": []}
+    return {"root_attrs": root_attrs, "top_level_keys": top_level_keys}
+
+
+def _attr_to_jsonable(value: Any) -> Any:
+    """Convert an HDF5 attribute value to a JSON-friendly scalar.
+
+    Returns ``None`` for blobs we don't want to ship (large arrays,
+    unsupported dtypes), the caller will skip them. Bytes / numpy
+    strings are decoded; numpy scalars are unwrapped via ``.item()``.
+    """
+
+    if isinstance(value, (bytes, bytearray)):
+        try:
+            return value.decode("utf-8")
+        except UnicodeDecodeError:
+            return None
+    if isinstance(value, str):
+        return value
+    if hasattr(value, "item") and not hasattr(value, "shape"):
+        try:
+            return value.item()
+        except (AttributeError, ValueError):
+            return None
+    if hasattr(value, "shape"):
+        shape = value.shape
+        if shape == ():
+            try:
+                return _attr_to_jsonable(value.item())
+            except (AttributeError, ValueError):
+                return None
+        if len(shape) == 1 and shape[0] <= 8:
+            # Short 1D vectors render nicely as a list (energy bounds,
+            # small enumerations, etc.); anything bigger gets dropped
+            # to keep the peek payload bounded.
+            try:
+                return [_attr_to_jsonable(v) for v in value.tolist()]
+            except (AttributeError, ValueError):
+                return None
+        return None
+    if isinstance(value, (int, float, bool)):
+        return value
+    if isinstance(value, (list, tuple)) and len(value) <= 8:
+        return [_attr_to_jsonable(v) for v in value]
+    return None
 
 
 def _read_bounds_and_mesh(

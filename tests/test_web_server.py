@@ -183,6 +183,12 @@ class InspectEndpointTests(unittest.TestCase):
         bounds = payload["energy_bounds"]
         self.assertEqual(len(bounds), 8)
         self.assertGreater(bounds[0], bounds[-1])  # descending CASMO-7
+        # M3-C: peek surface for non-handoff files; mock fixture
+        # carries sample values.
+        attr_names = {a["name"] for a in payload["root_attrs"]}
+        self.assertIn("schema_version", attr_names)
+        top_names = {t["name"] for t in payload["top_level_keys"]}
+        self.assertEqual(top_names, {"energy_bounds", "mixtures"})
 
     def test_mock_mode_returns_bundled_mixture_fixture(self) -> None:
         from openmc2donjon.web.server import MIXTURE_SCHEMA, create_app
@@ -404,6 +410,54 @@ class InspectEndpointTests(unittest.TestCase):
             )
             self.assertEqual(response.status_code, 404)
             self.assertIn("not found", response.json()["detail"])
+
+    def test_live_mode_inspect_peek_surfaces_non_handoff_structure(
+        self,
+    ) -> None:
+        """A non-MGXS HDF5 should still produce a useful peek payload.
+
+        Files like boundary-currents exports show ``ok=false`` because
+        they have no ``/mixtures`` group, but the user still benefits
+        from seeing the top-level groups and root attrs - that's how
+        they identify "ah, this is an OpenMC tally export".
+        """
+
+        import h5py
+        import numpy as np
+
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "currents.h5"
+            with h5py.File(path, "w") as h5:
+                h5.attrs["source"] = "OpenMC surface current export"
+                h5.attrs["batches"] = 20
+                h5.attrs["particles"] = 1000
+                h5.create_dataset(
+                    "energy_bounds",
+                    data=np.array([1e7, 1e6, 1e5, 1e4, 1.0], dtype=float),
+                )
+                h5.create_group("boundary_currents")
+                h5.create_group("surface_flux")
+
+            client = TestClient(create_app(mock_mode=False))
+            response = client.get("/api/inspect", params={"path": str(path)})
+            self.assertEqual(response.status_code, 200)
+            payload = response.json()
+
+            self.assertFalse(payload["ok"])
+            self.assertEqual(payload["mixture_count"], 0)
+
+            attrs = {a["name"]: a["value"] for a in payload["root_attrs"]}
+            self.assertEqual(attrs["source"], "OpenMC surface current export")
+            self.assertEqual(attrs["batches"], 20)
+            self.assertEqual(attrs["particles"], 1000)
+
+            top = {t["name"]: t for t in payload["top_level_keys"]}
+            self.assertEqual(top["boundary_currents"]["kind"], "group")
+            self.assertEqual(top["surface_flux"]["kind"], "group")
+            self.assertEqual(top["energy_bounds"]["kind"], "dataset")
+            self.assertEqual(top["energy_bounds"]["shape"], [5])
 
     def test_live_mode_scatter_moment_out_of_range_returns_404(self) -> None:
         from openmc2donjon.web.server import create_app

@@ -15,6 +15,17 @@
     "energy_groups",
     "produced_by"
   ],
+  "root_attrs": [
+    { "name": "schema_version", "value": "openmc2donjon.mgxs.v1" },
+    { "name": "scatter_axes", "value": "moment,from,to" },
+    { "name": "legendre_order", "value": 1 },
+    { "name": "energy_groups", "value": 7 },
+    { "name": "produced_by", "value": "openmc2donjon-export (mock)" }
+  ],
+  "top_level_keys": [
+    { "name": "energy_bounds", "kind": "dataset", "shape": [8], "dtype": "float64" },
+    { "name": "mixtures", "kind": "group", "shape": null, "dtype": null }
+  ],
   "burnup_axis": null,
   "burnup_axis_values": null,
   "mixture_count": 9,

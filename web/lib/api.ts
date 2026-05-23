@@ -35,6 +35,25 @@ export interface MixtureSummary {
   attr_keys: string[];
 }
 
+export type HandoffAttrValue =
+  | string
+  | number
+  | boolean
+  | null
+  | (string | number | boolean | null)[];
+
+export interface HandoffRootAttr {
+  name: string;
+  value: HandoffAttrValue;
+}
+
+export interface TopLevelEntry {
+  name: string;
+  kind: "group" | "dataset";
+  shape: number[] | null;
+  dtype: string | null;
+}
+
 export interface HandoffInspection {
   schema: string;
   path: string;
@@ -46,6 +65,13 @@ export interface HandoffInspection {
   energy_min: number | null;
   energy_max: number | null;
   mesh_match: MeshMatch | null;
+  /** Scalar / short-vector root HDF5 attributes (file-level metadata
+   * such as ``schema_version`` / ``source`` / ``batches``). */
+  root_attrs: HandoffRootAttr[];
+  /** One-level peek of HDF5 root groups + datasets. Always present;
+   * lets the UI tell a user that a non-handoff file is, say, an
+   * OpenMC tally export rather than a corrupted MGXS input. */
+  top_level_keys: TopLevelEntry[];
   root_attr_keys: string[];
   burnup_axis: string | null;
   burnup_axis_values: number | null;

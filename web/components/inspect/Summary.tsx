@@ -1,4 +1,9 @@
-import { HandoffInspection } from "@/lib/api";
+import {
+  HandoffAttrValue,
+  HandoffInspection,
+  HandoffRootAttr,
+  TopLevelEntry,
+} from "@/lib/api";
 import { formatEnergy } from "./formatEnergy";
 
 export default function Summary({ data }: { data: HandoffInspection }) {
@@ -88,8 +93,122 @@ export default function Summary({ data }: { data: HandoffInspection }) {
           </ul>
         </div>
       ) : null}
+
+      {data.root_attrs.length > 0 || data.top_level_keys.length > 0 ? (
+        <FilePeek
+          rootAttrs={data.root_attrs}
+          topLevelKeys={data.top_level_keys}
+          mixtureCount={data.mixture_count}
+          ok={data.ok}
+        />
+      ) : null}
     </div>
   );
+}
+
+function FilePeek({
+  rootAttrs,
+  topLevelKeys,
+  mixtureCount,
+  ok,
+}: {
+  rootAttrs: HandoffRootAttr[];
+  topLevelKeys: TopLevelEntry[];
+  mixtureCount: number;
+  ok: boolean;
+}) {
+  // For non-handoff HDF5 files the headline summary numbers go to
+  // zero, but the peek still has signal - lead with a short note that
+  // names this state so the user isn't left thinking "OK, FAIL,
+  // zero mixtures, now what".
+  const isNotHandoff = !ok && mixtureCount === 0;
+  return (
+    <details className="mt-5 text-[13px]" open={isNotHandoff}>
+      <summary className="cursor-pointer text-[var(--fg-2)] hover:text-[var(--fg-0)] select-none">
+        What&apos;s in this file?
+      </summary>
+      {isNotHandoff ? (
+        <p className="mt-2 text-[12px] text-[var(--fg-3)] leading-relaxed">
+          This HDF5 doesn&apos;t look like an MGXS handoff. The
+          attributes and top-level groups below are usually enough to
+          identify it (an OpenMC tally export, an ADF sidecar, a
+          low-order driver, …).
+        </p>
+      ) : null}
+      <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {rootAttrs.length > 0 ? (
+          <div>
+            <div className="text-[11px] uppercase tracking-wider text-[var(--fg-3)] mb-1">
+              Root attributes ({rootAttrs.length})
+            </div>
+            <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 font-mono text-[12px]">
+              {rootAttrs.map((attr) => (
+                <ContiguousRow key={attr.name} attr={attr} />
+              ))}
+            </dl>
+          </div>
+        ) : null}
+        {topLevelKeys.length > 0 ? (
+          <div>
+            <div className="text-[11px] uppercase tracking-wider text-[var(--fg-3)] mb-1">
+              Top-level entries ({topLevelKeys.length})
+            </div>
+            <ul className="font-mono text-[12px] space-y-1">
+              {topLevelKeys.map((entry) => (
+                <li
+                  key={`${entry.kind}:${entry.name}`}
+                  className="flex items-baseline gap-2"
+                >
+                  <span className="inline-flex items-center justify-center min-w-[44px] h-4 px-1 rounded border border-[var(--edge)] bg-white/[0.03] text-[10px] font-semibold uppercase tracking-wider text-[var(--fg-2)]">
+                    {entry.kind === "group" ? "GROUP" : "DSET"}
+                  </span>
+                  <span className="text-[var(--fg-1)] truncate">
+                    {entry.name}
+                    {entry.kind === "group" ? "/" : ""}
+                  </span>
+                  {entry.kind === "dataset" && entry.shape ? (
+                    <span className="text-[var(--fg-3)]">
+                      {entry.shape.join("×")}
+                      {entry.dtype ? ` ${entry.dtype}` : ""}
+                    </span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </div>
+    </details>
+  );
+}
+
+function ContiguousRow({ attr }: { attr: HandoffRootAttr }) {
+  return (
+    <>
+      <dt className="text-[var(--fg-3)] truncate">{attr.name}</dt>
+      <dd className="text-[var(--fg-1)] break-all">
+        {formatAttrValue(attr.value)}
+      </dd>
+    </>
+  );
+}
+
+function formatAttrValue(value: HandoffAttrValue): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) {
+    return `[${value.map((v) => formatAttrValue(v)).join(", ")}]`;
+  }
+  if (typeof value === "string") return value;
+  if (typeof value === "number") {
+    // Use scientific notation for very large / very small numbers so
+    // the column doesn't blow out on energy bounds.
+    const abs = Math.abs(value);
+    if (abs !== 0 && (abs >= 1e6 || abs < 1e-3)) {
+      return value.toExponential(4);
+    }
+    return String(value);
+  }
+  return String(value);
 }
 
 function OkBadge({ ok }: { ok: boolean }) {
