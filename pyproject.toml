@@ -36,6 +36,11 @@ dependencies = [
   "numpy>=1.24",
 ]
 
+[project.optional-dependencies]
+dev = [
+  "ruff>=0.8,<1",
+]
+
 [project.urls]
 Homepage = "https://github.com/arbreCui/openmc2donjon"
 Repository = "https://github.com/arbreCui/openmc2donjon"
