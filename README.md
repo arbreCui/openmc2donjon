@@ -3,22 +3,31 @@
 [![CI](https://github.com/arbreCui/openmc2donjon/actions/workflows/ci.yml/badge.svg)](https://github.com/arbreCui/openmc2donjon/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Convert OpenMC multi-group cross-section HDF5 handoffs into DRAGON/DONJON
-ASCII LCM files.
+Build production handoffs from OpenMC multi-group cross sections to
+DRAGON/DONJON deterministic workflows.
 
-The project is aimed at production homogenization workflows where OpenMC
-generates spatially resolved MGXS data and DONJON consumes deterministic
-macroscopic cross sections:
+The core converter writes OpenMC MGXS HDF5 data as DONJON ASCII LCM files, but
+the project also includes the surrounding user workflow: recipe/statepoint
+export, one-step or two-step conversion, production preflight gates, and
+optional ADF/DF or SPH equivalence-factor carry-through.
+
+It is aimed at homogenization workflows where OpenMC generates spatially
+resolved MGXS data and DONJON consumes deterministic macroscopic cross sections:
 
 ```text
-OpenMC MGXS domains
-  -> openmc2donjon HDF5 contract
+OpenMC recipe + statepoint
+  -> MGXS HDF5 handoff
+  -> optional ADF/DF or SPH sidecars
   -> L_MULTICOMPO or L_MACROLIB ASCII
   -> DONJON mixture map / deterministic solve
 ```
 
-Supported output modes:
+Supported handoff styles:
 
+- two-step: `openmc2donjon-export` writes `mgxs_library.h5`, then
+  `openmc2donjon` converts it;
+- one-step: `openmc2donjon-from-openmc` exports, checks, converts, and bundles
+  a managed run directory;
 - `L_MULTICOMPO` as `.mcompo.txt` for mapped domain-wise libraries.
 - `L_MACROLIB` as `.macrolib.txt` for direct one-state macrolib handoffs.
 
