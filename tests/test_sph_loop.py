@@ -59,6 +59,8 @@ class SphLoopTests(unittest.TestCase):
                             "require_final_solve": True,
                             "max_sph_rel_change": 1.0,
                             "max_flux_ratio_residual": 1.0,
+                            "require_reference_flux_std_dev": True,
+                            "max_reference_flux_std_dev_rel": 0.02,
                             "sph_minimum_floor": 1.9,
                             "sph_maximum_ceiling": 2.1,
                             "max_keff_step_pcm": 200.0,
@@ -196,7 +198,14 @@ class SphLoopTests(unittest.TestCase):
             )
             self.assertEqual(production_audit["artifact_counts"]["workflows"], 2)
             self.assertTrue(payload["acceptance"]["passed"])
-            self.assertEqual(len(payload["acceptance"]["checks"]), 8)
+            self.assertEqual(len(payload["acceptance"]["checks"]), 10)
+            self.assertTrue(
+                _acceptance_passed(payload, "require_reference_flux_std_dev")
+            )
+            self.assertAlmostEqual(
+                _acceptance_actual(payload, "max_reference_flux_std_dev_rel"),
+                0.01,
+            )
             self.assertEqual(
                 payload["quality"]["initial_flux_ratio_max_residual"],
                 1.0,
@@ -1378,6 +1387,22 @@ def _acceptance_actual(payload: dict[str, object], name: str) -> float:
             if not isinstance(value, (int, float)):
                 raise AssertionError(f"acceptance check {name!r} has no numeric actual")
             return float(value)
+    raise AssertionError(f"missing acceptance check {name!r}")
+
+
+def _acceptance_passed(payload: dict[str, object], name: str) -> bool:
+    acceptance = payload["acceptance"]
+    if not isinstance(acceptance, dict):
+        raise AssertionError("acceptance payload is not a JSON object")
+    checks = acceptance["checks"]
+    if not isinstance(checks, list):
+        raise AssertionError("acceptance checks are not a JSON array")
+    for item in checks:
+        if isinstance(item, dict) and item.get("name") == name:
+            value = item.get("passed")
+            if not isinstance(value, bool):
+                raise AssertionError(f"acceptance check {name!r} has no boolean passed")
+            return value
     raise AssertionError(f"missing acceptance check {name!r}")
 
 

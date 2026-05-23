@@ -47,7 +47,9 @@ class SphLoopPlanTests(unittest.TestCase):
                     "acceptance": {
                         "min_completed_iterations": "2",
                         "require_final_solve": True,
+                        "require_reference_flux_std_dev": True,
                         "max_final_keff_delta_pcm": "5.0",
+                        "max_reference_flux_std_dev_rel": "0.05",
                         "fail_on_violation": True,
                     },
                     "postprocess": {
@@ -97,6 +99,13 @@ class SphLoopPlanTests(unittest.TestCase):
             self.assertEqual(
                 plan.normalized_acceptance["max_final_keff_delta_pcm"],
                 5.0,
+            )
+            self.assertTrue(
+                plan.normalized_acceptance["require_reference_flux_std_dev"]
+            )
+            self.assertEqual(
+                plan.normalized_acceptance["max_reference_flux_std_dev_rel"],
+                0.05,
             )
             self.assertTrue(plan.normalized_acceptance["fail_on_violation"])
             self.assertEqual(plan.summary_path, config_dir / "summaries/loop.json")

@@ -33,6 +33,8 @@ class _DatasetMetadataLike(Protocol):
     group_order: str | None
     mixture_names: tuple[str, ...]
     energy_groups: int | None
+    std_dev_dataset: str | None
+    std_dev_max_rel: float | None
 
 
 class _FluxMapPreflightLike(Protocol):
@@ -117,6 +119,23 @@ def build_acceptance_report(
         checks.append(_artifact_metadata_alignment_check(artifact_metadata))
     if bool(config.get("require_production_audit", False)):
         checks.append(_production_audit_check(flux_map_preflight, artifact_metadata))
+    if bool(config.get("require_reference_flux_std_dev", False)):
+        checks.append(
+            _boolean_check(
+                "require_reference_flux_std_dev",
+                actual=_reference_flux_std_dev_present(artifact_metadata),
+                limit=True,
+            )
+        )
+    if "max_reference_flux_std_dev_rel" in config:
+        checks.append(
+            _maximum_check(
+                "max_reference_flux_std_dev_rel",
+                actual=_reference_flux_std_dev_max_rel(artifact_metadata),
+                limit=float(config["max_reference_flux_std_dev_rel"]),
+                units="relative",
+            )
+        )
 
     last_convergence = convergence[-1] if convergence else None
     if "max_sph_abs_change" in config:
@@ -399,6 +418,23 @@ def _production_audit_check(
         passed=passed,
         message=message,
     )
+
+
+def _reference_flux_std_dev_present(
+    artifact_metadata: _ArtifactMetadataLike | None,
+) -> bool:
+    if artifact_metadata is None:
+        return False
+    return bool(getattr(artifact_metadata.reference_flux, "std_dev_dataset", None))
+
+
+def _reference_flux_std_dev_max_rel(
+    artifact_metadata: _ArtifactMetadataLike | None,
+) -> float | None:
+    if artifact_metadata is None:
+        return None
+    value = getattr(artifact_metadata.reference_flux, "std_dev_max_rel", None)
+    return None if value is None else float(value)
 
 
 def _append_dataset_alignment_errors(

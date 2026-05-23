@@ -60,6 +60,8 @@ def acceptance_config(config: dict[str, Any]) -> dict[str, Any]:
         "require_converged",
         "require_artifact_metadata_alignment",
         "require_production_audit",
+        "require_reference_flux_std_dev",
+        "max_reference_flux_std_dev_rel",
         "max_sph_abs_change",
         "max_sph_rel_change",
         "max_flux_ratio_residual",
@@ -93,6 +95,7 @@ def acceptance_config(config: dict[str, Any]) -> dict[str, Any]:
         "max_sph_abs_change",
         "max_sph_rel_change",
         "max_flux_ratio_residual",
+        "max_reference_flux_std_dev_rel",
         "max_final_to_initial_flux_residual_ratio",
         "max_final_clipped_fraction",
         "sph_minimum_floor",
@@ -120,6 +123,7 @@ def acceptance_config(config: dict[str, Any]) -> dict[str, Any]:
         "require_converged",
         "require_artifact_metadata_alignment",
         "require_production_audit",
+        "require_reference_flux_std_dev",
         "fail_on_violation",
     ):
         if key in out and out[key] is not None:

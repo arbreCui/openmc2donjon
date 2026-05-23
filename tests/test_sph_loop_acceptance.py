@@ -259,6 +259,88 @@ class SphLoopAcceptanceTests(unittest.TestCase):
         self.assertIn("donjon_volume_flux energy_groups", check.message)
         self.assertIn("sph_sidecar group_order", check.message)
 
+    def test_reference_flux_uncertainty_acceptance_gate(self) -> None:
+        artifact_metadata = SimpleNamespace(
+            reference_flux=_metadata(
+                "mgxs_donjon",
+                ("fuel", "moderator"),
+                std_dev_dataset="openmc_volume_flux_std_dev",
+                std_dev_max_rel=0.012,
+            ),
+            workflows=(),
+            final_sph_sidecar=None,
+        )
+
+        report = build_acceptance_report(
+            {
+                "require_reference_flux_std_dev": True,
+                "max_reference_flux_std_dev_rel": 0.02,
+            },
+            audit_rows=(),
+            convergence=(),
+            completed_iterations=1,
+            converged=False,
+            final_solve=None,
+            artifact_metadata=artifact_metadata,
+        )
+
+        self.assertTrue(report.passed)
+        actual = {check.name: check.actual for check in report.checks}
+        self.assertTrue(actual["require_reference_flux_std_dev"])
+        self.assertAlmostEqual(
+            float(actual["max_reference_flux_std_dev_rel"]),
+            0.012,
+        )
+
+    def test_reference_flux_uncertainty_gate_fails_when_missing_or_too_large(self) -> None:
+        report = build_acceptance_report(
+            {
+                "require_reference_flux_std_dev": True,
+                "max_reference_flux_std_dev_rel": 0.02,
+            },
+            audit_rows=(),
+            convergence=(),
+            completed_iterations=1,
+            converged=False,
+            final_solve=None,
+            artifact_metadata=SimpleNamespace(
+                reference_flux=_metadata(
+                    "mgxs_donjon",
+                    ("fuel", "moderator"),
+                    std_dev_max_rel=0.05,
+                ),
+                workflows=(),
+                final_sph_sidecar=None,
+            ),
+        )
+
+        self.assertFalse(report.passed)
+        checks = {check.name: check for check in report.checks}
+        self.assertFalse(checks["require_reference_flux_std_dev"].passed)
+        self.assertFalse(checks["max_reference_flux_std_dev_rel"].passed)
+
+    def test_reference_flux_uncertainty_presence_gate_can_be_disabled(self) -> None:
+        report = build_acceptance_report(
+            {"require_reference_flux_std_dev": False},
+            audit_rows=(),
+            convergence=(),
+            completed_iterations=1,
+            converged=False,
+            final_solve=None,
+            artifact_metadata=SimpleNamespace(
+                reference_flux=_metadata(
+                    "mgxs_donjon",
+                    ("fuel", "moderator"),
+                    std_dev_dataset="openmc_volume_flux_std_dev",
+                ),
+                workflows=(),
+                final_sph_sidecar=None,
+            ),
+        )
+
+        self.assertFalse(report.enabled)
+        self.assertEqual(report.checks, ())
+
     def test_empty_acceptance_config_is_disabled_and_passes(self) -> None:
         report = build_acceptance_report(
             {},
@@ -295,12 +377,16 @@ def _metadata(
     mixture_names: tuple[str, ...],
     *,
     energy_groups: int = 2,
+    std_dev_dataset: str | None = None,
+    std_dev_max_rel: float | None = None,
 ) -> SimpleNamespace:
     return SimpleNamespace(
         source="test.h5::dataset",
         group_order=group_order,
         mixture_names=mixture_names,
         energy_groups=energy_groups,
+        std_dev_dataset=std_dev_dataset,
+        std_dev_max_rel=std_dev_max_rel,
     )
 
 
