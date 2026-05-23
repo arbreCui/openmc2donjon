@@ -70,6 +70,7 @@ class SphLoopFluxMapPreflightReport:
     mgxs_nu_ratio_min: float | None
     mgxs_nu_ratio_max: float | None
     mgxs_nu_ratio_worst: str | None
+    mgxs_nu_ratio_warning_count: int
     mgxs_adf_calculations: int
     mgxs_adf_faces: tuple[str, ...]
     mgxs_adf_face_error_count: int
@@ -267,6 +268,7 @@ def build_flux_map_preflight_report(
         mgxs_nu_ratio_min=mgxs_metadata["nu_ratio_min"],
         mgxs_nu_ratio_max=mgxs_metadata["nu_ratio_max"],
         mgxs_nu_ratio_worst=mgxs_metadata["nu_ratio_worst"],
+        mgxs_nu_ratio_warning_count=mgxs_metadata["nu_ratio_warning_count"],
         mgxs_adf_calculations=mgxs_metadata["adf_calculations"],
         mgxs_adf_faces=mgxs_metadata["adf_faces"],
         mgxs_adf_face_error_count=len(mgxs_metadata["adf_face_errors"]),
@@ -358,6 +360,7 @@ def payload(report: SphLoopFluxMapPreflightReport) -> dict[str, object]:
         "mgxs_nu_ratio_min": report.mgxs_nu_ratio_min,
         "mgxs_nu_ratio_max": report.mgxs_nu_ratio_max,
         "mgxs_nu_ratio_worst": report.mgxs_nu_ratio_worst,
+        "mgxs_nu_ratio_warning_count": report.mgxs_nu_ratio_warning_count,
         "mgxs_adf_calculations": report.mgxs_adf_calculations,
         "mgxs_adf_faces": list(report.mgxs_adf_faces),
         "mgxs_adf_face_error_count": report.mgxs_adf_face_error_count,
@@ -534,6 +537,7 @@ def _physics_contract(
         "nu_ratio_min": report.nu_ratio_min,
         "nu_ratio_max": report.nu_ratio_max,
         "nu_ratio_worst": report.nu_ratio_worst,
+        "nu_ratio_warning_count": report.nu_ratio_warning_count,
         "nu_ratio_warnings": report.nu_ratio_warnings,
         "adf_calculations": report.adf_calculations,
         "adf_faces": report.adf_faces,

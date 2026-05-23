@@ -8,6 +8,7 @@ from openmc2donjon.sph_loop_acceptance import (
     ACCEPTANCE_PASS_DECISION,
     build_acceptance_report,
 )
+from openmc2donjon.sph_loop_production_audit import build_production_audit_payload
 
 
 class SphLoopAcceptanceTests(unittest.TestCase):
@@ -218,6 +219,27 @@ class SphLoopAcceptanceTests(unittest.TestCase):
 
         self.assertTrue(report.passed)
         self.assertEqual(report.checks[0].name, "require_production_audit")
+
+    def test_production_audit_payload_includes_nu_ratio_warning_count(self) -> None:
+        payload = build_production_audit_payload(
+            flux_map_preflight=_preflight(nu_ratio_warning_count=1),
+            artifact_metadata=SimpleNamespace(
+                reference_flux=_metadata(
+                    "mgxs_donjon",
+                    ("fuel", "moderator"),
+                    energy_groups=2,
+                ),
+                workflows=(),
+                final_sph_sidecar=None,
+            ),
+            solve_count=0,
+            postprocess_count=0,
+        )
+
+        self.assertEqual(
+            payload["flux_map"]["mgxs_nu_ratio_warning_count"],
+            1,
+        )
 
     def test_mgxs_explicit_volume_acceptance_gate(self) -> None:
         report = build_acceptance_report(
@@ -592,6 +614,7 @@ def _preflight(
     adf_face_errors: int = 0,
     transport_p1_rel: float | None = None,
     transport_p1_errors: int = 0,
+    nu_ratio_warning_count: int = 0,
 ) -> SimpleNamespace:
     return SimpleNamespace(
         passed=True,
@@ -626,6 +649,7 @@ def _preflight(
         mgxs_nu_ratio_min=None,
         mgxs_nu_ratio_max=None,
         mgxs_nu_ratio_worst=None,
+        mgxs_nu_ratio_warning_count=nu_ratio_warning_count,
         mgxs_adf_calculations=0,
         mgxs_adf_faces=(),
         mgxs_adf_face_error_count=adf_face_errors,

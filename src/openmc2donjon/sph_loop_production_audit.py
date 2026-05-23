@@ -36,6 +36,7 @@ class FluxMapPreflightLike(Protocol):
     mgxs_nu_ratio_min: float | None
     mgxs_nu_ratio_max: float | None
     mgxs_nu_ratio_worst: str | None
+    mgxs_nu_ratio_warning_count: int
     mgxs_adf_calculations: int
     mgxs_adf_faces: tuple[str, ...]
     mgxs_adf_face_error_count: int
@@ -304,6 +305,9 @@ def build_production_audit_payload(
                 flux_map_preflight,
                 "mgxs_nu_ratio_worst",
                 None,
+            ),
+            "mgxs_nu_ratio_warning_count": int(
+                getattr(flux_map_preflight, "mgxs_nu_ratio_warning_count", 0)
             ),
             "mgxs_adf_calculations": int(
                 getattr(flux_map_preflight, "mgxs_adf_calculations", 0)

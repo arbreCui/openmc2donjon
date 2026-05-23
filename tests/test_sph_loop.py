@@ -694,6 +694,31 @@ class SphLoopTests(unittest.TestCase):
             any("fuel/states/00000002/energy_bounds" in error for error in report.errors)
         )
 
+    def test_flux_map_preflight_reports_nu_ratio_warning_count(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference = root / "reference_flux.h5"
+            _write_mgxs(mgxs)
+            _write_reference_flux(reference)
+            with h5py.File(mgxs, "a") as h5:
+                h5["mixtures/fuel/nu_fission"][:] = np.array([0.1, 0.03])
+
+            report = build_flux_map_preflight_report(
+                input_h5=mgxs,
+                reference_flux=f"{reference}::openmc_volume_flux",
+                map_h5=None,
+                scalar_flux_ids={"fuel": 2, "moderator": 4},
+                scalar_flux_column=0,
+            )
+
+        self.assertTrue(report.passed, report.errors)
+        self.assertEqual(report.mgxs_nu_ratio_checked_bins, 2)
+        self.assertEqual(report.mgxs_nu_ratio_warning_count, 1)
+        self.assertTrue(
+            any("nu_fission/fission" in warning for warning in report.warnings)
+        )
+
     def test_acceptance_rejects_unknown_energy_mesh_when_required(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

@@ -311,15 +311,24 @@ class MgxsInputContractTests(unittest.TestCase):
     def test_nu_ratio_outlier_warns_without_failing_contract(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "nu_outlier.h5"
+            summary = Path(tmpdir) / "summary.json"
             write_single_state_fixture(path, total=[0.29, 0.38])
             with h5py.File(path, "a") as h5:
                 h5["mixtures/fuel/nu_fission"][:] = np.array([0.1, 0.03])
 
             report = validator.validate_input(path)
+            ok = validator.run_preflight([path], summary_json=summary)
+            payload = json.loads(summary.read_text(encoding="utf-8"))
 
         self.assertTrue(report.ok, report.issues)
+        self.assertTrue(ok)
         self.assertEqual(report.nu_ratio_checked_bins, 2)
         self.assertAlmostEqual(report.nu_ratio_max or 0.0, 10.0)
+        self.assertEqual(report.nu_ratio_warning_count, 1)
+        self.assertEqual(
+            payload["inputs"][0]["physics_checks"]["nu_ratio_warning_count"],
+            1,
+        )
         self.assertTrue(
             any("nu_fission/fission" in warning for warning in report.warnings)
         )

@@ -663,6 +663,7 @@ def apply_shared_physics_checks(
     report.nu_ratio_min = physics.nu_ratio_min
     report.nu_ratio_max = physics.nu_ratio_max
     report.nu_ratio_worst = physics.nu_ratio_worst
+    report.nu_ratio_warning_count = physics.nu_ratio_warning_count
     for warning in physics.nu_ratio_warnings:
         report.warn(warning)
     report.adf_face_consistency_checked = bool(

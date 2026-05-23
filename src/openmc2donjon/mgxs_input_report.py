@@ -63,6 +63,7 @@ class InputReport:
     nu_ratio_min: float | None = None
     nu_ratio_max: float | None = None
     nu_ratio_worst: str | None = None
+    nu_ratio_warning_count: int = 0
     adf_face_consistency_checked: bool = False
     adf_face_consistency_errors: int = 0
     transport_p1_checked: int = 0
@@ -264,6 +265,7 @@ def _report_payload(report: InputReport) -> dict[str, object]:
             "nu_ratio_min": report.nu_ratio_min,
             "nu_ratio_max": report.nu_ratio_max,
             "nu_ratio_worst": report.nu_ratio_worst,
+            "nu_ratio_warning_count": report.nu_ratio_warning_count,
             "adf_face_consistency_checked": report.adf_face_consistency_checked,
             "adf_face_consistency_errors": report.adf_face_consistency_errors,
             "transport_p1_checked": report.transport_p1_checked,
@@ -332,6 +334,7 @@ def _physics_checks_line(report: InputReport) -> str:
         f"chi={report.chi_checked} "
         f"chi_sum_error={_format_optional(report.chi_sum_max_abs_error)} "
         f"nu_bins={report.nu_ratio_checked_bins} "
+        f"nu_warn={report.nu_ratio_warning_count} "
         f"nu_min={_format_optional(report.nu_ratio_min)} "
         f"nu_max={_format_optional(report.nu_ratio_max)} "
         f"transport_p1={report.transport_p1_checked} "

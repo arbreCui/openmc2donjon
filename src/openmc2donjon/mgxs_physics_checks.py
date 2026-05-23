@@ -44,6 +44,7 @@ class MgxsPhysicsCheckReport:
     nu_ratio_min: float | None = None
     nu_ratio_max: float | None = None
     nu_ratio_worst: str | None = None
+    nu_ratio_warning_count: int = 0
     nu_ratio_warnings: tuple[str, ...] = ()
     adf_calculations: int = 0
     adf_faces: tuple[str, ...] = ()
@@ -114,6 +115,7 @@ class _MutablePhysicsReport:
             nu_ratio_min=self.nu_ratio_min,
             nu_ratio_max=self.nu_ratio_max,
             nu_ratio_worst=self.nu_ratio_worst,
+            nu_ratio_warning_count=len(self.nu_ratio_warnings or ()),
             nu_ratio_warnings=tuple(self.nu_ratio_warnings or ()),
             adf_calculations=self.adf_calculations,
             adf_faces=self.adf_faces,

@@ -282,6 +282,7 @@ def _format_preflight_audit_lines(
         lines.append(
             "  mgxs_nu_ratio="
             f"bins={report.mgxs_nu_ratio_checked_bins} "
+            f"warnings={report.mgxs_nu_ratio_warning_count} "
             f"min={format_optional_float(report.mgxs_nu_ratio_min)} "
             f"max={format_optional_float(report.mgxs_nu_ratio_max)} "
             f"worst={report.mgxs_nu_ratio_worst or ''}"
