@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { ApiError, FileEntry, FileListing, api } from "@/lib/api";
 import { pathCrumbs } from "@/lib/fileBrowserPath";
 
@@ -46,8 +52,8 @@ type State =
  *   captured element. On select, focus restoration is skipped so the
  *   parent can move focus to a more useful target (Inspect button).
  *
- * Not yet shipped (real candidates for follow-up): breadcrumb,
- * recently-used list, arrow-key row navigation, editable path bar.
+ * Not yet shipped (real candidates for follow-up): recently-used
+ * list, arrow-key row navigation.
  */
 export default function FileBrowserModal({
   open,
@@ -60,6 +66,14 @@ export default function FileBrowserModal({
     path: initialPath,
   });
   const [currentPath, setCurrentPath] = useState(initialPath);
+  // Editable path bar draft. The committed location is ``currentPath``
+  // (drives the fetch); ``pathDraft`` is the user-controlled string in
+  // the input. We sync the draft back to ``currentPath`` any time it
+  // changes externally (crumb click, ↑ parent, dir entry click) so the
+  // input always reflects where the user actually is - typing that
+  // hadn't been submitted yet is intentionally discarded, since the
+  // user took a competing navigation action.
+  const [pathDraft, setPathDraft] = useState(initialPath);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   // Tracks whether the current open instance is closing because the
@@ -186,6 +200,29 @@ export default function FileBrowserModal({
     [onSelect],
   );
 
+  // Sync the editable draft whenever the committed path moves under
+  // it (crumb click, ↑ parent, dir-entry click, modal re-anchor).
+  useEffect(() => {
+    setPathDraft(currentPath);
+  }, [currentPath]);
+
+  const submitPathDraft = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const trimmed = pathDraft.trim();
+      // No-op on empty input or on a draft that matches what's already
+      // committed - sparing the backend a pointless refetch and not
+      // touching state that would just useEffect-sync back to the same
+      // value.
+      if (!trimmed || trimmed === currentPath) return;
+      setCurrentPath(trimmed);
+    },
+    [pathDraft, currentPath],
+  );
+
+  const draftCommittable =
+    pathDraft.trim() !== "" && pathDraft.trim() !== currentPath;
+
   if (!open) return null;
 
   return (
@@ -241,6 +278,42 @@ export default function FileBrowserModal({
             onPick={setCurrentPath}
           />
         </div>
+
+        {/* Editable path bar. Companion to the breadcrumb above:
+            breadcrumb is for clicking up the existing hierarchy, this
+            row is for pasting / typing a specific directory (deep jump,
+            sibling that breadcrumb can't get to). Backend is the source
+            of truth for what's valid - garbage input just produces the
+            existing 4xx error card. */}
+        <form
+          onSubmit={submitPathDraft}
+          className="px-4 py-2 border-b border-[var(--edge)] flex items-baseline gap-2"
+        >
+          <label
+            htmlFor="file-browser-path-input"
+            className="text-[11px] uppercase tracking-wider text-[var(--fg-3)] shrink-0"
+          >
+            Path
+          </label>
+          <input
+            id="file-browser-path-input"
+            type="text"
+            value={pathDraft}
+            onChange={(event) => setPathDraft(event.target.value)}
+            spellCheck={false}
+            autoComplete="off"
+            aria-label="Type a directory path"
+            className="flex-1 min-w-0 px-2 py-1 rounded border border-[var(--edge)] bg-[rgba(255,255,255,0.03)] text-[var(--fg-0)] font-mono text-[12px] focus:outline-none focus:border-[var(--accent)]"
+          />
+          <button
+            type="submit"
+            disabled={!draftCommittable}
+            className="btn btn-secondary text-[12px] disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label="Navigate to typed path"
+          >
+            Go
+          </button>
+        </form>
 
         <div className="flex-1 overflow-y-auto px-1 py-1">
           <BrowserBody state={state} onPickDir={setCurrentPath} onPickFile={handleSelect} />
