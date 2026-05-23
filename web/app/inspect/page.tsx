@@ -206,7 +206,13 @@ export default function InspectPage() {
 
         <FileBrowserModal
           open={browserOpen}
-          initialPath={pickBrowserStart(savedPrefix)}
+          // Prefer whatever the user has already typed - the common
+          // flow is "open inspect, point at some/handoff.h5, click
+          // Browse to pick a sibling file" rather than starting over
+          // from the saved Settings prefix. ``pickBrowserStart``
+          // strips a trailing file segment so opening the modal lands
+          // in the right directory.
+          initialPath={pickBrowserStart(path.trim() || savedPrefix)}
           onClose={() => setBrowserOpen(false)}
           onSelect={(picked) => {
             setPath(picked);

@@ -404,18 +404,24 @@ def _list_dir(raw: str, http_exception: Any) -> dict[str, Any]:
                 "size": size,
             }
         )
-    return _files_payload(real, entries)
+    parent = None if real.parent == real else str(real.parent)
+    return _files_payload(str(real), parent, entries)
 
 
 def _mock_list_dir(raw: str, http_exception: Any) -> dict[str, Any]:
     """Mock-mode implementation of ``/api/files`` (returns the bundled tree)."""
 
+    # Honour the ``~`` home alias and any nested ``~/foo/`` form.
     if raw in ("~", "~/"):
         resolved = _MOCK_HOME
     elif raw.startswith("~/"):
         resolved = f"{_MOCK_HOME}/{raw[2:]}"
     else:
-        resolved = raw.rstrip("/")
+        resolved = raw
+    # A trailing slash (``~/openmc-runs/``) is a user habit, not a
+    # different directory; normalise before the tree lookup.
+    resolved = resolved.rstrip("/") or "/"
+
     if resolved not in _MOCK_TREE:
         raise http_exception(
             status_code=404, detail=f"path not found: {raw}"
@@ -424,15 +430,23 @@ def _mock_list_dir(raw: str, http_exception: Any) -> dict[str, Any]:
         {"name": name, "kind": kind, "size": size}
         for name, kind, size in _MOCK_TREE[resolved]
     ]
-    return _files_payload(Path(resolved), entries)
+    # Parent navigation is honest about the mock universe: only walk
+    # up if the would-be parent is itself a node in the tree. That
+    # way ``/mock/home`` ends up with ``parent = None`` (disables the
+    # frontend "up" button) instead of pointing at ``/mock`` which
+    # would 404 on the next request.
+    parent_candidate = resolved.rsplit("/", 1)[0]
+    parent = parent_candidate if parent_candidate in _MOCK_TREE else None
+    return _files_payload(resolved, parent, entries)
 
 
-def _files_payload(real_path: Path, entries: list[dict[str, Any]]) -> dict[str, Any]:
-    parent = real_path.parent
+def _files_payload(
+    path: str, parent: str | None, entries: list[dict[str, Any]]
+) -> dict[str, Any]:
     return {
         "schema": FILES_SCHEMA,
-        "path": str(real_path),
-        "parent": None if parent == real_path else str(parent),
+        "path": path,
+        "parent": parent,
         "entries": entries,
     }
 

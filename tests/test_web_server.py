@@ -486,9 +486,36 @@ class FilesEndpointTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], FILES_SCHEMA)
         self.assertEqual(payload["path"], "/mock/home")
+        # ``/mock/home``'s naive Path parent would be ``/mock`` which is
+        # not in the tree; the endpoint reports None so the frontend
+        # disables the up-button instead of offering a 404 trap.
+        self.assertIsNone(payload["parent"])
         names = [entry["name"] for entry in payload["entries"]]
         self.assertIn("openmc-runs", names)
         self.assertIn("scratch", names)
+
+    def test_mock_mode_nested_dir_parent_points_back_into_tree(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.get(
+            "/api/files",
+            params={"path": "/mock/home/openmc-runs"},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["path"], "/mock/home/openmc-runs")
+        self.assertEqual(payload["parent"], "/mock/home")
+
+    def test_mock_mode_normalizes_trailing_slash(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.get(
+            "/api/files", params={"path": "~/openmc-runs/"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["path"], "/mock/home/openmc-runs")
 
     def test_mock_mode_lists_nested_directory_with_h5_files(self) -> None:
         from openmc2donjon.web.server import create_app

@@ -202,7 +202,11 @@ function BrowserBody({
   }
 
   return (
-    <ul role="listbox" className="text-sm">
+    // No ``role="listbox"`` here: the children are full action
+    // ``<button>`` elements (each one navigates or selects), not the
+    // listbox-option pattern. Leaving it as a plain unordered list
+    // keeps screen-reader semantics straight.
+    <ul className="text-sm">
       {dirs.map((entry) => (
         <EntryRow
           key={`dir:${entry.name}`}
@@ -241,8 +245,8 @@ function EntryRow({
         onClick={onClick}
         className="w-full px-3 py-1.5 flex items-baseline gap-3 text-left rounded hover:bg-white/[0.04]"
       >
-        <span className="w-5 text-center text-[var(--fg-3)]">
-          {isDir ? "📁" : "📄"}
+        <span className="inline-flex items-center justify-center min-w-[28px] h-5 px-1 rounded border border-[var(--edge)] bg-white/[0.03] text-[10px] font-semibold uppercase tracking-wider text-[var(--fg-2)] tab-num">
+          {isDir ? "DIR" : "H5"}
         </span>
         <span
           className={
