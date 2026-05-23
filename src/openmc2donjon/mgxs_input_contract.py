@@ -14,23 +14,19 @@ from .constants import MGXS_DONJON_GROUP_ORDER
 from .energy_groups import energy_bounds_sha256, load_energy_bounds_text
 from .hdf5_names import read_mixture_names
 from .mgxs_input_equivalence import (
-    SPH_DATASETS,
+    SPH_DATASETS,  # noqa: F401  (re-exported for mgxs_inspect)
     adf_names_for_group,
     attr_text,
     sph_present_for_group,
-    validate_adf_name,
     validate_adf_layout,
-    validate_adf_values,
     validate_sph_layout,
     validate_vector,
 )
 from .mgxs_input_report import (
     FAIL_DECISION,
     PASS_DECISION,
-    SCHEMA,
     InputReport,
     print_preflight_report,
-    print_report,
     write_summary,
 )
 from .mgxs_physics_checks import (

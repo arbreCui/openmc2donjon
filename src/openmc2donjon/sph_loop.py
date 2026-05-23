@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .macrolib import convert_mgxs_hdf5_to_macrolib
 from .multicompo import convert_mgxs_hdf5
-from .sph_loop_config import CONFIG_SCHEMA
+from .sph_loop_config import CONFIG_SCHEMA  # noqa: F401  (re-exported for donjon_sph_config)
 from .sph_loop_acceptance import build_acceptance_report
 from .sph_loop_execution import SphLoopExecution, execute_loop
 from .sph_loop_metadata import collect_artifact_metadata
@@ -23,8 +23,7 @@ from .sph_loop_audit import (
 )
 from .sph_loop_records import SphLoopReport
 from .sph_loop_report import (
-    PASS_DECISION,
-    SCHEMA,
+    PASS_DECISION,  # noqa: F401  (re-exported for tests / external callers)
     print_report,
     write_bundle,
     write_summary,

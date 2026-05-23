@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from itertools import pairwise
 from typing import Protocol
 
 from .constants import MGXS_DONJON_GROUP_ORDER
@@ -691,7 +692,7 @@ def _max_keff_step_pcm(values: list[float]) -> float | None:
     if len(values) < 2:
         return None
     deltas = []
-    for before, after in zip(values, values[1:]):
+    for before, after in pairwise(values):
         denominator = max(abs(before), 1.0e-30)
         deltas.append(abs(after - before) / denominator * 1.0e5)
     return float(max(deltas))

@@ -783,10 +783,10 @@ def _domain_volume(domain: Any) -> float | None:
 
 def _domain_fissionable(domain: Any, fallback: bool) -> bool:
     if hasattr(domain, "fissionable"):
-        return bool(getattr(domain, "fissionable"))
+        return bool(domain.fissionable)
     fill = getattr(domain, "fill", None)
     if fill is not None and hasattr(fill, "fissionable"):
-        return bool(getattr(fill, "fissionable"))
+        return bool(fill.fissionable)
     return fallback
 
 

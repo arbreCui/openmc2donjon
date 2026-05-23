@@ -220,7 +220,6 @@ def _load_from_adf_root(
     energy_groups: int,
 ) -> dict[str, dict[str, np.ndarray]]:
     if hasattr(obj, "keys"):
-        keys = tuple(str(key) for key in obj)
         if all(name in obj for name in mixture_names):
             return {
                 mixture_name: _adf_object_to_faces(

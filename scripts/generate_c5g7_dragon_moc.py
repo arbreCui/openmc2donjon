@@ -290,7 +290,9 @@ def _mixture_xs(index: int, mix) -> list[str]:
     lines.append("    SCAT")
     for moment in mix.scatter_matrix:
         triplet = dense_to_triplet(moment)
-        for to_group, (njjs, ijjs) in enumerate(zip(triplet.njjs, triplet.ijjs), start=1):
+        for to_group, (njjs, ijjs) in enumerate(
+            zip(triplet.njjs, triplet.ijjs, strict=True), start=1
+        ):
             start = sum(int(n) for n in triplet.njjs[: to_group - 1])
             stop = start + int(njjs)
             values = triplet.scat[start:stop]
@@ -310,7 +312,7 @@ def _cell_definitions(mat_id_to_mix: dict[int, int]) -> list[str]:
         f"    MIX {mod_mix}",
         "  ;",
     ]
-    for mat_id, material_name in MAT_ID_TO_NAME.items():
+    for mat_id in MAT_ID_TO_NAME:
         if mat_id == 8:
             continue
         mix = mat_id_to_mix[mat_id]

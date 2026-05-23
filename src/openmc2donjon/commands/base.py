@@ -20,7 +20,7 @@ class CommandSpec:
 
 
 def parser_from_args(args: argparse.Namespace) -> argparse.ArgumentParser:
-    return getattr(args, "_parser")
+    return args._parser
 
 
 def exit_with_command_error(

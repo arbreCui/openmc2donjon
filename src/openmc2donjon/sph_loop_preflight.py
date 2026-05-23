@@ -293,7 +293,7 @@ def build_flux_map_preflight_report(
         ),
         mixture_flux_map=tuple(
             (mixture, int(scalar_id))
-            for mixture, scalar_id in zip(mixture_names, scalar_ids)
+            for mixture, scalar_id in zip(mixture_names, scalar_ids, strict=True)
         ),
         duplicate_scalar_flux_ids=map_diagnostics["duplicate_scalar_flux_ids"],
         mesh_shape=map_diagnostics["mesh_shape"],

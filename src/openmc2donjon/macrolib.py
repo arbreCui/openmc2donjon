@@ -4,13 +4,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import TYPE_CHECKING, Iterable, Sequence
 
 import numpy as np
 
 from . import lcm_ascii as lcm
 from .constants import DONJON_ADF_NAME_WIDTH, DONJON_SIGNATURE_WIDTH
 from .scatter import dense_moments_to_triplets
+
+if TYPE_CHECKING:
+    from .multicompo import MixtureXS
 
 
 @dataclass
