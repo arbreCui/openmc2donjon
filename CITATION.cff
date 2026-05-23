@@ -1,0 +1,32 @@
+cff-version: 1.2.0
+message: "If you use openmc2donjon in academic work, please cite it as below."
+type: software
+title: openmc2donjon
+abstract: >-
+  openmc2donjon bridges OpenMC and DRAGON/DONJON for production
+  homogenization workflows. It exports OpenMC statepoints, optionally
+  augments the resulting MGXS HDF5 with ADF/DF or SPH equivalence factors
+  (one-shot or iteratively via run-sph-loop), and converts the handoff
+  into L_MULTICOMPO or L_MACROLIB ASCII files consumed by DONJON
+  low-order solves.
+version: "0.1.2"
+date-released: "2026-05-19"
+license: MIT
+repository-code: "https://github.com/arbreCui/openmc2donjon"
+url: "https://github.com/arbreCui/openmc2donjon"
+authors:
+  - given-names: Bowen
+    family-names: Cui
+    email: "bowen.cui@polymtl.ca"
+    affiliation: "Polytechnique Montréal"
+keywords:
+  - openmc
+  - dragon
+  - donjon
+  - neutronics
+  - reactor-physics
+  - mgxs
+  - homogenization
+  - sph
+  - adf
+  - equivalence
