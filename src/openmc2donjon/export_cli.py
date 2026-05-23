@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import argparse
 import pickle
-import sys
 from pathlib import Path
 
 from . import __version__
-from ._logging import add_cli_logging_arguments, configure_cli_logging_from_args
+from ._logging import add_cli_logging_arguments, configure_cli_logging_from_args, get_logger
 from .export_openmc_mgxs import export_openmc_mgxs_library
 from .openmc_statepoint import (
     StatepointLoadError,
@@ -20,6 +19,9 @@ from .recipe_dry_run_report import (
     print_recipe_dry_run_summary,
     print_strict_dry_run_decision,
 )
+
+
+logger = get_logger("export_cli")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -176,7 +178,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 0
     except StatepointLoadError as exc:
-        print(f"{parser.prog}: error: {exc}", file=sys.stderr)
+        logger.error("%s: error: %s", parser.prog, exc)
         return 1
 
     with Path(args.library_pickle).open("rb") as fh:

@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 import tempfile
 from pathlib import Path
 
 from . import __version__
-from ._logging import configure_cli_logging_from_args
+from ._logging import configure_cli_logging_from_args, get_logger
 from .from_openmc_adf import (
     AdfConfig,
     build_flux_ratio_adf,
@@ -54,6 +53,9 @@ from .recipe_dry_run_report import (
 )
 
 
+logger = get_logger("from_openmc_cli")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -87,7 +89,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 return 0 if ok else 1
     except StatepointLoadError as exc:
-        print(f"{parser.prog}: error: {exc}", file=sys.stderr)
+        logger.error("%s: error: %s", parser.prog, exc)
         return 1
 
 
