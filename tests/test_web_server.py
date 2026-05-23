@@ -10,7 +10,9 @@ job installs ``.[web,dev]`` and therefore exercises them.
 
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 
 
 try:  # pragma: no cover - import guard exercised via skip path
@@ -19,6 +21,46 @@ try:  # pragma: no cover - import guard exercised via skip path
     _WEB_AVAILABLE = True
 except ImportError:
     _WEB_AVAILABLE = False
+
+
+def _write_fake_hdf5(path: Path) -> None:
+    """Materialise a small HDF5 matching the converter input contract.
+
+    7 groups, 2 mixtures, P0 scatter, no ADF/SPH. Just enough that
+    ``inspect_file`` succeeds and ``identify_mesh`` can be exercised.
+    """
+
+    import h5py
+    import numpy as np
+
+    # CASMO-7 bounds so the catalog match endpoint returns a hit.
+    energy_bounds = np.array(
+        [10000000.0, 821000.0, 5530.0, 4.0, 0.625, 0.14, 0.058, 9.999999999999999e-06],
+        dtype=float,
+    )
+    ngroups = 7
+    with h5py.File(path, "w") as h5:
+        h5.attrs["schema_version"] = "openmc2donjon.mgxs.v1"
+        h5.attrs["energy_groups"] = ngroups
+        h5.attrs["legendre_order"] = 0
+        h5.attrs["scatter_axes"] = "moment,from,to"
+        h5.create_dataset("energy_bounds", data=energy_bounds)
+        mixtures = h5.create_group("mixtures")
+        for index, name in enumerate(("M1_UO2", "M2_MOD"), start=1):
+            mix = mixtures.create_group(name)
+            mix.attrs["volume"] = float(index)
+            mix.attrs["temperature"] = 600.0
+            mix.attrs["fissionable"] = bool(name == "M1_UO2")
+            mix.create_dataset("total", data=np.full(ngroups, 0.5 * index))
+            mix.create_dataset("absorption", data=np.full(ngroups, 0.05 * index))
+            scatter = np.zeros((1, ngroups, ngroups), dtype=float)
+            # Strictly down-scattering diagonal + single off-diagonal.
+            for g in range(ngroups):
+                scatter[0, g, g] = 0.2 * index
+                if g + 1 < ngroups:
+                    scatter[0, g, g + 1] = 0.01 * index
+            scatter_dataset = mix.create_dataset("scatter_matrix", data=scatter)
+            scatter_dataset.attrs["axes"] = "moment,from,to"
 
 
 @unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
@@ -116,6 +158,143 @@ class CorsBehaviourTests(unittest.TestCase):
             f"default origin appeared twice in {allow_origins!r}",
         )
         self.assertIn("http://example.local:5173", allow_origins)
+
+
+@unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
+class InspectEndpointTests(unittest.TestCase):
+    def test_mock_mode_returns_bundled_inspect_fixture(self) -> None:
+        from openmc2donjon.web.server import INSPECT_SCHEMA, create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.get("/api/inspect", params={"path": "/any.h5"})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["schema"], INSPECT_SCHEMA)
+        self.assertEqual(payload["energy_groups"], 7)
+        self.assertEqual(payload["legendre_order"], 1)
+        self.assertEqual(payload["mixture_count"], 9)
+        self.assertEqual(payload["sph_calculations"], 9)
+        self.assertEqual(
+            tuple(payload["adf_faces"]), ("XMIN", "XMAX", "YMIN", "YMAX")
+        )
+        self.assertEqual(payload["mesh_match"]["id"], "casmo_7")
+
+    def test_mock_mode_returns_bundled_mixture_fixture(self) -> None:
+        from openmc2donjon.web.server import MIXTURE_SCHEMA, create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.get(
+            "/api/inspect/mixture",
+            params={"path": "/any.h5", "mixture": "M3_MOX_70"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["schema"], MIXTURE_SCHEMA)
+        self.assertEqual(payload["mixture"], "M3_MOX_70")
+        self.assertEqual(len(payload["cross_sections"]["total"]), 7)
+        self.assertEqual(payload["scatter"]["shape"], [2, 7, 7])
+        self.assertEqual(payload["scatter"]["moment_index"], 0)
+        self.assertEqual(len(payload["scatter"]["values"]), 7)
+        self.assertEqual(len(payload["scatter"]["values"][0]), 7)
+
+    def test_live_mode_path_not_found_returns_404(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=False))
+        response = client.get(
+            "/api/inspect",
+            params={"path": "/definitely/does/not/exist.h5"},
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("not found", response.json()["detail"])
+
+    def test_live_mode_non_hdf5_returns_400(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.NamedTemporaryFile(
+            "w", suffix=".txt", delete=False
+        ) as fh:
+            fh.write("definitely not an hdf5 file")
+            text_path = fh.name
+        try:
+            client = TestClient(create_app(mock_mode=False))
+            response = client.get("/api/inspect", params={"path": text_path})
+            self.assertEqual(response.status_code, 400)
+            self.assertIn("not an HDF5", response.json()["detail"])
+        finally:
+            Path(text_path).unlink(missing_ok=True)
+
+    def test_live_mode_inspect_real_file(self) -> None:
+        from openmc2donjon.web.server import INSPECT_SCHEMA, create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "handoff.h5"
+            _write_fake_hdf5(path)
+
+            client = TestClient(create_app(mock_mode=False))
+            response = client.get("/api/inspect", params={"path": str(path)})
+            self.assertEqual(response.status_code, 200)
+            payload = response.json()
+            self.assertEqual(payload["schema"], INSPECT_SCHEMA)
+            self.assertEqual(payload["energy_groups"], 7)
+            self.assertEqual(payload["mixture_count"], 2)
+            self.assertIsNotNone(payload["mesh_match"])
+            self.assertEqual(payload["mesh_match"]["id"], "casmo_7")
+            mixture_names = sorted(m["name"] for m in payload["mixtures"])
+            self.assertEqual(mixture_names, ["M1_UO2", "M2_MOD"])
+
+    def test_live_mode_mixture_endpoint_returns_arrays(self) -> None:
+        from openmc2donjon.web.server import MIXTURE_SCHEMA, create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "handoff.h5"
+            _write_fake_hdf5(path)
+            client = TestClient(create_app(mock_mode=False))
+
+            response = client.get(
+                "/api/inspect/mixture",
+                params={"path": str(path), "mixture": "M1_UO2"},
+            )
+            self.assertEqual(response.status_code, 200)
+            payload = response.json()
+            self.assertEqual(payload["schema"], MIXTURE_SCHEMA)
+            self.assertEqual(payload["mixture"], "M1_UO2")
+            self.assertEqual(payload["energy_groups"], 7)
+            self.assertEqual(len(payload["cross_sections"]["total"]), 7)
+            self.assertEqual(payload["scatter"]["shape"], [1, 7, 7])
+            self.assertEqual(len(payload["scatter"]["values"]), 7)
+
+    def test_live_mode_mixture_not_found_returns_404(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "handoff.h5"
+            _write_fake_hdf5(path)
+            client = TestClient(create_app(mock_mode=False))
+
+            response = client.get(
+                "/api/inspect/mixture",
+                params={"path": str(path), "mixture": "NOT_A_MIXTURE"},
+            )
+            self.assertEqual(response.status_code, 404)
+            self.assertIn("not found", response.json()["detail"])
+
+    def test_live_mode_scatter_moment_out_of_range_returns_404(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "handoff.h5"
+            _write_fake_hdf5(path)
+            client = TestClient(create_app(mock_mode=False))
+
+            response = client.get(
+                "/api/inspect/mixture",
+                params={"path": str(path), "mixture": "M1_UO2", "moment": 3},
+            )
+            self.assertEqual(response.status_code, 404)
+            self.assertIn("scatter moment", response.json()["detail"])
 
 
 class UvicornLogLevelMappingTests(unittest.TestCase):
