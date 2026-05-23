@@ -17,6 +17,7 @@ frontend can be exercised without a real HDF5 on disk.
 from __future__ import annotations
 
 import json
+from functools import lru_cache
 from importlib import resources
 from pathlib import Path
 from typing import Any
@@ -335,18 +336,29 @@ def _load_fixture(filename: str) -> dict[str, Any]:
     return json.loads(text)
 
 
-def _mock_mixture_names() -> set[str]:
+@lru_cache(maxsize=1)
+def _mock_mixture_names() -> frozenset[str]:
+    """Cached set of mixture names from the bundled handoff fixture.
+
+    The fixture is read once per process; ``frozenset`` keeps the
+    cached value immutable so callers can't accidentally mutate the
+    shared object.
+    """
+
     handoff = _load_fixture("inspect_handoff.json")
-    return {mix["name"] for mix in handoff.get("mixtures", [])}
+    return frozenset(mix["name"] for mix in handoff.get("mixtures", []))
 
 
-def _mock_non_fissionable_mixtures() -> set[str]:
+@lru_cache(maxsize=1)
+def _mock_non_fissionable_mixtures() -> frozenset[str]:
+    """Cached set of non-fissionable mixture names from the handoff fixture."""
+
     handoff = _load_fixture("inspect_handoff.json")
-    return {
+    return frozenset(
         mix["name"]
         for mix in handoff.get("mixtures", [])
         if mix.get("fissionable") is False
-    }
+    )
 
 
 def _mock_mixture(mixture: str, moment: int, http_exception: Any) -> dict[str, Any]:

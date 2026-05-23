@@ -28,7 +28,9 @@ declare module "plotly.js-dist-min" {
     // non-positive samples from a log axis without breaking x/y
     // alignment.
     y?: (number | string | null)[];
-    z?: number[][];
+    // ``null`` entries render as gaps; the log-scale heatmap uses that
+    // to skip cells where ``v <= 0`` (log undefined).
+    z?: (number | null)[][];
     type?: string;
     mode?: string;
     line?: Record<string, unknown>;
@@ -43,6 +45,10 @@ declare module "plotly.js-dist-min" {
     colorbar?: Record<string, unknown>;
     zsmooth?: false | "fast" | "best";
     showscale?: boolean;
+    // Carries per-cell auxiliary values reachable from
+    // ``hovertemplate`` via ``%{customdata}`` - heatmap traces use 2D,
+    // line / scatter use 1D.
+    customdata?: (number | string | null)[] | (number | string | null)[][];
   };
 
   export type Config = Record<string, unknown> & {
