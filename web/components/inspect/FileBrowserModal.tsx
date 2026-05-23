@@ -9,6 +9,7 @@ import {
 } from "react";
 import { ApiError, FileEntry, FileListing, api } from "@/lib/api";
 import { pathCrumbs } from "@/lib/fileBrowserPath";
+import { RecentHandoff, useRecentHandoffs } from "@/lib/recentHandoffs";
 
 // CSS selector for elements that should be reachable via the tab trap.
 const FOCUSABLE_SELECTOR =
@@ -52,8 +53,8 @@ type State =
  *   captured element. On select, focus restoration is skipped so the
  *   parent can move focus to a more useful target (Inspect button).
  *
- * Not yet shipped (real candidates for follow-up): recently-used
- * list, arrow-key row navigation.
+ * Not yet shipped (real candidates for follow-up): arrow-key row
+ * navigation, pin / clear for the recent list.
  */
 export default function FileBrowserModal({
   open,
@@ -66,6 +67,12 @@ export default function FileBrowserModal({
     path: initialPath,
   });
   const [currentPath, setCurrentPath] = useState(initialPath);
+  // Per-browser list of recently-picked handoff files. We record on
+  // every successful pick (not on inspect-success in the parent)
+  // because the modal is self-contained that way - the trade-off is
+  // that a recent entry might be a file that fails to open, which
+  // shows up as the usual error card on the next inspect anyway.
+  const { recent, recordPick } = useRecentHandoffs();
   // Editable path bar draft. The committed location is ``currentPath``
   // (drives the fetch); ``pathDraft`` is the user-controlled string in
   // the input. We sync the draft back to ``currentPath`` any time it
@@ -194,10 +201,11 @@ export default function FileBrowserModal({
   // button) instead of bouncing back to Browse.
   const handleSelect = useCallback(
     (picked: string) => {
+      recordPick(picked);
       closedViaSelectRef.current = true;
       onSelect(picked);
     },
-    [onSelect],
+    [onSelect, recordPick],
   );
 
   // Sync the editable draft whenever the committed path moves under
@@ -316,6 +324,9 @@ export default function FileBrowserModal({
         </form>
 
         <div className="flex-1 overflow-y-auto px-1 py-1">
+          {recent.length > 0 ? (
+            <RecentList recent={recent} onPick={handleSelect} />
+          ) : null}
           <BrowserBody state={state} onPickDir={setCurrentPath} onPickFile={handleSelect} />
         </div>
       </div>
@@ -435,6 +446,48 @@ function EntryRow({
         ) : null}
       </button>
     </li>
+  );
+}
+
+function RecentList({
+  recent,
+  onPick,
+}: {
+  recent: readonly RecentHandoff[];
+  onPick: (path: string) => void;
+}) {
+  return (
+    // Lives in the same scroll container as the directory listing so
+    // the user can pop back to a familiar file even when the current
+    // directory is unrelated. ``border-b`` separates from the listing
+    // below; the "Recent" label keeps the two sections distinguishable.
+    <section
+      aria-label="Recently picked files"
+      className="px-3 pt-1 pb-2 border-b border-[var(--edge)] mb-1"
+    >
+      <div className="text-[11px] uppercase tracking-wider text-[var(--fg-3)] px-0 mb-1">
+        Recent
+      </div>
+      <ul className="text-sm">
+        {recent.map((entry) => (
+          <li key={entry.path}>
+            <button
+              type="button"
+              onClick={() => onPick(entry.path)}
+              title={entry.path}
+              className="w-full px-2 py-1 flex items-baseline gap-3 text-left rounded hover:bg-white/[0.04]"
+            >
+              <span className="inline-flex items-center justify-center min-w-[28px] h-5 px-1 rounded border border-[var(--edge)] bg-white/[0.03] text-[10px] font-semibold uppercase tracking-wider text-[var(--fg-2)] tab-num">
+                H5
+              </span>
+              <span className="font-mono flex-1 min-w-0 truncate text-[var(--accent-2)]">
+                {entry.path}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
