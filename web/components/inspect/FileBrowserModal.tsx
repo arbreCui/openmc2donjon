@@ -1,7 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, FileEntry, FileListing, api } from "@/lib/api";
+
+// CSS selector for elements that should be reachable via the tab trap.
+const FOCUSABLE_SELECTOR =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 const HDF5_EXTENSIONS = /\.(h5|hdf5)$/i;
 
@@ -44,6 +48,8 @@ export default function FileBrowserModal({
     path: initialPath,
   });
   const [currentPath, setCurrentPath] = useState(initialPath);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
   // Re-anchor to ``initialPath`` whenever the modal opens fresh.
   useEffect(() => {
@@ -85,6 +91,53 @@ export default function FileBrowserModal({
     return () => window.removeEventListener("keydown", handler);
   }, [open, onClose]);
 
+  // Focus management. On open: remember the element that was focused
+  // (typically the "Browse…" button) and move focus into the dialog so
+  // keyboard navigation lands inside the modal rather than continuing
+  // through the page behind it. On close: restore focus to the
+  // remembered element so the user picks back up where they were.
+  useEffect(() => {
+    if (!open) return;
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
+    // The dialog container itself is focusable (``tabIndex={-1}``) so
+    // a programmatic ``focus()`` lands here without inserting an entry
+    // in the tab order; the user's first Tab then moves to the first
+    // real focusable child (Cancel, ↑ parent, then entries).
+    dialogRef.current?.focus();
+    return () => {
+      previousFocusRef.current?.focus?.();
+    };
+  }, [open]);
+
+  // Tab trap. Without this, Tab from the last focusable element in
+  // the dialog escapes to the page behind the backdrop, which both
+  // breaks keyboard browsing and contradicts the visual "this is a
+  // modal" claim.
+  useEffect(() => {
+    if (!open) return;
+    const handler = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return;
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+      ).filter((el) => !el.hasAttribute("aria-hidden"));
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (event.shiftKey && (active === first || active === dialog)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [open]);
+
   const goUp = useCallback(() => {
     if (state.kind !== "ok") return;
     if (state.data.parent != null) setCurrentPath(state.data.parent);
@@ -105,7 +158,12 @@ export default function FileBrowserModal({
       aria-label="Browse for HDF5 file"
     >
       <div
-        className="glass rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col"
+        ref={dialogRef}
+        // ``tabIndex={-1}`` lets us focus the dialog programmatically
+        // on open without inserting it into the natural tab order;
+        // user keystrokes still cycle through real controls.
+        tabIndex={-1}
+        className="glass rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col outline-none"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-baseline justify-between gap-3 px-4 py-3 border-b border-[var(--edge)]">
