@@ -12,6 +12,15 @@ license = {text = "MIT"}
 authors = [
   {name = "Bowen Cui"},
 ]
+keywords = [
+  "openmc",
+  "dragon",
+  "donjon",
+  "neutronics",
+  "reactor-physics",
+  "mgxs",
+  "homogenization",
+]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Science/Research",
