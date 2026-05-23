@@ -32,8 +32,8 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Physics",
 ]
 dependencies = [
-  "h5py",
-  "numpy",
+  "h5py>=3.8",
+  "numpy>=1.24",
 ]
 
 [project.urls]
