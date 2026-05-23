@@ -15,6 +15,7 @@ import numpy as np
 from openmc2donjon.cli import main as cli_main
 from openmc2donjon.macrolib import read_macrolib_ascii
 from openmc2donjon.sph_loop import PASS_DECISION
+from openmc2donjon.sph_loop_preflight import build_flux_map_preflight_report
 
 
 class SphLoopTests(unittest.TestCase):
@@ -663,6 +664,35 @@ class SphLoopTests(unittest.TestCase):
             self.assertEqual(raised.exception.code, 1)
             self.assertIn("/energy_bounds dataset is required", stderr.getvalue())
             self.assertFalse((root / "loop_run/iter00_solve").exists())
+
+    def test_flux_map_preflight_rejects_state_energy_bounds_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "stateful_mgxs.h5"
+            reference = root / "reference_flux.h5"
+            _write_stateful_mgxs_with_state_bounds(mgxs, mismatch=True)
+            _write_reference_flux(
+                reference,
+                mixture_names=("fuel",),
+                values=np.asarray([[80.0, 800.0]]),
+            )
+
+            report = build_flux_map_preflight_report(
+                input_h5=mgxs,
+                reference_flux=f"{reference}::openmc_volume_flux",
+                map_h5=None,
+                scalar_flux_ids={"fuel": 2},
+                scalar_flux_column=0,
+                require_mgxs_energy_bounds=True,
+                require_mgxs_energy_bounds_consistency=True,
+            )
+
+        self.assertFalse(report.passed)
+        self.assertEqual(report.mgxs_energy_bounds_local_count, 2)
+        self.assertEqual(report.mgxs_energy_bounds_consistency_error_count, 1)
+        self.assertTrue(
+            any("fuel/states/00000002/energy_bounds" in error for error in report.errors)
+        )
 
     def test_acceptance_rejects_unknown_energy_mesh_when_required(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1422,6 +1452,31 @@ def _write_mgxs(
             with_volume=with_volume,
             with_h_factor=with_h_factor,
         )
+
+
+def _write_stateful_mgxs_with_state_bounds(path: Path, *, mismatch: bool) -> None:
+    root_bounds = np.array([1.0e-5, 1.0, 1.0e7])
+    with h5py.File(path, "w") as h5:
+        h5.attrs["energy_groups"] = 2
+        h5.attrs["legendre_order"] = 0
+        h5.create_dataset("energy_bounds", data=root_bounds)
+        h5.create_dataset("mixture_names", data=np.asarray(["fuel"], dtype="S"))
+        mixtures = h5.create_group("mixtures")
+        fuel = mixtures.create_group("fuel")
+        fuel.attrs["fissionable"] = True
+        fuel.attrs["scatter_axes"] = "moment,from,to"
+        fuel.attrs["source_domain_index"] = 1
+        fuel.attrs["source_domain_id"] = 101
+        fuel.attrs["source_domain_type"] = "cell"
+        fuel.attrs["volume"] = 10.0
+        states = fuel.create_group("states")
+        for index in range(1, 3):
+            state = states.create_group(f"{index:08d}")
+            state_bounds = root_bounds.copy()
+            if mismatch and index == 2:
+                state_bounds[1] = 0.9
+            state.create_dataset("energy_bounds", data=state_bounds)
+            _write_mixture(state, fissionable=True)
 
 
 def _write_mixture(
