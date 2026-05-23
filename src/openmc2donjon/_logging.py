@@ -1,10 +1,61 @@
 """Shared logging setup for openmc2donjon command line entry points.
 
-Output contract:
-- ``print()`` is for requested results: reports, paths, summaries, and text
-  that users may redirect or parse.
-- ``logging`` is for diagnostics: progress, warnings, fallbacks, and debug
-  detail. CLI logging is routed to stderr so stdout remains a result stream.
+Output contract
+---------------
+
+The package separates two output streams by design:
+
+- ``print()`` is for requested *results*: reports, paths, summaries, and
+  any text the user invoked the command to receive. Stdout stays a clean
+  result stream that can be redirected or parsed.
+- ``logging`` is for *diagnostics*: progress, warnings, fallbacks, and
+  debug detail. CLI logging is routed to stderr and shaped by the
+  ``-v / -vv / -q / --log-level`` flags.
+
+What stays a ``print()``
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Most of the codebase routes user-visible output through one of these
+patterns, and every ``print()`` inside them is a *result*:
+
+- Functions named ``print_report`` / ``_print_*`` / ``render_*`` /
+  ``format_*`` (the convention for "render a frozen Report dataclass to
+  stdout") and the dedicated report modules
+  (``mgxs_input_report``, ``sph_loop_report``, ``recipe_dry_run_report``).
+- CLI handlers that announce a produced artifact, e.g.
+  ``print(f"wrote {format}: {output_path}")``,
+  ``print(f"exported {n} domains ...")``,
+  ``print(f"injected ADF into HDF5: {hdf5_path}")``.
+  These are confirmations the user asked for by running the command;
+  silencing them with logger filters would break shell pipelines that
+  read them.
+
+What goes through ``logging``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Anything that is *not* a requested result and that a quiet user might
+reasonably want to suppress:
+
+- ``logger.error(...)`` for failures the CLI catches and surfaces (e.g.
+  ``StatepointLoadError`` from a recipe load). These previously used
+  ``print(..., file=sys.stderr)``.
+- ``logger.warning(...)`` for non-fatal physics/contract anomalies that
+  do not stop the run.
+- ``logger.info(...)`` for progress milestones useful under ``-v``
+  (e.g. "starting iteration k of N", "fallback X engaged").
+- ``logger.debug(...)`` for internals, subprocess invocation lines,
+  HDF5 path probing, etc., visible only under ``-vv``.
+
+Use ``get_logger("<module-suffix>")`` at module scope to obtain a
+package-scoped logger:
+
+    logger = get_logger("from_openmc_cli")
+
+The audit at ``tests/test_print_audit.py`` enforces this contract by
+listing every ``print()`` call outside a render helper - if you add a
+new one, either move it inside a ``print_*``/``render_*``/``format_*``
+helper, replace it with a ``logger`` call, or add it to the explicit
+whitelist there if it is a deliberate "I wrote X" result confirmation.
 """
 
 from __future__ import annotations
