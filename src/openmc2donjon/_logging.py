@@ -105,17 +105,20 @@ def is_cli_logging_flag(token: str) -> bool:
     logging flags do not need to be mirrored into the dispatcher.
     """
 
-    if token in ("--verbose", "-q", "--quiet"):
+    if token in ("--verbose", "--quiet"):
         return True
     if token in CLI_LOGGING_VALUE_FLAGS:
         return True
     if any(token.startswith(f"{flag}=") for flag in CLI_LOGGING_VALUE_FLAGS):
         return True
+    # argparse accepts short-flag clusters such as ``-vq``, ``-qv``, or
+    # ``-vvq`` when each character is its own argument. Treat any cluster
+    # built from ``v`` and ``q`` as a logging flag for dispatcher purposes.
     if (
         token.startswith("-")
         and not token.startswith("--")
         and len(token) > 1
-        and set(token[1:]) == {"v"}
+        and set(token[1:]) <= {"v", "q"}
     ):
         return True
     return False

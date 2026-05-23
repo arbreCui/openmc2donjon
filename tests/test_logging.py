@@ -135,6 +135,11 @@ class LoggingTests(unittest.TestCase):
         self.assertTrue(_is_command_invocation(["--log-level", "INFO", "doctor"]))
         self.assertFalse(_is_command_invocation(["-v", "input.h5"]))
 
+    def test_openmc2donjon_dispatch_skips_vq_clusters(self) -> None:
+        self.assertTrue(_is_command_invocation(["-vq", "check", "input.h5"]))
+        self.assertTrue(_is_command_invocation(["-qv", "doctor"]))
+        self.assertTrue(_is_command_invocation(["-vvq", "check", "input.h5"]))
+
     def test_is_cli_logging_flag_recognizes_supported_forms(self) -> None:
         self.assertTrue(is_cli_logging_flag("-v"))
         self.assertTrue(is_cli_logging_flag("-vv"))
@@ -145,12 +150,23 @@ class LoggingTests(unittest.TestCase):
         self.assertTrue(is_cli_logging_flag("--log-level"))
         self.assertTrue(is_cli_logging_flag("--log-level=INFO"))
 
+    def test_is_cli_logging_flag_recognizes_vq_clusters(self) -> None:
+        # argparse accepts ``-vq``, ``-qv``, ``-vvq`` etc. as short-flag
+        # clusters; the dispatcher must treat them as logging flags too.
+        self.assertTrue(is_cli_logging_flag("-vq"))
+        self.assertTrue(is_cli_logging_flag("-qv"))
+        self.assertTrue(is_cli_logging_flag("-vvq"))
+        self.assertTrue(is_cli_logging_flag("-qvv"))
+
     def test_is_cli_logging_flag_rejects_non_logging_tokens(self) -> None:
         self.assertFalse(is_cli_logging_flag("check"))
         self.assertFalse(is_cli_logging_flag("input.h5"))
         self.assertFalse(is_cli_logging_flag("--format"))
         self.assertFalse(is_cli_logging_flag("-"))
         self.assertFalse(is_cli_logging_flag(""))
+        # Clusters that include a non-logging short flag must not be skipped.
+        self.assertFalse(is_cli_logging_flag("-vx"))
+        self.assertFalse(is_cli_logging_flag("-qx"))
 
     def test_cli_logging_value_flags_includes_log_level(self) -> None:
         self.assertIn("--log-level", CLI_LOGGING_VALUE_FLAGS)
