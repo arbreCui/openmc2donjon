@@ -179,6 +179,10 @@ class InspectEndpointTests(unittest.TestCase):
             tuple(payload["adf_faces"]), ("XMIN", "XMAX", "YMIN", "YMAX")
         )
         self.assertEqual(payload["mesh_match"]["id"], "casmo_7")
+        # energy_bounds is required for the S3 spectrum chart X axis.
+        bounds = payload["energy_bounds"]
+        self.assertEqual(len(bounds), 8)
+        self.assertGreater(bounds[0], bounds[-1])  # descending CASMO-7
 
     def test_mock_mode_returns_bundled_mixture_fixture(self) -> None:
         from openmc2donjon.web.server import MIXTURE_SCHEMA, create_app
@@ -198,6 +202,78 @@ class InspectEndpointTests(unittest.TestCase):
         self.assertEqual(payload["scatter"]["moment_index"], 0)
         self.assertEqual(len(payload["scatter"]["values"]), 7)
         self.assertEqual(len(payload["scatter"]["values"][0]), 7)
+
+    def test_mock_mode_mixture_endpoint_honors_mixture_param(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.get(
+            "/api/inspect/mixture",
+            params={"path": "/any.h5", "mixture": "M1_UO2"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        # Same fixture data, but the mixture field reflects the request.
+        self.assertEqual(response.json()["mixture"], "M1_UO2")
+
+    def test_mock_mode_mixture_endpoint_rejects_unknown_mixture(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.get(
+            "/api/inspect/mixture",
+            params={"path": "/any.h5", "mixture": "NOT_REAL"},
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("not found", response.json()["detail"])
+
+    def test_mock_mode_mixture_endpoint_returns_scaled_p1(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        p0 = client.get(
+            "/api/inspect/mixture",
+            params={"path": "/any.h5", "mixture": "M3_MOX_70", "moment": 0},
+        ).json()
+        p1 = client.get(
+            "/api/inspect/mixture",
+            params={"path": "/any.h5", "mixture": "M3_MOX_70", "moment": 1},
+        ).json()
+
+        self.assertEqual(p0["scatter"]["moment_index"], 0)
+        self.assertEqual(p1["scatter"]["moment_index"], 1)
+        # P1 is a scaled clone, same shape.
+        self.assertEqual(
+            len(p1["scatter"]["values"]), len(p0["scatter"]["values"])
+        )
+        # Find a non-zero element in P0 and confirm P1 = 0.1 * P0 there.
+        for row_p0, row_p1 in zip(
+            p0["scatter"]["values"], p1["scatter"]["values"], strict=True
+        ):
+            for v0, v1 in zip(row_p0, row_p1, strict=True):
+                if v0 != 0.0:
+                    self.assertAlmostEqual(v1, 0.1 * v0, places=8)
+                    return
+        self.fail("expected at least one non-zero P0 entry in mock fixture")
+
+    def test_mock_mode_mixture_endpoint_rejects_out_of_range_moment(
+        self,
+    ) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.get(
+            "/api/inspect/mixture",
+            params={
+                "path": "/any.h5",
+                "mixture": "M3_MOX_70",
+                "moment": 2,
+            },
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("scatter moment", response.json()["detail"])
 
     def test_live_mode_path_not_found_returns_404(self) -> None:
         from openmc2donjon.web.server import create_app
@@ -244,6 +320,9 @@ class InspectEndpointTests(unittest.TestCase):
             self.assertEqual(payload["mesh_match"]["id"], "casmo_7")
             mixture_names = sorted(m["name"] for m in payload["mixtures"])
             self.assertEqual(mixture_names, ["M1_UO2", "M2_MOD"])
+            # energy_bounds is read from the same h5 open as the mesh ID.
+            self.assertEqual(len(payload["energy_bounds"]), 8)
+            self.assertAlmostEqual(payload["energy_bounds"][0], 10000000.0)
 
     def test_live_mode_mixture_endpoint_returns_arrays(self) -> None:
         from openmc2donjon.web.server import MIXTURE_SCHEMA, create_app

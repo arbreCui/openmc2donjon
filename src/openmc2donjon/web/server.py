@@ -113,7 +113,9 @@ def create_app(
             ) from exc
         payload = _report_payload(report)
         payload["schema"] = INSPECT_SCHEMA
-        payload["mesh_match"] = _detect_mesh(real_path)
+        bounds, mesh_match = _read_bounds_and_mesh(real_path)
+        payload["energy_bounds"] = bounds
+        payload["mesh_match"] = mesh_match
         return payload
 
     @app.get("/api/inspect/mixture")
@@ -123,7 +125,7 @@ def create_app(
         moment: int = Query(0, ge=0),
     ) -> dict[str, Any]:
         if mock_mode:
-            return _load_fixture("inspect_mixture.json")
+            return _mock_mixture(mixture, moment, HTTPException)
         real_path = _validate_hdf5_path(path, HTTPException)
         try:
             return _read_mixture_detail(real_path, mixture, moment, HTTPException)
@@ -161,22 +163,30 @@ def _validate_hdf5_path(raw: str, http_exception: Any) -> Path:
     return real
 
 
-def _detect_mesh(real_path: Path) -> dict[str, Any] | None:
-    """Match the file's ``energy_bounds`` against the bundled mesh catalog."""
+def _read_bounds_and_mesh(
+    real_path: Path,
+) -> tuple[list[float] | None, dict[str, Any] | None]:
+    """Read ``/energy_bounds`` once and reuse it for mesh ID detection.
+
+    Returns ``(bounds_list, mesh_dict)``. Either side can be ``None``: no
+    ``energy_bounds`` dataset means no bounds and no mesh match; bounds
+    present but no catalog hit means bounds list with ``mesh_dict=None``.
+    """
 
     import h5py
 
     try:
         with h5py.File(real_path, "r") as h5:
             if "energy_bounds" not in h5:
-                return None
+                return None, None
             bounds = np.asarray(h5["energy_bounds"][:], dtype=float)
     except (OSError, KeyError, ValueError):
-        return None
+        return None, None
+    bounds_list = bounds.tolist()
     mesh = identify_mesh(bounds)
     if mesh is None:
-        return None
-    return {
+        return bounds_list, None
+    return bounds_list, {
         "id": mesh.mesh_id,
         "name": mesh.name,
         "short": mesh.short,
@@ -323,3 +333,42 @@ def _load_fixture(filename: str) -> dict[str, Any]:
         encoding="utf-8"
     )
     return json.loads(text)
+
+
+def _mock_mixture_names() -> set[str]:
+    handoff = _load_fixture("inspect_handoff.json")
+    return {mix["name"] for mix in handoff.get("mixtures", [])}
+
+
+def _mock_mixture(mixture: str, moment: int, http_exception: Any) -> dict[str, Any]:
+    """Serve the bundled per-mixture fixture for any mixture in the handoff.
+
+    Mock mode previously ignored ``mixture`` / ``moment``. That made it
+    impossible to develop the frontend selectors against the mock, and
+    let regressions like "moment slider does nothing" slip through. The
+    handoff fixture declares 9 mixtures and P1 scattering, so we accept
+    those mixture names and moments 0 and 1, and synthesize a plausible
+    P1 by scaling the bundled P0 values by 0.1 (the frontend just needs
+    a non-zero, structurally identical matrix to render the heatmap).
+    """
+
+    if mixture not in _mock_mixture_names():
+        raise http_exception(
+            status_code=404, detail=f"mixture not found: {mixture}"
+        )
+    if moment >= 2:
+        raise http_exception(
+            status_code=404,
+            detail=f"scatter moment {moment} not available for mixture {mixture}",
+        )
+
+    payload = _load_fixture("inspect_mixture.json")
+    payload = dict(payload)
+    payload["mixture"] = mixture
+    if moment != 0:
+        scatter = dict(payload["scatter"])
+        scaled = [[float(v) * 0.1 for v in row] for row in scatter["values"]]
+        scatter["values"] = scaled
+        scatter["moment_index"] = moment
+        payload["scatter"] = scatter
+    return payload

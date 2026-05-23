@@ -42,6 +42,7 @@ export interface HandoffInspection {
   energy_groups: number | null;
   legendre_order: number | null;
   energy_bounds_shape: number[] | null;
+  energy_bounds: number[] | null;
   energy_min: number | null;
   energy_max: number | null;
   mesh_match: MeshMatch | null;
@@ -116,8 +117,41 @@ async function getJson<T>(
   return (await response.json()) as T;
 }
 
+export interface CrossSections {
+  total: number[] | null;
+  absorption: number[] | null;
+  fission: number[] | null;
+  nu_fission: number[] | null;
+  chi: number[] | null;
+}
+
+export interface ScatterMoment {
+  axes: string | null;
+  shape: number[];
+  moment_index: number;
+  values: number[][];
+}
+
+export interface MixtureDetail {
+  schema: string;
+  path: string;
+  mixture: string;
+  energy_groups: number | null;
+  legendre_order: number | null;
+  volume: number | null;
+  temperature: number | null;
+  cross_sections: CrossSections;
+  scatter: ScatterMoment | null;
+}
+
 export const api = {
   health: () => getJson<HealthResponse>("/api/health"),
   inspect: (path: string) =>
     getJson<HandoffInspection>("/api/inspect", { path }),
+  inspectMixture: (path: string, mixture: string, moment: number = 0) =>
+    getJson<MixtureDetail>("/api/inspect/mixture", {
+      path,
+      mixture,
+      moment,
+    }),
 };
