@@ -1,168 +1,67 @@
 # openmc2donjon
 
-Convert OpenMC MGXS HDF5 data into DRAGON/DONJON LCM ASCII.
+[![CI](https://github.com/arbreCui/openmc2donjon/actions/workflows/ci.yml/badge.svg)](https://github.com/arbreCui/openmc2donjon/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-The package writes:
+Convert OpenMC multi-group cross-section HDF5 handoffs into DRAGON/DONJON
+ASCII LCM files.
 
-- `L_MULTICOMPO` for homogenized assembly-wise or domain-wise data.
-- root `L_MACROLIB` for direct DONJON consumption in large one-state cases.
-
-## Quick Start
-
-```sh
-python -m pip install -e .
-bash scripts/run_recipe_export_smoke.sh
-openmc2donjon-from-openmc \
-  --recipe export_recipe.py \
-  --statepoint statepoint.120.h5 \
-  --run-dir runs/case1 \
-  --check
-```
-
-For a first pass through the workflow, start with
-[docs/QUICKSTART.md](docs/QUICKSTART.md).
-
-## For Reviewers
-
-Start here:
-
-- [Current handoff snapshot](docs/HANDOFF_SNAPSHOT.md)
-- [Quickstart](docs/QUICKSTART.md)
-- [OpenMC export workflow](docs/OPENMC_EXPORT_WORKFLOW.md)
-- [HDF5 input contract](docs/HDF5_INPUT_CONTRACT.md)
-- [Production preset](docs/PRODUCTION_PRESET.md)
-- [Production thresholds](docs/PRODUCTION_THRESHOLDS.md)
-- [External face-flux contract](docs/EXTERNAL_FACE_FLUX_CONTRACT.md)
-- [From-OpenMC summary JSON](docs/FROM_OPENMC_SUMMARY_SCHEMA.md)
-- [Validation summary](docs/VALIDATION.md)
-- [Handoff note](docs/HANDOFF_NOTE.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Roadmap](docs/ROADMAP.md)
-- [Release notes](RELEASE_NOTES.md)
-
-Useful checks:
-
-```sh
-bash scripts/run_recipe_export_smoke.sh
-bash examples/external_face_flux_adapter/run_smoke.sh
-bash examples/donjon_sph_loop_adapter/run_smoke.sh
-bash scripts/run_c5g7_demo.sh
-bash scripts/release_check.sh
-```
-
-On the local C5G7/DONJON validation machine, this additional smoke regenerates
-the accepted homogeneous face-flux denominator from the real DONJON dumps:
-
-```sh
-bash scripts/run_c5g7_donjon_face_flux_smoke.sh
-```
-
-Full local acceptance with DONJON decks:
-
-```sh
-bash scripts/release_check.sh --run-donjon
-```
-
-HDF5 input preflight:
-
-```sh
-openmc2donjon check mgxs_library.h5
-openmc2donjon check mgxs_library.h5 \
-  --scatter-row-balance-warn 1e-3 \
-  --scatter-row-balance-fail 1e-2
-```
-
-Production preflight and SPH-loop acceptance:
-
-```sh
-openmc2donjon check mgxs_library.h5 --production
-openmc2donjon run-sph-loop --config loop.json
-```
-
-The production preset requires explicit volumes, transport data, H-FACTOR for
-fissionable calculations, stable mixture ordering, consistent energy bounds,
-and the physics gates summarized in
-[docs/PRODUCTION_PRESET.md](docs/PRODUCTION_PRESET.md). Numerical defaults are
-listed in [docs/PRODUCTION_THRESHOLDS.md](docs/PRODUCTION_THRESHOLDS.md).
-
-## Data Flow
+The project is aimed at production homogenization workflows where OpenMC
+generates spatially resolved MGXS data and DONJON consumes deterministic
+macroscopic cross sections:
 
 ```text
 OpenMC MGXS domains
-  -> HDF5 input contract
-  -> openmc2donjon
-  -> L_MULTICOMPO or L_MACROLIB
-  -> DONJON mixture map
+  -> openmc2donjon HDF5 contract
+  -> L_MULTICOMPO or L_MACROLIB ASCII
+  -> DONJON mixture map / deterministic solve
 ```
 
-## Project Status
+Supported output modes:
 
-Current validation status:
+- `L_MULTICOMPO` as `.mcompo.txt` for mapped domain-wise libraries.
+- `L_MACROLIB` as `.macrolib.txt` for direct one-state macrolib handoffs.
 
-- C5G7 assembly-wise is the accepted validation line.
-- Hex-domain support exists as converter/modeling capability, including a real
-  OpenMC hex workflow smoke.
-- Experimental `BURN`-axis multi-state serialization exists, but is not part of
-  the accepted physics validation yet.
-- A suitable accepted hex benchmark is still future work.
+## Quick Start
 
-Supported input scope:
-
-| Input layout | Status | Notes |
-| --- | --- | --- |
-| One-state MGXS HDF5 | Production path | C5G7 assembly-wise acceptance uses this path. |
-| One-dimensional `BURN` multi-state HDF5 | Experimental serialization | Unit-tested and DONJON-smoked, not yet a physics validation line. |
-| Multi-axis branch library | Not supported | Extra `/state_points/*` axes are rejected instead of ignored. |
-| Hex spatial domains | Converter/modeling capability | Synthetic and real OpenMC smokes exist; awaiting a suitable accepted hex benchmark. |
-
-Experimental BURN-axis DONJON consumer smoke:
-
-```sh
-bash examples/donjon_openmc2donjon/run_burnup_axis_smoke.sh
-```
-
-## Spatial Domain Mapping
-
-The production mapping is spatial, not material-collapsed:
-
-- one OpenMC MGXS domain produces one homogenized cross-section set;
-- one homogenized cross-section set is written as one DONJON mixture;
-- the DONJON geometry places that mixture back at the same spatial position.
-
-For assembly-wise work, this means each assembly or component position has its
-own OpenMC-derived cross sections. Two components with the same material type
-are still kept as separate mixtures if they occupy different positions, because
-their spectra, leakage, and neighbor effects can differ.
-
-For 3D work, the same rule applies to the chosen spatial partition. For example,
-`assembly position + axial layer` becomes one OpenMC MGXS domain and therefore
-one DONJON mixture. If an assembly is split into ten axial layers, it produces
-ten cross-section sets.
-
-## Install
-
-From a source checkout:
+Install from a source checkout:
 
 ```sh
 python -m pip install -e .
 ```
 
-Run without installing:
+Check an MGXS handoff before conversion:
 
 ```sh
-PYTHONPATH=src python -m openmc2donjon.cli mgxs_library.h5 -o out.mcompo.txt
+openmc2donjon check mgxs_library.h5 --production
 ```
 
-After installation:
+Convert to MULTICOMPO:
 
 ```sh
-openmc2donjon mgxs_library.h5 -o out.mcompo.txt
-openmc2donjon --format macrolib mgxs_library.h5 -o out.macrolib.txt
+openmc2donjon mgxs_library.h5 -o out.mcompo.txt --check
 ```
 
-## OpenMC MGXS Export
+Convert to MACROLIB:
 
-For a real OpenMC statepoint, use a small case-specific recipe:
+```sh
+openmc2donjon mgxs_library.h5 --format macrolib -o out.macrolib.txt --check
+```
+
+Run a tiny recipe/export smoke without OpenMC data:
+
+```sh
+bash scripts/run_recipe_export_smoke.sh
+```
+
+For the full walkthrough, see [docs/QUICKSTART.md](docs/QUICKSTART.md).
+
+## OpenMC Entry Points
+
+Most real cases should use a small Python recipe that builds the case-specific
+OpenMC `mgxs.Library` and assigns stable spatial domain names.
+
+Export only the converter-facing HDF5:
 
 ```sh
 openmc2donjon-export \
@@ -171,425 +70,189 @@ openmc2donjon-export \
   -o mgxs_library.h5
 ```
 
-The recipe builds the OpenMC `mgxs.Library` for the case and can provide stable
-domain names or explicit `DomainExportSpec` objects. See
-[`docs/OPENMC_EXPORT_WORKFLOW.md`](docs/OPENMC_EXPORT_WORKFLOW.md). A
-ready-to-edit recipe skeleton is available in
-[`examples/openmc_recipe_template/`](examples/openmc_recipe_template/).
-
-A tiny recipe smoke that does not require OpenMC data is available for checking
-the workflow mechanics:
+Export and convert in one managed run directory:
 
 ```sh
-openmc2donjon doctor
-bash scripts/run_recipe_export_smoke.sh
+openmc2donjon-from-openmc \
+  --recipe export_recipe.py \
+  --statepoint statepoint.120.h5 \
+  --run-dir runs/case1 \
+  --check
 ```
 
-For a minimal real OpenMC case that builds XML, runs MGXS tallies, and converts
-a fresh statepoint, see
-[`examples/production_minicase/`](examples/production_minicase/) or run:
-
-```sh
-bash scripts/run_production_minicase_smoke.sh
-```
-
-For the minimal full-core version of that workflow, where one 3D OpenMC core
-contains nine assembly domains and each assembly position becomes one DONJON
-mixture, see
-[`examples/openmc_full_core_minicase/`](examples/openmc_full_core_minicase/) or run:
-
-```sh
-bash examples/openmc_full_core_minicase/run_smoke.sh
-```
-
-For a deterministic external low-order/nodal handoff example that exercises
-case-specific driver dataset paths, mixture/face reordering, current sign
-conversion, homogeneous face-flux reconstruction, and flux-ratio ADF injection,
-see [`examples/external_low_order_handoff/`](examples/external_low_order_handoff/)
-or run:
-
-```sh
-bash examples/external_low_order_handoff/run_smoke.sh
-```
-
-For the same production-facing workflow on a tiny hex lattice, see
-[`examples/openmc_hex_minicase/`](examples/openmc_hex_minicase/) or run:
-
-```sh
-bash examples/openmc_hex_minicase/run_smoke.sh
-```
-
-To include the local DONJON NCR + diffusion k-eff sanity comparison for that
-hex case:
-
-```sh
-bash examples/openmc_hex_minicase/run_keff_comparison.sh
-```
-
-Check a recipe before writing an HDF5 handoff:
+Inspect a recipe before writing files:
 
 ```sh
 openmc2donjon-export --recipe export_recipe.py --no-load-statepoint --dry-run
-openmc2donjon-export --recipe export_recipe.py --no-load-statepoint --dry-run --strict-dry-run
-```
-
-Write the matching OpenMC MGXS tallies before running the statepoint:
-
-```sh
-openmc2donjon-export --recipe export_recipe.py --write-tallies tallies.xml
-```
-
-Dry-run output includes a production checklist for MGXS coverage, transport
-readiness, domain mapping, volume provenance, and `domain_mode`.
-`--strict-dry-run` turns checklist warnings/failures into a non-zero exit code
-for CI-style recipe gates.
-
-Check the one-command conversion plan before writing any artifacts:
-
-```sh
 openmc2donjon-from-openmc --recipe export_recipe.py --dry-run --run-dir runs/case1 --check
-openmc2donjon-from-openmc --recipe export_recipe.py --dry-run --run-dir runs/case1 --check --strict-dry-run
 ```
 
-Convert with input-contract preflight:
+Useful references:
+
+- [OpenMC export workflow](docs/OPENMC_EXPORT_WORKFLOW.md)
+- [HDF5 input contract](docs/HDF5_INPUT_CONTRACT.md)
+- [Recipe template](examples/openmc_recipe_template/)
+- [Production minicase](examples/production_minicase/)
+- [Full-core minicase](examples/openmc_full_core_minicase/)
+- [Hex minicase](examples/openmc_hex_minicase/)
+
+## Spatial Domain Rule
+
+The converter preserves the OpenMC spatial partition:
+
+- one OpenMC MGXS domain becomes one HDF5 mixture;
+- one HDF5 mixture becomes one DONJON mixture;
+- the DONJON geometry places that mixture back at the matching spatial position.
+
+This is intentionally not material-collapsed. Two domains with the same
+material may still receive different homogenized cross sections because their
+spectra, leakage, and neighbor effects differ.
+
+For a 3D assembly-wise workflow, a typical domain might be
+`assembly position + axial layer`. If a core has 193 assemblies and 20 axial
+layers, the handoff contains 3860 spatial mixtures.
+
+## Production Checks
+
+`openmc2donjon check --production` enables the project production baseline:
+
+- explicit positive volumes;
+- explicit `transport_total`;
+- group-wise H-FACTOR/kappa-fission for fissionable calculations;
+- stable declared mixture order and source-domain provenance;
+- energy-bound consistency and known mesh audit metadata;
+- scatter row-balance, chi normalization, ADF face consistency, and
+  transport/P1 consistency gates;
+- statistical-uncertainty visibility when `*_std_dev` datasets are present.
+
+Details:
+
+- [Production preset](docs/PRODUCTION_PRESET.md)
+- [Production thresholds](docs/PRODUCTION_THRESHOLDS.md)
+- [HDF5 input contract](docs/HDF5_INPUT_CONTRACT.md)
+
+## SPH And ADF/DF
+
+The package can carry equivalence data into DONJON handoffs:
+
+- ADF/HADF discontinuity factors, including flux-ratio ADF sidecars.
+- SPH/NSPH factors for workflows where the downstream method prefers SPH.
+
+The converter records these factors and provenance in the HDF5/MACROLIB/MULTICOMPO
+handoff; it does not invent physics corrections on its own. Case-specific ADF
+or SPH factors should come from the chosen OpenMC/low-order/DONJON workflow.
+
+Entry points:
 
 ```sh
-openmc2donjon inspect mgxs_library.h5
-openmc2donjon mgxs_library.h5 -o out.mcompo.txt --check \
-  --scatter-row-balance-warn 1e-3 \
-  --scatter-row-balance-fail 1e-2
+openmc2donjon make-adf-sidecar mgxs_library.h5 -o adf_sidecar.h5 --mode unity
+openmc2donjon augment-adf mgxs_library.h5 --adf-source adf_sidecar.h5 -o mgxs_with_adf.h5
+
+openmc2donjon make-sph-sidecar mgxs_library.h5 -o sph_sidecar.h5 --value 1.0
+openmc2donjon augment-sph mgxs_library.h5 --sph-source sph_sidecar.h5 -o mgxs_with_sph.h5
+openmc2donjon run-sph-loop --config loop.json
 ```
 
-Compare a regenerated HDF5 handoff against a locked baseline:
+Docs and examples:
+
+- [External face-flux contract](docs/EXTERNAL_FACE_FLUX_CONTRACT.md)
+- [DONJON SPH loop adapter](examples/donjon_sph_loop_adapter/)
+- [External low-order handoff](examples/external_low_order_handoff/)
+
+## Validation Status
+
+Current accepted validation line:
+
+- C5G7 assembly-wise OpenMC-to-DONJON handoff with DONJON k-effective checks.
+- Converter round trips for `L_MULTICOMPO` and `L_MACROLIB`.
+- Production smokes for recipe export, full-core domain mapping, hex geometry
+  capability, ADF carry-through, and SPH handoff mechanics.
+
+Run portable checks:
 
 ```sh
-openmc2donjon diff accepted_mgxs.h5 candidate_mgxs.h5 --summary-json diff.json
-```
-
-Inject computed ADF/DF values into a handoff before conversion:
-
-```sh
-openmc2donjon make-adf-sidecar mgxs_library.h5 \
-  -o adf_sidecar.h5 \
-  --mode unity
-
-openmc2donjon augment-adf mgxs_library.h5 \
-  --adf-source adf_sidecar.h5 \
-  -o mgxs_with_adf.h5 \
-  --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
-  --summary-json adf_summary.json
-```
-
-`make-adf-sidecar --mode unity` creates identity discontinuity factors marked
-`adf_real=false`. It is a plumbing check for the ADF/DF workflow; replace the
-sidecar with case-specific physics values for production neutronics.
-
-Carry external SPH equivalence factors when the downstream DONJON route needs
-SPH rather than ADF/DF:
-
-```sh
-openmc2donjon make-sph-sidecar mgxs_library.h5 \
-  -o sph_sidecar.h5 \
-  --value 1.0
-
-openmc2donjon make-sph-sidecar mgxs_library.h5 \
-  -o sph_from_macrolib.h5 \
-  --mode macrolib \
-  --macrolib donor.macrolib.txt
-
-openmc2donjon augment-sph mgxs_library.h5 \
-  --sph-source sph_sidecar.h5 \
-  -o mgxs_with_sph.h5
-
-openmc2donjon mgxs_with_sph.h5 \
-  --format macrolib \
-  -o out.macrolib.txt \
-  --check \
-  --require-sph
-```
-
-The converter records SPH factors as DONJON `NSPH` data and sets the
-`L_MACROLIB` SPH state-vector flag. It does not apply SPH factors to the XS
-payload; use the `sph_applied` provenance attribute to mark files whose
-macroscopic data have already been corrected upstream.
-
-To build a physics sidecar from face-flux data, use the flux-ratio mode:
-
-```sh
-openmc2donjon export-surface-flux statepoint.120.h5 \
-  --mgxs mgxs_library.h5 \
-  -o openmc_surface_flux.h5 \
-  --tally-name openmc2donjon_surface_current_mu \
-  --mesh-shape 1,2 \
-  --mu-edges 0.0,0.25,0.5,0.75,1.0 \
-  --face-area 4.0
-
-openmc2donjon make-low-order-driver mgxs_library.h5 \
-  -o low_order_driver.h5 \
-  --raw-driver raw_low_order_driver.h5 \
-  --net-current-sign-convention auto \
-  --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX
-
-openmc2donjon check-low-order-driver mgxs_library.h5 low_order_driver.h5 \
-  --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
-  --face-widths 4.0
-
-openmc2donjon make-homogeneous-face-flux mgxs_library.h5 \
-  -o homogeneous_face_flux.h5 \
-  --volume-flux low_order_driver.h5 \
-  --net-current low_order_driver.h5 \
-  --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
-  --face-widths 4.0
-
-openmc2donjon check-face-flux mgxs_library.h5 \
-  --surface-flux openmc_surface_flux.h5 \
-  --homogeneous-face-flux homogeneous_face_flux.h5 \
-  --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX
-
-openmc2donjon make-adf-sidecar mgxs_library.h5 \
-  -o adf_sidecar.h5 \
-  --mode flux-ratio \
-  --surface-flux openmc_surface_flux.h5 \
-  --homogeneous-face-flux homogeneous_face_flux.h5 \
-  --faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX
-```
-
-This writes `ADF = heterogeneous face flux / homogeneous face flux`. Inputs can
-be HDF5 files with known dataset names or explicit `FILE::/dataset/path`
-references.
-When the raw driver stores flux/current at nonstandard paths, set root
-attributes `volume_flux_dataset` and `net_current_dataset`, or pass explicit
-`--volume-flux FILE::dataset` and `--net-current FILE::dataset`.
-
-For a managed production run directory, `openmc2donjon-from-openmc` can build
-the same flux-ratio ADF sidecar, run the low-order and face-flux contract
-checks, inject ADF, and bundle the side artifacts:
-
-```sh
-openmc2donjon-from-openmc \
-  --recipe export_recipe.py \
-  --statepoint statepoint.120.h5 \
-  --run-dir runs/case1 \
-  --build-flux-ratio-adf \
-  --export-surface-flux \
-  --surface-flux-tally-name openmc2donjon_surface_current_mu \
-  --surface-flux-mesh-shape 1,2 \
-  --surface-flux-mu-edges 0.0,0.25,0.5,0.75,1.0 \
-  --surface-flux-face-area 4.0 \
-  --low-order-raw-driver raw_low_order_driver.h5 \
-  --low-order-net-current-sign-convention auto \
-  --adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
-  --adf-face-widths 4.0 \
-  --adf-invalid-fill 1.0 \
-  --require-volume \
-  --require-transport-dataset
-```
-
-If the homogeneous face flux denominator has already been produced by a
-low-order or nodal solver, pass it directly and skip the low-order
-reconstruction:
-
-```sh
-openmc2donjon-from-openmc \
-  --recipe export_recipe.py \
-  --statepoint statepoint.120.h5 \
-  --run-dir runs/case1 \
-  --build-flux-ratio-adf \
-  --export-surface-flux \
-  --surface-flux-tally-name openmc2donjon_surface_current_mu \
-  --surface-flux-mesh-shape 1,2 \
-  --surface-flux-mu-edges 0.0,0.25,0.5,0.75,1.0 \
-  --surface-flux-face-area 4.0 \
-  --homogeneous-face-flux homogeneous_face_flux.h5 \
-  --adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
-  --adf-invalid-fill 1.0 \
-  --require-volume \
-  --require-transport-dataset
-```
-
-Both external face-flux inputs accept either a known-layout HDF5 file or an
-explicit `FILE::/dataset/path` reference.
-
-The one-step OpenMC entry point can inject the same sidecar before preflight:
-
-```sh
-openmc2donjon-from-openmc \
-  --recipe export_recipe.py \
-  --statepoint statepoint.120.h5 \
-  --run-dir runs/case1 \
-  --adf-source adf_sidecar.h5 \
-  --adf-faces FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX \
-  --check --require-adf
-```
-
-For a one-command export plus conversion:
-
-```sh
-openmc2donjon-from-openmc \
-  --recipe export_recipe.py \
-  --statepoint statepoint.120.h5 \
-  --run-dir runs/case1 \
-  --check
-```
-
-This writes `mgxs_library.h5`, `out.mcompo.txt`, `run_summary.json`, optional
-`check_summary.json`, and `manifest.json` in the run directory. Existing managed
-files are refused unless `--force-run-dir` is set. Side artifacts can be copied
-into the same manifest during the run:
-
-```sh
-openmc2donjon-from-openmc \
-  --recipe export_recipe.py \
-  --statepoint statepoint.120.h5 \
-  --run-dir runs/case1 \
-  --extra-artifact surface-flux=openmc_surface_flux.h5 \
-  --extra-artifact low-order-driver=low_order_driver.h5 \
-  --extra-artifact homogeneous-face-flux=homogeneous_face_flux.h5 \
-  --check
-```
-
-To add extra artifacts to a handoff manifest later:
-
-```sh
-openmc2donjon bundle \
-  --output-dir runs/case1 \
-  --mgxs runs/case1/mgxs_library.h5 \
-  --mcompo runs/case1/out.mcompo.txt \
-  --run-summary runs/case1/run_summary.json \
-  --extra notes=notes.txt \
-  --force
-```
-
-The summary manifest schema is documented in
-[`docs/FROM_OPENMC_SUMMARY_SCHEMA.md`](docs/FROM_OPENMC_SUMMARY_SCHEMA.md).
-
-If you already have an OpenMC `mgxs.Library` object in Python, export the
-converter-facing HDF5 directly:
-
-```python
-from openmc2donjon import DomainExportSpec, export_openmc_mgxs_library
-
-export_openmc_mgxs_library(library, "mgxs_library.h5")
-```
-
-The exporter keeps the spatial domain map intact: each OpenMC MGXS domain is
-written as one `/mixtures/<domain_name>` group. Stable names can be supplied
-with domain objects, ids, or names:
-
-```python
-export_openmc_mgxs_library(
-    library,
-    "mgxs_library.h5",
-    domain_names={101: "ASM_Y01_X01"},
-)
-```
-
-For OpenMC mesh or cell subdomains, pass explicit specs. Each spec becomes one
-HDF5 mixture and therefore one DONJON mixture:
-
-```python
-export_openmc_mgxs_library(
-    library,
-    "mgxs_library.h5",
-    domain_specs=[
-        DomainExportSpec(
-            domain=mesh,
-            name="ASM_Y01_X01",
-            xs_kwargs={"subdomains": [(1, 1, 1)]},
-            volume=assembly_volume,
-        ),
-    ],
-)
-```
-
-For a pickled library object, the helper CLI is:
-
-```sh
-openmc2donjon-export library.pkl -o mgxs_library.h5
-```
-
-## C5G7 Demo
-
-Run the portable converter-side C5G7 demo from the repository snapshot:
-
-```sh
+bash scripts/run_recipe_export_smoke.sh
 bash scripts/run_c5g7_demo.sh
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python -m unittest discover -s tests
 ```
 
-This runs package tests, converts the accepted C5G7 HDF5 to fresh
-`L_MULTICOMPO` and `L_MACROLIB` outputs under `/private/tmp`, and reads both
-outputs back through the LCM ASCII parser.
-
-To include the DONJON consumer smoke, run from a machine with a DRAGON/DONJON
-checkout and set the DONJON root:
+Run the full local release gate, including optional DONJON-dependent smokes
+when the local DRAGON/DONJON checkout is available:
 
 ```sh
-OPENMC2DONJON_ROOT=/path/to/dragon-5.1 \
-OPENMC2DONJON_DATA_DIR=/path/to/dragon-5.1/Donjon/data/openmc2donjon \
-  bash scripts/run_c5g7_demo.sh --run-donjon
+bash scripts/release_check.sh
+bash scripts/release_check.sh --run-donjon
 ```
 
-To regenerate a C5G7 HDF5 handoff from an existing OpenMC statepoint through
-the production recipe exporter:
+More detail:
+
+- [Validation summary](docs/VALIDATION.md)
+- [Current handoff snapshot](docs/HANDOFF_SNAPSHOT.md)
+- [Release notes](RELEASE_NOTES.md)
+- [C5G7 DONJON snapshot](examples/donjon_openmc2donjon/)
+
+## Output Contract
+
+The CLI keeps stdout as a result stream and stderr as diagnostics:
+
+- reports, generated paths, and "wrote/exported/injected" confirmations use
+  stdout;
+- diagnostic errors, warnings, progress, and debug detail use the package
+  logger on stderr;
+- `-v`, `-vv`, `-q`, and `--log-level` control diagnostic verbosity.
+
+This is enforced by `tests/test_print_audit.py` so accidental status
+`print()` calls do not leak into business logic.
+
+## Development
+
+Install developer tools:
 
 ```sh
-PYTHONPATH=src \
-C5G7_ADF_SOURCE=examples/donjon_openmc2donjon/c5g7_assembly_p1_adf_production.h5 \
-  python -m openmc2donjon.export_cli \
-  --recipe scripts/c5g7_export_recipe.py \
-  --statepoint /Users/wen/openmc-workspace/c5g7_converter_test/runs/assembly_p1/statepoint.120.h5 \
-  -o /private/tmp/openmc2donjon_c5g7_exporter_assembly_p1.h5
+python -m pip install -e ".[dev]"
 ```
 
-## Validation Workspace
-
-This repository includes a DONJON-side handoff snapshot under
-`examples/donjon_openmc2donjon/`. The snapshot is intentionally scoped to the
-accepted C5G7 line and the current project status documents.
-
-Useful entry points:
-
-- `examples/donjon_openmc2donjon/PROJECT_STATUS.md`
-- `examples/donjon_openmc2donjon/ACCEPTED_BASELINE.md`
-- `examples/donjon_openmc2donjon/run_acceptance.sh`
-- `examples/donjon_openmc2donjon/run_handoff_smoke.sh`
-
-The HDF5 handoff schema is documented in
-`docs/HDF5_INPUT_CONTRACT.md`.
-
-## Current Scope
-
-- One state point by default.
-- Experimental `BURN`-axis multi-state HDF5 input can be serialized to
-  `L_MULTICOMPO`, with a tiny DONJON `NCR:` consumer smoke. The accepted
-  validation line remains one-state C5G7.
-- Multi-state support is currently one-dimensional `BURN` only; extra
-  `/state_points/*` axes such as boron, temperature, or control state are
-  rejected rather than ignored.
-- One DONJON mixture per OpenMC MGXS domain, preserving the spatial domain map.
-- OpenMC group order is preserved; `ENERGY` is written as reversed energy
-  bounds for DRAGON/DONJON.
-- Scattering is written as DRAGON `NJJS/IJJS/SCAT` triplets with contiguous
-  incoming-group spans and descending incoming-group order.
-- Multiple Legendre moments are supported.
-- `STRD` is read from `transport_total` when available, or derived from P1
-  scattering when possible.
-- Optional `OVERV`, `H-FACTOR`, ADF/HADF, `NSPH`, single-mixture filtering, and
-  single-point `BURN` helper metadata are supported.
-- The preflight validator checks both one-state and experimental `BURN`-axis
-  multi-state HDF5 layouts, with optional P0 scatter row-balance thresholds.
-
-## Tests
+Run the local gates:
 
 ```sh
-PYTHONDONTWRITEBYTECODE=1 \
-PYTHONPATH=src \
-  python -m pytest -q -o cache_dir=/private/tmp/openmc2donjon_pytest_cache tests
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python -m unittest discover -s tests
+ruff check .
+mypy --no-incremental \
+  src/openmc2donjon/constants.py \
+  src/openmc2donjon/scatter.py \
+  src/openmc2donjon/energy_groups.py \
+  src/openmc2donjon/mgxs_physics_checks.py
 ```
+
+CI runs the same unit-test matrix on Python 3.10, 3.11, and 3.12, plus Ruff
+and the whitelisted strict mypy gate.
+
+## Roadmap
+
+Near-term work:
+
+- localhost web UI for preflight, conversion, report viewing, and energy-mesh
+  inspection;
+- tighter integration with the existing nucdata energy-group resources;
+- broader mypy coverage for small pure helper modules;
+- optional citation/DOI metadata for research workflows.
+
+Larger physics work remains separate from the format converter core:
+
+- uncertainty propagation from OpenMC tally `std_dev` data;
+- richer standard energy-mesh ID checks;
+- additional production examples and benchmark comparisons.
+
+See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Repository Layout
 
-- `src/openmc2donjon/` - converter package.
-- `tests/` - unit tests for LCM ASCII, scatter, MULTICOMPO, MACROLIB, and CLI.
-- `scripts/` - local validation and C5G7 helper scripts.
-- `examples/donjon_openmc2donjon/` - DONJON-side C5G7 handoff snapshot.
+- `src/openmc2donjon/` - Python package and CLI implementation.
+- `docs/` - workflow, contract, production, and validation notes.
+- `examples/` - small runnable handoff examples and DONJON adapters.
+- `scripts/` - local smoke, validation, and release-check helpers.
+- `tests/` - unit tests and contract/audit gates.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
