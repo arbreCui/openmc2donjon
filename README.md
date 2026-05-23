@@ -30,6 +30,8 @@ Start here:
 - [Quickstart](docs/QUICKSTART.md)
 - [OpenMC export workflow](docs/OPENMC_EXPORT_WORKFLOW.md)
 - [HDF5 input contract](docs/HDF5_INPUT_CONTRACT.md)
+- [Production preset](docs/PRODUCTION_PRESET.md)
+- [Production thresholds](docs/PRODUCTION_THRESHOLDS.md)
 - [External face-flux contract](docs/EXTERNAL_FACE_FLUX_CONTRACT.md)
 - [From-OpenMC summary JSON](docs/FROM_OPENMC_SUMMARY_SCHEMA.md)
 - [Validation summary](docs/VALIDATION.md)
@@ -69,6 +71,19 @@ openmc2donjon check mgxs_library.h5 \
   --scatter-row-balance-warn 1e-3 \
   --scatter-row-balance-fail 1e-2
 ```
+
+Production preflight and SPH-loop acceptance:
+
+```sh
+openmc2donjon check mgxs_library.h5 --production
+openmc2donjon run-sph-loop --config loop.json
+```
+
+The production preset requires explicit volumes, transport data, H-FACTOR for
+fissionable calculations, stable mixture ordering, consistent energy bounds,
+and the physics gates summarized in
+[docs/PRODUCTION_PRESET.md](docs/PRODUCTION_PRESET.md). Numerical defaults are
+listed in [docs/PRODUCTION_THRESHOLDS.md](docs/PRODUCTION_THRESHOLDS.md).
 
 ## Data Flow
 
