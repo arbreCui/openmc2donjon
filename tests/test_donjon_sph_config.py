@@ -128,6 +128,14 @@ class DonjonSphConfigTests(unittest.TestCase):
                         "--acceptance-require-known-mesh",
                         "--acceptance-mesh-tolerance",
                         "1e-5",
+                        "--acceptance-require-mgxs-energy-bounds-consistency",
+                        "--acceptance-max-mgxs-scatter-row-balance-rel",
+                        "0.04",
+                        "--acceptance-max-mgxs-chi-sum-error",
+                        "1e-7",
+                        "--acceptance-require-mgxs-adf-face-consistency",
+                        "--acceptance-max-mgxs-transport-p1-rel",
+                        "0.03",
                         "--acceptance-max-final-keff-delta-pcm",
                         "5.0",
                         "--acceptance-max-final-to-initial-flux-residual-ratio",
@@ -163,6 +171,18 @@ class DonjonSphConfigTests(unittest.TestCase):
             self.assertTrue(payload["acceptance"]["require_mgxs_energy_bounds"])
             self.assertTrue(payload["acceptance"]["require_known_mesh"])
             self.assertEqual(payload["acceptance"]["mesh_tolerance"], 1.0e-5)
+            self.assertTrue(
+                payload["acceptance"]["require_mgxs_energy_bounds_consistency"]
+            )
+            self.assertEqual(
+                payload["acceptance"]["max_mgxs_scatter_row_balance_rel"],
+                0.04,
+            )
+            self.assertEqual(payload["acceptance"]["max_mgxs_chi_sum_error"], 1.0e-7)
+            self.assertTrue(
+                payload["acceptance"]["require_mgxs_adf_face_consistency"]
+            )
+            self.assertEqual(payload["acceptance"]["max_mgxs_transport_p1_rel"], 0.03)
             self.assertEqual(payload["acceptance"]["max_final_keff_delta_pcm"], 5.0)
             self.assertEqual(
                 payload["acceptance"]["max_final_to_initial_flux_residual_ratio"],

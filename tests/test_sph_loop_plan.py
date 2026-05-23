@@ -49,6 +49,11 @@ class SphLoopPlanTests(unittest.TestCase):
                         "require_final_solve": True,
                         "require_known_mesh": True,
                         "mesh_tolerance": "1.0e-5",
+                        "require_mgxs_energy_bounds_consistency": True,
+                        "max_mgxs_scatter_row_balance_rel": "0.04",
+                        "max_mgxs_chi_sum_error": "1.0e-7",
+                        "require_mgxs_adf_face_consistency": True,
+                        "max_mgxs_transport_p1_rel": "0.03",
                         "require_reference_flux_std_dev": True,
                         "max_final_keff_delta_pcm": "5.0",
                         "max_reference_flux_std_dev_rel": "0.05",
@@ -107,6 +112,26 @@ class SphLoopPlanTests(unittest.TestCase):
             )
             self.assertTrue(plan.normalized_acceptance["require_known_mesh"])
             self.assertEqual(plan.normalized_acceptance["mesh_tolerance"], 1.0e-5)
+            self.assertTrue(
+                plan.normalized_acceptance[
+                    "require_mgxs_energy_bounds_consistency"
+                ]
+            )
+            self.assertEqual(
+                plan.normalized_acceptance["max_mgxs_scatter_row_balance_rel"],
+                0.04,
+            )
+            self.assertEqual(
+                plan.normalized_acceptance["max_mgxs_chi_sum_error"],
+                1.0e-7,
+            )
+            self.assertTrue(
+                plan.normalized_acceptance["require_mgxs_adf_face_consistency"]
+            )
+            self.assertEqual(
+                plan.normalized_acceptance["max_mgxs_transport_p1_rel"],
+                0.03,
+            )
             self.assertEqual(
                 plan.normalized_acceptance["max_reference_flux_std_dev_rel"],
                 0.05,
@@ -209,6 +234,26 @@ class SphLoopPlanTests(unittest.TestCase):
                 "require_mgxs_energy_bounds",
                 plan.normalized_acceptance,
             )
+            self.assertNotIn(
+                "require_mgxs_energy_bounds_consistency",
+                plan.normalized_acceptance,
+            )
+            self.assertNotIn(
+                "max_mgxs_scatter_row_balance_rel",
+                plan.normalized_acceptance,
+            )
+            self.assertNotIn(
+                "max_mgxs_chi_sum_error",
+                plan.normalized_acceptance,
+            )
+            self.assertNotIn(
+                "require_mgxs_adf_face_consistency",
+                plan.normalized_acceptance,
+            )
+            self.assertNotIn(
+                "max_mgxs_transport_p1_rel",
+                plan.normalized_acceptance,
+            )
             self.assertEqual(plan.normalized_acceptance["min_completed_iterations"], 2)
             self.assertEqual(plan.normalized_acceptance["max_final_clipped_count"], 0)
             self.assertEqual(plan.normalized_acceptance["max_final_clipped_fraction"], 0.0)
@@ -256,6 +301,26 @@ class SphLoopPlanTests(unittest.TestCase):
                 "require_mgxs_energy_bounds",
                 plan.normalized_acceptance,
             )
+            self.assertNotIn(
+                "require_mgxs_energy_bounds_consistency",
+                plan.normalized_acceptance,
+            )
+            self.assertNotIn(
+                "max_mgxs_scatter_row_balance_rel",
+                plan.normalized_acceptance,
+            )
+            self.assertNotIn(
+                "max_mgxs_chi_sum_error",
+                plan.normalized_acceptance,
+            )
+            self.assertNotIn(
+                "require_mgxs_adf_face_consistency",
+                plan.normalized_acceptance,
+            )
+            self.assertNotIn(
+                "max_mgxs_transport_p1_rel",
+                plan.normalized_acceptance,
+            )
 
     def test_production_acceptance_preset_requires_explicit_mgxs_volumes(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -271,6 +336,26 @@ class SphLoopPlanTests(unittest.TestCase):
             self.assertTrue(plan.normalized_acceptance["require_mgxs_h_factor"])
             self.assertTrue(
                 plan.normalized_acceptance["require_mgxs_energy_bounds"]
+            )
+            self.assertTrue(
+                plan.normalized_acceptance[
+                    "require_mgxs_energy_bounds_consistency"
+                ]
+            )
+            self.assertEqual(
+                plan.normalized_acceptance["max_mgxs_scatter_row_balance_rel"],
+                5.0e-2,
+            )
+            self.assertEqual(
+                plan.normalized_acceptance["max_mgxs_chi_sum_error"],
+                1.0e-6,
+            )
+            self.assertTrue(
+                plan.normalized_acceptance["require_mgxs_adf_face_consistency"]
+            )
+            self.assertEqual(
+                plan.normalized_acceptance["max_mgxs_transport_p1_rel"],
+                5.0e-2,
             )
 
 

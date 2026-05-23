@@ -15,7 +15,6 @@ from .energy_groups import energy_bounds_sha256, load_energy_bounds_text
 from .hdf5_names import read_mixture_names
 from .mgxs_input_equivalence import (
     SPH_DATASETS,
-    adf_names_from_attrs,
     adf_names_for_group,
     attr_text,
     sph_present_for_group,
@@ -34,16 +33,16 @@ from .mgxs_input_report import (
     print_report,
     write_summary,
 )
+from .mgxs_physics_checks import (
+    DEFAULT_CHI_SUM_TOLERANCE,
+    DEFAULT_SCATTER_ROW_BALANCE_REL,
+    DEFAULT_TRANSPORT_P1_REL,
+    MgxsPhysicsCheckReport,
+    evaluate_mgxs_physics,
+)
 from .mgxs_input_scatter import (
-    MOMENT_FIRST_SCATTER_AXES,
-    MOMENT_LAST_SCATTER_AXES,
     configure_scatter_row_balance,
-    finalize_scatter_row_balance,
-    normalize_axes,
-    p0_scatter_matrix,
-    update_scatter_row_balance,
     validate_scatter,
-    vector_values_for_balance,
 )
 from .mgxs_input_uncertainty import (
     UncertaintyConfig,
@@ -73,7 +72,7 @@ H_FACTOR_DATASETS = (
     "kappa_fission_xs",
     "kappa_fission_cross_section",
 )
-PRODUCTION_SCATTER_ROW_BALANCE_WARN = 5.0e-2
+PRODUCTION_SCATTER_ROW_BALANCE_FAIL = DEFAULT_SCATTER_ROW_BALANCE_REL
 PRODUCTION_UNCERTAINTY_PRODUCTION_FAIL = 1.0
 
 
@@ -88,6 +87,11 @@ def production_preflight_defaults(
     require_volume: bool,
     require_h_factor: bool,
     scatter_row_balance_warn: float | None,
+    scatter_row_balance_fail: float | None,
+    require_energy_bounds_consistency: bool = False,
+    chi_sum_tolerance: float | None = None,
+    require_adf_face_consistency: bool = False,
+    transport_p1_fail: float | None = None,
     uncertainty_warn: float | None,
     uncertainty_production_fail: float | None,
 ) -> dict[str, Any]:
@@ -102,11 +106,20 @@ def production_preflight_defaults(
             "require_volume": require_volume,
             "require_h_factor": require_h_factor,
             "scatter_row_balance_warn": scatter_row_balance_warn,
+            "scatter_row_balance_fail": scatter_row_balance_fail,
+            "require_energy_bounds_consistency": require_energy_bounds_consistency,
+            "chi_sum_tolerance": chi_sum_tolerance,
+            "require_adf_face_consistency": require_adf_face_consistency,
+            "transport_p1_fail": transport_p1_fail,
             "uncertainty_production_fail": uncertainty_production_fail,
         }
 
-    if scatter_row_balance_warn is None:
-        scatter_row_balance_warn = PRODUCTION_SCATTER_ROW_BALANCE_WARN
+    if scatter_row_balance_fail is None:
+        scatter_row_balance_fail = PRODUCTION_SCATTER_ROW_BALANCE_FAIL
+    if chi_sum_tolerance is None:
+        chi_sum_tolerance = DEFAULT_CHI_SUM_TOLERANCE
+    if transport_p1_fail is None:
+        transport_p1_fail = DEFAULT_TRANSPORT_P1_REL
     if uncertainty_warn is not None and uncertainty_production_fail is None:
         uncertainty_production_fail = PRODUCTION_UNCERTAINTY_PRODUCTION_FAIL
 
@@ -119,6 +132,11 @@ def production_preflight_defaults(
         "require_volume": True,
         "require_h_factor": True,
         "scatter_row_balance_warn": scatter_row_balance_warn,
+        "scatter_row_balance_fail": scatter_row_balance_fail,
+        "require_energy_bounds_consistency": True,
+        "chi_sum_tolerance": chi_sum_tolerance,
+        "require_adf_face_consistency": True,
+        "transport_p1_fail": transport_p1_fail,
         "uncertainty_production_fail": uncertainty_production_fail,
     }
 
@@ -136,6 +154,11 @@ def main() -> int:
         require_volume=args.require_volume,
         require_h_factor=args.require_h_factor,
         scatter_row_balance_warn=args.scatter_row_balance_warn,
+        scatter_row_balance_fail=args.scatter_row_balance_fail,
+        require_energy_bounds_consistency=args.require_energy_bounds_consistency,
+        chi_sum_tolerance=args.chi_sum_tolerance,
+        require_adf_face_consistency=args.require_adf_face_consistency,
+        transport_p1_fail=args.transport_p1_fail,
         uncertainty_warn=None if args.no_uncertainty_check else args.uncertainty_warn,
         uncertainty_production_fail=(
             None if args.no_uncertainty_check else args.uncertainty_production_fail
@@ -167,7 +190,13 @@ def main() -> int:
             expected_energy_bounds_sha256=args.expected_energy_bounds_sha256,
             expected_adf_faces=expected_faces,
             scatter_row_balance_warn=settings["scatter_row_balance_warn"],
-            scatter_row_balance_fail=args.scatter_row_balance_fail,
+            scatter_row_balance_fail=settings["scatter_row_balance_fail"],
+            require_energy_bounds_consistency=settings[
+                "require_energy_bounds_consistency"
+            ],
+            chi_sum_tolerance=settings["chi_sum_tolerance"],
+            require_adf_face_consistency=settings["require_adf_face_consistency"],
+            transport_p1_fail=settings["transport_p1_fail"],
             uncertainty=UncertaintyConfig(
                 warn_threshold=None if args.no_uncertainty_check else args.uncertainty_warn,
                 fail_threshold=None if args.no_uncertainty_check else args.uncertainty_fail,
@@ -216,7 +245,7 @@ def parse_args() -> argparse.Namespace:
         help=(
             "enable production preflight defaults: require volume, transport_total, "
             "fissionable H-FACTOR, declared mixture order, domain provenance, "
-            "row-balance warnings, and production uncertainty failure threshold"
+            "physics consistency gates, and production uncertainty failure threshold"
         ),
     )
     parser.add_argument(
@@ -312,6 +341,36 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--require-energy-bounds-consistency",
+        action="store_true",
+        help=(
+            "require any local mixture/state energy_bounds dataset to match "
+            "global /energy_bounds"
+        ),
+    )
+    parser.add_argument(
+        "--chi-sum-tolerance",
+        type=float,
+        default=None,
+        metavar="ABS",
+        help="fail if fissionable chi normalization error exceeds ABS",
+    )
+    parser.add_argument(
+        "--require-adf-face-consistency",
+        action="store_true",
+        help="require all ADF-bearing calculations to declare the same face names",
+    )
+    parser.add_argument(
+        "--transport-p1-fail",
+        type=float,
+        default=None,
+        metavar="REL",
+        help=(
+            "fail if explicit transport_total differs from total minus P1 "
+            "scatter out by more than REL"
+        ),
+    )
+    parser.add_argument(
         "--uncertainty-warn",
         type=float,
         default=0.05,
@@ -380,6 +439,10 @@ def validate_input(
     expected_adf_faces: list[str] | None = None,
     scatter_row_balance_warn: float | None = None,
     scatter_row_balance_fail: float | None = None,
+    require_energy_bounds_consistency: bool = False,
+    chi_sum_tolerance: float | None = None,
+    require_adf_face_consistency: bool = False,
+    transport_p1_fail: float | None = None,
     uncertainty: UncertaintyConfig | None = None,
 ) -> InputReport:
     report = InputReport(path=str(path))
@@ -412,6 +475,12 @@ def validate_input(
                 expected_energy_bounds_label=expected_energy_bounds_label,
                 expected_energy_bounds_sha256=expected_energy_bounds_sha256,
                 expected_adf_faces=expected_adf_faces,
+                scatter_row_balance_warn=scatter_row_balance_warn,
+                scatter_row_balance_fail=scatter_row_balance_fail,
+                require_energy_bounds_consistency=require_energy_bounds_consistency,
+                chi_sum_tolerance=chi_sum_tolerance,
+                require_adf_face_consistency=require_adf_face_consistency,
+                transport_p1_fail=transport_p1_fail,
                 uncertainty=uncertainty or UncertaintyConfig(),
             )
     except OSError as exc:
@@ -437,6 +506,12 @@ def validate_open_h5(
     expected_energy_bounds_label: str | None,
     expected_energy_bounds_sha256: str | None,
     expected_adf_faces: list[str] | None,
+    scatter_row_balance_warn: float | None,
+    scatter_row_balance_fail: float | None,
+    require_energy_bounds_consistency: bool,
+    chi_sum_tolerance: float | None,
+    require_adf_face_consistency: bool,
+    transport_p1_fail: float | None,
     uncertainty: UncertaintyConfig,
 ) -> None:
     ngroups = integer_attr(h5.attrs, "energy_groups")
@@ -530,14 +605,78 @@ def validate_open_h5(
             )
         )
 
+    physics = evaluate_mgxs_physics(
+        h5,
+        mixture_names=mixture_names,
+        energy_groups=ngroups,
+        legendre_order=legendre_order,
+        root_energy_bounds=_valid_root_energy_bounds(energy, ngroups),
+        energy_bounds_consistency=require_energy_bounds_consistency,
+        scatter_row_balance_rel=scatter_row_balance_fail,
+        scatter_row_balance_warn_rel=scatter_row_balance_warn,
+        chi_sum_tolerance=chi_sum_tolerance,
+        require_adf_face_consistency=require_adf_face_consistency,
+        transport_p1_rel=transport_p1_fail,
+    )
+    apply_shared_physics_checks(report, physics)
+
     validate_state_layout(report, state_counts, burnup_axis)
 
     validate_adf_layout(report, adf_names_by_mix, require_adf, expected_adf_faces)
     validate_sph_layout(report, sph_present_by_calc, require_sph)
     finalize_volume_contract(report, require_volume=bool(require_volume))
-
-    finalize_scatter_row_balance(report)
     finalize_uncertainty(report)
+
+
+def _valid_root_energy_bounds(energy: np.ndarray, ngroups: int) -> np.ndarray | None:
+    if energy.shape != (ngroups + 1,):
+        return None
+    if not np.all(np.isfinite(energy)):
+        return None
+    if np.any(energy <= 0.0):
+        return None
+    if not np.all(np.diff(energy) > 0.0):
+        return None
+    return energy
+
+
+def apply_shared_physics_checks(
+    report: InputReport,
+    physics: MgxsPhysicsCheckReport,
+) -> None:
+    report.energy_bounds_local_count = physics.energy_bounds_local_count
+    for issue in physics.energy_bounds_consistency_errors:
+        report.fail(issue)
+    report.scatter_row_balance_max_rel = physics.scatter_row_balance_max_rel
+    report.scatter_row_balance_max_abs = physics.scatter_row_balance_max_abs
+    report.scatter_row_balance_worst = physics.scatter_row_balance_worst
+    for warning in physics.scatter_row_balance_warnings:
+        report.warn(warning)
+    for issue in physics.scatter_row_balance_errors:
+        report.fail(issue)
+    report.chi_checked = physics.chi_checked
+    report.chi_sum_max_abs_error = physics.chi_sum_max_abs_error
+    report.chi_sum_worst = physics.chi_sum_worst
+    for issue in physics.chi_errors:
+        report.fail(issue)
+    report.nu_ratio_checked_bins = physics.nu_ratio_checked_bins
+    report.nu_ratio_min = physics.nu_ratio_min
+    report.nu_ratio_max = physics.nu_ratio_max
+    report.nu_ratio_worst = physics.nu_ratio_worst
+    for warning in physics.nu_ratio_warnings:
+        report.warn(warning)
+    report.adf_face_consistency_checked = bool(
+        physics.adf_calculations or physics.adf_face_errors
+    )
+    report.adf_face_consistency_errors = len(physics.adf_face_errors)
+    for issue in physics.adf_face_errors:
+        report.fail(issue)
+    report.transport_p1_checked = physics.transport_p1_checked
+    report.transport_p1_max_rel = physics.transport_p1_max_rel
+    report.transport_p1_max_abs = physics.transport_p1_max_abs
+    report.transport_p1_worst = physics.transport_p1_worst
+    for issue in physics.transport_p1_errors:
+        report.fail(issue)
 
 
 def finalize_volume_contract(report: InputReport, *, require_volume: bool) -> None:
@@ -1146,17 +1285,6 @@ def validate_calculation(
     )
     if not np.all(np.isfinite(scatter)):
         report.fail(f"mixture {name}: scatter_matrix contains non-finite values")
-    if report.scatter_row_balance_checked:
-        update_scatter_row_balance(
-            group,
-            scatter,
-            axes,
-            ngroups,
-            legendre_order,
-            report,
-            name,
-        )
-
     for field in OPTIONAL_VECTOR_DATASETS:
         if field in group:
             validate_vector(group[field], ngroups, report, f"mixture {name}: {field}")
@@ -1311,6 +1439,10 @@ def run_preflight(
     expected_energy_bounds_sha256: str | None = None,
     scatter_row_balance_warn: float | None = None,
     scatter_row_balance_fail: float | None = None,
+    require_energy_bounds_consistency: bool = False,
+    chi_sum_tolerance: float | None = None,
+    require_adf_face_consistency: bool = False,
+    transport_p1_fail: float | None = None,
     uncertainty_warn: float | None = 0.05,
     uncertainty_fail: float | None = None,
     uncertainty_production_fail: float | None = None,
@@ -1335,6 +1467,11 @@ def run_preflight(
         require_volume=require_volume,
         require_h_factor=require_h_factor,
         scatter_row_balance_warn=scatter_row_balance_warn,
+        scatter_row_balance_fail=scatter_row_balance_fail,
+        require_energy_bounds_consistency=require_energy_bounds_consistency,
+        chi_sum_tolerance=chi_sum_tolerance,
+        require_adf_face_consistency=require_adf_face_consistency,
+        transport_p1_fail=transport_p1_fail,
         uncertainty_warn=uncertainty_warn,
         uncertainty_production_fail=uncertainty_production_fail,
     )
@@ -1356,7 +1493,13 @@ def run_preflight(
             expected_energy_bounds_sha256=expected_energy_bounds_sha256,
             expected_adf_faces=expected_faces,
             scatter_row_balance_warn=settings["scatter_row_balance_warn"],
-            scatter_row_balance_fail=scatter_row_balance_fail,
+            scatter_row_balance_fail=settings["scatter_row_balance_fail"],
+            require_energy_bounds_consistency=settings[
+                "require_energy_bounds_consistency"
+            ],
+            chi_sum_tolerance=settings["chi_sum_tolerance"],
+            require_adf_face_consistency=settings["require_adf_face_consistency"],
+            transport_p1_fail=settings["transport_p1_fail"],
             uncertainty=UncertaintyConfig(
                 warn_threshold=uncertainty_warn,
                 fail_threshold=uncertainty_fail,

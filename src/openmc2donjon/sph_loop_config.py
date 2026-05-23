@@ -6,6 +6,11 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .mgxs_physics_checks import (
+    DEFAULT_CHI_SUM_TOLERANCE,
+    DEFAULT_SCATTER_ROW_BALANCE_REL,
+    DEFAULT_TRANSPORT_P1_REL,
+)
 
 CONFIG_SCHEMA = "openmc2donjon.sph-loop-config.v1"
 
@@ -67,6 +72,11 @@ def acceptance_config(config: dict[str, Any]) -> dict[str, Any]:
         "require_mgxs_energy_bounds",
         "require_known_mesh",
         "mesh_tolerance",
+        "require_mgxs_energy_bounds_consistency",
+        "max_mgxs_scatter_row_balance_rel",
+        "max_mgxs_chi_sum_error",
+        "require_mgxs_adf_face_consistency",
+        "max_mgxs_transport_p1_rel",
         "require_reference_flux_std_dev",
         "max_reference_flux_std_dev_rel",
         "max_sph_abs_change",
@@ -108,6 +118,9 @@ def acceptance_config(config: dict[str, Any]) -> dict[str, Any]:
         "max_flux_ratio_residual",
         "max_reference_flux_std_dev_rel",
         "mesh_tolerance",
+        "max_mgxs_scatter_row_balance_rel",
+        "max_mgxs_chi_sum_error",
+        "max_mgxs_transport_p1_rel",
         "max_final_to_initial_flux_residual_ratio",
         "max_final_clipped_fraction",
         "sph_minimum_floor",
@@ -157,6 +170,8 @@ def acceptance_config(config: dict[str, Any]) -> dict[str, Any]:
         "require_mgxs_h_factor",
         "require_mgxs_energy_bounds",
         "require_known_mesh",
+        "require_mgxs_energy_bounds_consistency",
+        "require_mgxs_adf_face_consistency",
         "require_reference_flux_std_dev",
         "fail_on_violation",
     ):
@@ -198,6 +213,11 @@ def _production_acceptance_defaults(config: dict[str, Any]) -> dict[str, Any]:
     out["require_mgxs_explicit_volumes"] = True
     out["require_mgxs_h_factor"] = True
     out["require_mgxs_energy_bounds"] = True
+    out["require_mgxs_energy_bounds_consistency"] = True
+    out["max_mgxs_scatter_row_balance_rel"] = DEFAULT_SCATTER_ROW_BALANCE_REL
+    out["max_mgxs_chi_sum_error"] = DEFAULT_CHI_SUM_TOLERANCE
+    out["require_mgxs_adf_face_consistency"] = True
+    out["max_mgxs_transport_p1_rel"] = DEFAULT_TRANSPORT_P1_REL
     return out
 
 

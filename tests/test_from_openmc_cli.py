@@ -195,7 +195,12 @@ class FromOpenMCCliTests(unittest.TestCase):
         self.assertIn("require_volume: yes", rendered)
         self.assertIn("require_h_factor: yes", rendered)
         self.assertIn("require_transport_dataset: yes", rendered)
-        self.assertIn("scatter_row_balance_warn: 0.05", rendered)
+        self.assertIn("scatter_row_balance_warn: none", rendered)
+        self.assertIn("scatter_row_balance_fail: 0.05", rendered)
+        self.assertIn("require_energy_bounds_consistency: yes", rendered)
+        self.assertIn("chi_sum_tolerance: 1e-06", rendered)
+        self.assertIn("require_adf_face_consistency: yes", rendered)
+        self.assertIn("transport_p1_fail: 0.05", rendered)
         self.assertIn("uncertainty_production_fail: 1.0", rendered)
 
     def test_check_can_fail_on_exported_std_dev_uncertainty(self) -> None:

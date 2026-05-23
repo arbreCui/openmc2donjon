@@ -24,6 +24,7 @@ from .energy_groups import (
     validate_energy_bounds_internal,
 )
 from .hdf5_names import read_mixture_names
+from .mgxs_physics_checks import evaluate_mgxs_physics
 
 
 SCHEMA = "openmc2donjon.sph-loop-flux-map-preflight.v1"
@@ -55,6 +56,28 @@ class SphLoopFluxMapPreflightReport:
     mgxs_energy_mesh_id: str | None
     mgxs_energy_mesh_name: str | None
     mgxs_energy_mesh_tolerance: float
+    mgxs_energy_bounds_local_count: int
+    mgxs_energy_bounds_consistency_error_count: int
+    mgxs_scatter_row_balance_checked: int
+    mgxs_scatter_row_balance_max_rel: float | None
+    mgxs_scatter_row_balance_max_abs: float | None
+    mgxs_scatter_row_balance_worst: str | None
+    mgxs_chi_checked: int
+    mgxs_chi_sum_max_abs_error: float | None
+    mgxs_chi_sum_worst: str | None
+    mgxs_chi_error_count: int
+    mgxs_nu_ratio_checked_bins: int
+    mgxs_nu_ratio_min: float | None
+    mgxs_nu_ratio_max: float | None
+    mgxs_nu_ratio_worst: str | None
+    mgxs_adf_calculations: int
+    mgxs_adf_faces: tuple[str, ...]
+    mgxs_adf_face_error_count: int
+    mgxs_transport_p1_checked: int
+    mgxs_transport_p1_max_rel: float | None
+    mgxs_transport_p1_max_abs: float | None
+    mgxs_transport_p1_worst: str | None
+    mgxs_transport_p1_error_count: int
     mgxs_source_domain_indices: tuple[int | None, ...]
     mgxs_source_domain_order_errors: tuple[str, ...]
     mgxs_calculations: int
@@ -101,11 +124,21 @@ def build_flux_map_preflight_report(
     require_mgxs_energy_bounds: bool = False,
     require_known_mesh: bool = False,
     mesh_tolerance: float = MESH_RELATIVE_TOLERANCE,
+    require_mgxs_energy_bounds_consistency: bool = False,
+    max_mgxs_scatter_row_balance_rel: float | None = None,
+    max_mgxs_chi_sum_error: float | None = None,
+    require_mgxs_adf_face_consistency: bool = False,
+    max_mgxs_transport_p1_rel: float | None = None,
 ) -> SphLoopFluxMapPreflightReport:
     input_path = Path(input_h5)
     mgxs_metadata = _read_mgxs_metadata(
         input_path,
         mesh_tolerance=mesh_tolerance,
+        energy_bounds_consistency=require_mgxs_energy_bounds_consistency,
+        scatter_row_balance_rel=max_mgxs_scatter_row_balance_rel,
+        chi_sum_tolerance=max_mgxs_chi_sum_error,
+        require_adf_face_consistency=require_mgxs_adf_face_consistency,
+        transport_p1_rel=max_mgxs_transport_p1_rel,
     )
     mixture_names = mgxs_metadata["mixture_names"]
     energy_groups = mgxs_metadata["energy_groups"]
@@ -126,9 +159,16 @@ def build_flux_map_preflight_report(
             f"within rtol={mesh_tolerance:g}"
         )
     errors.extend(mgxs_metadata["energy_bounds_errors"])
+    errors.extend(mgxs_metadata["energy_bounds_consistency_errors"])
+    errors.extend(mgxs_metadata["scatter_row_balance_errors"])
+    errors.extend(mgxs_metadata["chi_errors"])
+    errors.extend(mgxs_metadata["adf_face_errors"])
+    errors.extend(mgxs_metadata["transport_p1_errors"])
     errors.extend(mgxs_metadata["volume_errors"])
     errors.extend(mgxs_metadata["h_factor_errors"])
     warnings.extend(mgxs_metadata["energy_bounds_warnings"])
+    warnings.extend(mgxs_metadata["scatter_row_balance_warnings"])
+    warnings.extend(mgxs_metadata["nu_ratio_warnings"])
     if mgxs_metadata["volume_defaulted"]:
         warnings.append(
             f"{mgxs_metadata['volume_defaulted']}/"
@@ -201,6 +241,40 @@ def build_flux_map_preflight_report(
         mgxs_energy_mesh_id=mgxs_metadata["energy_mesh_id"],
         mgxs_energy_mesh_name=mgxs_metadata["energy_mesh_name"],
         mgxs_energy_mesh_tolerance=float(mesh_tolerance),
+        mgxs_energy_bounds_local_count=mgxs_metadata[
+            "energy_bounds_local_count"
+        ],
+        mgxs_energy_bounds_consistency_error_count=len(
+            mgxs_metadata["energy_bounds_consistency_errors"]
+        ),
+        mgxs_scatter_row_balance_checked=mgxs_metadata[
+            "scatter_row_balance_checked"
+        ],
+        mgxs_scatter_row_balance_max_rel=mgxs_metadata[
+            "scatter_row_balance_max_rel"
+        ],
+        mgxs_scatter_row_balance_max_abs=mgxs_metadata[
+            "scatter_row_balance_max_abs"
+        ],
+        mgxs_scatter_row_balance_worst=mgxs_metadata[
+            "scatter_row_balance_worst"
+        ],
+        mgxs_chi_checked=mgxs_metadata["chi_checked"],
+        mgxs_chi_sum_max_abs_error=mgxs_metadata["chi_sum_max_abs_error"],
+        mgxs_chi_sum_worst=mgxs_metadata["chi_sum_worst"],
+        mgxs_chi_error_count=len(mgxs_metadata["chi_errors"]),
+        mgxs_nu_ratio_checked_bins=mgxs_metadata["nu_ratio_checked_bins"],
+        mgxs_nu_ratio_min=mgxs_metadata["nu_ratio_min"],
+        mgxs_nu_ratio_max=mgxs_metadata["nu_ratio_max"],
+        mgxs_nu_ratio_worst=mgxs_metadata["nu_ratio_worst"],
+        mgxs_adf_calculations=mgxs_metadata["adf_calculations"],
+        mgxs_adf_faces=mgxs_metadata["adf_faces"],
+        mgxs_adf_face_error_count=len(mgxs_metadata["adf_face_errors"]),
+        mgxs_transport_p1_checked=mgxs_metadata["transport_p1_checked"],
+        mgxs_transport_p1_max_rel=mgxs_metadata["transport_p1_max_rel"],
+        mgxs_transport_p1_max_abs=mgxs_metadata["transport_p1_max_abs"],
+        mgxs_transport_p1_worst=mgxs_metadata["transport_p1_worst"],
+        mgxs_transport_p1_error_count=len(mgxs_metadata["transport_p1_errors"]),
         mgxs_source_domain_indices=mgxs_metadata["source_domain_indices"],
         mgxs_source_domain_order_errors=mgxs_metadata["source_domain_order_errors"],
         mgxs_calculations=mgxs_metadata["calculations"],
@@ -260,6 +334,38 @@ def payload(report: SphLoopFluxMapPreflightReport) -> dict[str, object]:
         "mgxs_energy_mesh_id": report.mgxs_energy_mesh_id,
         "mgxs_energy_mesh_name": report.mgxs_energy_mesh_name,
         "mgxs_energy_mesh_tolerance": report.mgxs_energy_mesh_tolerance,
+        "mgxs_energy_bounds_local_count": report.mgxs_energy_bounds_local_count,
+        "mgxs_energy_bounds_consistency_error_count": (
+            report.mgxs_energy_bounds_consistency_error_count
+        ),
+        "mgxs_scatter_row_balance_checked": (
+            report.mgxs_scatter_row_balance_checked
+        ),
+        "mgxs_scatter_row_balance_max_rel": (
+            report.mgxs_scatter_row_balance_max_rel
+        ),
+        "mgxs_scatter_row_balance_max_abs": (
+            report.mgxs_scatter_row_balance_max_abs
+        ),
+        "mgxs_scatter_row_balance_worst": (
+            report.mgxs_scatter_row_balance_worst
+        ),
+        "mgxs_chi_checked": report.mgxs_chi_checked,
+        "mgxs_chi_sum_max_abs_error": report.mgxs_chi_sum_max_abs_error,
+        "mgxs_chi_sum_worst": report.mgxs_chi_sum_worst,
+        "mgxs_chi_error_count": report.mgxs_chi_error_count,
+        "mgxs_nu_ratio_checked_bins": report.mgxs_nu_ratio_checked_bins,
+        "mgxs_nu_ratio_min": report.mgxs_nu_ratio_min,
+        "mgxs_nu_ratio_max": report.mgxs_nu_ratio_max,
+        "mgxs_nu_ratio_worst": report.mgxs_nu_ratio_worst,
+        "mgxs_adf_calculations": report.mgxs_adf_calculations,
+        "mgxs_adf_faces": list(report.mgxs_adf_faces),
+        "mgxs_adf_face_error_count": report.mgxs_adf_face_error_count,
+        "mgxs_transport_p1_checked": report.mgxs_transport_p1_checked,
+        "mgxs_transport_p1_max_rel": report.mgxs_transport_p1_max_rel,
+        "mgxs_transport_p1_max_abs": report.mgxs_transport_p1_max_abs,
+        "mgxs_transport_p1_worst": report.mgxs_transport_p1_worst,
+        "mgxs_transport_p1_error_count": report.mgxs_transport_p1_error_count,
         "mgxs_source_domain_indices": list(report.mgxs_source_domain_indices),
         "mgxs_source_domain_order_errors": list(
             report.mgxs_source_domain_order_errors
@@ -320,6 +426,11 @@ def _read_mgxs_metadata(
     path: Path,
     *,
     mesh_tolerance: float = MESH_RELATIVE_TOLERANCE,
+    energy_bounds_consistency: bool = False,
+    scatter_row_balance_rel: float | None = None,
+    chi_sum_tolerance: float | None = None,
+    require_adf_face_consistency: bool = False,
+    transport_p1_rel: float | None = None,
 ) -> dict[str, Any]:
     import h5py
 
@@ -344,6 +455,22 @@ def _read_mgxs_metadata(
             energy_groups,
             mesh_tolerance=mesh_tolerance,
         )
+        legendre_order = int(h5.attrs.get("legendre_order", 0))
+        root_energy_bounds = None
+        if "energy_bounds" in h5 and not energy_bounds_contract["energy_bounds_errors"]:
+            root_energy_bounds = np.asarray(h5["energy_bounds"][:], dtype=float)
+        physics_contract = _physics_contract(
+            h5,
+            mixture_names=mixture_names,
+            energy_groups=energy_groups,
+            legendre_order=legendre_order,
+            root_energy_bounds=root_energy_bounds,
+            energy_bounds_consistency=energy_bounds_consistency,
+            scatter_row_balance_rel=scatter_row_balance_rel,
+            chi_sum_tolerance=chi_sum_tolerance,
+            require_adf_face_consistency=require_adf_face_consistency,
+            transport_p1_rel=transport_p1_rel,
+        )
         volume_contract = _volume_contract(h5, mixture_names)
         h_factor_contract = _h_factor_contract(h5, mixture_names, energy_groups)
     if not mixture_names:
@@ -357,8 +484,65 @@ def _read_mgxs_metadata(
         "source_domain_indices": source_domain_indices,
         "source_domain_order_errors": source_domain_errors,
         **energy_bounds_contract,
+        **physics_contract,
         **volume_contract,
         **h_factor_contract,
+    }
+
+
+def _physics_contract(
+    h5: Any,
+    *,
+    mixture_names: tuple[str, ...],
+    energy_groups: int,
+    legendre_order: int,
+    root_energy_bounds: np.ndarray | None,
+    energy_bounds_consistency: bool,
+    scatter_row_balance_rel: float | None,
+    chi_sum_tolerance: float | None,
+    require_adf_face_consistency: bool,
+    transport_p1_rel: float | None,
+) -> dict[str, Any]:
+    report = evaluate_mgxs_physics(
+        h5,
+        mixture_names=mixture_names,
+        energy_groups=energy_groups,
+        legendre_order=legendre_order,
+        root_energy_bounds=root_energy_bounds,
+        energy_bounds_consistency=energy_bounds_consistency,
+        scatter_row_balance_rel=scatter_row_balance_rel,
+        chi_sum_tolerance=chi_sum_tolerance,
+        require_adf_face_consistency=require_adf_face_consistency,
+        transport_p1_rel=transport_p1_rel,
+    )
+    return {
+        "energy_bounds_local_count": report.energy_bounds_local_count,
+        "energy_bounds_consistency_errors": (
+            report.energy_bounds_consistency_errors
+        ),
+        "scatter_row_balance_checked": report.scatter_row_balance_checked,
+        "scatter_row_balance_max_rel": report.scatter_row_balance_max_rel,
+        "scatter_row_balance_max_abs": report.scatter_row_balance_max_abs,
+        "scatter_row_balance_worst": report.scatter_row_balance_worst,
+        "scatter_row_balance_warnings": report.scatter_row_balance_warnings,
+        "scatter_row_balance_errors": report.scatter_row_balance_errors,
+        "chi_checked": report.chi_checked,
+        "chi_sum_max_abs_error": report.chi_sum_max_abs_error,
+        "chi_sum_worst": report.chi_sum_worst,
+        "chi_errors": report.chi_errors,
+        "nu_ratio_checked_bins": report.nu_ratio_checked_bins,
+        "nu_ratio_min": report.nu_ratio_min,
+        "nu_ratio_max": report.nu_ratio_max,
+        "nu_ratio_worst": report.nu_ratio_worst,
+        "nu_ratio_warnings": report.nu_ratio_warnings,
+        "adf_calculations": report.adf_calculations,
+        "adf_faces": report.adf_faces,
+        "adf_face_errors": report.adf_face_errors,
+        "transport_p1_checked": report.transport_p1_checked,
+        "transport_p1_max_rel": report.transport_p1_max_rel,
+        "transport_p1_max_abs": report.transport_p1_max_abs,
+        "transport_p1_worst": report.transport_p1_worst,
+        "transport_p1_errors": report.transport_p1_errors,
     }
 
 

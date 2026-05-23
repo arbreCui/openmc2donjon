@@ -339,6 +339,73 @@ class SphLoopAcceptanceTests(unittest.TestCase):
         self.assertFalse(checks["require_mgxs_energy_bounds"].passed)
         self.assertFalse(checks["require_known_mesh"].passed)
 
+    def test_mgxs_physics_acceptance_gates(self) -> None:
+        report = build_acceptance_report(
+            {
+                "require_mgxs_energy_bounds_consistency": True,
+                "max_mgxs_scatter_row_balance_rel": 5.0e-2,
+                "max_mgxs_chi_sum_error": 1.0e-6,
+                "require_mgxs_adf_face_consistency": True,
+                "max_mgxs_transport_p1_rel": 5.0e-2,
+            },
+            audit_rows=(),
+            convergence=(),
+            completed_iterations=1,
+            converged=False,
+            final_solve=None,
+            flux_map_preflight=_preflight(
+                energy_bounds_consistency_errors=0,
+                scatter_row_balance_rel=1.0e-3,
+                chi_sum_error=5.0e-8,
+                adf_face_errors=0,
+                transport_p1_rel=2.0e-3,
+            ),
+        )
+
+        self.assertTrue(report.passed)
+        actual = {check.name: check.actual for check in report.checks}
+        self.assertTrue(actual["require_mgxs_energy_bounds_consistency"])
+        self.assertAlmostEqual(
+            float(actual["max_mgxs_scatter_row_balance_rel"]),
+            1.0e-3,
+        )
+        self.assertAlmostEqual(float(actual["max_mgxs_chi_sum_error"]), 5.0e-8)
+        self.assertTrue(actual["require_mgxs_adf_face_consistency"])
+        self.assertAlmostEqual(float(actual["max_mgxs_transport_p1_rel"]), 2.0e-3)
+
+    def test_mgxs_physics_acceptance_gates_fail_on_contract_errors(self) -> None:
+        report = build_acceptance_report(
+            {
+                "require_mgxs_energy_bounds_consistency": True,
+                "max_mgxs_scatter_row_balance_rel": 5.0e-2,
+                "max_mgxs_chi_sum_error": 1.0e-6,
+                "require_mgxs_adf_face_consistency": True,
+                "max_mgxs_transport_p1_rel": 5.0e-2,
+            },
+            audit_rows=(),
+            convergence=(),
+            completed_iterations=1,
+            converged=False,
+            final_solve=None,
+            flux_map_preflight=_preflight(
+                energy_bounds_consistency_errors=1,
+                scatter_row_balance_rel=6.0e-2,
+                chi_sum_error=2.0e-6,
+                chi_errors=1,
+                adf_face_errors=1,
+                transport_p1_rel=7.0e-2,
+                transport_p1_errors=1,
+            ),
+        )
+
+        self.assertFalse(report.passed)
+        checks = {check.name: check for check in report.checks}
+        self.assertFalse(checks["require_mgxs_energy_bounds_consistency"].passed)
+        self.assertFalse(checks["max_mgxs_scatter_row_balance_rel"].passed)
+        self.assertFalse(checks["max_mgxs_chi_sum_error"].passed)
+        self.assertFalse(checks["require_mgxs_adf_face_consistency"].passed)
+        self.assertFalse(checks["max_mgxs_transport_p1_rel"].passed)
+
     def test_production_audit_gate_reports_mismatch(self) -> None:
         report = build_acceptance_report(
             {"require_production_audit": True},
@@ -517,7 +584,14 @@ def _preflight(
     h_factor_invalid: int = 0,
     energy_bounds_present: bool = True,
     energy_bounds_error_count: int = 0,
+    energy_bounds_consistency_errors: int = 0,
     energy_mesh_id: str | None = None,
+    scatter_row_balance_rel: float | None = None,
+    chi_sum_error: float | None = None,
+    chi_errors: int = 0,
+    adf_face_errors: int = 0,
+    transport_p1_rel: float | None = None,
+    transport_p1_errors: int = 0,
 ) -> SimpleNamespace:
     return SimpleNamespace(
         passed=True,
@@ -526,6 +600,10 @@ def _preflight(
         energy_groups=2,
         mgxs_energy_bounds_present=energy_bounds_present,
         mgxs_energy_bounds_error_count=energy_bounds_error_count,
+        mgxs_energy_bounds_consistency_error_count=(
+            energy_bounds_consistency_errors
+        ),
+        mgxs_energy_bounds_local_count=0,
         mgxs_energy_mesh_id=energy_mesh_id,
         mgxs_declared_mixture_order=True,
         mgxs_source_domain_indices=(1, 2),
@@ -534,6 +612,28 @@ def _preflight(
         mgxs_volume_nonpositive=0,
         mgxs_h_factor_missing=h_factor_missing,
         mgxs_h_factor_invalid=h_factor_invalid,
+        mgxs_scatter_row_balance_checked=(
+            0 if scatter_row_balance_rel is None else 1
+        ),
+        mgxs_scatter_row_balance_max_rel=scatter_row_balance_rel,
+        mgxs_scatter_row_balance_max_abs=None,
+        mgxs_scatter_row_balance_worst=None,
+        mgxs_chi_checked=0 if chi_sum_error is None else 1,
+        mgxs_chi_sum_max_abs_error=chi_sum_error,
+        mgxs_chi_sum_worst=None,
+        mgxs_chi_error_count=chi_errors,
+        mgxs_nu_ratio_checked_bins=0,
+        mgxs_nu_ratio_min=None,
+        mgxs_nu_ratio_max=None,
+        mgxs_nu_ratio_worst=None,
+        mgxs_adf_calculations=0,
+        mgxs_adf_faces=(),
+        mgxs_adf_face_error_count=adf_face_errors,
+        mgxs_transport_p1_checked=0 if transport_p1_rel is None else 1,
+        mgxs_transport_p1_max_rel=transport_p1_rel,
+        mgxs_transport_p1_max_abs=None,
+        mgxs_transport_p1_worst=None,
+        mgxs_transport_p1_error_count=transport_p1_errors,
         scalar_flux_ids=(2, 4),
         minimum_required_flux_unknown_count=4,
         mixture_flux_map=(("fuel", 2), ("moderator", 4)),

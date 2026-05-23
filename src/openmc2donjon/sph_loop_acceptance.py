@@ -45,6 +45,13 @@ class _FluxMapPreflightLike(Protocol):
     mgxs_energy_bounds_present: bool
     mgxs_energy_bounds_error_count: int
     mgxs_energy_mesh_id: str | None
+    mgxs_energy_bounds_consistency_error_count: int
+    mgxs_scatter_row_balance_max_rel: float | None
+    mgxs_chi_sum_max_abs_error: float | None
+    mgxs_chi_error_count: int
+    mgxs_adf_face_error_count: int
+    mgxs_transport_p1_max_rel: float | None
+    mgxs_transport_p1_error_count: int
     mgxs_volume_defaulted: int
     mgxs_volume_nonpositive: int
     mgxs_h_factor_missing: int
@@ -174,6 +181,49 @@ def build_acceptance_report(
                 "require_known_mesh",
                 actual=_mgxs_known_mesh_present(flux_map_preflight),
                 limit=True,
+            )
+        )
+    if bool(config.get("require_mgxs_energy_bounds_consistency", False)):
+        checks.append(
+            _boolean_check(
+                "require_mgxs_energy_bounds_consistency",
+                actual=_mgxs_energy_bounds_consistent(flux_map_preflight),
+                limit=True,
+            )
+        )
+    if "max_mgxs_scatter_row_balance_rel" in config:
+        checks.append(
+            _maximum_check(
+                "max_mgxs_scatter_row_balance_rel",
+                actual=_mgxs_scatter_row_balance_rel(flux_map_preflight),
+                limit=float(config["max_mgxs_scatter_row_balance_rel"]),
+                units="relative",
+            )
+        )
+    if "max_mgxs_chi_sum_error" in config:
+        checks.append(
+            _maximum_check(
+                "max_mgxs_chi_sum_error",
+                actual=_mgxs_chi_sum_error(flux_map_preflight),
+                limit=float(config["max_mgxs_chi_sum_error"]),
+                units="absolute",
+            )
+        )
+    if bool(config.get("require_mgxs_adf_face_consistency", False)):
+        checks.append(
+            _boolean_check(
+                "require_mgxs_adf_face_consistency",
+                actual=_mgxs_adf_faces_consistent(flux_map_preflight),
+                limit=True,
+            )
+        )
+    if "max_mgxs_transport_p1_rel" in config:
+        checks.append(
+            _maximum_check(
+                "max_mgxs_transport_p1_rel",
+                actual=_mgxs_transport_p1_rel(flux_map_preflight),
+                limit=float(config["max_mgxs_transport_p1_rel"]),
+                units="relative",
             )
         )
     if bool(config.get("require_reference_flux_std_dev", False)):
@@ -541,6 +591,64 @@ def _mgxs_known_mesh_present(
     if int(getattr(flux_map_preflight, "mgxs_energy_bounds_error_count", 0)) != 0:
         return False
     return bool(getattr(flux_map_preflight, "mgxs_energy_mesh_id", None))
+
+
+def _mgxs_energy_bounds_consistent(
+    flux_map_preflight: _FluxMapPreflightLike | None,
+) -> bool:
+    if flux_map_preflight is None:
+        return False
+    return (
+        int(
+            getattr(
+                flux_map_preflight,
+                "mgxs_energy_bounds_consistency_error_count",
+                0,
+            )
+        )
+        == 0
+    )
+
+
+def _mgxs_scatter_row_balance_rel(
+    flux_map_preflight: _FluxMapPreflightLike | None,
+) -> float | None:
+    if flux_map_preflight is None:
+        return None
+    value = getattr(flux_map_preflight, "mgxs_scatter_row_balance_max_rel", None)
+    return 0.0 if value is None else float(value)
+
+
+def _mgxs_chi_sum_error(
+    flux_map_preflight: _FluxMapPreflightLike | None,
+) -> float | None:
+    if flux_map_preflight is None:
+        return None
+    if int(getattr(flux_map_preflight, "mgxs_chi_error_count", 0)) != 0:
+        value = getattr(flux_map_preflight, "mgxs_chi_sum_max_abs_error", None)
+        return float("inf") if value is None else float(value)
+    value = getattr(flux_map_preflight, "mgxs_chi_sum_max_abs_error", None)
+    return 0.0 if value is None else float(value)
+
+
+def _mgxs_adf_faces_consistent(
+    flux_map_preflight: _FluxMapPreflightLike | None,
+) -> bool:
+    if flux_map_preflight is None:
+        return False
+    return int(getattr(flux_map_preflight, "mgxs_adf_face_error_count", 0)) == 0
+
+
+def _mgxs_transport_p1_rel(
+    flux_map_preflight: _FluxMapPreflightLike | None,
+) -> float | None:
+    if flux_map_preflight is None:
+        return None
+    if int(getattr(flux_map_preflight, "mgxs_transport_p1_error_count", 0)) != 0:
+        value = getattr(flux_map_preflight, "mgxs_transport_p1_max_rel", None)
+        return float("inf") if value is None else float(value)
+    value = getattr(flux_map_preflight, "mgxs_transport_p1_max_rel", None)
+    return 0.0 if value is None else float(value)
 
 
 def _reference_flux_std_dev_max_rel(

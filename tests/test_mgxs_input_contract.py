@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -195,6 +196,30 @@ class MgxsInputContractTests(unittest.TestCase):
             any("exceeds fail threshold" in item for item in report.issues)
         )
 
+    def test_production_preflight_fails_unbalanced_scatter_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "bad_balance.h5"
+            summary = Path(tmpdir) / "summary.json"
+            write_single_state_fixture(path, total=[0.5, 0.7])
+            append_production_metadata(path)
+
+            ok = validator.run_preflight(
+                [path],
+                production=True,
+                uncertainty_warn=None,
+                summary_json=summary,
+            )
+
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+
+        self.assertFalse(ok)
+        self.assertTrue(
+            any(
+                "scatter row-balance max relative residual" in issue
+                for issue in payload["inputs"][0]["issues"]
+            )
+        )
+
     def test_scatter_row_balance_uses_declared_moment_last_axes(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "moment_last.h5"
@@ -222,6 +247,153 @@ class MgxsInputContractTests(unittest.TestCase):
         self.assertEqual(report.scatter_axes, ["G_in,G_out,moment"])
         self.assertIsNotNone(report.scatter_row_balance_max_rel)
         self.assertLess(float(report.scatter_row_balance_max_rel), 1.0e-15)
+
+    def test_local_energy_bounds_must_match_root_when_required(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "local_bounds.h5"
+            write_multistate_fixture(path)
+            with h5py.File(path, "a") as h5:
+                root = h5["energy_bounds"][:]
+                h5["mixtures/fuel"].create_dataset("energy_bounds", data=root)
+
+            matching_report = validator.validate_input(
+                path,
+                require_energy_bounds_consistency=True,
+            )
+
+            with h5py.File(path, "a") as h5:
+                h5["mixtures/fuel/states/00000002"].create_dataset(
+                    "energy_bounds",
+                    data=np.array([1.0e-5, 0.9, 1.0e7]),
+                )
+
+            mismatch_report = validator.validate_input(
+                path,
+                require_energy_bounds_consistency=True,
+            )
+
+        self.assertTrue(matching_report.ok, matching_report.issues)
+        self.assertEqual(matching_report.energy_bounds_local_count, 1)
+        self.assertFalse(mismatch_report.ok)
+        self.assertEqual(mismatch_report.energy_bounds_local_count, 2)
+        self.assertTrue(
+            any("differs from /energy_bounds" in issue for issue in mismatch_report.issues)
+        )
+
+    def test_chi_sum_gate_applies_only_to_fissionable_calculations(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            bad = Path(tmpdir) / "bad_chi.h5"
+            moderator = Path(tmpdir) / "moderator_chi.h5"
+            write_single_state_fixture(bad, total=[0.29, 0.38])
+            write_single_state_fixture(moderator, total=[0.29, 0.38])
+            with h5py.File(bad, "a") as h5:
+                h5["mixtures/fuel/chi"][:] = np.array([0.8, 0.0])
+            with h5py.File(moderator, "a") as h5:
+                h5["mixtures/fuel"].attrs["fissionable"] = False
+                h5["mixtures/fuel/chi"][:] = np.array([0.0, 0.0])
+
+            bad_report = validator.validate_input(
+                bad,
+                chi_sum_tolerance=1.0e-6,
+            )
+            moderator_report = validator.validate_input(
+                moderator,
+                chi_sum_tolerance=1.0e-6,
+            )
+
+        self.assertFalse(bad_report.ok)
+        self.assertEqual(bad_report.chi_checked, 1)
+        self.assertAlmostEqual(bad_report.chi_sum_max_abs_error or 0.0, 0.2)
+        self.assertTrue(any("chi sum error" in issue for issue in bad_report.issues))
+        self.assertTrue(moderator_report.ok, moderator_report.issues)
+        self.assertEqual(moderator_report.chi_checked, 0)
+
+    def test_nu_ratio_outlier_warns_without_failing_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "nu_outlier.h5"
+            write_single_state_fixture(path, total=[0.29, 0.38])
+            with h5py.File(path, "a") as h5:
+                h5["mixtures/fuel/nu_fission"][:] = np.array([0.1, 0.03])
+
+            report = validator.validate_input(path)
+
+        self.assertTrue(report.ok, report.issues)
+        self.assertEqual(report.nu_ratio_checked_bins, 2)
+        self.assertAlmostEqual(report.nu_ratio_max or 0.0, 10.0)
+        self.assertTrue(
+            any("nu_fission/fission" in warning for warning in report.warnings)
+        )
+
+    def test_adf_face_consistency_gate_fails_when_only_some_calculations_have_adf(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "adf_faces.h5"
+            write_single_state_fixture(path, total=[0.29, 0.38])
+            with h5py.File(path, "a") as h5:
+                fuel = h5["mixtures/fuel"]
+                adf = fuel.create_dataset("adf", data=np.ones((2, 2)))
+                adf.attrs["face_names"] = np.asarray(["left", "right"], dtype="S")
+                moderator = h5["mixtures"].create_group("moderator")
+                write_one_state_payload(
+                    moderator,
+                    total=[0.29, 0.38],
+                    fissionable=False,
+                )
+
+            report = validator.validate_input(
+                path,
+                require_adf_face_consistency=True,
+            )
+
+        self.assertFalse(report.ok)
+        self.assertTrue(report.adf_face_consistency_checked)
+        self.assertEqual(report.adf_face_consistency_errors, 1)
+        self.assertTrue(any("ADF faces" in issue for issue in report.issues))
+
+    def test_transport_total_p1_gate_compares_explicit_and_derived_transport(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            bad = Path(tmpdir) / "bad_transport.h5"
+            good = Path(tmpdir) / "good_transport.h5"
+            p0 = np.array([[0.2, 0.04], [0.0, 0.3]])
+            p1 = np.array([[0.01, 0.02], [0.03, 0.04]])
+            scatter = np.stack((p0, p1), axis=0)
+            write_single_state_fixture(
+                bad,
+                total=[0.29, 0.38],
+                legendre_order=1,
+                scatter=scatter,
+            )
+            write_single_state_fixture(
+                good,
+                total=[0.29, 0.38],
+                legendre_order=1,
+                scatter=scatter,
+            )
+            with h5py.File(good, "a") as h5:
+                h5["mixtures/fuel/transport_total"][:] = np.array([0.26, 0.31])
+
+            bad_report = validator.validate_input(
+                bad,
+                transport_p1_fail=5.0e-2,
+            )
+            good_report = validator.validate_input(
+                good,
+                transport_p1_fail=5.0e-2,
+            )
+
+        self.assertFalse(bad_report.ok)
+        self.assertEqual(bad_report.transport_p1_checked, 1)
+        self.assertGreater(bad_report.transport_p1_max_rel or 0.0, 5.0e-2)
+        self.assertTrue(
+            any("transport_total/P1" in issue for issue in bad_report.issues)
+        )
+        self.assertTrue(good_report.ok, good_report.issues)
+        self.assertEqual(good_report.transport_p1_checked, 1)
+        self.assertIsNotNone(good_report.transport_p1_max_rel)
+        self.assertLess(float(good_report.transport_p1_max_rel), 1.0e-12)
 
     def test_missing_volume_is_reported_before_it_becomes_default_one(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -756,6 +928,17 @@ def append_openmc_volume_flux(
             std_dataset.attrs["group_order"] = group_order
             std_dataset.attrs["mixture_names"] = np.asarray(mixture_names, dtype="S")
             std_dataset.attrs["source_group_order"] = "unit_test"
+
+
+def append_production_metadata(path: Path) -> None:
+    with h5py.File(path, "a") as h5:
+        h5.attrs["domain_mode"] = "assembly"
+        h5.create_dataset("mixture_names", data=np.asarray(["fuel"], dtype="S"))
+        fuel = h5["mixtures/fuel"]
+        fuel.attrs["source_domain_index"] = 1
+        fuel.attrs["source_domain_id"] = 101
+        fuel.attrs["source_domain_type"] = "cell"
+        fuel.create_dataset("kappa_fission", data=np.array([3.2e-12, 3.1e-12]))
 
 
 if __name__ == "__main__":

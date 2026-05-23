@@ -20,6 +20,7 @@ class InputReport:
     legendre_order: int | None = None
     energy_group_structure: str | None = None
     energy_bounds_sha256: str | None = None
+    energy_bounds_local_count: int = 0
     domain_mode: str | None = None
     mixtures: int = 0
     declared_mixture_order: bool = False
@@ -55,6 +56,19 @@ class InputReport:
     scatter_row_balance_max_abs: float | None = None
     scatter_row_balance_max_rel: float | None = None
     scatter_row_balance_worst: str | None = None
+    chi_checked: int = 0
+    chi_sum_max_abs_error: float | None = None
+    chi_sum_worst: str | None = None
+    nu_ratio_checked_bins: int = 0
+    nu_ratio_min: float | None = None
+    nu_ratio_max: float | None = None
+    nu_ratio_worst: str | None = None
+    adf_face_consistency_checked: bool = False
+    adf_face_consistency_errors: int = 0
+    transport_p1_checked: int = 0
+    transport_p1_max_abs: float | None = None
+    transport_p1_max_rel: float | None = None
+    transport_p1_worst: str | None = None
     uncertainty_checked: bool = False
     uncertainty_warn_threshold: float | None = None
     uncertainty_fail_threshold: float | None = None
@@ -160,6 +174,7 @@ def print_report(report: InputReport) -> None:
                 f"max_abs={(report.scatter_row_balance_max_abs or 0.0):.6e} "
                 f"worst={report.scatter_row_balance_worst}"
             )
+    print(_physics_checks_line(report))
     print(_uncertainty_line(report))
     if report.adf_mixtures:
         print(
@@ -206,6 +221,7 @@ def _report_payload(report: InputReport) -> dict[str, object]:
         "legendre_order": report.legendre_order,
         "energy_group_structure": report.energy_group_structure,
         "energy_bounds_sha256": report.energy_bounds_sha256,
+        "energy_bounds_local_count": report.energy_bounds_local_count,
         "domain_mode": report.domain_mode,
         "mixtures": report.mixtures,
         "declared_mixture_order": report.declared_mixture_order,
@@ -239,6 +255,21 @@ def _report_payload(report: InputReport) -> dict[str, object]:
             "max_abs": report.scatter_row_balance_max_abs,
             "max_rel": report.scatter_row_balance_max_rel,
             "worst": report.scatter_row_balance_worst,
+        },
+        "physics_checks": {
+            "chi_checked": report.chi_checked,
+            "chi_sum_max_abs_error": report.chi_sum_max_abs_error,
+            "chi_sum_worst": report.chi_sum_worst,
+            "nu_ratio_checked_bins": report.nu_ratio_checked_bins,
+            "nu_ratio_min": report.nu_ratio_min,
+            "nu_ratio_max": report.nu_ratio_max,
+            "nu_ratio_worst": report.nu_ratio_worst,
+            "adf_face_consistency_checked": report.adf_face_consistency_checked,
+            "adf_face_consistency_errors": report.adf_face_consistency_errors,
+            "transport_p1_checked": report.transport_p1_checked,
+            "transport_p1_max_abs": report.transport_p1_max_abs,
+            "transport_p1_max_rel": report.transport_p1_max_rel,
+            "transport_p1_worst": report.transport_p1_worst,
         },
         "uncertainty": {
             "checked": report.uncertainty_checked,
@@ -292,6 +323,24 @@ def _uncertainty_line(report: InputReport) -> str:
         f"worst={report.uncertainty_worst}"
         f"{_uncertainty_production_suffix(report)}"
     )
+
+
+def _physics_checks_line(report: InputReport) -> str:
+    return (
+        "        physics_checks="
+        f"local_energy_bounds={report.energy_bounds_local_count} "
+        f"chi={report.chi_checked} "
+        f"chi_sum_error={_format_optional(report.chi_sum_max_abs_error)} "
+        f"nu_bins={report.nu_ratio_checked_bins} "
+        f"nu_min={_format_optional(report.nu_ratio_min)} "
+        f"nu_max={_format_optional(report.nu_ratio_max)} "
+        f"transport_p1={report.transport_p1_checked} "
+        f"transport_p1_rel={_format_optional(report.transport_p1_max_rel)}"
+    )
+
+
+def _format_optional(value: float | None) -> str:
+    return "none" if value is None else f"{value:.6e}"
 
 
 def _openmc_volume_flux_line(report: InputReport) -> str:

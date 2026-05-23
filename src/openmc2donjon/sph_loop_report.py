@@ -64,7 +64,11 @@ def print_report(report: SphLoopReport) -> None:
         f"groups={report.flux_map_preflight.energy_groups} "
         f"mesh={report.flux_map_preflight.mgxs_energy_mesh_id or 'unknown'} "
         f"volume_defaulted={report.flux_map_preflight.mgxs_volume_defaulted} "
-        f"h_factor_missing={report.flux_map_preflight.mgxs_h_factor_missing}"
+        f"h_factor_missing={report.flux_map_preflight.mgxs_h_factor_missing} "
+        "scatter_row_balance="
+        f"{format_optional_float(report.flux_map_preflight.mgxs_scatter_row_balance_max_rel)} "
+        "chi_error="
+        f"{format_optional_float(report.flux_map_preflight.mgxs_chi_sum_max_abs_error)}"
     )
     if report.bundle_manifest is not None:
         print(f"  bundle_manifest: {report.bundle_manifest}")

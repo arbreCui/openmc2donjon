@@ -91,6 +91,27 @@ def _run_preflight(plan: SphLoopPlan) -> SphLoopFluxMapPreflightReport:
             plan.normalized_acceptance.get("require_known_mesh", False)
         ),
         mesh_tolerance=float(plan.normalized_acceptance.get("mesh_tolerance", 1.0e-6)),
+        require_mgxs_energy_bounds_consistency=bool(
+            plan.normalized_acceptance.get(
+                "require_mgxs_energy_bounds_consistency",
+                False,
+            )
+        ),
+        max_mgxs_scatter_row_balance_rel=plan.normalized_acceptance.get(
+            "max_mgxs_scatter_row_balance_rel"
+        ),
+        max_mgxs_chi_sum_error=plan.normalized_acceptance.get(
+            "max_mgxs_chi_sum_error"
+        ),
+        require_mgxs_adf_face_consistency=bool(
+            plan.normalized_acceptance.get(
+                "require_mgxs_adf_face_consistency",
+                False,
+            )
+        ),
+        max_mgxs_transport_p1_rel=plan.normalized_acceptance.get(
+            "max_mgxs_transport_p1_rel"
+        ),
     )
     if not preflight.passed:
         raise ValueError(format_preflight_failure(preflight))

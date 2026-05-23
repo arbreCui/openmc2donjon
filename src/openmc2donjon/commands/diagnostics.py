@@ -84,7 +84,7 @@ def build_check_parser() -> argparse.ArgumentParser:
         help=(
             "enable production preflight defaults: volume, transport_total, "
             "fissionable H-FACTOR, declared mixture order, domain provenance, "
-            "row-balance warnings, and production uncertainty gate"
+            "physics consistency gates, and production uncertainty gate"
         ),
     )
     parser.add_argument(
@@ -177,6 +177,33 @@ def build_check_parser() -> argparse.ArgumentParser:
         help=(
             "fail if max |total - absorption - sum(P0 scatter out)| / |total| "
             "exceeds REL"
+        ),
+    )
+    parser.add_argument(
+        "--require-energy-bounds-consistency",
+        action="store_true",
+        help="require local mixture/state energy_bounds to match global /energy_bounds",
+    )
+    parser.add_argument(
+        "--chi-sum-tolerance",
+        type=float,
+        default=None,
+        metavar="ABS",
+        help="fail if fissionable chi normalization error exceeds ABS",
+    )
+    parser.add_argument(
+        "--require-adf-face-consistency",
+        action="store_true",
+        help="require all ADF-bearing calculations to share face names",
+    )
+    parser.add_argument(
+        "--transport-p1-fail",
+        type=float,
+        default=None,
+        metavar="REL",
+        help=(
+            "fail if explicit transport_total differs from total minus P1 "
+            "scatter out by more than REL"
         ),
     )
     parser.add_argument(
@@ -472,6 +499,10 @@ def check_handler(args: argparse.Namespace) -> int:
         expected_energy_bounds_sha256=args.expected_energy_bounds_sha256,
         scatter_row_balance_warn=args.scatter_row_balance_warn,
         scatter_row_balance_fail=args.scatter_row_balance_fail,
+        require_energy_bounds_consistency=args.require_energy_bounds_consistency,
+        chi_sum_tolerance=args.chi_sum_tolerance,
+        require_adf_face_consistency=args.require_adf_face_consistency,
+        transport_p1_fail=args.transport_p1_fail,
         uncertainty_warn=None if args.no_uncertainty_check else args.uncertainty_warn,
         uncertainty_fail=None if args.no_uncertainty_check else args.uncertainty_fail,
         uncertainty_production_fail=(

@@ -263,6 +263,19 @@ def _print_dry_run_checks(args: argparse.Namespace) -> None:
             require_volume=args.require_volume,
             require_h_factor=args.require_h_factor,
             scatter_row_balance_warn=args.scatter_row_balance_warn,
+            scatter_row_balance_fail=args.scatter_row_balance_fail,
+            require_energy_bounds_consistency=getattr(
+                args,
+                "require_energy_bounds_consistency",
+                False,
+            ),
+            chi_sum_tolerance=getattr(args, "chi_sum_tolerance", None),
+            require_adf_face_consistency=getattr(
+                args,
+                "require_adf_face_consistency",
+                False,
+            ),
+            transport_p1_fail=getattr(args, "transport_p1_fail", None),
             uncertainty_warn=None if args.no_uncertainty_check else args.uncertainty_warn,
             uncertainty_production_fail=(
                 None if args.no_uncertainty_check else args.uncertainty_production_fail
@@ -310,7 +323,23 @@ def _print_dry_run_checks(args: argparse.Namespace) -> None:
         )
         print(
             "    scatter_row_balance_fail: "
-            f"{_render_optional_value(args.scatter_row_balance_fail)}"
+            f"{_render_optional_value(settings['scatter_row_balance_fail'])}"
+        )
+        print(
+            "    require_energy_bounds_consistency: "
+            f"{_yes_no(settings['require_energy_bounds_consistency'])}"
+        )
+        print(
+            "    chi_sum_tolerance: "
+            f"{_render_optional_value(settings['chi_sum_tolerance'])}"
+        )
+        print(
+            "    require_adf_face_consistency: "
+            f"{_yes_no(settings['require_adf_face_consistency'])}"
+        )
+        print(
+            "    transport_p1_fail: "
+            f"{_render_optional_value(settings['transport_p1_fail'])}"
         )
         if args.no_uncertainty_check:
             print("    uncertainty_check: disabled")
@@ -457,6 +486,10 @@ def _run_pipeline_preflight(
         expected_energy_bounds_sha256=args.expected_energy_bounds_sha256,
         scatter_row_balance_warn=args.scatter_row_balance_warn,
         scatter_row_balance_fail=args.scatter_row_balance_fail,
+        require_energy_bounds_consistency=args.require_energy_bounds_consistency,
+        chi_sum_tolerance=args.chi_sum_tolerance,
+        require_adf_face_consistency=args.require_adf_face_consistency,
+        transport_p1_fail=args.transport_p1_fail,
         uncertainty_warn=None if args.no_uncertainty_check else args.uncertainty_warn,
         uncertainty_fail=None if args.no_uncertainty_check else args.uncertainty_fail,
         uncertainty_production_fail=(

@@ -354,7 +354,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "run post-export preflight with production defaults: volume, "
             "transport_total, fissionable H-FACTOR, domain provenance, "
-            "row-balance warnings, and production uncertainty gate"
+            "physics consistency gates, and production uncertainty gate"
         ),
     )
     parser.add_argument(
@@ -436,6 +436,36 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "with --check, fail if max |total - absorption - sum(P0 scatter out)| "
             "/ |total| exceeds REL"
+        ),
+    )
+    parser.add_argument(
+        "--require-energy-bounds-consistency",
+        action="store_true",
+        help=(
+            "with --check, require local mixture/state energy_bounds datasets "
+            "to match global /energy_bounds"
+        ),
+    )
+    parser.add_argument(
+        "--chi-sum-tolerance",
+        type=float,
+        default=None,
+        metavar="ABS",
+        help="with --check, fail if fissionable chi sum error exceeds ABS",
+    )
+    parser.add_argument(
+        "--require-adf-face-consistency",
+        action="store_true",
+        help="with --check, require all ADF-bearing calculations to share faces",
+    )
+    parser.add_argument(
+        "--transport-p1-fail",
+        type=float,
+        default=None,
+        metavar="REL",
+        help=(
+            "with --check, fail if explicit transport_total differs from "
+            "total minus P1 scatter out by more than REL"
         ),
     )
     parser.add_argument(

@@ -264,8 +264,41 @@ def _format_preflight_audit_lines(
         f"present={report.mgxs_energy_bounds_present} "
         f"order={report.mgxs_energy_bounds_order or 'missing'} "
         f"mesh={mesh} sha256={digest} "
-        f"errors={report.mgxs_energy_bounds_error_count}"
+        f"errors={report.mgxs_energy_bounds_error_count} "
+        f"local={report.mgxs_energy_bounds_local_count} "
+        f"local_errors={report.mgxs_energy_bounds_consistency_error_count}"
     )
+    lines.append(
+        "  mgxs_physics="
+        "scatter_row_balance="
+        f"{format_optional_float(report.mgxs_scatter_row_balance_max_rel)} "
+        "chi_sum_error="
+        f"{format_optional_float(report.mgxs_chi_sum_max_abs_error)} "
+        "transport_p1="
+        f"{format_optional_float(report.mgxs_transport_p1_max_rel)} "
+        f"adf_faces={','.join(report.mgxs_adf_faces) or 'none'}"
+    )
+    if report.mgxs_nu_ratio_checked_bins:
+        lines.append(
+            "  mgxs_nu_ratio="
+            f"bins={report.mgxs_nu_ratio_checked_bins} "
+            f"min={format_optional_float(report.mgxs_nu_ratio_min)} "
+            f"max={format_optional_float(report.mgxs_nu_ratio_max)} "
+            f"worst={report.mgxs_nu_ratio_worst or ''}"
+        )
+    if report.mgxs_scatter_row_balance_worst:
+        lines.append(
+            "  mgxs_scatter_row_balance_worst="
+            f"{report.mgxs_scatter_row_balance_worst}"
+        )
+    if report.mgxs_chi_sum_worst:
+        lines.append(
+            f"  mgxs_chi_sum_worst={report.mgxs_chi_sum_worst}"
+        )
+    if report.mgxs_transport_p1_worst:
+        lines.append(
+            f"  mgxs_transport_p1_worst={report.mgxs_transport_p1_worst}"
+        )
     lines.append(
         "  mgxs_volume="
         f"{report.mgxs_volume_attributes}/{report.mgxs_calculations} "

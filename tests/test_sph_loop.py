@@ -576,6 +576,11 @@ class SphLoopTests(unittest.TestCase):
                     "require_mgxs_explicit_volumes",
                     "require_mgxs_h_factor",
                     "require_mgxs_energy_bounds",
+                    "require_mgxs_energy_bounds_consistency",
+                    "max_mgxs_scatter_row_balance_rel",
+                    "max_mgxs_chi_sum_error",
+                    "require_mgxs_adf_face_consistency",
+                    "max_mgxs_transport_p1_rel",
                     "max_sph_rel_change",
                     "max_flux_ratio_residual",
                     "max_final_to_initial_flux_residual_ratio",
@@ -584,6 +589,18 @@ class SphLoopTests(unittest.TestCase):
                 },
             )
             self.assertEqual(_acceptance_actual(payload, "max_final_clipped_count"), 0.0)
+            self.assertLess(
+                _acceptance_actual(payload, "max_mgxs_scatter_row_balance_rel"),
+                1.0e-12,
+            )
+            self.assertEqual(
+                _acceptance_actual(payload, "max_mgxs_chi_sum_error"),
+                0.0,
+            )
+            self.assertEqual(
+                _acceptance_actual(payload, "max_mgxs_transport_p1_rel"),
+                0.0,
+            )
             self.assertEqual(
                 _acceptance_actual(payload, "max_final_to_initial_flux_residual_ratio"),
                 0.0,
@@ -1417,7 +1434,7 @@ def _write_mixture(
     group.attrs["fissionable"] = bool(fissionable)
     if with_volume:
         group.attrs["volume"] = 10.0
-    group.create_dataset("total", data=np.array([0.6, 0.8]))
+    group.create_dataset("total", data=np.array([0.5, 0.6]))
     group.create_dataset("transport_total", data=np.array([0.5, 0.7]))
     group.create_dataset("absorption", data=np.array([0.1, 0.2]))
     group.create_dataset("fission", data=np.array([0.01, 0.02]) if fissionable else np.zeros(2))

@@ -22,6 +22,28 @@ class FluxMapPreflightLike(Protocol):
     mgxs_energy_mesh_id: str | None
     mgxs_energy_mesh_name: str | None
     mgxs_energy_mesh_tolerance: float
+    mgxs_energy_bounds_local_count: int
+    mgxs_energy_bounds_consistency_error_count: int
+    mgxs_scatter_row_balance_checked: int
+    mgxs_scatter_row_balance_max_rel: float | None
+    mgxs_scatter_row_balance_max_abs: float | None
+    mgxs_scatter_row_balance_worst: str | None
+    mgxs_chi_checked: int
+    mgxs_chi_sum_max_abs_error: float | None
+    mgxs_chi_sum_worst: str | None
+    mgxs_chi_error_count: int
+    mgxs_nu_ratio_checked_bins: int
+    mgxs_nu_ratio_min: float | None
+    mgxs_nu_ratio_max: float | None
+    mgxs_nu_ratio_worst: str | None
+    mgxs_adf_calculations: int
+    mgxs_adf_faces: tuple[str, ...]
+    mgxs_adf_face_error_count: int
+    mgxs_transport_p1_checked: int
+    mgxs_transport_p1_max_rel: float | None
+    mgxs_transport_p1_max_abs: float | None
+    mgxs_transport_p1_worst: str | None
+    mgxs_transport_p1_error_count: int
     mgxs_declared_mixture_order: bool
     mgxs_source_domain_indices: tuple[int | None, ...]
     mgxs_source_domain_order_errors: tuple[str, ...]
@@ -220,6 +242,98 @@ def build_production_audit_payload(
             ),
             "mgxs_energy_mesh_tolerance": float(
                 getattr(flux_map_preflight, "mgxs_energy_mesh_tolerance", 0.0)
+            ),
+            "mgxs_energy_bounds_local_count": int(
+                getattr(flux_map_preflight, "mgxs_energy_bounds_local_count", 0)
+            ),
+            "mgxs_energy_bounds_consistency_error_count": int(
+                getattr(
+                    flux_map_preflight,
+                    "mgxs_energy_bounds_consistency_error_count",
+                    0,
+                )
+            ),
+            "mgxs_scatter_row_balance_checked": int(
+                getattr(flux_map_preflight, "mgxs_scatter_row_balance_checked", 0)
+            ),
+            "mgxs_scatter_row_balance_max_rel": getattr(
+                flux_map_preflight,
+                "mgxs_scatter_row_balance_max_rel",
+                None,
+            ),
+            "mgxs_scatter_row_balance_max_abs": getattr(
+                flux_map_preflight,
+                "mgxs_scatter_row_balance_max_abs",
+                None,
+            ),
+            "mgxs_scatter_row_balance_worst": getattr(
+                flux_map_preflight,
+                "mgxs_scatter_row_balance_worst",
+                None,
+            ),
+            "mgxs_chi_checked": int(
+                getattr(flux_map_preflight, "mgxs_chi_checked", 0)
+            ),
+            "mgxs_chi_sum_max_abs_error": getattr(
+                flux_map_preflight,
+                "mgxs_chi_sum_max_abs_error",
+                None,
+            ),
+            "mgxs_chi_sum_worst": getattr(
+                flux_map_preflight,
+                "mgxs_chi_sum_worst",
+                None,
+            ),
+            "mgxs_chi_error_count": int(
+                getattr(flux_map_preflight, "mgxs_chi_error_count", 0)
+            ),
+            "mgxs_nu_ratio_checked_bins": int(
+                getattr(flux_map_preflight, "mgxs_nu_ratio_checked_bins", 0)
+            ),
+            "mgxs_nu_ratio_min": getattr(
+                flux_map_preflight,
+                "mgxs_nu_ratio_min",
+                None,
+            ),
+            "mgxs_nu_ratio_max": getattr(
+                flux_map_preflight,
+                "mgxs_nu_ratio_max",
+                None,
+            ),
+            "mgxs_nu_ratio_worst": getattr(
+                flux_map_preflight,
+                "mgxs_nu_ratio_worst",
+                None,
+            ),
+            "mgxs_adf_calculations": int(
+                getattr(flux_map_preflight, "mgxs_adf_calculations", 0)
+            ),
+            "mgxs_adf_faces": list(
+                getattr(flux_map_preflight, "mgxs_adf_faces", ())
+            ),
+            "mgxs_adf_face_error_count": int(
+                getattr(flux_map_preflight, "mgxs_adf_face_error_count", 0)
+            ),
+            "mgxs_transport_p1_checked": int(
+                getattr(flux_map_preflight, "mgxs_transport_p1_checked", 0)
+            ),
+            "mgxs_transport_p1_max_rel": getattr(
+                flux_map_preflight,
+                "mgxs_transport_p1_max_rel",
+                None,
+            ),
+            "mgxs_transport_p1_max_abs": getattr(
+                flux_map_preflight,
+                "mgxs_transport_p1_max_abs",
+                None,
+            ),
+            "mgxs_transport_p1_worst": getattr(
+                flux_map_preflight,
+                "mgxs_transport_p1_worst",
+                None,
+            ),
+            "mgxs_transport_p1_error_count": int(
+                getattr(flux_map_preflight, "mgxs_transport_p1_error_count", 0)
             ),
             "mgxs_volume_attributes": int(
                 getattr(flux_map_preflight, "mgxs_volume_attributes", 0)

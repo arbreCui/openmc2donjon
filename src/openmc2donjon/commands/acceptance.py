@@ -84,6 +84,37 @@ def add_sph_loop_acceptance_args(parser: argparse.ArgumentParser) -> None:
         help="production acceptance: relative tolerance for known energy mesh matching",
     )
     parser.add_argument(
+        "--acceptance-require-mgxs-energy-bounds-consistency",
+        action="store_true",
+        help=(
+            "production acceptance: require local mixture/state energy_bounds "
+            "to match the global /energy_bounds dataset"
+        ),
+    )
+    parser.add_argument(
+        "--acceptance-max-mgxs-scatter-row-balance-rel",
+        type=float,
+        default=None,
+        help="production acceptance: max relative MGXS scatter row-balance residual",
+    )
+    parser.add_argument(
+        "--acceptance-max-mgxs-chi-sum-error",
+        type=float,
+        default=None,
+        help="production acceptance: max absolute fissionable chi normalization error",
+    )
+    parser.add_argument(
+        "--acceptance-require-mgxs-adf-face-consistency",
+        action="store_true",
+        help="production acceptance: require all ADF-bearing calculations to share faces",
+    )
+    parser.add_argument(
+        "--acceptance-max-mgxs-transport-p1-rel",
+        type=float,
+        default=None,
+        help="production acceptance: max relative transport_total/P1 residual",
+    )
+    parser.add_argument(
         "--acceptance-max-sph-rel-change",
         type=float,
         default=None,
@@ -159,6 +190,11 @@ def sph_loop_acceptance_from_args(
             args.acceptance_max_mgxs_missing_h_factor_count
         ),
         "mesh_tolerance": args.acceptance_mesh_tolerance,
+        "max_mgxs_scatter_row_balance_rel": (
+            args.acceptance_max_mgxs_scatter_row_balance_rel
+        ),
+        "max_mgxs_chi_sum_error": args.acceptance_max_mgxs_chi_sum_error,
+        "max_mgxs_transport_p1_rel": args.acceptance_max_mgxs_transport_p1_rel,
         "max_sph_rel_change": args.acceptance_max_sph_rel_change,
         "max_flux_ratio_residual": args.acceptance_max_flux_ratio_residual,
         "max_final_to_initial_flux_residual_ratio": (
@@ -186,6 +222,10 @@ def sph_loop_acceptance_from_args(
         acceptance["require_mgxs_energy_bounds"] = True
     if args.acceptance_require_known_mesh:
         acceptance["require_known_mesh"] = True
+    if args.acceptance_require_mgxs_energy_bounds_consistency:
+        acceptance["require_mgxs_energy_bounds_consistency"] = True
+    if args.acceptance_require_mgxs_adf_face_consistency:
+        acceptance["require_mgxs_adf_face_consistency"] = True
     if args.fail_on_acceptance_violation:
         acceptance["fail_on_violation"] = True
     return acceptance or None

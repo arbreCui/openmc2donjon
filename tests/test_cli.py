@@ -87,6 +87,8 @@ class CliTests(unittest.TestCase):
                     "kappa_fission",
                     data=np.array([3.2e-12, 3.1e-12]),
                 )
+                h5["mixtures/fuel/total"][:] = np.array([0.29, 0.38])
+                h5["mixtures/fuel/transport_total"][:] = np.array([0.29, 0.38])
 
             with contextlib.redirect_stdout(io.StringIO()):
                 present_rc = cli_main(
@@ -105,8 +107,12 @@ class CliTests(unittest.TestCase):
         self.assertIn("H-FACTOR/kappa_fission", stream.getvalue())
         self.assertEqual(present_rc, 0)
         self.assertEqual(
-            payload["inputs"][0]["scatter_row_balance"]["warn_threshold"],
+            payload["inputs"][0]["scatter_row_balance"]["fail_threshold"],
             5.0e-2,
+        )
+        self.assertEqual(
+            payload["inputs"][0]["physics_checks"]["chi_sum_max_abs_error"],
+            0.0,
         )
         self.assertEqual(
             payload["inputs"][0]["uncertainty"]["production_fail_threshold"],
