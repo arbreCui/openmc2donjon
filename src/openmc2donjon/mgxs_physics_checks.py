@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Iterator
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -59,72 +60,59 @@ class MgxsPhysicsCheckReport:
 @dataclass
 class _MutablePhysicsReport:
     energy_bounds_local_count: int = 0
-    energy_bounds_consistency_errors: list[str] | None = None
+    energy_bounds_consistency_errors: list[str] = field(default_factory=list)
     scatter_row_balance_checked: int = 0
     scatter_row_balance_max_rel: float | None = None
     scatter_row_balance_max_abs: float | None = None
     scatter_row_balance_worst: str | None = None
-    scatter_row_balance_warnings: list[str] | None = None
-    scatter_row_balance_errors: list[str] | None = None
+    scatter_row_balance_warnings: list[str] = field(default_factory=list)
+    scatter_row_balance_errors: list[str] = field(default_factory=list)
     chi_checked: int = 0
     chi_sum_max_abs_error: float | None = None
     chi_sum_worst: str | None = None
-    chi_errors: list[str] | None = None
+    chi_errors: list[str] = field(default_factory=list)
     nu_ratio_checked_bins: int = 0
     nu_ratio_min: float | None = None
     nu_ratio_max: float | None = None
     nu_ratio_worst: str | None = None
-    nu_ratio_warnings: list[str] | None = None
+    nu_ratio_warnings: list[str] = field(default_factory=list)
     adf_calculations: int = 0
     adf_faces: tuple[str, ...] = ()
-    adf_face_errors: list[str] | None = None
+    adf_face_errors: list[str] = field(default_factory=list)
     transport_p1_checked: int = 0
     transport_p1_max_rel: float | None = None
     transport_p1_max_abs: float | None = None
     transport_p1_worst: str | None = None
-    transport_p1_errors: list[str] | None = None
-
-    def __post_init__(self) -> None:
-        self.energy_bounds_consistency_errors = []
-        self.scatter_row_balance_warnings = []
-        self.scatter_row_balance_errors = []
-        self.chi_errors = []
-        self.nu_ratio_warnings = []
-        self.adf_face_errors = []
-        self.transport_p1_errors = []
+    transport_p1_errors: list[str] = field(default_factory=list)
 
     def freeze(self) -> MgxsPhysicsCheckReport:
         return MgxsPhysicsCheckReport(
             energy_bounds_local_count=self.energy_bounds_local_count,
-            energy_bounds_consistency_errors=tuple(
-                self.energy_bounds_consistency_errors or ()
-            ),
+            energy_bounds_consistency_errors=tuple(self.energy_bounds_consistency_errors),
             scatter_row_balance_checked=self.scatter_row_balance_checked,
             scatter_row_balance_max_rel=self.scatter_row_balance_max_rel,
             scatter_row_balance_max_abs=self.scatter_row_balance_max_abs,
             scatter_row_balance_worst=self.scatter_row_balance_worst,
-            scatter_row_balance_warnings=tuple(
-                self.scatter_row_balance_warnings or ()
-            ),
-            scatter_row_balance_errors=tuple(self.scatter_row_balance_errors or ()),
+            scatter_row_balance_warnings=tuple(self.scatter_row_balance_warnings),
+            scatter_row_balance_errors=tuple(self.scatter_row_balance_errors),
             chi_checked=self.chi_checked,
             chi_sum_max_abs_error=self.chi_sum_max_abs_error,
             chi_sum_worst=self.chi_sum_worst,
-            chi_errors=tuple(self.chi_errors or ()),
+            chi_errors=tuple(self.chi_errors),
             nu_ratio_checked_bins=self.nu_ratio_checked_bins,
             nu_ratio_min=self.nu_ratio_min,
             nu_ratio_max=self.nu_ratio_max,
             nu_ratio_worst=self.nu_ratio_worst,
-            nu_ratio_warning_count=len(self.nu_ratio_warnings or ()),
-            nu_ratio_warnings=tuple(self.nu_ratio_warnings or ()),
+            nu_ratio_warning_count=len(self.nu_ratio_warnings),
+            nu_ratio_warnings=tuple(self.nu_ratio_warnings),
             adf_calculations=self.adf_calculations,
             adf_faces=self.adf_faces,
-            adf_face_errors=tuple(self.adf_face_errors or ()),
+            adf_face_errors=tuple(self.adf_face_errors),
             transport_p1_checked=self.transport_p1_checked,
             transport_p1_max_rel=self.transport_p1_max_rel,
             transport_p1_max_abs=self.transport_p1_max_abs,
             transport_p1_worst=self.transport_p1_worst,
-            transport_p1_errors=tuple(self.transport_p1_errors or ()),
+            transport_p1_errors=tuple(self.transport_p1_errors),
         )
 
 
@@ -481,15 +469,15 @@ def scatter_moment_matrix(
     moment_first = values.shape == (expected_moments, ngroups, ngroups)
     moment_last = values.shape == (ngroups, ngroups, expected_moments)
     if normalized in MOMENT_FIRST_SCATTER_AXES and moment_first:
-        return values[moment]
+        return np.asarray(values[moment])
     if normalized in MOMENT_LAST_SCATTER_AXES and moment_last:
-        return values[:, :, moment]
+        return np.asarray(values[:, :, moment])
     if axes is not None:
         return None
     if moment_first and not moment_last:
-        return values[moment]
+        return np.asarray(values[moment])
     if moment_last and not moment_first:
-        return values[:, :, moment]
+        return np.asarray(values[:, :, moment])
     return None
 
 
@@ -513,7 +501,9 @@ def _finalize_adf_faces(
             return
 
 
-def _iter_calculations(h5: Any, mixture_names: tuple[str, ...]):
+def _iter_calculations(
+    h5: Any, mixture_names: tuple[str, ...]
+) -> Iterator[tuple[str, Any, Any]]:
     mixtures = h5["mixtures"]
     for mixture_name in mixture_names:
         mixture = mixtures[mixture_name]

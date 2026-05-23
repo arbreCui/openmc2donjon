@@ -130,7 +130,7 @@ def load_energy_mesh(mesh_id: str) -> EnergyMesh:
 def energy_mesh_catalog() -> tuple[EnergyMesh, ...]:
     """Return bundled energy meshes from the package data catalog."""
 
-    root = resources.files("openmc2donjon").joinpath("data", "energy_meshes")
+    root = resources.files("openmc2donjon").joinpath("data").joinpath("energy_meshes")
     index = json.loads(root.joinpath("meshes.json").read_text(encoding="utf-8"))
     meshes: list[EnergyMesh] = []
     for item in index["meshes"]:

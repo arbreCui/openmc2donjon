@@ -74,10 +74,36 @@ python_version = "3.10"
 warn_unused_configs = true
 show_error_codes = true
 # Most of the codebase is dynamic (HDF5 attrs, argparse Namespaces, subprocess
-# payloads). Per-module strict gating is introduced in a follow-up commit
-# alongside the modules that actually pass; the base config stays lenient.
+# payloads). The base config stays lenient and per-module strict gating is
+# applied via overrides below; `warn_redundant_casts` is a mypy global-only
+# knob so it lives at the top level rather than inside each override.
 follow_imports = "silent"
+warn_redundant_casts = true
 
 [[tool.mypy.overrides]]
 module = ["h5py", "h5py.*"]
 ignore_missing_imports = true
+
+# Strict gating for pure-logic modules. Expand the list as other modules
+# become clean; `no_implicit_reexport` is intentionally left off because
+# the package relies on `from .x import y` re-export shorthand in several
+# places (re-exports are marked with `# noqa: F401` for ruff).
+[[tool.mypy.overrides]]
+module = [
+  "openmc2donjon.constants",
+  "openmc2donjon.scatter",
+  "openmc2donjon.energy_groups",
+  "openmc2donjon.mgxs_physics_checks",
+]
+disallow_any_generics = true
+disallow_subclassing_any = true
+disallow_untyped_calls = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_unused_ignores = true
+warn_return_any = true
+strict_equality = true
+extra_checks = true
