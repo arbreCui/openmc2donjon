@@ -222,7 +222,7 @@ export default function FileBrowserModal({
           </button>
         </div>
 
-        <div className="px-4 py-2 border-b border-[var(--edge)] flex items-center gap-2 flex-wrap">
+        <div className="px-4 py-2 border-b border-[var(--edge)] flex items-baseline gap-2 flex-wrap">
           <button
             type="button"
             onClick={goUp}
@@ -234,14 +234,11 @@ export default function FileBrowserModal({
           >
             ↑ parent
           </button>
-          <span
-            className="font-mono text-[12px] text-[var(--fg-2)] break-all"
-            aria-live="polite"
-          >
-            {state.kind === "ok"
-              ? state.data.path
-              : state.path}
-          </span>
+          <PathBreadcrumb
+            path={state.kind === "ok" ? state.data.path : state.path}
+            pending={state.kind !== "ok"}
+            onPick={setCurrentPath}
+          />
         </div>
 
         <div className="flex-1 overflow-y-auto px-1 py-1">
@@ -365,6 +362,112 @@ function EntryRow({
       </button>
     </li>
   );
+}
+
+function PathBreadcrumb({
+  path,
+  pending,
+  onPick,
+}: {
+  path: string;
+  pending: boolean;
+  onPick: (path: string) => void;
+}) {
+  const crumbs = pathCrumbs(path);
+  return (
+    // ``aria-live="polite"`` lives on the nav so screen readers
+    // announce the new location when navigation lands. ``aria-current``
+    // on the final crumb tells them which one is "here now".
+    <nav
+      aria-label="Path"
+      aria-live="polite"
+      className={
+        "flex flex-wrap items-baseline gap-x-0.5 gap-y-0.5 font-mono text-[12px] min-w-0 " +
+        (pending ? "text-[var(--fg-3)]" : "text-[var(--fg-2)]")
+      }
+    >
+      {crumbs.map((crumb, index) => {
+        const isLast = index === crumbs.length - 1;
+        return (
+          <span
+            key={crumb.path}
+            className="inline-flex items-baseline gap-0.5"
+          >
+            {isLast ? (
+              // Non-interactive ``<span>`` rather than a disabled
+              // button: tab order stays clean and screen readers don't
+              // announce a useless "button, disabled" for the current
+              // location.
+              <span
+                aria-current="location"
+                className="px-1 text-[var(--fg-0)] font-semibold break-all"
+              >
+                {crumb.label}
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onPick(crumb.path)}
+                className="px-1 rounded text-[var(--accent-2)] hover:bg-white/[0.05] break-all"
+                title={crumb.path}
+              >
+                {crumb.label}
+              </button>
+            )}
+            {!isLast ? (
+              <span aria-hidden className="text-[var(--fg-3)]">
+                /
+              </span>
+            ) : null}
+          </span>
+        );
+      })}
+    </nav>
+  );
+}
+
+interface Crumb {
+  /** What to render in the button. */
+  label: string;
+  /** What to pass to ``setCurrentPath`` when this crumb is picked. */
+  path: string;
+}
+
+/**
+ * Split an absolute path into clickable breadcrumb segments.
+ *
+ * Mock-mode shortcut: ``/mock/home/...`` collapses the ``/mock/home``
+ * prefix into a single ``home`` crumb so the breadcrumb doesn't lead
+ * with the mock-tree scaffolding; the click target still navigates to
+ * the real ``/mock/home`` path the backend expects.
+ */
+function pathCrumbs(path: string): Crumb[] {
+  if (path === "/mock/home" || path.startsWith("/mock/home/")) {
+    const crumbs: Crumb[] = [{ label: "home", path: "/mock/home" }];
+    const tail =
+      path === "/mock/home" ? "" : path.slice("/mock/home/".length);
+    if (tail) {
+      let cur = "/mock/home";
+      for (const part of tail.split("/").filter(Boolean)) {
+        cur = `${cur}/${part}`;
+        crumbs.push({ label: part, path: cur });
+      }
+    }
+    return crumbs;
+  }
+  if (path.startsWith("/")) {
+    const crumbs: Crumb[] = [{ label: "/", path: "/" }];
+    let cur = "";
+    for (const part of path.split("/").filter(Boolean)) {
+      cur = `${cur}/${part}`;
+      crumbs.push({ label: part, path: cur });
+    }
+    return crumbs;
+  }
+  // Non-absolute fallback. The backend resolves ``~`` and relative
+  // paths before sending them back, so in practice we shouldn't hit
+  // this branch.
+  return [{ label: path || "/", path }];
 }
 
 function joinPath(parent: string, name: string): string {
