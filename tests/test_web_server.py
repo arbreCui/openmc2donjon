@@ -257,6 +257,51 @@ class InspectEndpointTests(unittest.TestCase):
                     return
         self.fail("expected at least one non-zero P0 entry in mock fixture")
 
+    def test_mock_mode_non_fissionable_mixture_nulls_fission_family(
+        self,
+    ) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        # M5_MOD is the moderator in the handoff fixture
+        # (``fissionable: false``) - the mock branch should strip the
+        # fission family so the spectrum chart's zero-series guard and
+        # the scatter heatmap both get exercised against a realistic
+        # non-fissionable shape.
+        response = client.get(
+            "/api/inspect/mixture",
+            params={"path": "/any.h5", "mixture": "M5_MOD"},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        xs = payload["cross_sections"]
+        self.assertIsNotNone(xs["total"])
+        self.assertIsNotNone(xs["absorption"])
+        self.assertIsNone(xs["fission"])
+        self.assertIsNone(xs["nu_fission"])
+        self.assertIsNone(xs["chi"])
+        # Scatter remains present (moderator absolutely scatters).
+        self.assertIsNotNone(payload["scatter"])
+        self.assertEqual(len(payload["scatter"]["values"]), 7)
+
+    def test_mock_mode_fissionable_mixture_keeps_fission_family(
+        self,
+    ) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        # M3_MOX_70 is fissionable in the handoff fixture - the mock
+        # branch must not strip its fission family.
+        response = client.get(
+            "/api/inspect/mixture",
+            params={"path": "/any.h5", "mixture": "M3_MOX_70"},
+        )
+        self.assertEqual(response.status_code, 200)
+        xs = response.json()["cross_sections"]
+        self.assertIsNotNone(xs["fission"])
+        self.assertIsNotNone(xs["nu_fission"])
+        self.assertIsNotNone(xs["chi"])
+
     def test_mock_mode_mixture_endpoint_rejects_out_of_range_moment(
         self,
     ) -> None:

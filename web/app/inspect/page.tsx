@@ -10,6 +10,7 @@ import {
 import { useSettings } from "@/lib/settings";
 import CrossSectionPlot from "@/components/inspect/CrossSectionPlot";
 import MixtureTable from "@/components/inspect/MixtureTable";
+import ScatterHeatmap from "@/components/inspect/ScatterHeatmap";
 import Summary from "@/components/inspect/Summary";
 
 const FALLBACK_PLACEHOLDER = "/path/to/mgxs_library.h5";
@@ -249,6 +250,12 @@ function MixturePanel({
           (legacy file). Cross sections are still available via the API.
         </div>
       )}
+      {detail.scatter ? (
+        <ScatterHeatmap
+          scatter={detail.scatter}
+          mixtureName={detail.mixture}
+        />
+      ) : null}
     </div>
   );
 }

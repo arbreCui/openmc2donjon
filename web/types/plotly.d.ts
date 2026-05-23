@@ -21,11 +21,14 @@ declare module "plotly.js-dist-min" {
   };
 
   export type Data = Record<string, unknown> & {
-    x?: number[];
+    // ``string`` entries cover categorical / heatmap axes (e.g. group
+    // labels); numeric entries cover line and scatter traces.
+    x?: (number | string)[];
     // ``null`` entries render as gaps; callers use that to drop
     // non-positive samples from a log axis without breaking x/y
     // alignment.
-    y?: (number | null)[];
+    y?: (number | string | null)[];
+    z?: number[][];
     type?: string;
     mode?: string;
     line?: Record<string, unknown>;
@@ -36,6 +39,10 @@ declare module "plotly.js-dist-min" {
     hoverinfo?: string;
     name?: string;
     connectgaps?: boolean;
+    colorscale?: string | (number | string)[][];
+    colorbar?: Record<string, unknown>;
+    zsmooth?: false | "fast" | "best";
+    showscale?: boolean;
   };
 
   export type Config = Record<string, unknown> & {

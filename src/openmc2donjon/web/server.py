@@ -340,6 +340,15 @@ def _mock_mixture_names() -> set[str]:
     return {mix["name"] for mix in handoff.get("mixtures", [])}
 
 
+def _mock_non_fissionable_mixtures() -> set[str]:
+    handoff = _load_fixture("inspect_handoff.json")
+    return {
+        mix["name"]
+        for mix in handoff.get("mixtures", [])
+        if mix.get("fissionable") is False
+    }
+
+
 def _mock_mixture(mixture: str, moment: int, http_exception: Any) -> dict[str, Any]:
     """Serve the bundled per-mixture fixture for any mixture in the handoff.
 
@@ -366,6 +375,17 @@ def _mock_mixture(mixture: str, moment: int, http_exception: Any) -> dict[str, A
     payload = _load_fixture("inspect_mixture.json")
     payload = dict(payload)
     payload["mixture"] = mixture
+    if mixture in _mock_non_fissionable_mixtures():
+        # Strip the fission family so the frontend exercises the
+        # null-series guards in both the spectrum and the (M2-A)
+        # heatmap. ``total`` / ``absorption`` / ``scatter`` stay
+        # present - moderator / guide-tube mixtures absolutely still
+        # have those.
+        xs = dict(payload["cross_sections"])
+        xs["fission"] = None
+        xs["nu_fission"] = None
+        xs["chi"] = None
+        payload["cross_sections"] = xs
     if moment != 0:
         scatter = dict(payload["scatter"])
         scaled = [[float(v) * 0.1 for v in row] for row in scatter["values"]]
