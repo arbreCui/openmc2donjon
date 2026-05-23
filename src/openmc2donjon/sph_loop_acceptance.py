@@ -42,6 +42,8 @@ class _FluxMapPreflightLike(Protocol):
     map_kind: str
     mixture_names: tuple[str, ...]
     energy_groups: int
+    mgxs_volume_defaulted: int
+    mgxs_volume_nonpositive: int
     scalar_flux_ids: tuple[int, ...]
     minimum_required_flux_unknown_count: int | None
     mixture_flux_map: tuple[tuple[str, int], ...]
@@ -119,6 +121,23 @@ def build_acceptance_report(
         checks.append(_artifact_metadata_alignment_check(artifact_metadata))
     if bool(config.get("require_production_audit", False)):
         checks.append(_production_audit_check(flux_map_preflight, artifact_metadata))
+    if bool(config.get("require_mgxs_explicit_volumes", False)):
+        checks.append(
+            _boolean_check(
+                "require_mgxs_explicit_volumes",
+                actual=_mgxs_explicit_volumes_present(flux_map_preflight),
+                limit=True,
+            )
+        )
+    if "max_mgxs_default_volume_count" in config:
+        checks.append(
+            _maximum_check(
+                "max_mgxs_default_volume_count",
+                actual=_mgxs_default_volume_count(flux_map_preflight),
+                limit=int(config["max_mgxs_default_volume_count"]),
+                units="calculations",
+            )
+        )
     if bool(config.get("require_reference_flux_std_dev", False)):
         checks.append(
             _boolean_check(
@@ -426,6 +445,25 @@ def _reference_flux_std_dev_present(
     if artifact_metadata is None:
         return False
     return bool(getattr(artifact_metadata.reference_flux, "std_dev_dataset", None))
+
+
+def _mgxs_explicit_volumes_present(
+    flux_map_preflight: _FluxMapPreflightLike | None,
+) -> bool:
+    if flux_map_preflight is None:
+        return False
+    return (
+        int(getattr(flux_map_preflight, "mgxs_volume_defaulted", 0)) == 0
+        and int(getattr(flux_map_preflight, "mgxs_volume_nonpositive", 0)) == 0
+    )
+
+
+def _mgxs_default_volume_count(
+    flux_map_preflight: _FluxMapPreflightLike | None,
+) -> int | None:
+    if flux_map_preflight is None:
+        return None
+    return int(getattr(flux_map_preflight, "mgxs_volume_defaulted", 0))
 
 
 def _reference_flux_std_dev_max_rel(

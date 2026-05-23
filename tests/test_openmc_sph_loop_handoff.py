@@ -210,6 +210,9 @@ class OpenMCSphLoopHandoffTests(unittest.TestCase):
                 plan.normalized_acceptance["require_artifact_metadata_alignment"]
             )
             self.assertTrue(plan.normalized_acceptance["require_production_audit"])
+            self.assertTrue(
+                plan.normalized_acceptance["require_mgxs_explicit_volumes"]
+            )
             self.assertTrue(plan.normalized_acceptance["require_final_solve"])
             with h5py.File(report.mgxs_h5, "r") as h5:
                 np.testing.assert_allclose(

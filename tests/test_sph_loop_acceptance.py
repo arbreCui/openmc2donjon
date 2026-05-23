@@ -219,6 +219,44 @@ class SphLoopAcceptanceTests(unittest.TestCase):
         self.assertTrue(report.passed)
         self.assertEqual(report.checks[0].name, "require_production_audit")
 
+    def test_mgxs_explicit_volume_acceptance_gate(self) -> None:
+        report = build_acceptance_report(
+            {
+                "require_mgxs_explicit_volumes": True,
+                "max_mgxs_default_volume_count": 0,
+            },
+            audit_rows=(),
+            convergence=(),
+            completed_iterations=1,
+            converged=False,
+            final_solve=None,
+            flux_map_preflight=_preflight(volume_defaulted=0),
+        )
+
+        self.assertTrue(report.passed)
+        actual = {check.name: check.actual for check in report.checks}
+        self.assertTrue(actual["require_mgxs_explicit_volumes"])
+        self.assertEqual(actual["max_mgxs_default_volume_count"], 0)
+
+    def test_mgxs_explicit_volume_gate_fails_on_defaulted_volume(self) -> None:
+        report = build_acceptance_report(
+            {
+                "require_mgxs_explicit_volumes": True,
+                "max_mgxs_default_volume_count": 0,
+            },
+            audit_rows=(),
+            convergence=(),
+            completed_iterations=1,
+            converged=False,
+            final_solve=None,
+            flux_map_preflight=_preflight(volume_defaulted=1),
+        )
+
+        self.assertFalse(report.passed)
+        checks = {check.name: check for check in report.checks}
+        self.assertFalse(checks["require_mgxs_explicit_volumes"].passed)
+        self.assertFalse(checks["max_mgxs_default_volume_count"].passed)
+
     def test_production_audit_gate_reports_mismatch(self) -> None:
         report = build_acceptance_report(
             {"require_production_audit": True},
@@ -390,7 +428,7 @@ def _metadata(
     )
 
 
-def _preflight() -> SimpleNamespace:
+def _preflight(*, volume_defaulted: int = 0) -> SimpleNamespace:
     return SimpleNamespace(
         passed=True,
         map_kind="scalar_flux_map",
@@ -399,6 +437,8 @@ def _preflight() -> SimpleNamespace:
         mgxs_declared_mixture_order=True,
         mgxs_source_domain_indices=(1, 2),
         mgxs_source_domain_order_errors=(),
+        mgxs_volume_defaulted=volume_defaulted,
+        mgxs_volume_nonpositive=0,
         scalar_flux_ids=(2, 4),
         minimum_required_flux_unknown_count=4,
         mixture_flux_map=(("fuel", 2), ("moderator", 4)),

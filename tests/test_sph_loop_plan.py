@@ -193,6 +193,10 @@ class SphLoopPlanTests(unittest.TestCase):
                 plan.normalized_acceptance["require_artifact_metadata_alignment"]
             )
             self.assertTrue(plan.normalized_acceptance["require_production_audit"])
+            self.assertNotIn(
+                "require_mgxs_explicit_volumes",
+                plan.normalized_acceptance,
+            )
             self.assertEqual(plan.normalized_acceptance["min_completed_iterations"], 2)
             self.assertEqual(plan.normalized_acceptance["max_final_clipped_count"], 0)
             self.assertEqual(plan.normalized_acceptance["max_final_clipped_fraction"], 0.0)
@@ -228,6 +232,22 @@ class SphLoopPlanTests(unittest.TestCase):
                 2.0e-4,
             )
             self.assertTrue(plan.normalized_acceptance["require_converged"])
+            self.assertNotIn(
+                "require_mgxs_explicit_volumes",
+                plan.normalized_acceptance,
+            )
+
+    def test_production_acceptance_preset_requires_explicit_mgxs_volumes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = Path(tmpdir) / "loop.json"
+            _write_config(config, {"acceptance": {"preset": "production"}})
+
+            plan = build_sph_loop_plan(config)
+
+            self.assertEqual(plan.normalized_acceptance["preset"], "production")
+            self.assertTrue(
+                plan.normalized_acceptance["require_mgxs_explicit_volumes"]
+            )
 
 
 def _write_config(path: Path, extra: dict[str, object] | None = None) -> None:

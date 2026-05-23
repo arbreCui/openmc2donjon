@@ -34,6 +34,10 @@ class SphLoopFluxMapPreflightReport:
     mgxs_declared_mixture_order: bool
     mgxs_source_domain_indices: tuple[int | None, ...]
     mgxs_source_domain_order_errors: tuple[str, ...]
+    mgxs_calculations: int
+    mgxs_volume_attributes: int
+    mgxs_volume_defaulted: int
+    mgxs_volume_nonpositive: int
     scalar_flux_ids: tuple[int, ...]
     minimum_required_flux_unknown_count: int | None
     mixture_flux_map: tuple[tuple[str, int], ...]
@@ -76,6 +80,13 @@ def build_flux_map_preflight_report(
     warnings: list[str] = []
     if require_mgxs_domain_order:
         errors.extend(mgxs_metadata["source_domain_order_errors"])
+    errors.extend(mgxs_metadata["volume_errors"])
+    if mgxs_metadata["volume_defaulted"]:
+        warnings.append(
+            f"{mgxs_metadata['volume_defaulted']}/"
+            f"{mgxs_metadata['calculations']} MGXS calculation(s) are missing "
+            "volume; converter readers will use default volume 1.0"
+        )
 
     ids = np.asarray([], dtype=int)
     mesh_payload: dict[str, np.ndarray] | None = None
@@ -131,6 +142,10 @@ def build_flux_map_preflight_report(
         mgxs_declared_mixture_order=mgxs_metadata["declared_mixture_order"],
         mgxs_source_domain_indices=mgxs_metadata["source_domain_indices"],
         mgxs_source_domain_order_errors=mgxs_metadata["source_domain_order_errors"],
+        mgxs_calculations=mgxs_metadata["calculations"],
+        mgxs_volume_attributes=mgxs_metadata["volume_attributes"],
+        mgxs_volume_defaulted=mgxs_metadata["volume_defaulted"],
+        mgxs_volume_nonpositive=mgxs_metadata["volume_nonpositive"],
         scalar_flux_ids=scalar_ids,
         minimum_required_flux_unknown_count=(
             None if not scalar_ids else int(max(scalar_ids))
@@ -177,6 +192,10 @@ def payload(report: SphLoopFluxMapPreflightReport) -> dict[str, object]:
         "mgxs_source_domain_order_errors": list(
             report.mgxs_source_domain_order_errors
         ),
+        "mgxs_calculations": report.mgxs_calculations,
+        "mgxs_volume_attributes": report.mgxs_volume_attributes,
+        "mgxs_volume_defaulted": report.mgxs_volume_defaulted,
+        "mgxs_volume_nonpositive": report.mgxs_volume_nonpositive,
         "scalar_flux_ids": list(report.scalar_flux_ids),
         "minimum_required_flux_unknown_count": (
             report.minimum_required_flux_unknown_count
@@ -234,6 +253,7 @@ def _read_mgxs_metadata(path: Path) -> dict[str, Any]:
             mixture_names,
             declared_mixture_order=declared_mixture_order,
         )
+        volume_contract = _volume_contract(h5, mixture_names)
         if "energy_groups" in h5.attrs:
             energy_groups = int(h5.attrs["energy_groups"])
         elif "energy_bounds" in h5:
@@ -250,6 +270,84 @@ def _read_mgxs_metadata(path: Path) -> dict[str, Any]:
         "declared_mixture_order": declared_mixture_order,
         "source_domain_indices": source_domain_indices,
         "source_domain_order_errors": source_domain_errors,
+        **volume_contract,
+    }
+
+
+def _volume_contract(h5: Any, mixture_names: tuple[str, ...]) -> dict[str, Any]:
+    volume_attributes = 0
+    volume_defaulted = 0
+    volume_nonpositive = 0
+    calculations = 0
+    errors: list[str] = []
+
+    mixtures = h5["mixtures"]
+    for mixture_name in mixture_names:
+        mixture = mixtures[mixture_name]
+        if "states" in mixture:
+            states = mixture["states"]
+            for state_name in sorted(states):
+                state = states[state_name]
+                calculations += 1
+                label = f"{mixture_name}/states/{state_name}"
+                result = _volume_status(label, state.attrs, mixture.attrs)
+                volume_attributes += result["attributes"]
+                volume_defaulted += result["defaulted"]
+                volume_nonpositive += result["nonpositive"]
+                errors.extend(result["errors"])
+        else:
+            calculations += 1
+            result = _volume_status(mixture_name, mixture.attrs, None)
+            volume_attributes += result["attributes"]
+            volume_defaulted += result["defaulted"]
+            volume_nonpositive += result["nonpositive"]
+            errors.extend(result["errors"])
+
+    return {
+        "calculations": calculations,
+        "volume_attributes": volume_attributes,
+        "volume_defaulted": volume_defaulted,
+        "volume_nonpositive": volume_nonpositive,
+        "volume_errors": tuple(errors),
+    }
+
+
+def _volume_status(
+    label: str,
+    attrs: Any,
+    parent_attrs: Any | None,
+) -> dict[str, Any]:
+    value = attrs.get("volume")
+    if value is None and parent_attrs is not None:
+        value = parent_attrs.get("volume")
+    if value is None:
+        return {
+            "attributes": 0,
+            "defaulted": 1,
+            "nonpositive": 0,
+            "errors": (),
+        }
+    try:
+        volume = float(value)
+    except (TypeError, ValueError):
+        return {
+            "attributes": 1,
+            "defaulted": 0,
+            "nonpositive": 1,
+            "errors": (f"mixture {label}: volume attribute must be numeric",),
+        }
+    if volume <= 0.0:
+        return {
+            "attributes": 1,
+            "defaulted": 0,
+            "nonpositive": 1,
+            "errors": (f"mixture {label}: volume attribute must be positive",),
+        }
+    return {
+        "attributes": 1,
+        "defaulted": 0,
+        "nonpositive": 0,
+        "errors": (),
     }
 
 

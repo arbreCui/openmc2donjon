@@ -34,6 +34,20 @@ def add_sph_loop_acceptance_args(parser: argparse.ArgumentParser) -> None:
         help="production acceptance: require the convergence criteria to pass",
     )
     parser.add_argument(
+        "--acceptance-require-mgxs-explicit-volumes",
+        action="store_true",
+        help=(
+            "production acceptance: require every MGXS calculation to have an "
+            "explicit positive volume"
+        ),
+    )
+    parser.add_argument(
+        "--acceptance-max-mgxs-default-volume-count",
+        type=int,
+        default=None,
+        help="production acceptance: max MGXS calculation count using default volume 1.0",
+    )
+    parser.add_argument(
         "--acceptance-max-sph-rel-change",
         type=float,
         default=None,
@@ -102,6 +116,9 @@ def sph_loop_acceptance_from_args(
         acceptance["preset"] = args.acceptance_preset
     optional_values = {
         "min_completed_iterations": args.acceptance_min_completed_iterations,
+        "max_mgxs_default_volume_count": (
+            args.acceptance_max_mgxs_default_volume_count
+        ),
         "max_sph_rel_change": args.acceptance_max_sph_rel_change,
         "max_flux_ratio_residual": args.acceptance_max_flux_ratio_residual,
         "max_final_to_initial_flux_residual_ratio": (
@@ -121,6 +138,8 @@ def sph_loop_acceptance_from_args(
         acceptance["require_final_solve"] = True
     if args.acceptance_require_converged:
         acceptance["require_converged"] = True
+    if args.acceptance_require_mgxs_explicit_volumes:
+        acceptance["require_mgxs_explicit_volumes"] = True
     if args.fail_on_acceptance_violation:
         acceptance["fail_on_violation"] = True
     return acceptance or None

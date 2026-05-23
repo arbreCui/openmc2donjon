@@ -134,6 +134,10 @@ class SphLoopTests(unittest.TestCase):
             self.assertTrue(preflight["mgxs_declared_mixture_order"])
             self.assertEqual(preflight["mgxs_source_domain_indices"], [1, 2])
             self.assertEqual(preflight["mgxs_source_domain_order_errors"], [])
+            self.assertEqual(preflight["mgxs_calculations"], 2)
+            self.assertEqual(preflight["mgxs_volume_attributes"], 2)
+            self.assertEqual(preflight["mgxs_volume_defaulted"], 0)
+            self.assertEqual(preflight["mgxs_volume_nonpositive"], 0)
             self.assertEqual(preflight["scalar_flux_ids"], [2, 4])
             self.assertEqual(preflight["reference_flux_shape"], [2, 2])
             self.assertEqual(preflight["reference_flux_group_order"], "mgxs_donjon")
@@ -196,6 +200,7 @@ class SphLoopTests(unittest.TestCase):
                 production_audit["flux_map"]["mgxs_source_domain_indices"],
                 [1, 2],
             )
+            self.assertEqual(production_audit["flux_map"]["mgxs_volume_defaulted"], 0)
             self.assertEqual(production_audit["artifact_counts"]["workflows"], 2)
             self.assertTrue(payload["acceptance"]["passed"])
             self.assertEqual(len(payload["acceptance"]["checks"]), 10)
@@ -555,6 +560,7 @@ class SphLoopTests(unittest.TestCase):
                     "require_converged",
                     "require_artifact_metadata_alignment",
                     "require_production_audit",
+                    "require_mgxs_explicit_volumes",
                     "max_sph_rel_change",
                     "max_flux_ratio_residual",
                     "max_final_to_initial_flux_residual_ratio",
@@ -573,6 +579,71 @@ class SphLoopTests(unittest.TestCase):
             }
             self.assertTrue(audit_checks["flux_map_preflight_passed"]["passed"])
             self.assertTrue(audit_checks["final_sph_sidecar_present"]["passed"])
+
+    def test_production_acceptance_preset_fails_on_defaulted_volume(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference = root / "reference_flux.h5"
+            solver = root / "fake_exact_donjon_solver.py"
+            config = root / "loop.json"
+            summary = root / "loop_summary.json"
+            _write_mgxs(mgxs, with_volume=False)
+            _write_reference_flux(reference)
+            _write_exact_fake_solver(solver)
+            config.write_text(
+                json.dumps(
+                    {
+                        "schema": "openmc2donjon.sph-loop-config.v1",
+                        "input_h5": "mgxs.h5",
+                        "output_dir": "loop_run",
+                        "reference_flux": "reference_flux.h5::openmc_volume_flux",
+                        "iterations": 1,
+                        "format": "macrolib",
+                        "final_solve": True,
+                        "damping": 1.0,
+                        "scalar_flux_map": {"fuel": 2, "moderator": 4},
+                        "acceptance": {"preset": "production"},
+                        "solver": {
+                            "command": [
+                                sys.executable,
+                                str(solver),
+                                "--macrolib",
+                                "{ascii_input}",
+                                "--result",
+                                "{result}",
+                                "--iteration",
+                                "{iteration}",
+                            ],
+                            "result": "donjon_flux.result",
+                        },
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as raised:
+                    cli_main(
+                        [
+                            "run-sph-loop",
+                            "--config",
+                            str(config),
+                            "--summary-json",
+                            str(summary),
+                        ]
+                    )
+
+            self.assertEqual(raised.exception.code, 1)
+            self.assertIn("require_mgxs_explicit_volumes", stderr.getvalue())
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+            self.assertEqual(payload["flux_map_preflight"]["mgxs_volume_defaulted"], 2)
+            self.assertFalse(payload["acceptance_passed"])
+            checks = {item["name"]: item for item in payload["acceptance"]["checks"]}
+            self.assertFalse(checks["require_mgxs_explicit_volumes"]["passed"])
 
     def test_production_acceptance_preset_fails_without_final_solve(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1117,6 +1188,7 @@ def _write_mgxs(
     path: Path,
     *,
     source_domain_indices: tuple[int, int] = (1, 2),
+    with_volume: bool = True,
 ) -> None:
     with h5py.File(path, "w") as h5:
         h5.attrs["energy_groups"] = 2
@@ -1131,13 +1203,14 @@ def _write_mgxs(
         moderator.attrs["source_domain_index"] = source_domain_indices[1]
         moderator.attrs["source_domain_id"] = 102
         moderator.attrs["source_domain_type"] = "cell"
-        _write_mixture(fuel, fissionable=True)
-        _write_mixture(moderator, fissionable=False)
+        _write_mixture(fuel, fissionable=True, with_volume=with_volume)
+        _write_mixture(moderator, fissionable=False, with_volume=with_volume)
 
 
-def _write_mixture(group, *, fissionable: bool) -> None:
+def _write_mixture(group, *, fissionable: bool, with_volume: bool = True) -> None:
     group.attrs["fissionable"] = bool(fissionable)
-    group.attrs["volume"] = 10.0
+    if with_volume:
+        group.attrs["volume"] = 10.0
     group.create_dataset("total", data=np.array([0.6, 0.8]))
     group.create_dataset("transport_total", data=np.array([0.5, 0.7]))
     group.create_dataset("absorption", data=np.array([0.1, 0.2]))

@@ -18,6 +18,10 @@ class FluxMapPreflightLike(Protocol):
     mgxs_declared_mixture_order: bool
     mgxs_source_domain_indices: tuple[int | None, ...]
     mgxs_source_domain_order_errors: tuple[str, ...]
+    mgxs_calculations: int
+    mgxs_volume_attributes: int
+    mgxs_volume_defaulted: int
+    mgxs_volume_nonpositive: int
     scalar_flux_ids: tuple[int, ...]
     minimum_required_flux_unknown_count: int | None
     mixture_flux_map: tuple[tuple[str, int], ...]
@@ -174,6 +178,18 @@ def build_production_audit_payload(
                 getattr(flux_map_preflight, "mgxs_source_domain_indices", ())
             ),
             "mgxs_source_domain_order_errors": list(mgxs_domain_order_errors),
+            "mgxs_calculations": int(
+                getattr(flux_map_preflight, "mgxs_calculations", 0)
+            ),
+            "mgxs_volume_attributes": int(
+                getattr(flux_map_preflight, "mgxs_volume_attributes", 0)
+            ),
+            "mgxs_volume_defaulted": int(
+                getattr(flux_map_preflight, "mgxs_volume_defaulted", 0)
+            ),
+            "mgxs_volume_nonpositive": int(
+                getattr(flux_map_preflight, "mgxs_volume_nonpositive", 0)
+            ),
         },
         "artifact_counts": {
             "workflows": len(artifact_metadata.workflows),

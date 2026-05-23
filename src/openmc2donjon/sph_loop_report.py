@@ -61,7 +61,8 @@ def print_report(report: SphLoopReport) -> None:
         f"{'PASS' if report.flux_map_preflight.passed else 'FAIL'} "
         f"map={report.flux_map_preflight.map_kind} "
         f"mixtures={len(report.flux_map_preflight.mixture_names)} "
-        f"groups={report.flux_map_preflight.energy_groups}"
+        f"groups={report.flux_map_preflight.energy_groups} "
+        f"volume_defaulted={report.flux_map_preflight.mgxs_volume_defaulted}"
     )
     if report.bundle_manifest is not None:
         print(f"  bundle_manifest: {report.bundle_manifest}")

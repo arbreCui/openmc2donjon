@@ -253,6 +253,12 @@ def _format_preflight_audit_lines(
             "  minimum_required_flux_unknown_count="
             f"{report.minimum_required_flux_unknown_count}"
         )
+    lines.append(
+        "  mgxs_volume="
+        f"{report.mgxs_volume_attributes}/{report.mgxs_calculations} "
+        f"defaulted={report.mgxs_volume_defaulted}/{report.mgxs_calculations} "
+        f"nonpositive={report.mgxs_volume_nonpositive}"
+    )
     if report.mesh_shape is not None:
         shape = "x".join(str(value) for value in report.mesh_shape)
         lines.append(

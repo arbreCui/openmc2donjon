@@ -60,6 +60,8 @@ def acceptance_config(config: dict[str, Any]) -> dict[str, Any]:
         "require_converged",
         "require_artifact_metadata_alignment",
         "require_production_audit",
+        "require_mgxs_explicit_volumes",
+        "max_mgxs_default_volume_count",
         "require_reference_flux_std_dev",
         "max_reference_flux_std_dev_rel",
         "max_sph_abs_change",
@@ -84,7 +86,11 @@ def acceptance_config(config: dict[str, Any]) -> dict[str, Any]:
         out = _mechanical_acceptance_defaults(config)
         out.update({key: value for key, value in nested.items() if key != "preset"})
         out["preset"] = preset
-    elif preset in {"production", "physics"}:
+    elif preset == "production":
+        out = _production_acceptance_defaults(config)
+        out.update({key: value for key, value in nested.items() if key != "preset"})
+        out["preset"] = preset
+    elif preset == "physics":
         out = _physics_acceptance_defaults(config)
         out.update({key: value for key, value in nested.items() if key != "preset"})
         out["preset"] = preset
@@ -113,6 +119,14 @@ def acceptance_config(config: dict[str, Any]) -> dict[str, Any]:
         if value < 0:
             raise ValueError("acceptance.max_final_clipped_count must be >= 0")
         out["max_final_clipped_count"] = value
+    if (
+        "max_mgxs_default_volume_count" in out
+        and out["max_mgxs_default_volume_count"] is not None
+    ):
+        value = int(out["max_mgxs_default_volume_count"])
+        if value < 0:
+            raise ValueError("acceptance.max_mgxs_default_volume_count must be >= 0")
+        out["max_mgxs_default_volume_count"] = value
     if "min_completed_iterations" in out and out["min_completed_iterations"] is not None:
         value = int(out["min_completed_iterations"])
         if value < 1:
@@ -123,6 +137,7 @@ def acceptance_config(config: dict[str, Any]) -> dict[str, Any]:
         "require_converged",
         "require_artifact_metadata_alignment",
         "require_production_audit",
+        "require_mgxs_explicit_volumes",
         "require_reference_flux_std_dev",
         "fail_on_violation",
     ):
@@ -156,6 +171,12 @@ def _physics_acceptance_defaults(config: dict[str, Any]) -> dict[str, Any]:
         out["max_flux_ratio_residual"] = flux_tolerance
     if sph_tolerance is not None or flux_tolerance is not None:
         out["require_converged"] = True
+    return out
+
+
+def _production_acceptance_defaults(config: dict[str, Any]) -> dict[str, Any]:
+    out = _physics_acceptance_defaults(config)
+    out["require_mgxs_explicit_volumes"] = True
     return out
 
 

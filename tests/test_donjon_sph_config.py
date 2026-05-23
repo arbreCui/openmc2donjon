@@ -118,6 +118,9 @@ class DonjonSphConfigTests(unittest.TestCase):
                         "--acceptance-min-completed-iterations",
                         "1",
                         "--acceptance-require-final-solve",
+                        "--acceptance-require-mgxs-explicit-volumes",
+                        "--acceptance-max-mgxs-default-volume-count",
+                        "0",
                         "--acceptance-max-final-keff-delta-pcm",
                         "5.0",
                         "--acceptance-max-final-to-initial-flux-residual-ratio",
@@ -143,6 +146,8 @@ class DonjonSphConfigTests(unittest.TestCase):
             self.assertEqual(payload["acceptance"]["preset"], "production")
             self.assertEqual(payload["acceptance"]["min_completed_iterations"], 1)
             self.assertTrue(payload["acceptance"]["require_final_solve"])
+            self.assertTrue(payload["acceptance"]["require_mgxs_explicit_volumes"])
+            self.assertEqual(payload["acceptance"]["max_mgxs_default_volume_count"], 0)
             self.assertEqual(payload["acceptance"]["max_final_keff_delta_pcm"], 5.0)
             self.assertEqual(
                 payload["acceptance"]["max_final_to_initial_flux_residual_ratio"],

@@ -164,6 +164,7 @@ def _write_config(
             "max_final_clipped_count": 0,
             "require_artifact_metadata_alignment": True,
             "require_production_audit": True,
+            "require_mgxs_explicit_volumes": True,
             "fail_on_violation": True,
         },
         "solver": {
