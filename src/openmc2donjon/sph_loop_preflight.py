@@ -21,6 +21,14 @@ from .hdf5_names import read_mixture_names
 SCHEMA = "openmc2donjon.sph-loop-flux-map-preflight.v1"
 PASS_DECISION = "openmc2donjon_sph_loop_flux_map_preflight_passed"
 FAIL_DECISION = "openmc2donjon_sph_loop_flux_map_preflight_failed"
+H_FACTOR_DATASETS = (
+    "h_factor",
+    "H-FACTOR",
+    "H_FACTOR",
+    "kappa_fission",
+    "kappa_fission_xs",
+    "kappa_fission_cross_section",
+)
 
 
 @dataclass(frozen=True)
@@ -38,6 +46,10 @@ class SphLoopFluxMapPreflightReport:
     mgxs_volume_attributes: int
     mgxs_volume_defaulted: int
     mgxs_volume_nonpositive: int
+    mgxs_fissionable_calculations: int
+    mgxs_h_factor_datasets: int
+    mgxs_h_factor_missing: int
+    mgxs_h_factor_invalid: int
     scalar_flux_ids: tuple[int, ...]
     minimum_required_flux_unknown_count: int | None
     mixture_flux_map: tuple[tuple[str, int], ...]
@@ -81,11 +93,18 @@ def build_flux_map_preflight_report(
     if require_mgxs_domain_order:
         errors.extend(mgxs_metadata["source_domain_order_errors"])
     errors.extend(mgxs_metadata["volume_errors"])
+    errors.extend(mgxs_metadata["h_factor_errors"])
     if mgxs_metadata["volume_defaulted"]:
         warnings.append(
             f"{mgxs_metadata['volume_defaulted']}/"
             f"{mgxs_metadata['calculations']} MGXS calculation(s) are missing "
             "volume; converter readers will use default volume 1.0"
+        )
+    if mgxs_metadata["h_factor_missing"]:
+        warnings.append(
+            f"{mgxs_metadata['h_factor_missing']}/"
+            f"{mgxs_metadata['fissionable_calculations']} fissionable MGXS "
+            "calculation(s) are missing H-FACTOR/kappa_fission"
         )
 
     ids = np.asarray([], dtype=int)
@@ -146,6 +165,10 @@ def build_flux_map_preflight_report(
         mgxs_volume_attributes=mgxs_metadata["volume_attributes"],
         mgxs_volume_defaulted=mgxs_metadata["volume_defaulted"],
         mgxs_volume_nonpositive=mgxs_metadata["volume_nonpositive"],
+        mgxs_fissionable_calculations=mgxs_metadata["fissionable_calculations"],
+        mgxs_h_factor_datasets=mgxs_metadata["h_factor_datasets"],
+        mgxs_h_factor_missing=mgxs_metadata["h_factor_missing"],
+        mgxs_h_factor_invalid=mgxs_metadata["h_factor_invalid"],
         scalar_flux_ids=scalar_ids,
         minimum_required_flux_unknown_count=(
             None if not scalar_ids else int(max(scalar_ids))
@@ -196,6 +219,10 @@ def payload(report: SphLoopFluxMapPreflightReport) -> dict[str, object]:
         "mgxs_volume_attributes": report.mgxs_volume_attributes,
         "mgxs_volume_defaulted": report.mgxs_volume_defaulted,
         "mgxs_volume_nonpositive": report.mgxs_volume_nonpositive,
+        "mgxs_fissionable_calculations": report.mgxs_fissionable_calculations,
+        "mgxs_h_factor_datasets": report.mgxs_h_factor_datasets,
+        "mgxs_h_factor_missing": report.mgxs_h_factor_missing,
+        "mgxs_h_factor_invalid": report.mgxs_h_factor_invalid,
         "scalar_flux_ids": list(report.scalar_flux_ids),
         "minimum_required_flux_unknown_count": (
             report.minimum_required_flux_unknown_count
@@ -253,13 +280,14 @@ def _read_mgxs_metadata(path: Path) -> dict[str, Any]:
             mixture_names,
             declared_mixture_order=declared_mixture_order,
         )
-        volume_contract = _volume_contract(h5, mixture_names)
         if "energy_groups" in h5.attrs:
             energy_groups = int(h5.attrs["energy_groups"])
         elif "energy_bounds" in h5:
             energy_groups = int(h5["energy_bounds"].shape[0]) - 1
         else:
             raise ValueError("input HDF5 must define energy_groups or energy_bounds")
+        volume_contract = _volume_contract(h5, mixture_names)
+        h_factor_contract = _h_factor_contract(h5, mixture_names, energy_groups)
     if not mixture_names:
         raise ValueError("input HDF5 contains no mixtures")
     if energy_groups <= 0:
@@ -271,6 +299,7 @@ def _read_mgxs_metadata(path: Path) -> dict[str, Any]:
         "source_domain_indices": source_domain_indices,
         "source_domain_order_errors": source_domain_errors,
         **volume_contract,
+        **h_factor_contract,
     }
 
 
@@ -281,27 +310,17 @@ def _volume_contract(h5: Any, mixture_names: tuple[str, ...]) -> dict[str, Any]:
     calculations = 0
     errors: list[str] = []
 
-    mixtures = h5["mixtures"]
-    for mixture_name in mixture_names:
-        mixture = mixtures[mixture_name]
-        if "states" in mixture:
-            states = mixture["states"]
-            for state_name in sorted(states):
-                state = states[state_name]
-                calculations += 1
-                label = f"{mixture_name}/states/{state_name}"
-                result = _volume_status(label, state.attrs, mixture.attrs)
-                volume_attributes += result["attributes"]
-                volume_defaulted += result["defaulted"]
-                volume_nonpositive += result["nonpositive"]
-                errors.extend(result["errors"])
-        else:
-            calculations += 1
-            result = _volume_status(mixture_name, mixture.attrs, None)
-            volume_attributes += result["attributes"]
-            volume_defaulted += result["defaulted"]
-            volume_nonpositive += result["nonpositive"]
-            errors.extend(result["errors"])
+    for label, group, parent_group in _iter_calculations(h5, mixture_names):
+        calculations += 1
+        result = _volume_status(
+            label,
+            group.attrs,
+            None if parent_group is None else parent_group.attrs,
+        )
+        volume_attributes += result["attributes"]
+        volume_defaulted += result["defaulted"]
+        volume_nonpositive += result["nonpositive"]
+        errors.extend(result["errors"])
 
     return {
         "calculations": calculations,
@@ -310,6 +329,64 @@ def _volume_contract(h5: Any, mixture_names: tuple[str, ...]) -> dict[str, Any]:
         "volume_nonpositive": volume_nonpositive,
         "volume_errors": tuple(errors),
     }
+
+
+def _h_factor_contract(
+    h5: Any,
+    mixture_names: tuple[str, ...],
+    ngroups: int,
+) -> dict[str, Any]:
+    fissionable_calculations = 0
+    h_factor_datasets = 0
+    h_factor_missing = 0
+    h_factor_invalid = 0
+    errors: list[str] = []
+
+    for label, group, parent_group in _iter_calculations(h5, mixture_names):
+        parent_attrs = None if parent_group is None else parent_group.attrs
+        fissionable = bool(
+            _attr_with_parent(group.attrs, parent_attrs, "fissionable", False)
+        )
+        if fissionable:
+            fissionable_calculations += 1
+
+        dataset_name = _h_factor_dataset_name(group)
+        if dataset_name is None:
+            if fissionable:
+                h_factor_missing += 1
+            continue
+
+        h_factor_datasets += 1
+        issue = _h_factor_issue(
+            group[dataset_name],
+            label=label,
+            dataset_name=dataset_name,
+            ngroups=ngroups,
+            fissionable=fissionable,
+        )
+        if issue is not None:
+            h_factor_invalid += 1
+            errors.append(issue)
+
+    return {
+        "fissionable_calculations": fissionable_calculations,
+        "h_factor_datasets": h_factor_datasets,
+        "h_factor_missing": h_factor_missing,
+        "h_factor_invalid": h_factor_invalid,
+        "h_factor_errors": tuple(errors),
+    }
+
+
+def _iter_calculations(h5: Any, mixture_names: tuple[str, ...]):
+    mixtures = h5["mixtures"]
+    for mixture_name in mixture_names:
+        mixture = mixtures[mixture_name]
+        if "states" in mixture:
+            states = mixture["states"]
+            for state_name in sorted(states):
+                yield f"{mixture_name}/states/{state_name}", states[state_name], mixture
+        else:
+            yield mixture_name, mixture, None
 
 
 def _volume_status(
@@ -349,6 +426,54 @@ def _volume_status(
         "nonpositive": 0,
         "errors": (),
     }
+
+
+def _h_factor_dataset_name(group: Any) -> str | None:
+    for name in H_FACTOR_DATASETS:
+        if name in group:
+            return name
+    return None
+
+
+def _h_factor_issue(
+    obj: Any,
+    *,
+    label: str,
+    dataset_name: str,
+    ngroups: int,
+    fissionable: bool,
+) -> str | None:
+    try:
+        values = np.asarray(obj[:], dtype=float).reshape(-1)
+    except (TypeError, ValueError, OSError):
+        return f"mixture {label}: {dataset_name} must be a numeric vector"
+    if values.shape != (ngroups,):
+        return (
+            f"mixture {label}: {dataset_name} must have {ngroups} values, "
+            f"got {values.shape[0]}"
+        )
+    if not np.all(np.isfinite(values)):
+        return f"mixture {label}: {dataset_name} contains non-finite values"
+    if np.any(values < 0.0):
+        return f"mixture {label}: {dataset_name} values must be non-negative"
+    if fissionable and not np.any(values > 0.0):
+        return (
+            f"mixture {label}: fissionable {dataset_name} must include "
+            "a positive value"
+        )
+    return None
+
+
+def _attr_with_parent(
+    attrs: Any,
+    parent_attrs: Any | None,
+    name: str,
+    default: object,
+) -> object:
+    value = attrs.get(name)
+    if value is None and parent_attrs is not None:
+        value = parent_attrs.get(name)
+    return default if value is None else value
 
 
 def _source_domain_order_contract(

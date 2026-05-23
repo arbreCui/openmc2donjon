@@ -59,6 +59,7 @@ class SphLoopMinicaseExampleTests(unittest.TestCase):
                     2,
                 )
                 self.assertIn("transport_total", h5["mixtures/FUEL_ASM"])
+                self.assertIn("kappa_fission", h5["mixtures/FUEL_ASM"])
                 np.testing.assert_allclose(
                     h5["energy_bounds"][:],
                     [1.0e-5, 1.0, 1.0e7],
@@ -113,6 +114,7 @@ class SphLoopMinicaseExampleTests(unittest.TestCase):
                 plan.normalized_acceptance["require_mgxs_explicit_volumes"],
                 True,
             )
+            self.assertEqual(plan.normalized_acceptance["require_mgxs_h_factor"], True)
 
     def test_minicase_production_preset_runs_with_artifact_metadata_gate(self) -> None:
         root = _repo_root()

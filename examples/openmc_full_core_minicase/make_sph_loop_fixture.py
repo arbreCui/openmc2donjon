@@ -165,6 +165,7 @@ def _write_config(
             "require_artifact_metadata_alignment": True,
             "require_production_audit": True,
             "require_mgxs_explicit_volumes": True,
+            "require_mgxs_h_factor": True,
             "fail_on_violation": True,
         },
         "solver": {

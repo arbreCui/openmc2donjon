@@ -259,6 +259,12 @@ def _format_preflight_audit_lines(
         f"defaulted={report.mgxs_volume_defaulted}/{report.mgxs_calculations} "
         f"nonpositive={report.mgxs_volume_nonpositive}"
     )
+    lines.append(
+        "  mgxs_h_factor="
+        f"{report.mgxs_h_factor_datasets}/{report.mgxs_fissionable_calculations} "
+        f"missing={report.mgxs_h_factor_missing} "
+        f"invalid={report.mgxs_h_factor_invalid}"
+    )
     if report.mesh_shape is not None:
         shape = "x".join(str(value) for value in report.mesh_shape)
         lines.append(

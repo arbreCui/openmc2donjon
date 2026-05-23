@@ -197,6 +197,10 @@ class SphLoopPlanTests(unittest.TestCase):
                 "require_mgxs_explicit_volumes",
                 plan.normalized_acceptance,
             )
+            self.assertNotIn(
+                "require_mgxs_h_factor",
+                plan.normalized_acceptance,
+            )
             self.assertEqual(plan.normalized_acceptance["min_completed_iterations"], 2)
             self.assertEqual(plan.normalized_acceptance["max_final_clipped_count"], 0)
             self.assertEqual(plan.normalized_acceptance["max_final_clipped_fraction"], 0.0)
@@ -236,6 +240,10 @@ class SphLoopPlanTests(unittest.TestCase):
                 "require_mgxs_explicit_volumes",
                 plan.normalized_acceptance,
             )
+            self.assertNotIn(
+                "require_mgxs_h_factor",
+                plan.normalized_acceptance,
+            )
 
     def test_production_acceptance_preset_requires_explicit_mgxs_volumes(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -248,6 +256,7 @@ class SphLoopPlanTests(unittest.TestCase):
             self.assertTrue(
                 plan.normalized_acceptance["require_mgxs_explicit_volumes"]
             )
+            self.assertTrue(plan.normalized_acceptance["require_mgxs_h_factor"])
 
 
 def _write_config(path: Path, extra: dict[str, object] | None = None) -> None:

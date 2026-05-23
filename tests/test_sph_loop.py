@@ -138,6 +138,10 @@ class SphLoopTests(unittest.TestCase):
             self.assertEqual(preflight["mgxs_volume_attributes"], 2)
             self.assertEqual(preflight["mgxs_volume_defaulted"], 0)
             self.assertEqual(preflight["mgxs_volume_nonpositive"], 0)
+            self.assertEqual(preflight["mgxs_fissionable_calculations"], 1)
+            self.assertEqual(preflight["mgxs_h_factor_datasets"], 1)
+            self.assertEqual(preflight["mgxs_h_factor_missing"], 0)
+            self.assertEqual(preflight["mgxs_h_factor_invalid"], 0)
             self.assertEqual(preflight["scalar_flux_ids"], [2, 4])
             self.assertEqual(preflight["reference_flux_shape"], [2, 2])
             self.assertEqual(preflight["reference_flux_group_order"], "mgxs_donjon")
@@ -201,6 +205,7 @@ class SphLoopTests(unittest.TestCase):
                 [1, 2],
             )
             self.assertEqual(production_audit["flux_map"]["mgxs_volume_defaulted"], 0)
+            self.assertEqual(production_audit["flux_map"]["mgxs_h_factor_missing"], 0)
             self.assertEqual(production_audit["artifact_counts"]["workflows"], 2)
             self.assertTrue(payload["acceptance"]["passed"])
             self.assertEqual(len(payload["acceptance"]["checks"]), 10)
@@ -561,6 +566,7 @@ class SphLoopTests(unittest.TestCase):
                     "require_artifact_metadata_alignment",
                     "require_production_audit",
                     "require_mgxs_explicit_volumes",
+                    "require_mgxs_h_factor",
                     "max_sph_rel_change",
                     "max_flux_ratio_residual",
                     "max_final_to_initial_flux_residual_ratio",
@@ -644,6 +650,71 @@ class SphLoopTests(unittest.TestCase):
             self.assertFalse(payload["acceptance_passed"])
             checks = {item["name"]: item for item in payload["acceptance"]["checks"]}
             self.assertFalse(checks["require_mgxs_explicit_volumes"]["passed"])
+
+    def test_production_acceptance_preset_fails_on_missing_h_factor(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference = root / "reference_flux.h5"
+            solver = root / "fake_exact_donjon_solver.py"
+            config = root / "loop.json"
+            summary = root / "loop_summary.json"
+            _write_mgxs(mgxs, with_h_factor=False)
+            _write_reference_flux(reference)
+            _write_exact_fake_solver(solver)
+            config.write_text(
+                json.dumps(
+                    {
+                        "schema": "openmc2donjon.sph-loop-config.v1",
+                        "input_h5": "mgxs.h5",
+                        "output_dir": "loop_run",
+                        "reference_flux": "reference_flux.h5::openmc_volume_flux",
+                        "iterations": 1,
+                        "format": "macrolib",
+                        "final_solve": True,
+                        "damping": 1.0,
+                        "scalar_flux_map": {"fuel": 2, "moderator": 4},
+                        "acceptance": {"preset": "production"},
+                        "solver": {
+                            "command": [
+                                sys.executable,
+                                str(solver),
+                                "--macrolib",
+                                "{ascii_input}",
+                                "--result",
+                                "{result}",
+                                "--iteration",
+                                "{iteration}",
+                            ],
+                            "result": "donjon_flux.result",
+                        },
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as raised:
+                    cli_main(
+                        [
+                            "run-sph-loop",
+                            "--config",
+                            str(config),
+                            "--summary-json",
+                            str(summary),
+                        ]
+                    )
+
+            self.assertEqual(raised.exception.code, 1)
+            self.assertIn("require_mgxs_h_factor", stderr.getvalue())
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+            self.assertEqual(payload["flux_map_preflight"]["mgxs_h_factor_missing"], 1)
+            self.assertFalse(payload["acceptance_passed"])
+            checks = {item["name"]: item for item in payload["acceptance"]["checks"]}
+            self.assertFalse(checks["require_mgxs_h_factor"]["passed"])
 
     def test_production_acceptance_preset_fails_without_final_solve(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1189,6 +1260,7 @@ def _write_mgxs(
     *,
     source_domain_indices: tuple[int, int] = (1, 2),
     with_volume: bool = True,
+    with_h_factor: bool = True,
 ) -> None:
     with h5py.File(path, "w") as h5:
         h5.attrs["energy_groups"] = 2
@@ -1203,11 +1275,27 @@ def _write_mgxs(
         moderator.attrs["source_domain_index"] = source_domain_indices[1]
         moderator.attrs["source_domain_id"] = 102
         moderator.attrs["source_domain_type"] = "cell"
-        _write_mixture(fuel, fissionable=True, with_volume=with_volume)
-        _write_mixture(moderator, fissionable=False, with_volume=with_volume)
+        _write_mixture(
+            fuel,
+            fissionable=True,
+            with_volume=with_volume,
+            with_h_factor=with_h_factor,
+        )
+        _write_mixture(
+            moderator,
+            fissionable=False,
+            with_volume=with_volume,
+            with_h_factor=with_h_factor,
+        )
 
 
-def _write_mixture(group, *, fissionable: bool, with_volume: bool = True) -> None:
+def _write_mixture(
+    group,
+    *,
+    fissionable: bool,
+    with_volume: bool = True,
+    with_h_factor: bool = True,
+) -> None:
     group.attrs["fissionable"] = bool(fissionable)
     if with_volume:
         group.attrs["volume"] = 10.0
@@ -1219,6 +1307,8 @@ def _write_mixture(group, *, fissionable: bool, with_volume: bool = True) -> Non
         "nu_fission",
         data=np.array([0.025, 0.05]) if fissionable else np.zeros(2),
     )
+    if fissionable and with_h_factor:
+        group.create_dataset("kappa_fission", data=np.array([3.2e-12, 3.1e-12]))
     group.create_dataset("chi", data=np.array([1.0, 0.0]) if fissionable else np.zeros(2))
     group.create_dataset(
         "scatter_matrix",

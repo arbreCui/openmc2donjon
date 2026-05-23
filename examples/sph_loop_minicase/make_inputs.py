@@ -139,6 +139,8 @@ def _write_mixture(
         "nu_fission",
         data=np.array([0.025, 0.075]) if fissionable else np.zeros(2),
     )
+    if fissionable:
+        group.create_dataset("kappa_fission", data=np.array([3.2e-12, 3.1e-12]))
     group.create_dataset(
         "chi",
         data=np.array([1.0, 0.0]) if fissionable else np.zeros(2),

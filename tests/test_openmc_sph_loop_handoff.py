@@ -213,6 +213,7 @@ class OpenMCSphLoopHandoffTests(unittest.TestCase):
             self.assertTrue(
                 plan.normalized_acceptance["require_mgxs_explicit_volumes"]
             )
+            self.assertTrue(plan.normalized_acceptance["require_mgxs_h_factor"])
             self.assertTrue(plan.normalized_acceptance["require_final_solve"])
             with h5py.File(report.mgxs_h5, "r") as h5:
                 np.testing.assert_allclose(

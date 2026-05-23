@@ -62,6 +62,8 @@ def acceptance_config(config: dict[str, Any]) -> dict[str, Any]:
         "require_production_audit",
         "require_mgxs_explicit_volumes",
         "max_mgxs_default_volume_count",
+        "require_mgxs_h_factor",
+        "max_mgxs_missing_h_factor_count",
         "require_reference_flux_std_dev",
         "max_reference_flux_std_dev_rel",
         "max_sph_abs_change",
@@ -127,6 +129,16 @@ def acceptance_config(config: dict[str, Any]) -> dict[str, Any]:
         if value < 0:
             raise ValueError("acceptance.max_mgxs_default_volume_count must be >= 0")
         out["max_mgxs_default_volume_count"] = value
+    if (
+        "max_mgxs_missing_h_factor_count" in out
+        and out["max_mgxs_missing_h_factor_count"] is not None
+    ):
+        value = int(out["max_mgxs_missing_h_factor_count"])
+        if value < 0:
+            raise ValueError(
+                "acceptance.max_mgxs_missing_h_factor_count must be >= 0"
+            )
+        out["max_mgxs_missing_h_factor_count"] = value
     if "min_completed_iterations" in out and out["min_completed_iterations"] is not None:
         value = int(out["min_completed_iterations"])
         if value < 1:
@@ -138,6 +150,7 @@ def acceptance_config(config: dict[str, Any]) -> dict[str, Any]:
         "require_artifact_metadata_alignment",
         "require_production_audit",
         "require_mgxs_explicit_volumes",
+        "require_mgxs_h_factor",
         "require_reference_flux_std_dev",
         "fail_on_violation",
     ):
@@ -177,6 +190,7 @@ def _physics_acceptance_defaults(config: dict[str, Any]) -> dict[str, Any]:
 def _production_acceptance_defaults(config: dict[str, Any]) -> dict[str, Any]:
     out = _physics_acceptance_defaults(config)
     out["require_mgxs_explicit_volumes"] = True
+    out["require_mgxs_h_factor"] = True
     return out
 
 

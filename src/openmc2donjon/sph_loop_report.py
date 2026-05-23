@@ -62,7 +62,8 @@ def print_report(report: SphLoopReport) -> None:
         f"map={report.flux_map_preflight.map_kind} "
         f"mixtures={len(report.flux_map_preflight.mixture_names)} "
         f"groups={report.flux_map_preflight.energy_groups} "
-        f"volume_defaulted={report.flux_map_preflight.mgxs_volume_defaulted}"
+        f"volume_defaulted={report.flux_map_preflight.mgxs_volume_defaulted} "
+        f"h_factor_missing={report.flux_map_preflight.mgxs_h_factor_missing}"
     )
     if report.bundle_manifest is not None:
         print(f"  bundle_manifest: {report.bundle_manifest}")

@@ -22,6 +22,10 @@ class FluxMapPreflightLike(Protocol):
     mgxs_volume_attributes: int
     mgxs_volume_defaulted: int
     mgxs_volume_nonpositive: int
+    mgxs_fissionable_calculations: int
+    mgxs_h_factor_datasets: int
+    mgxs_h_factor_missing: int
+    mgxs_h_factor_invalid: int
     scalar_flux_ids: tuple[int, ...]
     minimum_required_flux_unknown_count: int | None
     mixture_flux_map: tuple[tuple[str, int], ...]
@@ -189,6 +193,18 @@ def build_production_audit_payload(
             ),
             "mgxs_volume_nonpositive": int(
                 getattr(flux_map_preflight, "mgxs_volume_nonpositive", 0)
+            ),
+            "mgxs_fissionable_calculations": int(
+                getattr(flux_map_preflight, "mgxs_fissionable_calculations", 0)
+            ),
+            "mgxs_h_factor_datasets": int(
+                getattr(flux_map_preflight, "mgxs_h_factor_datasets", 0)
+            ),
+            "mgxs_h_factor_missing": int(
+                getattr(flux_map_preflight, "mgxs_h_factor_missing", 0)
+            ),
+            "mgxs_h_factor_invalid": int(
+                getattr(flux_map_preflight, "mgxs_h_factor_invalid", 0)
             ),
         },
         "artifact_counts": {
