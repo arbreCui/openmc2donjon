@@ -7,9 +7,12 @@ import {
   MixtureDetail,
   api,
 } from "@/lib/api";
+import { useSettings } from "@/lib/settings";
 import CrossSectionPlot from "@/components/inspect/CrossSectionPlot";
 import MixtureTable from "@/components/inspect/MixtureTable";
 import Summary from "@/components/inspect/Summary";
+
+const FALLBACK_PLACEHOLDER = "/path/to/mgxs_library.h5";
 
 type State =
   | { kind: "idle" }
@@ -30,6 +33,13 @@ export default function InspectPage() {
   const [mixtureState, setMixtureState] = useState<MixtureState>({
     kind: "idle",
   });
+  const [settings] = useSettings();
+  // Show the saved default as a *placeholder* only - never pre-fill the
+  // value, so users who want to type a new path don't have to clear
+  // the input first. ``FALLBACK_PLACEHOLDER`` keeps the field signalling
+  // its intent before the user has saved anything in Settings.
+  const placeholder =
+    settings.default_inspect_path?.trim() || FALLBACK_PLACEHOLDER;
 
   const inspect = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -103,7 +113,7 @@ export default function InspectPage() {
         >
           <input
             type="text"
-            placeholder="/path/to/mgxs_library.h5"
+            placeholder={placeholder}
             value={path}
             onChange={(e) => setPath(e.target.value)}
             className="flex-1 min-w-0 px-3 py-2 rounded-md border border-[var(--edge)] bg-[rgba(255,255,255,0.03)] text-[var(--fg-0)] font-mono text-sm focus:outline-none focus:border-[var(--accent)]"

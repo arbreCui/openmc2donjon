@@ -1,0 +1,120 @@
+"use client";
+
+import { FormEvent, useEffect, useState } from "react";
+import { DEFAULT_SETTINGS, useSettings } from "@/lib/settings";
+
+export default function SettingsPage() {
+  const [settings, update, reset, hydrated] = useSettings();
+  const [draft, setDraft] = useState<string>("");
+  const [savedFlash, setSavedFlash] = useState(false);
+
+  // Initialise the draft from persisted settings once they hydrate.
+  useEffect(() => {
+    if (hydrated) {
+      setDraft(settings.default_inspect_path);
+    }
+  }, [hydrated, settings.default_inspect_path]);
+
+  // Auto-dismiss the "Saved" indicator a few seconds after a save.
+  useEffect(() => {
+    if (!savedFlash) return;
+    const handle = window.setTimeout(() => setSavedFlash(false), 1800);
+    return () => window.clearTimeout(handle);
+  }, [savedFlash]);
+
+  const onSave = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    update({ default_inspect_path: draft.trim() });
+    setSavedFlash(true);
+  };
+
+  const onReset = () => {
+    reset();
+    setDraft(DEFAULT_SETTINGS.default_inspect_path);
+    setSavedFlash(false);
+  };
+
+  return (
+    <main className="min-h-[calc(100vh-3.5rem)] px-6 py-12">
+      <div className="mx-auto max-w-3xl">
+        <header className="mb-8">
+          <h1 className="text-3xl font-bold tracking-tight">
+            <span className="grad-text">Settings</span>
+          </h1>
+          <p className="mt-2 text-sm text-[var(--fg-2)]">
+            Browser-local preferences. Nothing here is sent to the
+            backend or written to disk; values live in this
+            browser&apos;s
+            <code className="font-mono"> localStorage</code> only.
+          </p>
+        </header>
+
+        <form
+          className="glass rounded-xl p-5 space-y-4"
+          onSubmit={onSave}
+        >
+          <div>
+            <label
+              htmlFor="default_inspect_path"
+              className="block text-sm font-semibold"
+            >
+              Default Inspect path
+            </label>
+            <p className="mt-1 text-[12px] text-[var(--fg-3)]">
+              Pre-filled as a <em>placeholder</em> on the Inspect page so
+              you can see your usual prefix without it being committed
+              into the input. Leave blank to disable.
+            </p>
+            <input
+              id="default_inspect_path"
+              type="text"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              disabled={!hydrated}
+              placeholder="/shared/you/openmc-runs/"
+              className="mt-3 w-full min-w-0 px-3 py-2 rounded-md border border-[var(--edge)] bg-[rgba(255,255,255,0.03)] text-[var(--fg-0)] font-mono text-sm focus:outline-none focus:border-[var(--accent)] disabled:opacity-50"
+              spellCheck={false}
+              autoComplete="off"
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="text-[12px] tab-num text-[var(--fg-3)]">
+              {hydrated ? (
+                savedFlash ? (
+                  <span className="text-emerald-300">Saved.</span>
+                ) : (
+                  <span>
+                    Current value:{" "}
+                    <span className="font-mono text-[var(--fg-1)]">
+                      {settings.default_inspect_path || "(none)"}
+                    </span>
+                  </span>
+                )
+              ) : (
+                <span>Loading…</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onReset}
+                className="btn btn-secondary"
+                disabled={!hydrated}
+              >
+                Restore defaults
+              </button>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={!hydrated}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </main>
+  );
+}

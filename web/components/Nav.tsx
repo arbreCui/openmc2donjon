@@ -11,6 +11,7 @@ type Item = {
 const ITEMS: Item[] = [
   { href: "/", label: "Home" },
   { href: "/inspect", label: "Inspect" },
+  { href: "/settings", label: "Settings" },
 ];
 
 export default function Nav() {
