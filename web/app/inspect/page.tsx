@@ -10,7 +10,9 @@ import {
 import { useSettings } from "@/lib/settings";
 import CrossSectionPlot from "@/components/inspect/CrossSectionPlot";
 import MixtureTable from "@/components/inspect/MixtureTable";
-import ScatterHeatmap from "@/components/inspect/ScatterHeatmap";
+import ScatterHeatmap, {
+  type Scale as ScatterScale,
+} from "@/components/inspect/ScatterHeatmap";
 import Summary from "@/components/inspect/Summary";
 
 const FALLBACK_PLACEHOLDER = "/path/to/mgxs_library.h5";
@@ -34,6 +36,12 @@ export default function InspectPage() {
   const [mixtureState, setMixtureState] = useState<MixtureState>({
     kind: "idle",
   });
+  // Scatter-heatmap controls are lifted here so a moment change can
+  // drive an ``api.inspectMixture`` refetch and so a scale preference
+  // survives mixture switches (a user who picked log10 once usually
+  // wants log10 for the next mixture too).
+  const [scatterMoment, setScatterMoment] = useState(0);
+  const [scatterScale, setScatterScale] = useState<ScatterScale>("linear");
   const [settings, , , settingsHydrated] = useSettings();
   const savedPrefix = settings.default_inspect_path.trim();
   // Show the saved default as a *placeholder* only - never pre-fill the
@@ -56,6 +64,7 @@ export default function InspectPage() {
     setState({ kind: "loading" });
     setSelectedMixture(null);
     setMixtureState({ kind: "idle" });
+    setScatterMoment(0);
     try {
       const data = await api.inspect(trimmed);
       setState({ kind: "ok", data, path: trimmed });
@@ -66,15 +75,19 @@ export default function InspectPage() {
 
   const handlePickMixture = useCallback((name: string) => {
     setSelectedMixture(name);
+    // New mixture = start at P0; scale preference is intentionally
+    // preserved so users don't have to re-pick log10 after every row click.
+    setScatterMoment(0);
   }, []);
 
   useEffect(() => {
     if (state.kind !== "ok" || selectedMixture == null) return;
     const requested = selectedMixture;
+    const requestedMoment = scatterMoment;
     setMixtureState({ kind: "loading", mixture: requested });
     let cancelled = false;
     api
-      .inspectMixture(state.path, requested, 0)
+      .inspectMixture(state.path, requested, requestedMoment)
       .then((data) => {
         if (cancelled) return;
         setMixtureState({ kind: "ok", data });
@@ -94,7 +107,7 @@ export default function InspectPage() {
     return () => {
       cancelled = true;
     };
-  }, [state, selectedMixture]);
+  }, [state, selectedMixture, scatterMoment]);
 
   return (
     <main className="min-h-[calc(100vh-3.5rem)] px-6 py-12">
@@ -161,6 +174,10 @@ export default function InspectPage() {
               handoff={state.data}
               mixtureState={mixtureState}
               selectedMixture={selectedMixture}
+              scatterMoment={scatterMoment}
+              scatterScale={scatterScale}
+              onScatterMomentChange={setScatterMoment}
+              onScatterScaleChange={setScatterScale}
             />
           </section>
         ) : null}
@@ -200,10 +217,18 @@ function MixturePanel({
   handoff,
   mixtureState,
   selectedMixture,
+  scatterMoment,
+  scatterScale,
+  onScatterMomentChange,
+  onScatterScaleChange,
 }: {
   handoff: HandoffInspection;
   mixtureState: MixtureState;
   selectedMixture: string | null;
+  scatterMoment: number;
+  scatterScale: ScatterScale;
+  onScatterMomentChange: (m: number) => void;
+  onScatterScaleChange: (s: ScatterScale) => void;
 }) {
   if (selectedMixture == null) {
     return (
@@ -254,10 +279,22 @@ function MixturePanel({
         <ScatterHeatmap
           scatter={detail.scatter}
           mixtureName={detail.mixture}
+          moment={scatterMoment}
+          scale={scatterScale}
+          availableMoments={availableMoments(handoff)}
+          onMomentChange={onScatterMomentChange}
+          onScaleChange={onScatterScaleChange}
         />
       ) : null}
     </div>
   );
+}
+
+function availableMoments(handoff: HandoffInspection): readonly number[] {
+  // Trust the file-level Legendre order. If absent, P0 is the only
+  // safe assumption.
+  const max = handoff.legendre_order ?? 0;
+  return Array.from({ length: max + 1 }, (_, i) => i);
 }
 
 function MixtureMeta({ detail }: { detail: MixtureDetail }) {

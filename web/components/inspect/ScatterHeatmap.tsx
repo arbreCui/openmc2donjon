@@ -1,48 +1,59 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { Data, Layout } from "plotly.js-dist-min";
 import { usePlotlyPlot } from "@/lib/usePlotlyPlot";
 import type { ScatterMoment } from "@/lib/api";
 
+export type Scale = "linear" | "log10";
+
 export interface ScatterHeatmapProps {
   scatter: ScatterMoment;
   mixtureName: string;
+  /** Currently selected moment (== ``scatter.moment_index`` when the parent's
+   * fetch has settled; passed through so the selector reflects the requested
+   * value even mid-fetch). */
+  moment: number;
+  scale: Scale;
+  /** Allowed moment indices, derived from ``handoff.legendre_order``. */
+  availableMoments: readonly number[];
+  onMomentChange: (moment: number) => void;
+  onScaleChange: (scale: Scale) => void;
   className?: string;
 }
-
-type Scale = "linear" | "log10";
 
 const ZERO_CELL_COLOR = "#2a2d3a";
 
 /**
- * Render one scatter moment as a heatmap with a Linear / log10 colour
- * toggle and a direction caption.
- *
- * The matrix follows the canonical ``moment,from,to`` axis order the
- * Python backend produces, so ``z[i][j]`` is the scattering cross
- * section from group ``i+1`` to group ``j+1``. The Y axis is reversed
- * so group 1 (fastest) sits at the top, matching the reactor-physics
- * convention readers expect.
+ * Controlled heatmap: parent owns ``moment`` / ``scale``. Triggering a
+ * moment change refetches in the parent; switching scale is a pure
+ * client-side re-render.
  *
  * Scale handling
  * --------------
- * Linear mode plots the raw values; log10 mode plots ``log10(z)`` on
- * top of a grey background, with the original value carried through
- * ``customdata`` so the hover label still reports the real cross
- * section. Cells where ``z == 0`` (typically the upper triangle in a
- * down-scatter-only matrix) render as explicit grey rather than as
- * transparent gaps; this distinguishes "physical zero" from "missing
- * data" and matches the caption.
+ * Linear mode plots the raw values; log10 mode stacks two traces - a
+ * grey background for non-positive cells (``v <= 0``) and the viridis
+ * log10 trace for the strictly-positive cells. The grey trace
+ * distinguishes "physical zero" / "non-positive" from "missing data".
  *
- * Moment selector lands in M2-D.
+ * Hover
+ * -----
+ * Positive cells: ``σ = 9.05e-02 (log₁₀ = -1.04)``.
+ * Zero cells:     ``σ = 0 (no scatter)``.
+ * Negative cells: ``σ = -1.23e-12 (non-positive)`` - shouldn't occur
+ * in well-formed data but we render them as grey-with-warning rather
+ * than silently dropping or feeding to ``log10``.
  */
 export default function ScatterHeatmap({
   scatter,
   mixtureName,
+  moment,
+  scale,
+  availableMoments,
+  onMomentChange,
+  onScaleChange,
   className,
 }: ScatterHeatmapProps) {
-  const [scale, setScale] = useState<Scale>("linear");
   const traces = useMemo(() => buildTraces(scatter, scale), [scatter, scale]);
 
   const ref = usePlotlyPlot(
@@ -53,15 +64,6 @@ export default function ScatterHeatmap({
     [traces, mixtureName, scatter.moment_index, scale],
   );
 
-  if (traces.length === 0) {
-    return (
-      <div className="glass rounded-xl p-5 text-sm text-[var(--fg-3)]">
-        No scatter matrix available for{" "}
-        <span className="font-mono">{mixtureName}</span>.
-      </div>
-    );
-  }
-
   return (
     <div className={className ?? "glass rounded-xl p-3"}>
       <div className="flex items-center justify-between gap-3 px-2 pt-1 pb-2 flex-wrap">
@@ -69,9 +71,25 @@ export default function ScatterHeatmap({
           Scatter matrix (P{scatter.moment_index}) —{" "}
           <span className="font-mono">{mixtureName}</span>
         </h3>
-        <SegmentedControl scale={scale} onChange={setScale} />
+        <div className="flex items-center gap-2 flex-wrap">
+          {availableMoments.length > 1 ? (
+            <MomentSelector
+              moments={availableMoments}
+              selected={moment}
+              onChange={onMomentChange}
+            />
+          ) : null}
+          <ScaleToggle scale={scale} onChange={onScaleChange} />
+        </div>
       </div>
-      <div ref={ref} className="h-96 w-full" />
+      {traces.length === 0 ? (
+        <div className="px-2 pb-2 text-sm text-[var(--fg-3)]">
+          No scatter matrix available for{" "}
+          <span className="font-mono">{mixtureName}</span>.
+        </div>
+      ) : (
+        <div ref={ref} className="h-96 w-full" />
+      )}
       <p className="px-2 pt-3 text-[12px] text-[var(--fg-3)] leading-relaxed">
         Rows are incoming (<code className="font-mono">from</code>) groups;
         columns are outgoing (<code className="font-mono">to</code>) groups.{" "}
@@ -84,7 +102,45 @@ export default function ScatterHeatmap({
   );
 }
 
-function SegmentedControl({
+function MomentSelector({
+  moments,
+  selected,
+  onChange,
+}: {
+  moments: readonly number[];
+  selected: number;
+  onChange: (m: number) => void;
+}) {
+  return (
+    <div
+      className="inline-flex rounded-md border border-[var(--edge)] bg-[rgba(255,255,255,0.03)] p-0.5 text-[12px] tab-num"
+      role="group"
+      aria-label="Scatter moment"
+    >
+      {moments.map((m) => {
+        const active = selected === m;
+        return (
+          <button
+            key={m}
+            type="button"
+            onClick={() => onChange(m)}
+            aria-pressed={active}
+            className={
+              "px-2.5 py-1 rounded transition " +
+              (active
+                ? "bg-[var(--accent)]/15 text-[var(--fg-0)]"
+                : "text-[var(--fg-2)] hover:text-[var(--fg-0)]")
+            }
+          >
+            P{m}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ScaleToggle({
   scale,
   onChange,
 }: {
@@ -158,30 +214,36 @@ function buildLinearTrace(values: number[][], labels: string[]): Data {
 }
 
 function buildLogTraces(values: number[][], labels: string[]): Data[] {
-  // Trace 1: a grey heatmap that fills only the zero cells. We mask
-  // non-zero cells with null so the log trace above paints over them.
+  // Trace 1: grey background for non-positive cells. Strictly-positive
+  // cells render via the log trace stacked on top.
   const greyZ: (number | null)[][] = values.map((row) =>
-    row.map((v) => (v === 0 ? 0 : null)),
+    row.map((v) => (v <= 0 ? 0 : null)),
+  );
+  const greyCustomdata: string[][] = values.map((row) =>
+    row.map((v) =>
+      v === 0
+        ? "σ = 0 (no scatter)"
+        : v < 0
+          ? `σ = ${v.toExponential(3)} (non-positive)`
+          : "",
+    ),
   );
   const greyTrace: Data = {
     type: "heatmap",
     z: greyZ,
     x: labels,
     y: labels,
+    customdata: greyCustomdata,
     colorscale: [
       [0.0, ZERO_CELL_COLOR],
       [1.0, ZERO_CELL_COLOR],
     ],
     showscale: false,
-    hovertemplate:
-      "from %{y} → to %{x}<br>σ = 0 (no scatter)<extra></extra>",
+    hovertemplate: "from %{y} → to %{x}<br>%{customdata}<extra></extra>",
   };
 
-  // Trace 2: log10 of positive cells; zeros are null so the grey
-  // background shows through.
   const positives = values.flat().filter((v) => v > 0);
   if (positives.length === 0) {
-    // Degenerate case: nothing positive to log. Just show grey.
     return [greyTrace];
   }
   const logged: (number | null)[][] = values.map((row) =>
@@ -195,7 +257,7 @@ function buildLogTraces(values: number[][], labels: string[]): Data[] {
     row.map((v) =>
       v > 0
         ? `σ = ${v.toExponential(3)} (log₁₀ = ${Math.log10(v).toFixed(2)})`
-        : "σ = 0 (no scatter)",
+        : "",
     ),
   );
 
@@ -236,11 +298,18 @@ function integerTicksInRange(min: number, max: number): number[] {
   for (let k = lo; k <= hi; k++) {
     ticks.push(k);
   }
-  // If the range spans many decades, thin out so the colorbar isn't
-  // crowded; aim for at most 7 visible ticks.
   if (ticks.length <= 7) return ticks;
+  // Thin to at most 7 ticks but ALWAYS keep the first and last so the
+  // colour bar's reported range matches the data's. Without this guard
+  // a 12-decade range thinned by stride=2 could stop at ``-2`` and lie
+  // about the maximum.
   const stride = Math.ceil(ticks.length / 7);
-  return ticks.filter((_, i) => i % stride === 0);
+  const thinned = ticks.filter((_, i) => i % stride === 0);
+  const last = ticks[ticks.length - 1];
+  if (thinned[thinned.length - 1] !== last) {
+    thinned.push(last);
+  }
+  return thinned;
 }
 
 const SUPERSCRIPT_DIGITS = "⁰¹²³⁴⁵⁶⁷⁸⁹";
