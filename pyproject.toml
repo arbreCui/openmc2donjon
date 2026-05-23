@@ -40,6 +40,10 @@ dependencies = [
 dev = [
   "ruff>=0.8,<1",
   "mypy>=1.14,<2",
+  # ``fastapi.testclient`` pulls ``httpx`` lazily; pin it in dev so the
+  # web-backend test suite can construct ``TestClient`` without
+  # bloating the production ``[web]`` extra.
+  "httpx>=0.27,<1",
 ]
 web = [
   "fastapi>=0.110,<1",
