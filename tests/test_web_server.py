@@ -421,6 +421,106 @@ class InspectEndpointTests(unittest.TestCase):
             self.assertIn("scatter moment", response.json()["detail"])
 
 
+@unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
+class FilesEndpointTests(unittest.TestCase):
+    def test_live_mode_lists_real_directory(self) -> None:
+        from openmc2donjon.web.server import FILES_SCHEMA, create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            (base / "alpha.h5").write_bytes(b"x" * 16)
+            (base / "beta.txt").write_text("hello")
+            (base / "child").mkdir()
+
+            client = TestClient(create_app(mock_mode=False))
+            response = client.get("/api/files", params={"path": str(base)})
+            self.assertEqual(response.status_code, 200)
+            payload = response.json()
+
+            self.assertEqual(payload["schema"], FILES_SCHEMA)
+            self.assertEqual(payload["path"], str(base.resolve()))
+            self.assertEqual(payload["parent"], str(base.resolve().parent))
+            names = sorted(entry["name"] for entry in payload["entries"])
+            self.assertEqual(names, ["alpha.h5", "beta.txt", "child"])
+
+            kinds = {e["name"]: e["kind"] for e in payload["entries"]}
+            self.assertEqual(kinds["alpha.h5"], "file")
+            self.assertEqual(kinds["beta.txt"], "file")
+            self.assertEqual(kinds["child"], "dir")
+
+            sizes = {e["name"]: e["size"] for e in payload["entries"]}
+            self.assertEqual(sizes["alpha.h5"], 16)
+            self.assertIsNone(sizes["child"])
+
+    def test_live_mode_returns_404_for_missing_path(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=False))
+        response = client.get(
+            "/api/files", params={"path": "/definitely/not/here"}
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("not found", response.json()["detail"])
+
+    def test_live_mode_returns_400_when_path_is_a_file(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as fh:
+            fh.write(b"not a directory")
+            tmppath = fh.name
+        try:
+            client = TestClient(create_app(mock_mode=False))
+            response = client.get("/api/files", params={"path": tmppath})
+            self.assertEqual(response.status_code, 400)
+            self.assertIn("not a directory", response.json()["detail"])
+        finally:
+            Path(tmppath).unlink(missing_ok=True)
+
+    def test_mock_mode_root_returns_top_level_entries(self) -> None:
+        from openmc2donjon.web.server import FILES_SCHEMA, create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.get("/api/files", params={"path": "/mock/home"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+
+        self.assertEqual(payload["schema"], FILES_SCHEMA)
+        self.assertEqual(payload["path"], "/mock/home")
+        names = [entry["name"] for entry in payload["entries"]]
+        self.assertIn("openmc-runs", names)
+        self.assertIn("scratch", names)
+
+    def test_mock_mode_lists_nested_directory_with_h5_files(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.get(
+            "/api/files",
+            params={"path": "/mock/home/openmc-runs/c5g7"},
+        )
+        self.assertEqual(response.status_code, 200)
+        names = [entry["name"] for entry in response.json()["entries"]]
+        self.assertIn("handoff.h5", names)
+        self.assertIn("handoff_aug.h5", names)
+
+    def test_mock_mode_unknown_path_returns_404(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.get(
+            "/api/files", params={"path": "/mock/home/does/not/exist"}
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_mock_mode_tilde_aliases_to_home(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.get("/api/files", params={"path": "~"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["path"], "/mock/home")
+
+
 class UvicornLogLevelMappingTests(unittest.TestCase):
     def _ns(self, **kwargs: object) -> object:
         import argparse

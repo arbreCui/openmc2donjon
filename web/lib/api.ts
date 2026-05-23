@@ -144,6 +144,19 @@ export interface MixtureDetail {
   scatter: ScatterMoment | null;
 }
 
+export interface FileEntry {
+  name: string;
+  kind: "dir" | "file";
+  size: number | null;
+}
+
+export interface FileListing {
+  schema: string;
+  path: string;
+  parent: string | null;
+  entries: FileEntry[];
+}
+
 export const api = {
   health: () => getJson<HealthResponse>("/api/health"),
   inspect: (path: string) =>
@@ -154,4 +167,5 @@ export const api = {
       mixture,
       moment,
     }),
+  listFiles: (path: string) => getJson<FileListing>("/api/files", { path }),
 };

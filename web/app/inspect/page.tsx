@@ -9,6 +9,7 @@ import {
 } from "@/lib/api";
 import { useSettings } from "@/lib/settings";
 import CrossSectionPlot from "@/components/inspect/CrossSectionPlot";
+import FileBrowserModal from "@/components/inspect/FileBrowserModal";
 import MixtureTable from "@/components/inspect/MixtureTable";
 import ScatterHeatmap, {
   type Scale as ScatterScale,
@@ -82,6 +83,7 @@ export default function InspectPage() {
   // wants log10 for the next mixture too).
   const [scatterMoment, setScatterMoment] = useState(0);
   const [scatterScale, setScatterScale] = useState<ScatterScale>("linear");
+  const [browserOpen, setBrowserOpen] = useState(false);
   const [settings, , , settingsHydrated] = useSettings();
   const savedPrefix = settings.default_inspect_path.trim();
   // Show the saved default as a *placeholder* only - never pre-fill the
@@ -187,6 +189,13 @@ export default function InspectPage() {
             aria-label="HDF5 handoff path"
           />
           <button
+            type="button"
+            onClick={() => setBrowserOpen(true)}
+            className="btn btn-secondary"
+          >
+            Browse…
+          </button>
+          <button
             type="submit"
             className="btn btn-primary"
             disabled={state.kind === "loading"}
@@ -194,6 +203,16 @@ export default function InspectPage() {
             {state.kind === "loading" ? "Reading…" : "Inspect"}
           </button>
         </form>
+
+        <FileBrowserModal
+          open={browserOpen}
+          initialPath={pickBrowserStart(savedPrefix)}
+          onClose={() => setBrowserOpen(false)}
+          onSelect={(picked) => {
+            setPath(picked);
+            setBrowserOpen(false);
+          }}
+        />
 
         {canUseSavedPrefix ? (
           <button
@@ -392,6 +411,25 @@ function availableMoments(handoff: HandoffInspection): readonly number[] {
   // safe assumption.
   const max = handoff.legendre_order ?? 0;
   return Array.from({ length: max + 1 }, (_, i) => i);
+}
+
+function pickBrowserStart(savedPrefix: string): string {
+  // Prefer the user's saved Inspect prefix when it looks like a
+  // directory (trailing slash, or just a folder path). Otherwise let
+  // the backend resolve ``~`` to the server home / mock home.
+  const trimmed = savedPrefix.trim();
+  if (!trimmed) return "~";
+  // Drop a trailing file segment so "~/runs/handoff.h5" still opens
+  // the runs/ directory. Heuristic: if the basename has an extension,
+  // strip it.
+  const lastSlash = trimmed.lastIndexOf("/");
+  if (lastSlash >= 0 && lastSlash < trimmed.length - 1) {
+    const tail = trimmed.slice(lastSlash + 1);
+    if (tail.includes(".")) {
+      return trimmed.slice(0, lastSlash + 1);
+    }
+  }
+  return trimmed;
 }
 
 function MixtureMeta({ detail }: { detail: MixtureDetail }) {

@@ -40,6 +40,35 @@ DEFAULT_CORS_ORIGINS: tuple[str, ...] = (
 
 INSPECT_SCHEMA = "openmc2donjon.mgxs-inspect.v1"
 MIXTURE_SCHEMA = "openmc2donjon.mgxs-mixture.v1"
+FILES_SCHEMA = "openmc2donjon.files.v1"
+
+# Synthetic directory tree returned by the file browser when running in
+# ``--mock``. Three levels deep, mimicking the typical ``$HOME/openmc-runs``
+# layout users will navigate in production.
+_MOCK_HOME = "/mock/home"
+_MOCK_TREE: dict[str, list[tuple[str, str, int | None]]] = {
+    _MOCK_HOME: [
+        ("openmc-runs", "dir", None),
+        ("scratch", "dir", None),
+        ("notes.txt", "file", 1024),
+    ],
+    f"{_MOCK_HOME}/openmc-runs": [
+        ("c5g7", "dir", None),
+        ("u238_33g", "dir", None),
+    ],
+    f"{_MOCK_HOME}/openmc-runs/c5g7": [
+        ("handoff.h5", "file", 832_000),
+        ("handoff_aug.h5", "file", 856_000),
+        ("README.md", "file", 1_024),
+    ],
+    f"{_MOCK_HOME}/openmc-runs/u238_33g": [
+        ("mgxs.h5", "file", 1_240_000),
+        ("mgxs_with_sph.h5", "file", 1_250_000),
+    ],
+    f"{_MOCK_HOME}/scratch": [
+        ("tmp_run.h5", "file", 256_000),
+    ],
+}
 
 # Cross sections to extract when reading per-mixture detail. ``chi`` is
 # included so the frontend can show source spectrum alongside reaction
@@ -118,6 +147,12 @@ def create_app(
         payload["energy_bounds"] = bounds
         payload["mesh_match"] = mesh_match
         return payload
+
+    @app.get("/api/files")
+    def api_files(path: str = Query(..., min_length=1)) -> dict[str, Any]:
+        if mock_mode:
+            return _mock_list_dir(path, HTTPException)
+        return _list_dir(path, HTTPException)
 
     @app.get("/api/inspect/mixture")
     def api_inspect_mixture(
@@ -325,6 +360,81 @@ def _float_attr(attrs: Any, name: str) -> float | None:
         return float(attrs[name])
     except (TypeError, ValueError):
         return None
+
+
+def _list_dir(raw: str, http_exception: Any) -> dict[str, Any]:
+    """Real-filesystem implementation of ``/api/files`` (live mode)."""
+
+    real = Path(raw).expanduser().resolve()
+    if not real.exists():
+        raise http_exception(status_code=404, detail=f"path not found: {raw}")
+    if not real.is_dir():
+        raise http_exception(
+            status_code=400, detail=f"path is not a directory: {raw}"
+        )
+    try:
+        children = sorted(real.iterdir(), key=lambda p: p.name.lower())
+    except PermissionError as exc:
+        raise http_exception(
+            status_code=403, detail=f"cannot read directory: {exc}"
+        ) from exc
+    except OSError as exc:
+        raise http_exception(
+            status_code=403, detail=f"cannot read directory: {exc}"
+        ) from exc
+
+    entries: list[dict[str, Any]] = []
+    for child in children:
+        try:
+            is_dir = child.is_dir()
+            size: int | None = None
+            if not is_dir:
+                try:
+                    size = child.stat().st_size
+                except OSError:
+                    size = None
+        except OSError:
+            # Broken symlink or vanished mid-listing; skip it rather
+            # than fail the whole request.
+            continue
+        entries.append(
+            {
+                "name": child.name,
+                "kind": "dir" if is_dir else "file",
+                "size": size,
+            }
+        )
+    return _files_payload(real, entries)
+
+
+def _mock_list_dir(raw: str, http_exception: Any) -> dict[str, Any]:
+    """Mock-mode implementation of ``/api/files`` (returns the bundled tree)."""
+
+    if raw in ("~", "~/"):
+        resolved = _MOCK_HOME
+    elif raw.startswith("~/"):
+        resolved = f"{_MOCK_HOME}/{raw[2:]}"
+    else:
+        resolved = raw.rstrip("/")
+    if resolved not in _MOCK_TREE:
+        raise http_exception(
+            status_code=404, detail=f"path not found: {raw}"
+        )
+    entries = [
+        {"name": name, "kind": kind, "size": size}
+        for name, kind, size in _MOCK_TREE[resolved]
+    ]
+    return _files_payload(Path(resolved), entries)
+
+
+def _files_payload(real_path: Path, entries: list[dict[str, Any]]) -> dict[str, Any]:
+    parent = real_path.parent
+    return {
+        "schema": FILES_SCHEMA,
+        "path": str(real_path),
+        "parent": None if parent == real_path else str(parent),
+        "entries": entries,
+    }
 
 
 def _load_fixture(filename: str) -> dict[str, Any]:
