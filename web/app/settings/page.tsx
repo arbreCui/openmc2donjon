@@ -43,9 +43,9 @@ export default function SettingsPage() {
           </h1>
           <p className="mt-2 text-sm text-[var(--fg-2)]">
             Browser-local preferences. Nothing here is sent to the
-            backend or written to disk; values live in this
+            openmc2donjon backend; values are stored only in this
             browser&apos;s
-            <code className="font-mono"> localStorage</code> only.
+            <code className="font-mono"> localStorage</code>.
           </p>
         </header>
 

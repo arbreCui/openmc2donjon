@@ -33,13 +33,17 @@ export default function InspectPage() {
   const [mixtureState, setMixtureState] = useState<MixtureState>({
     kind: "idle",
   });
-  const [settings] = useSettings();
+  const [settings, , , settingsHydrated] = useSettings();
+  const savedPrefix = settings.default_inspect_path.trim();
   // Show the saved default as a *placeholder* only - never pre-fill the
   // value, so users who want to type a new path don't have to clear
   // the input first. ``FALLBACK_PLACEHOLDER`` keeps the field signalling
-  // its intent before the user has saved anything in Settings.
-  const placeholder =
-    settings.default_inspect_path?.trim() || FALLBACK_PLACEHOLDER;
+  // its intent before the user has saved anything in Settings. An
+  // explicit "Use saved prefix" button below the form copies the saved
+  // value into the input when the user actually wants to save typing.
+  const placeholder = savedPrefix || FALLBACK_PLACEHOLDER;
+  const canUseSavedPrefix =
+    settingsHydrated && savedPrefix !== "" && !path.startsWith(savedPrefix);
 
   const inspect = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -129,6 +133,17 @@ export default function InspectPage() {
             {state.kind === "loading" ? "Reading…" : "Inspect"}
           </button>
         </form>
+
+        {canUseSavedPrefix ? (
+          <button
+            type="button"
+            onClick={() => setPath(savedPrefix)}
+            className="mt-2 text-[12px] text-[var(--accent-2)] hover:underline"
+          >
+            Use saved prefix:{" "}
+            <code className="font-mono">{savedPrefix}</code>
+          </button>
+        ) : null}
 
         <section className="mt-6">
           <FileResultView state={state} />
