@@ -26,8 +26,8 @@ class ProductionMinicaseExampleTests(unittest.TestCase):
         model_text = (_example_dir() / "minicase_model.py").read_text(encoding="utf-8")
         self.assertIn("VOLUME_FLUX_TALLY_NAME", model_text)
         self.assertIn("def extract_volume_flux(statepoint_path: Path)", model_text)
-        self.assertIn("energy_filter_order[:, ::-1]", model_text)
-        self.assertIn('"group_order"] = "mgxs_donjon"', model_text)
+        self.assertIn("reverse_openmc_energy_filter_flux", model_text)
+        self.assertIn("write_openmc_volume_flux_hdf5", model_text)
         self.assertIn('"energy_group_count"', model_text)
         self.assertIn('"legendre_order"', model_text)
 

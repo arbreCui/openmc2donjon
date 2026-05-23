@@ -25,8 +25,8 @@ class OpenMCFullCoreMinicaseExampleTests(unittest.TestCase):
         self.assertIn("ASM_Y{y_index:02d}_X{x_index:02d}", text)
         self.assertIn("DOMAIN_VOLUME_BY_ID", text)
         self.assertIn("VOLUME_FLUX_TALLY_NAME", text)
-        self.assertIn("energy_filter_order[:, ::-1]", text)
-        self.assertIn('"group_order"] = "mgxs_donjon"', text)
+        self.assertIn("reverse_openmc_energy_filter_flux", text)
+        self.assertIn("write_openmc_volume_flux_hdf5", text)
         self.assertIn('"spatial_mapping"', text)
 
     def test_recipe_preserves_one_domain_per_assembly_position(self) -> None:

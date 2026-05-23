@@ -19,6 +19,10 @@ from pathlib import Path
 import numpy as np
 import openmc
 import openmc.mgxs as mgxs
+from openmc2donjon.openmc_volume_flux import (
+    reverse_openmc_energy_filter_flux,
+    write_openmc_volume_flux_hdf5,
+)
 
 
 CASE_NAME = "openmc_full_core_minicase"
@@ -265,12 +269,11 @@ def extract_volume_flux(statepoint_path: Path) -> np.ndarray:
     with openmc.StatePoint(str(statepoint_path)) as statepoint:
         tally = statepoint.get_tally(name=VOLUME_FLUX_TALLY_NAME)
         values = np.asarray(tally.get_values(scores=["flux"], value="mean"), dtype=float)
-    energy_filter_order = np.squeeze(values).reshape(
-        (len(DOMAIN_IDS), len(ENERGY_BOUNDS_EV) - 1)
+    return reverse_openmc_energy_filter_flux(
+        values,
+        mixture_count=len(DOMAIN_IDS),
+        energy_groups=len(ENERGY_BOUNDS_EV) - 1,
     )
-    # OpenMC tally bins follow the EnergyFilter bin order; the converter HDF5
-    # contract stores group-wise arrays in MGXS/DONJON group order.
-    return energy_filter_order[:, ::-1]
 
 
 def append_volume_flux_hdf5(
@@ -278,16 +281,8 @@ def append_volume_flux_hdf5(
     statepoint_path: Path,
     mixture_names: list[str],
 ) -> None:
-    import h5py
-
     values = extract_volume_flux(statepoint_path)
-    with h5py.File(output_path, "a") as h5:
-        if "openmc_volume_flux" in h5:
-            del h5["openmc_volume_flux"]
-        dataset = h5.create_dataset("openmc_volume_flux", data=values)
-        dataset.attrs["mixture_names"] = np.asarray(mixture_names, dtype="S")
-        dataset.attrs["group_order"] = "mgxs_donjon"
-        dataset.attrs["source_group_order"] = "openmc_energy_filter_reversed"
+    write_openmc_volume_flux_hdf5(output_path, values, mixture_names=mixture_names)
 
 
 def root_attrs() -> dict[str, object]:

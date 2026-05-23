@@ -19,6 +19,11 @@ from .openmc_statepoint import (
     export_openmc_tallies_recipe,
     export_openmc_statepoint_recipe,
 )
+from .openmc_volume_flux import (
+    OpenMCVolumeFluxReport,
+    reverse_openmc_energy_filter_flux,
+    write_openmc_volume_flux_hdf5,
+)
 
 __all__ = [
     "__version__",
@@ -29,11 +34,14 @@ __all__ = [
     "export_openmc_mgxs_library",
     "export_openmc_statepoint_recipe",
     "MixtureHistory",
+    "OpenMCVolumeFluxReport",
     "RecipeDryRunSummary",
     "RecipeExportSummary",
     "RecipeTalliesExportSummary",
     "export_openmc_tallies_recipe",
+    "reverse_openmc_energy_filter_flux",
     "write_macrolib",
     "write_multicompo",
     "write_multicompo_histories",
+    "write_openmc_volume_flux_hdf5",
 ]
