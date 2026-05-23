@@ -65,8 +65,8 @@ def serve_handler(args: argparse.Namespace) -> int:
         )
     from ..web.server import create_app
 
-    cors_origins = tuple(args.cors_origins) if args.cors_origins else None
-    app = create_app(mock_mode=bool(args.mock), cors_origins=cors_origins)
+    extra_origins = tuple(args.cors_origins) if args.cors_origins else ()
+    app = create_app(mock_mode=bool(args.mock), extra_origins=extra_origins)
     mode = "mock" if args.mock else "live"
     logger.info(
         "Serving openmc2donjon web backend on http://%s:%d (%s mode)",
@@ -74,8 +74,34 @@ def serve_handler(args: argparse.Namespace) -> int:
         args.port,
         mode,
     )
-    uvicorn.run(app, host=args.host, port=args.port, log_level="info")
+    uvicorn.run(
+        app,
+        host=args.host,
+        port=args.port,
+        log_level=_uvicorn_log_level(args),
+    )
     return 0
+
+
+def _uvicorn_log_level(args: argparse.Namespace) -> str:
+    """Map the CLI logging flags onto uvicorn's ``log_level`` knob.
+
+    ``--log-level`` wins, then ``--quiet``, then ``-vv`` -> debug. The
+    default stays at ``info`` so uvicorn request logs remain visible
+    during interactive use.
+    """
+
+    explicit = getattr(args, "log_level", None)
+    if explicit:
+        return str(explicit).lower()
+    if getattr(args, "quiet", False):
+        return "error"
+    verbose = int(getattr(args, "verbose", 0) or 0)
+    if verbose >= 2:
+        return "debug"
+    return "info"
+
+
 
 
 def command_specs() -> tuple[CommandSpec, ...]:

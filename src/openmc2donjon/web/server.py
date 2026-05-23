@@ -18,9 +18,23 @@ from .._logging import get_logger
 
 logger = get_logger("web.server")
 
+DEFAULT_CORS_ORIGINS: tuple[str, ...] = (
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+)
 
-def create_app(*, mock_mode: bool = False, cors_origins: tuple[str, ...] | None = None) -> Any:
+
+def create_app(
+    *,
+    mock_mode: bool = False,
+    extra_origins: tuple[str, ...] = (),
+) -> Any:
     """Build a configured FastAPI application instance.
+
+    The CORS allow-list always includes ``DEFAULT_CORS_ORIGINS`` (the
+    Next.js dev server). Any ``extra_origins`` are appended and the
+    resulting list is order-preserving deduplicated, so callers can
+    grow the list without losing the defaults.
 
     Importing FastAPI lazily lets the package work without the ``web``
     extra installed for users who only need the CLI.
@@ -41,11 +55,7 @@ def create_app(*, mock_mode: bool = False, cors_origins: tuple[str, ...] | None 
         version=__version__,
     )
 
-    allow_origins = list(
-        cors_origins
-        if cors_origins is not None
-        else ("http://localhost:3000", "http://127.0.0.1:3000")
-    )
+    allow_origins = list(dict.fromkeys((*DEFAULT_CORS_ORIGINS, *extra_origins)))
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allow_origins,
