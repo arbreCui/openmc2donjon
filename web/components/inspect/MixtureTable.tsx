@@ -1,15 +1,22 @@
 import { MixtureSummary } from "@/lib/api";
 
+export interface MixtureTableProps {
+  mixtures: MixtureSummary[];
+  selectedName?: string | null;
+  onSelect?: (name: string) => void;
+}
+
 export default function MixtureTable({
   mixtures,
-}: {
-  mixtures: MixtureSummary[];
-}) {
+  selectedName,
+  onSelect,
+}: MixtureTableProps) {
   if (mixtures.length === 0) {
     return (
       <p className="text-sm text-[var(--fg-3)]">No mixtures in this file.</p>
     );
   }
+  const interactive = onSelect != null;
   return (
     <div className="glass rounded-xl p-1 overflow-x-auto">
       <table className="w-full text-sm">
@@ -25,10 +32,32 @@ export default function MixtureTable({
           </tr>
         </thead>
         <tbody>
-          {mixtures.map((m) => (
+          {mixtures.map((m) => {
+            const active = selectedName === m.name;
+            return (
             <tr
               key={m.name}
-              className="border-t border-[var(--edge)] hover:bg-white/[0.03]"
+              className={
+                "border-t border-[var(--edge)] " +
+                (interactive ? "cursor-pointer " : "") +
+                (active
+                  ? "bg-[var(--accent)]/10 hover:bg-[var(--accent)]/15"
+                  : "hover:bg-white/[0.03]")
+              }
+              onClick={interactive ? () => onSelect!(m.name) : undefined}
+              onKeyDown={
+                interactive
+                  ? (e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onSelect!(m.name);
+                      }
+                    }
+                  : undefined
+              }
+              tabIndex={interactive ? 0 : undefined}
+              aria-selected={interactive ? active : undefined}
+              role={interactive ? "button" : undefined}
             >
               <Td>
                 <span className="font-mono">{m.name}</span>
@@ -62,7 +91,8 @@ export default function MixtureTable({
                 {m.scatter_shape ? `[${m.scatter_shape.join(",")}]` : "—"}
               </Td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>
