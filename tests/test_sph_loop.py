@@ -30,7 +30,10 @@ class SphLoopTests(unittest.TestCase):
             summary = root / "loop_summary.json"
             bundle_dir = root / "sph_loop_bundle"
             _write_mgxs(mgxs)
-            _write_reference_flux(reference)
+            _write_reference_flux(
+                reference,
+                std_dev=np.asarray([[0.8, 8.0], [0.8, 8.0]]),
+            )
             _write_fake_solver(solver)
             _write_fake_postprocess(postprocess)
             run_script.write_text(
@@ -137,6 +140,14 @@ class SphLoopTests(unittest.TestCase):
             metadata = payload["artifact_metadata"]
             self.assertEqual(metadata["reference_flux"]["group_order"], "mgxs_donjon")
             self.assertEqual(
+                metadata["reference_flux"]["std_dev_dataset"],
+                "openmc_volume_flux_std_dev",
+            )
+            self.assertAlmostEqual(
+                metadata["reference_flux"]["std_dev_max_rel"],
+                0.01,
+            )
+            self.assertEqual(
                 metadata["reference_flux"]["mixture_names"],
                 ["fuel", "moderator"],
             )
@@ -158,6 +169,10 @@ class SphLoopTests(unittest.TestCase):
                 "mgxs_donjon",
             )
             production_audit = payload["production_audit"]
+            self.assertEqual(
+                production_audit["reference"]["std_dev_dataset"],
+                "openmc_volume_flux_std_dev",
+            )
             self.assertTrue(production_audit["passed"])
             self.assertEqual(production_audit["errors"], [])
             self.assertEqual(
@@ -1135,6 +1150,7 @@ def _write_reference_flux(
     mixture_names: tuple[str, ...] = ("fuel", "moderator"),
     group_order: str | None = "mgxs_donjon",
     values: np.ndarray | None = None,
+    std_dev: np.ndarray | None = None,
 ) -> None:
     with h5py.File(path, "w") as h5:
         dataset = h5.create_dataset(
@@ -1148,6 +1164,14 @@ def _write_reference_flux(
         dataset.attrs["mixture_names"] = np.asarray(mixture_names, dtype="S")
         if group_order is not None:
             dataset.attrs["group_order"] = group_order
+        if std_dev is not None:
+            std_dataset = h5.create_dataset(
+                "openmc_volume_flux_std_dev",
+                data=np.asarray(std_dev),
+            )
+            std_dataset.attrs["mixture_names"] = np.asarray(mixture_names, dtype="S")
+            if group_order is not None:
+                std_dataset.attrs["group_order"] = group_order
 
 
 def _write_reference_flux_without_mixture_names(path: Path) -> None:

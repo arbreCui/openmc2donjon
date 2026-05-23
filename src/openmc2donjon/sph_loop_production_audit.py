@@ -151,6 +151,10 @@ def build_production_audit_payload(
             "group_order": reference.group_order,
             "energy_groups": reference.energy_groups,
             "mixture_names": list(reference.mixture_names),
+            "std_dev_source": getattr(reference, "std_dev_source", None),
+            "std_dev_dataset": getattr(reference, "std_dev_dataset", None),
+            "std_dev_max_rel": getattr(reference, "std_dev_max_rel", None),
+            "std_dev_worst": getattr(reference, "std_dev_worst", None),
         },
         "flux_map": {
             "passed": flux_map_preflight.passed,

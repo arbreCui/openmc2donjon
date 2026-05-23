@@ -38,6 +38,11 @@ class SphLoopScaffoldTests(unittest.TestCase):
 
             self.assertEqual(report.scalar_flux_ids, (2, 4))
             self.assertEqual(report.reference_flux_dataset, "openmc_volume_flux")
+            self.assertEqual(
+                report.reference_flux_std_dev_dataset,
+                "openmc_volume_flux_std_dev",
+            )
+            self.assertAlmostEqual(report.reference_flux_std_dev_max_rel or 0.0, 0.01)
             self.assertEqual(report.run_script, out / "run_sph_loop.sh")
             self.assertTrue(report.run_script.exists())
             self.assertTrue(os.access(report.run_script, os.X_OK))
@@ -59,6 +64,14 @@ class SphLoopScaffoldTests(unittest.TestCase):
                     h5["openmc_volume_flux"][:],
                     [[80.0, 800.0], [120.0, 600.0]],
                 )
+                np.testing.assert_allclose(
+                    h5["openmc_volume_flux_std_dev"][:],
+                    [[0.8, 8.0], [1.2, 6.0]],
+                )
+                np.testing.assert_allclose(
+                    h5["reference_flux_std_dev"][:],
+                    [[0.8, 8.0], [1.2, 6.0]],
+                )
                 np.testing.assert_array_equal(
                     h5["mixture_names"][:],
                     np.asarray(["FUEL", "MOD"], dtype="S"),
@@ -66,6 +79,10 @@ class SphLoopScaffoldTests(unittest.TestCase):
                 self.assertEqual(
                     h5["openmc_volume_flux"].attrs["group_order"],
                     "mgxs_donjon",
+                )
+                self.assertEqual(
+                    h5["openmc_volume_flux_std_dev"].attrs["std_dev_of"],
+                    "openmc_volume_flux",
                 )
             with h5py.File(out / "flux_map.h5", "r") as h5:
                 self.assertEqual(h5.attrs["schema"], "openmc2donjon.low-order-flux-map.v1")
@@ -143,6 +160,8 @@ class SphLoopScaffoldTests(unittest.TestCase):
             self.assertEqual(payload["scalar_flux_ids"], [1, 2])
             self.assertEqual(payload["run_script"], str(out / "run_sph_loop.sh"))
             self.assertEqual(payload["run_command"][-2:], ["--config", str(out / "loop_config.json")])
+            self.assertIsNone(payload["reference_flux_std_dev_dataset"])
+            self.assertIsNone(payload["reference_flux_std_dev_max_rel"])
             self.assertTrue(payload["warnings"])
             self.assertTrue((out / "reference_flux.h5").exists())
             self.assertTrue((out / "flux_map.h5").exists())
@@ -167,6 +186,12 @@ def _write_reference_h5(path: Path) -> None:
         )
         dataset.attrs["mixture_names"] = np.asarray(["MOD", "FUEL"], dtype="S")
         dataset.attrs["group_order"] = "mgxs_donjon"
+        std_dev = h5.create_dataset(
+            "openmc_volume_flux_std_dev",
+            data=np.array([[1.2, 6.0], [0.8, 8.0]], dtype=float),
+        )
+        std_dev.attrs["mixture_names"] = np.asarray(["MOD", "FUEL"], dtype="S")
+        std_dev.attrs["group_order"] = "mgxs_donjon"
 
 
 def _write_reference_csv(path: Path) -> None:

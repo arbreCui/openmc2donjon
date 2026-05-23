@@ -13,8 +13,9 @@ import numpy as np
 from . import __version__
 from .constants import MGXS_DONJON_GROUP_ORDER
 from .donjon_sph_config import write_donjon_sph_loop_config
+from .hdf5_metadata import split_dataset_reference
 from .hdf5_names import read_mixture_names
-from .sph_iteration import _load_matrix_source
+from .sph_iteration import LoadedMatrix, _load_hdf5_matrix, _load_matrix_source
 
 
 SCHEMA = "openmc2donjon.sph-loop-scaffold.v1"
@@ -29,6 +30,8 @@ class SphLoopScaffoldReport:
     output_dir: Path
     reference_flux_source: Path
     reference_flux_dataset: str | None
+    reference_flux_std_dev_dataset: str | None
+    reference_flux_std_dev_max_rel: float | None
     reference_flux_h5: Path
     flux_map_h5: Path
     loop_config: Path
@@ -104,6 +107,12 @@ def create_sph_loop_scaffold(
         label="OpenMC reference flux",
     )
     _validate_reference_flux(loaded_reference.values)
+    loaded_reference_std_dev = _load_reference_flux_std_dev(
+        reference_flux,
+        loaded_reference,
+        mixture_names=mixture_names,
+        energy_groups=energy_groups,
+    )
 
     ids = (
         np.arange(1, len(mixture_names) + 1, dtype=int)
@@ -136,6 +145,9 @@ def create_sph_loop_scaffold(
         energy_bounds=energy_bounds,
         mixture_names=mixture_names,
         values=loaded_reference.values,
+        std_dev=(
+            None if loaded_reference_std_dev is None else loaded_reference_std_dev.values
+        ),
         source_label=source_label,
     )
     _write_flux_map(
@@ -197,6 +209,15 @@ def create_sph_loop_scaffold(
         output_dir=output_root,
         reference_flux_source=loaded_reference.path,
         reference_flux_dataset=loaded_reference.dataset_path,
+        reference_flux_std_dev_dataset=(
+            None
+            if loaded_reference_std_dev is None
+            else loaded_reference_std_dev.dataset_path
+        ),
+        reference_flux_std_dev_max_rel=_max_relative_std_dev(
+            loaded_reference.values,
+            None if loaded_reference_std_dev is None else loaded_reference_std_dev.values,
+        ),
         reference_flux_h5=reference_path,
         flux_map_h5=flux_map_path,
         loop_config=config_path,
@@ -246,6 +267,12 @@ def print_report(report: SphLoopScaffoldReport) -> None:
     print(f"  reference_flux_source: {report.reference_flux_source}")
     if report.reference_flux_dataset is not None:
         print(f"  reference_flux_dataset: {report.reference_flux_dataset}")
+    if report.reference_flux_std_dev_dataset is not None:
+        print(
+            "  reference_flux_std_dev: "
+            f"{report.reference_flux_std_dev_dataset} "
+            f"max_rel={report.reference_flux_std_dev_max_rel:.6e}"
+        )
     print(f"  reference_flux_h5: {report.reference_flux_h5}")
     print(f"  flux_map_h5: {report.flux_map_h5}")
     print(f"  loop_config: {report.loop_config}")
@@ -271,6 +298,8 @@ def write_summary(path: Path, report: SphLoopScaffoldReport) -> None:
         "output_dir": str(report.output_dir),
         "reference_flux_source": str(report.reference_flux_source),
         "reference_flux_dataset": report.reference_flux_dataset,
+        "reference_flux_std_dev_dataset": report.reference_flux_std_dev_dataset,
+        "reference_flux_std_dev_max_rel": report.reference_flux_std_dev_max_rel,
         "reference_flux_h5": str(report.reference_flux_h5),
         "flux_map_h5": str(report.flux_map_h5),
         "loop_config": str(report.loop_config),
@@ -324,6 +353,71 @@ def _validate_reference_flux(values: np.ndarray) -> None:
         raise ValueError("OpenMC reference flux values must be positive")
 
 
+def _load_reference_flux_std_dev(
+    reference_flux: str | Path,
+    loaded_reference: LoadedMatrix,
+    *,
+    mixture_names: tuple[str, ...],
+    energy_groups: int,
+) -> LoadedMatrix | None:
+    if loaded_reference.dataset_path is None:
+        return None
+    path, _dataset = split_dataset_reference(reference_flux)
+    if not _looks_like_hdf5_path(path):
+        return None
+    dataset_path = _std_dev_dataset_path(loaded_reference.dataset_path)
+    try:
+        values, actual_dataset_path = _load_hdf5_matrix(
+            path,
+            dataset=dataset_path,
+            mixture_names=mixture_names,
+            energy_groups=energy_groups,
+            label="OpenMC reference flux std_dev",
+        )
+    except ValueError as exc:
+        if "dataset not found" in str(exc):
+            return None
+        raise
+    _validate_reference_flux_std_dev(values, mean=loaded_reference.values)
+    return LoadedMatrix(values=values, path=path, dataset_path=actual_dataset_path)
+
+
+def _looks_like_hdf5_path(path: Path) -> bool:
+    return path.suffix.lower() in {".h5", ".hdf5", ".hdf"}
+
+
+def _std_dev_dataset_path(dataset_path: str) -> str:
+    if dataset_path.endswith("_std_dev"):
+        return dataset_path
+    return f"{dataset_path}_std_dev"
+
+
+def _validate_reference_flux_std_dev(values: np.ndarray, *, mean: np.ndarray) -> None:
+    if values.shape != mean.shape:
+        raise ValueError(
+            "OpenMC reference flux std_dev shape must match reference flux "
+            f"shape: {values.shape} != {mean.shape}"
+        )
+    if not np.all(np.isfinite(values)):
+        raise ValueError("OpenMC reference flux std_dev values must be finite")
+    if np.any(values < 0.0):
+        raise ValueError("OpenMC reference flux std_dev values must be non-negative")
+
+
+def _max_relative_std_dev(
+    mean: np.ndarray,
+    std_dev: np.ndarray | None,
+) -> float | None:
+    if std_dev is None:
+        return None
+    mask = np.abs(mean) > 1.0e-12
+    if not np.any(mask):
+        return None
+    rel = np.zeros_like(mean, dtype=float)
+    rel[mask] = std_dev[mask] / np.abs(mean[mask])
+    return float(np.max(rel))
+
+
 def _write_reference_flux(
     path: Path,
     *,
@@ -333,6 +427,7 @@ def _write_reference_flux(
     energy_bounds: np.ndarray,
     mixture_names: tuple[str, ...],
     values: np.ndarray,
+    std_dev: np.ndarray | None,
     source_label: str,
 ) -> None:
     import h5py
@@ -352,6 +447,14 @@ def _write_reference_flux(
             dataset = h5.create_dataset(name, data=np.asarray(values, dtype=float))
             dataset.attrs["mixture_names"] = np.asarray(mixture_names, dtype="S")
             dataset.attrs["group_order"] = MGXS_DONJON_GROUP_ORDER
+            if std_dev is not None:
+                std_dataset = h5.create_dataset(
+                    f"{name}_std_dev",
+                    data=np.asarray(std_dev, dtype=float),
+                )
+                std_dataset.attrs["mixture_names"] = np.asarray(mixture_names, dtype="S")
+                std_dataset.attrs["group_order"] = MGXS_DONJON_GROUP_ORDER
+                std_dataset.attrs["std_dev_of"] = name
 
 
 def _write_flux_map(

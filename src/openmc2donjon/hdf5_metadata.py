@@ -19,6 +19,11 @@ class Hdf5DatasetMetadata:
     group_order: str | None
     mixture_names: tuple[str, ...]
     energy_groups: int | None
+    std_dev_source: str | None = None
+    std_dev_dataset: str | None = None
+    std_dev_shape: tuple[int, ...] | None = None
+    std_dev_max_rel: float | None = None
+    std_dev_worst: str | None = None
 
 
 def read_hdf5_dataset_metadata(
@@ -45,6 +50,12 @@ def read_hdf5_dataset_metadata(
         )
         group_order = _text_attr(obj, h5, "group_order")
         energy_groups = _energy_groups(obj, h5, shape)
+        std_dev = _std_dev_metadata(
+            h5,
+            dataset_path=dataset_path,
+            mean_values=np.asarray(obj[:], dtype=float),
+            mixture_names=mixture_names,
+        )
     return Hdf5DatasetMetadata(
         requested_source=requested,
         source=f"{path}::{dataset_path}",
@@ -54,6 +65,11 @@ def read_hdf5_dataset_metadata(
         group_order=group_order,
         mixture_names=mixture_names,
         energy_groups=energy_groups,
+        std_dev_source=None if std_dev is None else f"{path}::{std_dev['dataset']}",
+        std_dev_dataset=None if std_dev is None else str(std_dev["dataset"]),
+        std_dev_shape=None if std_dev is None else std_dev["shape"],
+        std_dev_max_rel=None if std_dev is None else std_dev["max_rel"],
+        std_dev_worst=None if std_dev is None else str(std_dev["worst"]),
     )
 
 
@@ -130,3 +146,69 @@ def _energy_groups(obj: Any, root: Any, shape: tuple[int, ...]) -> int | None:
     if len(shape) == 1:
         return int(shape[0])
     return None
+
+
+def _std_dev_metadata(
+    h5: Any,
+    *,
+    dataset_path: str,
+    mean_values: np.ndarray,
+    mixture_names: tuple[str, ...],
+) -> dict[str, Any] | None:
+    std_dev_path = _std_dev_dataset_path(dataset_path)
+    if std_dev_path not in h5 or hasattr(h5[std_dev_path], "keys"):
+        return None
+    std_dev = np.asarray(h5[std_dev_path][:], dtype=float)
+    shape = tuple(int(value) for value in std_dev.shape)
+    if shape != tuple(int(value) for value in mean_values.shape):
+        return {
+            "dataset": std_dev_path,
+            "shape": shape,
+            "max_rel": None,
+            "worst": "shape mismatch",
+        }
+    if not np.all(np.isfinite(std_dev)) or np.any(std_dev < 0.0):
+        return {
+            "dataset": std_dev_path,
+            "shape": shape,
+            "max_rel": None,
+            "worst": "invalid std_dev values",
+        }
+    if not np.all(np.isfinite(mean_values)):
+        return {
+            "dataset": std_dev_path,
+            "shape": shape,
+            "max_rel": None,
+            "worst": "invalid mean values",
+        }
+    mask = np.abs(mean_values) > 1.0e-12
+    if not np.any(mask):
+        return {
+            "dataset": std_dev_path,
+            "shape": shape,
+            "max_rel": None,
+            "worst": "no mean values above floor",
+        }
+    rel = np.zeros_like(mean_values, dtype=float)
+    rel[mask] = std_dev[mask] / np.abs(mean_values[mask])
+    index = tuple(int(value) for value in np.unravel_index(int(np.argmax(rel)), rel.shape))
+    return {
+        "dataset": std_dev_path,
+        "shape": shape,
+        "max_rel": float(rel[index]),
+        "worst": _std_dev_worst_label(index, mixture_names),
+    }
+
+
+def _std_dev_dataset_path(dataset_path: str) -> str:
+    if dataset_path.endswith("_std_dev"):
+        return dataset_path
+    return f"{dataset_path}_std_dev"
+
+
+def _std_dev_worst_label(index: tuple[int, ...], mixture_names: tuple[str, ...]) -> str:
+    if not index:
+        return "scalar"
+    if len(index) >= 2 and index[0] < len(mixture_names):
+        return f"{mixture_names[index[0]]}: g={index[1] + 1}"
+    return f"index={index}"

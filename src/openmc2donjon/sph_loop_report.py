@@ -339,6 +339,13 @@ def _dataset_metadata_payload(metadata: Hdf5DatasetMetadata) -> dict[str, Any]:
         "energy_groups": metadata.energy_groups,
         "mixture_count": len(metadata.mixture_names),
         "mixture_names": list(metadata.mixture_names),
+        "std_dev_source": metadata.std_dev_source,
+        "std_dev_dataset": metadata.std_dev_dataset,
+        "std_dev_shape": (
+            None if metadata.std_dev_shape is None else list(metadata.std_dev_shape)
+        ),
+        "std_dev_max_rel": metadata.std_dev_max_rel,
+        "std_dev_worst": metadata.std_dev_worst,
     }
 
 
