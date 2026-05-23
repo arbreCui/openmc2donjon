@@ -106,12 +106,21 @@ function buildTraces(midpoints: number[], xs: CrossSections): Data[] {
     const values = xs[series.key];
     if (values == null || values.length === 0) return [];
     if (values.length !== midpoints.length) return [];
+    // Log Y can't render <= 0. Moderator / guide-tube mixtures very
+    // often have fission and nu-fission identically zero, and even
+    // legitimate small XS may underflow to 0 from rounded output.
+    // Convert non-positive samples to ``null`` so Plotly draws gaps
+    // instead of dropping points silently with a console warning; if
+    // the entire series is non-positive, omit it from the chart.
+    const sanitized = values.map((v) => (v > 0 ? v : null));
+    if (sanitized.every((v) => v === null)) return [];
     return [
       {
         x: midpoints,
-        y: values,
+        y: sanitized,
         type: "scatter",
         mode: "lines+markers",
+        connectgaps: false,
         name: series.label,
         line: { color: series.color, width: 2, shape: "hv" },
         marker: { color: series.color, size: 5 },

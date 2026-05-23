@@ -44,7 +44,19 @@ const DEFAULT_CONFIG: Partial<Config> = {
 };
 
 function renderError(host: HTMLDivElement, msg: string) {
-  host.innerHTML = `<div style="padding:1rem;font:11px/1.5 -apple-system,sans-serif;color:#fca5a5;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.25);border-radius:8px">plot failed: ${msg}</div>`;
+  // Construct the error box with DOM APIs and ``textContent`` rather
+  // than ``innerHTML``: the message comes from a thrown exception, which
+  // could in principle include arbitrary characters. Even in a
+  // localhost-only tool, ``textContent`` keeps "<", ">", and quotes
+  // inert instead of trusting the runtime to never produce HTML.
+  host.replaceChildren();
+  const box = host.ownerDocument.createElement("div");
+  box.style.cssText =
+    "padding:1rem;font:11px/1.5 -apple-system,sans-serif;color:#fca5a5;" +
+    "background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.25);" +
+    "border-radius:8px";
+  box.textContent = `plot failed: ${msg}`;
+  host.appendChild(box);
 }
 
 export function usePlotlyPlot(

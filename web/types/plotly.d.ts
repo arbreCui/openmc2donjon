@@ -22,7 +22,10 @@ declare module "plotly.js-dist-min" {
 
   export type Data = Record<string, unknown> & {
     x?: number[];
-    y?: number[];
+    // ``null`` entries render as gaps; callers use that to drop
+    // non-positive samples from a log axis without breaking x/y
+    // alignment.
+    y?: (number | null)[];
     type?: string;
     mode?: string;
     line?: Record<string, unknown>;
@@ -32,6 +35,7 @@ declare module "plotly.js-dist-min" {
     hovertemplate?: string;
     hoverinfo?: string;
     name?: string;
+    connectgaps?: boolean;
   };
 
   export type Config = Record<string, unknown> & {
