@@ -1,0 +1,47 @@
+# Production Thresholds
+
+This page records the default numerical gates used by the production
+preflight and SPH-loop acceptance paths. The defaults are intentionally
+conservative: they catch common handoff mistakes without pretending that
+Monte Carlo tallies are exact.
+
+## Hard Gates
+
+| Gate | Default | Meaning |
+| --- | ---: | --- |
+| Scatter row balance | `5.0e-2` relative | Max residual of `total - absorption - sum(P0 scatter out)` divided by `total`. |
+| CHI normalization | `1.0e-6` absolute | Max `abs(sum(chi) - 1)` for fissionable calculations. |
+| Transport/P1 consistency | `5.0e-2` relative | Max residual between explicit `transport_total` and `total - sum(P1 scatter out)`. |
+| Local energy bounds | exact shape + `rtol=1.0e-10` | Any local mixture/state `energy_bounds` must match root `/energy_bounds`. |
+
+Scatter row balance and transport/P1 use `5.0e-2` because these checks are
+meant to catch wrong axes, transposed scatter matrices, and mismatched
+transport definitions, not to reject ordinary low-statistics Monte Carlo
+noise. A bad axis convention usually produces errors far above this level.
+
+CHI uses `1.0e-6` because a fission spectrum is a normalized probability
+vector. Non-finite values and negative entries are always errors for
+fissionable calculations.
+
+Energy bounds consistency uses a much tighter tolerance because the values
+are group-edge metadata, not tally estimates. A state-specific edge mismatch
+means the cross sections are not on the same group structure.
+
+## Warning Gates
+
+| Gate | Default | Meaning |
+| --- | ---: | --- |
+| NU ratio | `[2.0, 3.5]` | Warn if `nu_fission / fission` falls outside this interval for fissionable bins with `fission > 1.0e-30`. |
+| Unknown energy mesh | warning by default | Warn when `/energy_bounds` does not match a bundled known mesh, unless the caller explicitly requires a known mesh. |
+| Missing uncertainty datasets | warning by default | Warn when `*_std_dev` datasets are absent or incomplete. |
+
+NU ratio is warning-only because valid values depend on isotope mix, burnup,
+and spectrum. The range is still useful for catching swapped datasets or
+accidental unit/normalization errors.
+
+## Override Policy
+
+Command-line preflight options and SPH acceptance config keys can tighten or
+relax these defaults. Production runs should record the effective thresholds
+in the JSON summary or audit payload so that downstream reviewers know what
+was accepted.
