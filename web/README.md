@@ -45,16 +45,36 @@ set `NEXT_PUBLIC_API_BASE_URL` accordingly.
 CI runs `npm ci`, `npm run lint`, `npm run typecheck`, and
 `npm run build` on every push and pull request as a blocking job.
 
+> **Dev caveat: don't run `npm run build` while `npm run dev` is
+> active.** Both share the `.next/` cache directory; a production
+> build leaves it in a state the dev server can't reload from
+> (you'll get `ENOENT: app-build-manifest.json` and a 500 page).
+> If you need to verify the build locally, either stop the dev
+> server first (`kill $(lsof -ti:3000)`), or build into a
+> throwaway dir: `next build --distDir .next-build`. After an
+> accidental collision, `rm -rf .next` and restart `npm run dev`.
+
 ## Layout
 
 ```
 web/
   app/                Next.js App Router pages
-    layout.tsx        Root layout + metadata
+    layout.tsx        Root layout + primary nav
     page.tsx          Home (reads /api/health)
+    inspect/page.tsx  /inspect (path input + summary + mixture table)
     globals.css       Design tokens, glass utility, grad-text, button primitives
+  components/
+    Nav.tsx           Top sticky nav
+    inspect/          Inspect-page presentational pieces
+      Summary.tsx        Path / mesh badge / 8-stat grid / detail rows / issues
+      MixtureTable.tsx   Per-mixture roster table
+      CrossSectionPlot.tsx  log-log Plotly chart (4 reaction-rate series)
+      formatEnergy.ts    eV / keV / MeV unit formatter
   lib/
     api.ts            Typed fetch client for the FastAPI backend
+    usePlotlyPlot.ts  Lifecycle hook: lazy import + newPlot + purge
+  types/
+    plotly.d.ts       Ambient module for `plotly.js-dist-min`
   tailwind.config.ts
   tsconfig.json
   next.config.ts

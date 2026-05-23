@@ -348,8 +348,9 @@ def _mock_mixture(mixture: str, moment: int, http_exception: Any) -> dict[str, A
     let regressions like "moment slider does nothing" slip through. The
     handoff fixture declares 9 mixtures and P1 scattering, so we accept
     those mixture names and moments 0 and 1, and synthesize a plausible
-    P1 by scaling the bundled P0 values by 0.1 (the frontend just needs
-    a non-zero, structurally identical matrix to render the heatmap).
+    P1 by scaling the bundled P0 values by 0.1 - enough non-zero
+    structure for the frontend selectors and plot wiring to be exercised
+    without us needing to ship a second hand-crafted fixture per moment.
     """
 
     if mixture not in _mock_mixture_names():
