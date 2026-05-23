@@ -5,6 +5,7 @@ node_modules/
 
 # build artifacts
 .next/
+.next-build/
 out/
 build/
 dist/

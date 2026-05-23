@@ -36,11 +36,12 @@ set `NEXT_PUBLIC_API_BASE_URL` accordingly.
 
 | Command           | What it does                                  |
 | ----------------- | --------------------------------------------- |
-| `npm run dev`     | Start the Next.js dev server with Turbopack.  |
-| `npm run build`   | Production build.                             |
-| `npm run start`   | Serve the production build locally.           |
-| `npm run lint`    | Run ESLint (`next/core-web-vitals` profile).  |
-| `npm run typecheck` | Run `tsc --noEmit`.                         |
+| `npm run dev`           | Start the Next.js dev server with Turbopack.                                |
+| `npm run build`         | Production build into `.next/` (used by CI).                                |
+| `npm run build:verify`  | Same build but into `.next-build/`, safe to run alongside `npm run dev`.    |
+| `npm run start`         | Serve the production build locally.                                         |
+| `npm run lint`          | Run ESLint (`next/core-web-vitals` profile).                                |
+| `npm run typecheck`     | Run `tsc --noEmit`.                                                         |
 
 CI runs `npm ci`, `npm run lint`, `npm run typecheck`, and
 `npm run build` on every push and pull request as a blocking job.
@@ -49,10 +50,11 @@ CI runs `npm ci`, `npm run lint`, `npm run typecheck`, and
 > active.** Both share the `.next/` cache directory; a production
 > build leaves it in a state the dev server can't reload from
 > (you'll get `ENOENT: app-build-manifest.json` and a 500 page).
-> If you need to verify the build locally, either stop the dev
-> server first (`kill $(lsof -ti:3000)`), or build into a
-> throwaway dir: `next build --distDir .next-build`. After an
-> accidental collision, `rm -rf .next` and restart `npm run dev`.
+> Use `npm run build:verify` instead — it sets `NEXT_DIST_DIR=.next-build`
+> via `next.config.ts`, so the verification build lives in
+> `.next-build/` and `.next/` stays untouched. CI still uses the
+> plain `npm run build`. After an accidental `.next/` collision, run
+> `rm -rf .next` and restart `npm run dev`.
 
 ## Layout
 
