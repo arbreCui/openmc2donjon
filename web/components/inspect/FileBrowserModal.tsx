@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, FileEntry, FileListing, api } from "@/lib/api";
+import { pathCrumbs } from "@/lib/fileBrowserPath";
 
 // CSS selector for elements that should be reachable via the tab trap.
 const FOCUSABLE_SELECTOR =
@@ -405,10 +406,16 @@ function PathBreadcrumb({
                 {crumb.label}
               </span>
             ) : (
+              // Crumbs are disabled while a fetch is in flight or has
+              // errored, so a user looking at a stale path can't fire
+              // a second navigation on top of it. The effect's
+              // cancellation flag would tolerate overlap, but a
+              // visibly-static breadcrumb is the honest signal.
               <button
                 type="button"
                 onClick={() => onPick(crumb.path)}
-                className="px-1 rounded text-[var(--accent-2)] hover:bg-white/[0.05] break-all"
+                disabled={pending}
+                className="px-1 rounded text-[var(--accent-2)] hover:bg-white/[0.05] break-all disabled:text-[var(--fg-3)] disabled:hover:bg-transparent disabled:cursor-not-allowed"
                 title={crumb.path}
               >
                 {crumb.label}
@@ -426,58 +433,17 @@ function PathBreadcrumb({
   );
 }
 
-interface Crumb {
-  /** What to render in the button. */
-  label: string;
-  /** What to pass to ``setCurrentPath`` when this crumb is picked. */
-  path: string;
-}
-
-/**
- * Split an absolute path into clickable breadcrumb segments.
- *
- * Mock-mode shortcut: ``/mock/home/...`` collapses the ``/mock/home``
- * prefix into a single ``home`` crumb so the breadcrumb doesn't lead
- * with the mock-tree scaffolding; the click target still navigates to
- * the real ``/mock/home`` path the backend expects.
- */
-function pathCrumbs(path: string): Crumb[] {
-  if (path === "/mock/home" || path.startsWith("/mock/home/")) {
-    const crumbs: Crumb[] = [{ label: "home", path: "/mock/home" }];
-    const tail =
-      path === "/mock/home" ? "" : path.slice("/mock/home/".length);
-    if (tail) {
-      let cur = "/mock/home";
-      for (const part of tail.split("/").filter(Boolean)) {
-        cur = `${cur}/${part}`;
-        crumbs.push({ label: part, path: cur });
-      }
-    }
-    return crumbs;
-  }
-  if (path.startsWith("/")) {
-    const crumbs: Crumb[] = [{ label: "/", path: "/" }];
-    let cur = "";
-    for (const part of path.split("/").filter(Boolean)) {
-      cur = `${cur}/${part}`;
-      crumbs.push({ label: part, path: cur });
-    }
-    return crumbs;
-  }
-  // Non-absolute fallback. The backend resolves ``~`` and relative
-  // paths before sending them back, so in practice we shouldn't hit
-  // this branch.
-  return [{ label: path || "/", path }];
-}
-
 function joinPath(parent: string, name: string): string {
   if (parent.endsWith("/")) return `${parent}${name}`;
   return `${parent}/${name}`;
 }
 
 function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-  return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
+  const KB = 1024;
+  const MB = KB * 1024;
+  const GB = MB * 1024;
+  if (bytes < KB) return `${bytes} B`;
+  if (bytes < MB) return `${(bytes / KB).toFixed(1)} KB`;
+  if (bytes < GB) return `${(bytes / MB).toFixed(1)} MB`;
+  return `${(bytes / GB).toFixed(1)} GB`;
 }
