@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 
 from . import __version__
+from ._logging import add_cli_logging_arguments, configure_cli_logging_from_args
 from .commands import adf, diagnostics, openmc, sph
 from .commands.base import CommandSpec
 from .macrolib import convert_mgxs_hdf5_to_macrolib
@@ -61,6 +62,7 @@ def build_parser() -> argparse.ArgumentParser:
         version=f"%(prog)s {__version__}",
         help="show package version and exit",
     )
+    add_cli_logging_arguments(parser)
     parser.add_argument("input_h5", help="OpenMC MGXS library HDF5 file")
     parser.add_argument(
         "--format",
@@ -304,6 +306,7 @@ def build_command_parser() -> argparse.ArgumentParser:
         version=f"%(prog)s {__version__}",
         help="show package version and exit",
     )
+    add_cli_logging_arguments(parser)
     subparsers = parser.add_subparsers(dest="command", required=True)
     for spec in _command_specs():
         parent = spec.parser_builder()
@@ -315,6 +318,7 @@ def build_command_parser() -> argparse.ArgumentParser:
             help=spec.help,
             description=parent.description,
         )
+        add_cli_logging_arguments(command_parser, defaults=False)
         command_parser.set_defaults(func=spec.handler, _parser=command_parser)
     return parser
 
@@ -336,12 +340,38 @@ def _command_names() -> set[str]:
     return names
 
 
+def _is_command_invocation(raw_argv: list[str]) -> bool:
+    skip_next = False
+    for token in raw_argv:
+        if skip_next:
+            skip_next = False
+            continue
+        if token in _command_names():
+            return True
+        if token == "--":
+            return False
+        if token in ("--verbose", "-q", "--quiet"):
+            continue
+        if token.startswith("-") and len(token) > 1 and set(token[1:]) == {"v"}:
+            continue
+        if token == "--log-level":
+            skip_next = True
+            continue
+        if token.startswith("--log-level="):
+            continue
+        return False
+    return False
+
+
 def main(argv: list[str] | None = None) -> int:
     raw_argv = sys.argv[1:] if argv is None else list(argv)
-    if raw_argv and raw_argv[0] in _command_names():
+    if _is_command_invocation(raw_argv):
         args = build_command_parser().parse_args(raw_argv)
+        configure_cli_logging_from_args(args)
         return args.func(args)
-    return _convert_handler(build_parser().parse_args(raw_argv))
+    args = build_parser().parse_args(raw_argv)
+    configure_cli_logging_from_args(args)
+    return _convert_handler(args)
 
 
 def _convert_handler(args: argparse.Namespace) -> int:

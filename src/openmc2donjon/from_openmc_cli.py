@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 
 from . import __version__
+from ._logging import configure_cli_logging_from_args
 from .from_openmc_adf import (
     AdfConfig,
     build_flux_ratio_adf,
@@ -56,6 +57,7 @@ from .recipe_dry_run_report import (
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    configure_cli_logging_from_args(args)
     _normalize_args(args)
     _validate_args(args, parser)
     try:

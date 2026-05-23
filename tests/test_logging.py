@@ -10,6 +10,13 @@ from openmc2donjon._logging import (
     configure_cli_logging,
     get_logger,
 )
+from openmc2donjon.cli import (
+    _is_command_invocation,
+    build_command_parser,
+    build_parser as build_convert_parser,
+)
+from openmc2donjon.export_cli import build_parser as build_export_parser
+from openmc2donjon.from_openmc_cli import build_parser as build_from_openmc_parser
 
 
 class LoggingTests(unittest.TestCase):
@@ -96,6 +103,35 @@ class LoggingTests(unittest.TestCase):
         self.assertEqual(args.verbose, 2)
         self.assertTrue(args.quiet)
         self.assertEqual(args.log_level, "WARNING")
+
+    def test_entrypoint_parsers_accept_logging_flags(self) -> None:
+        convert_args = build_convert_parser().parse_args(
+            ["-vv", "--quiet", "--log-level", "info", "input.h5"]
+        )
+        from_openmc_args = build_from_openmc_parser().parse_args(
+            ["--recipe", "recipe.py", "-v"]
+        )
+        export_args = build_export_parser().parse_args(["-q", "library.pkl"])
+
+        self.assertEqual(convert_args.verbose, 2)
+        self.assertTrue(convert_args.quiet)
+        self.assertEqual(convert_args.log_level, "INFO")
+        self.assertEqual(from_openmc_args.verbose, 1)
+        self.assertTrue(export_args.quiet)
+
+    def test_openmc2donjon_command_parser_accepts_logging_flags(self) -> None:
+        before = build_command_parser().parse_args(["-v", "doctor"])
+        after = build_command_parser().parse_args(["doctor", "-vv"])
+        explicit = build_command_parser().parse_args(["doctor", "--log-level", "debug"])
+
+        self.assertEqual(before.verbose, 1)
+        self.assertEqual(after.verbose, 2)
+        self.assertEqual(explicit.log_level, "DEBUG")
+
+    def test_openmc2donjon_dispatch_detects_logging_flags_before_command(self) -> None:
+        self.assertTrue(_is_command_invocation(["-v", "check", "input.h5"]))
+        self.assertTrue(_is_command_invocation(["--log-level", "INFO", "doctor"]))
+        self.assertFalse(_is_command_invocation(["-v", "input.h5"]))
 
 
 if __name__ == "__main__":

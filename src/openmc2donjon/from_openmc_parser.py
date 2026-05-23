@@ -6,6 +6,7 @@ import argparse
 from pathlib import Path
 
 from . import __version__
+from ._logging import add_cli_logging_arguments
 from .multicompo import DEFAULT_ROOT_NAME
 from .openmc_surface_flux import DEFAULT_TALLY_NAME as DEFAULT_SURFACE_FLUX_TALLY_NAME
 
@@ -24,6 +25,7 @@ def build_parser() -> argparse.ArgumentParser:
         version=f"%(prog)s {__version__}",
         help="show package version and exit",
     )
+    add_cli_logging_arguments(parser)
     parser.add_argument(
         "--recipe",
         type=Path,

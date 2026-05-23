@@ -27,27 +27,35 @@ def get_logger(name: str | None = None) -> logging.Logger:
     return logging.getLogger(f"{LOGGER_NAME}.{name}")
 
 
-def add_cli_logging_arguments(parser: argparse.ArgumentParser) -> None:
+def add_cli_logging_arguments(
+    parser: argparse.ArgumentParser,
+    *,
+    defaults: bool = True,
+) -> None:
     """Add standard CLI logging flags to an argparse parser."""
 
+    verbose_default: int | str = 0 if defaults else argparse.SUPPRESS
+    quiet_default: bool | str = False if defaults else argparse.SUPPRESS
+    log_level_default: None | str = None if defaults else argparse.SUPPRESS
     parser.add_argument(
         "-v",
         "--verbose",
         action="count",
-        default=0,
+        default=verbose_default,
         help="increase diagnostic logging verbosity; repeat for DEBUG",
     )
     parser.add_argument(
         "-q",
         "--quiet",
         action="store_true",
+        default=quiet_default,
         help="suppress warning diagnostics; only errors are logged",
     )
     parser.add_argument(
         "--log-level",
         choices=LOG_LEVEL_NAMES,
         type=str.upper,
-        default=None,
+        default=log_level_default,
         help="set diagnostic logging level explicitly",
     )
 
@@ -73,6 +81,16 @@ def configure_cli_logging(
     handler.setLevel(logging.NOTSET)
     logger.addHandler(handler)
     return logger
+
+
+def configure_cli_logging_from_args(args: argparse.Namespace) -> logging.Logger:
+    """Configure CLI diagnostics from standard logging argparse attributes."""
+
+    return configure_cli_logging(
+        verbose=int(getattr(args, "verbose", 0) or 0),
+        quiet=bool(getattr(args, "quiet", False)),
+        log_level=getattr(args, "log_level", None),
+    )
 
 
 def _resolve_log_level(verbose: int, quiet: bool, log_level: str | None) -> int:

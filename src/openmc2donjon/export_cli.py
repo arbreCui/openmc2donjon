@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
+from ._logging import add_cli_logging_arguments, configure_cli_logging_from_args
 from .export_openmc_mgxs import export_openmc_mgxs_library
 from .openmc_statepoint import (
     StatepointLoadError,
@@ -35,6 +36,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="version",
         version=f"%(prog)s {__version__}",
     )
+    add_cli_logging_arguments(parser)
     parser.add_argument(
         "library_pickle",
         nargs="?",
@@ -102,6 +104,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    configure_cli_logging_from_args(args)
     if bool(args.recipe) == bool(args.library_pickle):
         parser.error("provide exactly one input: library_pickle or --recipe")
     if args.statepoint is not None and args.recipe is None:
