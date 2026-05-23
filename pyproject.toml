@@ -41,6 +41,10 @@ dev = [
   "ruff>=0.8,<1",
   "mypy>=1.14,<2",
 ]
+web = [
+  "fastapi>=0.110,<1",
+  "uvicorn[standard]>=0.27,<1",
+]
 
 [project.urls]
 Homepage = "https://github.com/arbreCui/openmc2donjon"

@@ -13,7 +13,7 @@ from ._logging import (
     configure_cli_logging_from_args,
     is_cli_logging_flag,
 )
-from .commands import adf, diagnostics, openmc, sph
+from .commands import adf, diagnostics, openmc, sph, web
 from .commands.base import CommandSpec
 from .macrolib import convert_mgxs_hdf5_to_macrolib
 from .mgxs_input_contract import run_preflight
@@ -334,6 +334,7 @@ def _command_specs() -> tuple[CommandSpec, ...]:
         *adf.command_specs(),
         *sph.command_specs(),
         *diagnostics.command_specs(),
+        *web.command_specs(),
     )
 
 

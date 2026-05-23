@@ -249,18 +249,39 @@ mypy --no-incremental \
   src/openmc2donjon/mgxs_physics_checks.py
 ```
 
-CI runs the same unit-test matrix on Python 3.10, 3.11, and 3.12, plus Ruff
-and the whitelisted strict mypy gate.
+CI runs the same unit-test matrix on Python 3.10, 3.11, and 3.12, plus Ruff,
+the whitelisted strict mypy gate, and a frontend job that lints, type-checks,
+and builds the `web/` Next.js project.
+
+## Web UI (preview)
+
+A localhost-only Next.js + FastAPI web UI lives in [`web/`](web/), wired to
+the same Python package as the CLI. M0 ships the scaffold: a home page that
+confirms backend connectivity; CLI command pages land in later milestones.
+
+```sh
+python -m pip install -e ".[web]"
+openmc2donjon serve              # FastAPI on http://localhost:8000
+
+# In another shell:
+cd web
+npm install
+npm run dev                      # Next.js on http://localhost:3000
+```
+
+`openmc2donjon serve --mock` returns fixture data instead of calling the
+real package APIs — useful for frontend-only development. See
+[`web/README.md`](web/README.md) for full layout and conventions.
 
 ## Roadmap
 
 Near-term work:
 
-- localhost web UI for preflight, conversion, report viewing, and energy-mesh
-  inspection;
-- tighter integration with the existing nucdata energy-group resources;
-- broader mypy coverage for small pure helper modules;
-- optional citation/DOI metadata for research workflows.
+- expand the localhost web UI from the M0 scaffold to preflight, conversion,
+  inspection, and SPH-loop monitoring pages;
+- tighter integration with standard energy-group resources for mesh ID
+  cross-validation;
+- broader mypy coverage for small pure helper modules.
 
 Larger physics work remains separate from the format converter core:
 
