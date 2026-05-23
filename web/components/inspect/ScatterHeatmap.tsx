@@ -13,6 +13,8 @@ export interface ScatterHeatmapProps {
 
 type Scale = "linear" | "log10";
 
+const ZERO_CELL_COLOR = "#2a2d3a";
+
 /**
  * Render one scatter moment as a heatmap with a Linear / log10 colour
  * toggle and a direction caption.
@@ -25,12 +27,15 @@ type Scale = "linear" | "log10";
  *
  * Scale handling
  * --------------
- * Linear mode plots the raw values; log10 mode plots ``log10(z)`` and
- * carries the original value through ``customdata`` so the hover label
- * still shows the real cross section. Cells with ``z <= 0`` render as
- * gaps under log10 (Plotly skips ``null`` z entries).
+ * Linear mode plots the raw values; log10 mode plots ``log10(z)`` on
+ * top of a grey background, with the original value carried through
+ * ``customdata`` so the hover label still reports the real cross
+ * section. Cells where ``z == 0`` (typically the upper triangle in a
+ * down-scatter-only matrix) render as explicit grey rather than as
+ * transparent gaps; this distinguishes "physical zero" from "missing
+ * data" and matches the caption.
  *
- * Moment selector + finer zero-cell handling land in M2-C.
+ * Moment selector lands in M2-D.
  */
 export default function ScatterHeatmap({
   scatter,
@@ -38,17 +43,17 @@ export default function ScatterHeatmap({
   className,
 }: ScatterHeatmapProps) {
   const [scale, setScale] = useState<Scale>("linear");
-  const trace = useMemo(() => buildTrace(scatter, scale), [scatter, scale]);
+  const traces = useMemo(() => buildTraces(scatter, scale), [scatter, scale]);
 
   const ref = usePlotlyPlot(
     () => {
-      if (!trace) return null;
-      return { traces: [trace], layout: buildLayout() };
+      if (traces.length === 0) return null;
+      return { traces, layout: buildLayout() };
     },
-    [trace, mixtureName, scatter.moment_index, scale],
+    [traces, mixtureName, scatter.moment_index, scale],
   );
 
-  if (!trace) {
+  if (traces.length === 0) {
     return (
       <div className="glass rounded-xl p-5 text-sm text-[var(--fg-3)]">
         No scatter matrix available for{" "}
@@ -72,7 +77,7 @@ export default function ScatterHeatmap({
         columns are outgoing (<code className="font-mono">to</code>) groups.{" "}
         <code className="font-mono">g1</code> is the highest-energy group.{" "}
         {scale === "log10"
-          ? "Colour bar shows log₁₀(σ); cells with zero scatter render as gaps."
+          ? "Colour bar shows σ on a log₁₀ scale; cells with zero scatter are shown in grey."
           : "Colour bar shows σ directly; switch to log₁₀ to see weak couplings off the diagonal."}
       </p>
     </div>
@@ -119,44 +124,22 @@ function SegmentedControl({
   );
 }
 
-function buildTrace(scatter: ScatterMoment, scale: Scale): Data | null {
+function buildTraces(scatter: ScatterMoment, scale: Scale): Data[] {
   const values = scatter.values;
   const ngroups = values.length;
-  if (ngroups === 0) return null;
+  if (ngroups === 0) return [];
   // Reject ragged matrices defensively; ``mgxs_physics_checks`` should
   // never emit one, but a bad fixture or future endpoint could.
-  if (values.some((row) => row.length !== ngroups)) return null;
+  if (values.some((row) => row.length !== ngroups)) return [];
   const labels = Array.from({ length: ngroups }, (_, i) => `g${i + 1}`);
 
   if (scale === "log10") {
-    const logged: (number | null)[][] = values.map((row) =>
-      row.map((v) => (v > 0 ? Math.log10(v) : null)),
-    );
-    return {
-      type: "heatmap",
-      z: logged,
-      x: labels,
-      y: labels,
-      customdata: values,
-      colorscale: "Viridis",
-      showscale: true,
-      colorbar: {
-        thickness: 10,
-        outlinewidth: 0,
-        tickfont: { color: "#8b90a3", size: 10 },
-        title: {
-          text: "log₁₀(σ)",
-          side: "right",
-          font: { color: "#8b90a3", size: 10 },
-        },
-      },
-      hovertemplate:
-        "from %{y} → to %{x}<br>" +
-        "σ = %{customdata:.4g} (log₁₀ = %{z:.2f})" +
-        "<extra></extra>",
-    };
+    return buildLogTraces(values, labels);
   }
+  return [buildLinearTrace(values, labels)];
+}
 
+function buildLinearTrace(values: number[][], labels: string[]): Data {
   return {
     type: "heatmap",
     z: values,
@@ -172,6 +155,104 @@ function buildTrace(scatter: ScatterMoment, scale: Scale): Data | null {
     hovertemplate:
       "from %{y} → to %{x}<br>σ = %{z:.4g}<extra></extra>",
   };
+}
+
+function buildLogTraces(values: number[][], labels: string[]): Data[] {
+  // Trace 1: a grey heatmap that fills only the zero cells. We mask
+  // non-zero cells with null so the log trace above paints over them.
+  const greyZ: (number | null)[][] = values.map((row) =>
+    row.map((v) => (v === 0 ? 0 : null)),
+  );
+  const greyTrace: Data = {
+    type: "heatmap",
+    z: greyZ,
+    x: labels,
+    y: labels,
+    colorscale: [
+      [0.0, ZERO_CELL_COLOR],
+      [1.0, ZERO_CELL_COLOR],
+    ],
+    showscale: false,
+    hovertemplate:
+      "from %{y} → to %{x}<br>σ = 0 (no scatter)<extra></extra>",
+  };
+
+  // Trace 2: log10 of positive cells; zeros are null so the grey
+  // background shows through.
+  const positives = values.flat().filter((v) => v > 0);
+  if (positives.length === 0) {
+    // Degenerate case: nothing positive to log. Just show grey.
+    return [greyTrace];
+  }
+  const logged: (number | null)[][] = values.map((row) =>
+    row.map((v) => (v > 0 ? Math.log10(v) : null)),
+  );
+  const logMin = Math.log10(Math.min(...positives));
+  const logMax = Math.log10(Math.max(...positives));
+  const tickvals = integerTicksInRange(logMin, logMax);
+
+  const customdata: string[][] = values.map((row) =>
+    row.map((v) =>
+      v > 0
+        ? `σ = ${v.toExponential(3)} (log₁₀ = ${Math.log10(v).toFixed(2)})`
+        : "σ = 0 (no scatter)",
+    ),
+  );
+
+  const logTrace: Data = {
+    type: "heatmap",
+    z: logged,
+    x: labels,
+    y: labels,
+    customdata,
+    colorscale: "Viridis",
+    showscale: true,
+    colorbar: {
+      thickness: 10,
+      outlinewidth: 0,
+      tickfont: { color: "#8b90a3", size: 10 },
+      tickvals,
+      ticktext: tickvals.map(formatExponent),
+      title: {
+        text: "σ",
+        side: "right",
+        font: { color: "#8b90a3", size: 10 },
+      },
+    },
+    hovertemplate: "from %{y} → to %{x}<br>%{customdata}<extra></extra>",
+  };
+
+  // Order matters: grey first so the log trace renders on top of it;
+  // log's null cells let the grey show through.
+  return [greyTrace, logTrace];
+}
+
+function integerTicksInRange(min: number, max: number): number[] {
+  // Bracket the range to the nearest integer log10 marks so each tick
+  // is a clean power of ten.
+  const lo = Math.floor(min);
+  const hi = Math.ceil(max);
+  const ticks: number[] = [];
+  for (let k = lo; k <= hi; k++) {
+    ticks.push(k);
+  }
+  // If the range spans many decades, thin out so the colorbar isn't
+  // crowded; aim for at most 7 visible ticks.
+  if (ticks.length <= 7) return ticks;
+  const stride = Math.ceil(ticks.length / 7);
+  return ticks.filter((_, i) => i % stride === 0);
+}
+
+const SUPERSCRIPT_DIGITS = "⁰¹²³⁴⁵⁶⁷⁸⁹";
+
+function formatExponent(n: number): string {
+  const digits = Math.abs(n)
+    .toString()
+    .split("")
+    .map((c) => SUPERSCRIPT_DIGITS[parseInt(c, 10)])
+    .join("");
+  const sign = n < 0 ? "⁻" : "";
+  return `10${sign}${digits}`;
 }
 
 function buildLayout(): Partial<Layout> {
@@ -204,4 +285,3 @@ function buildLayout(): Partial<Layout> {
     },
   };
 }
-
