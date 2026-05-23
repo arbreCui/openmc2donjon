@@ -237,13 +237,27 @@ def load_statepoint(library: mgxs.Library, statepoint_path: Path) -> None:
 
 
 def extract_volume_flux(statepoint_path: Path) -> np.ndarray:
+    values, _std_dev = extract_volume_flux_with_std_dev(statepoint_path)
+    return values
+
+
+def extract_volume_flux_with_std_dev(
+    statepoint_path: Path,
+) -> tuple[np.ndarray, np.ndarray]:
     with openmc.StatePoint(str(statepoint_path)) as statepoint:
         tally = statepoint.get_tally(name=VOLUME_FLUX_TALLY_NAME)
         values = np.asarray(tally.get_values(scores=["flux"], value="mean"), dtype=float)
-    return reverse_openmc_energy_filter_flux(
-        values,
-        mixture_count=len(DOMAIN_NAME_BY_ID),
-        energy_groups=len(ENERGY_BOUNDS_EV) - 1,
+        std_dev = np.asarray(
+            tally.get_values(scores=["flux"], value="std_dev"),
+            dtype=float,
+        )
+    shape = {
+        "mixture_count": len(DOMAIN_NAME_BY_ID),
+        "energy_groups": len(ENERGY_BOUNDS_EV) - 1,
+    }
+    return (
+        reverse_openmc_energy_filter_flux(values, **shape),
+        reverse_openmc_energy_filter_flux(std_dev, **shape),
     )
 
 
@@ -252,8 +266,13 @@ def append_volume_flux_hdf5(
     statepoint_path: Path,
     mixture_names: list[str],
 ) -> None:
-    values = extract_volume_flux(statepoint_path)
-    write_openmc_volume_flux_hdf5(output_path, values, mixture_names=mixture_names)
+    values, std_dev = extract_volume_flux_with_std_dev(statepoint_path)
+    write_openmc_volume_flux_hdf5(
+        output_path,
+        values,
+        mixture_names=mixture_names,
+        std_dev=std_dev,
+    )
 
 
 def root_attrs() -> dict[str, object]:

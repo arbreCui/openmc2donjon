@@ -501,6 +501,7 @@ def validate_open_h5(
         ngroups,
         report,
         require_openmc_volume_flux=require_openmc_volume_flux,
+        uncertainty=uncertainty,
     )
 
     burnup_axis = burnup_axis_from_hdf5(h5, report)
@@ -651,6 +652,7 @@ def validate_openmc_volume_flux(
     report: InputReport,
     *,
     require_openmc_volume_flux: bool,
+    uncertainty: UncertaintyConfig,
 ) -> None:
     if "openmc_volume_flux" not in h5:
         if require_openmc_volume_flux:
@@ -701,6 +703,123 @@ def validate_openmc_volume_flux(
         report.fail(
             "/openmc_volume_flux attrs mixture_names must match /mixture_names: "
             f"{declared!r} != {mixture_names!r}"
+        )
+
+    validate_openmc_volume_flux_std_dev(
+        h5,
+        obj,
+        mixture_names,
+        expected_shape,
+        report,
+        uncertainty=uncertainty,
+    )
+
+
+def validate_openmc_volume_flux_std_dev(
+    h5: h5py.File,
+    mean: h5py.Dataset,
+    mixture_names: tuple[str, ...],
+    expected_shape: tuple[int, int],
+    report: InputReport,
+    *,
+    uncertainty: UncertaintyConfig,
+) -> None:
+    name = "openmc_volume_flux_std_dev"
+    if name not in h5:
+        return
+
+    obj = h5[name]
+    report.openmc_volume_flux_std_dev_present = True
+    if not isinstance(obj, h5py.Dataset):
+        report.fail("/openmc_volume_flux_std_dev must be an HDF5 dataset")
+        return
+
+    report.openmc_volume_flux_std_dev_shape = tuple(int(value) for value in obj.shape)
+    if report.openmc_volume_flux_std_dev_shape != expected_shape:
+        report.fail(
+            "/openmc_volume_flux_std_dev shape must match (mixture, group): "
+            f"{report.openmc_volume_flux_std_dev_shape} != {expected_shape}"
+        )
+        return
+
+    values = np.asarray(obj[:], dtype=float)
+    if not np.all(np.isfinite(values)):
+        report.fail("/openmc_volume_flux_std_dev contains non-finite values")
+        return
+    if np.any(values < 0.0):
+        report.fail("/openmc_volume_flux_std_dev values must be non-negative")
+        return
+
+    group_order = (
+        attr_text(obj.attrs["group_order"]) if "group_order" in obj.attrs else None
+    )
+    if group_order != MGXS_DONJON_GROUP_ORDER:
+        report.fail(
+            "/openmc_volume_flux_std_dev attrs group_order must be "
+            f"{MGXS_DONJON_GROUP_ORDER!r}, got {group_order!r}"
+        )
+    if "mixture_names" not in obj.attrs:
+        report.fail("/openmc_volume_flux_std_dev attrs mixture_names is required")
+    else:
+        declared = names_from_hdf5_value(obj.attrs["mixture_names"])
+        if declared != mixture_names:
+            report.fail(
+                "/openmc_volume_flux_std_dev attrs mixture_names must match "
+                f"/mixture_names: {declared!r} != {mixture_names!r}"
+            )
+
+    if mean.shape != expected_shape:
+        return
+    mean_values = np.asarray(mean[:], dtype=float)
+    if not np.all(np.isfinite(mean_values)):
+        return
+    mask = np.abs(mean_values) > uncertainty.mean_abs_floor
+    if not np.any(mask):
+        return
+    rel = np.zeros_like(mean_values, dtype=float)
+    rel[mask] = values[mask] / np.abs(mean_values[mask])
+    index = tuple(
+        int(value) for value in np.unravel_index(int(np.argmax(rel)), rel.shape)
+    )
+    max_rel = float(rel[index])
+    report.openmc_volume_flux_std_dev_max_rel = max_rel
+    report.openmc_volume_flux_std_dev_worst = (
+        f"{mixture_names[index[0]]}: openmc_volume_flux g={index[1] + 1} "
+        f"mean={mean_values[index]:.6e} std_dev={values[index]:.6e} "
+        f"rel={max_rel:.6e}"
+    )
+    _apply_openmc_volume_flux_uncertainty_threshold(
+        report,
+        max_rel,
+        uncertainty=uncertainty,
+    )
+
+
+def _apply_openmc_volume_flux_uncertainty_threshold(
+    report: InputReport,
+    max_rel: float,
+    *,
+    uncertainty: UncertaintyConfig,
+) -> None:
+    detail = (
+        "OpenMC volume-flux statistical uncertainty max relative sigma "
+        f"{max_rel:.6e} at {report.openmc_volume_flux_std_dev_worst}"
+    )
+    if (
+        uncertainty.production_fail_threshold is not None
+        and max_rel > uncertainty.production_fail_threshold
+    ):
+        report.fail(
+            f"{detail} exceeds production fail threshold "
+            f"{uncertainty.production_fail_threshold:.6e}"
+        )
+    elif uncertainty.fail_threshold is not None and max_rel > uncertainty.fail_threshold:
+        report.fail(
+            f"{detail} exceeds fail threshold {uncertainty.fail_threshold:.6e}"
+        )
+    elif uncertainty.warn_threshold is not None and max_rel > uncertainty.warn_threshold:
+        report.warn(
+            f"{detail} exceeds warn threshold {uncertainty.warn_threshold:.6e}"
         )
 
 

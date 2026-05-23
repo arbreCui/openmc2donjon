@@ -38,6 +38,10 @@ class InputReport:
     openmc_volume_flux_group_order: str | None = None
     openmc_volume_flux_source_group_order: str | None = None
     openmc_volume_flux_mixture_names: int = 0
+    openmc_volume_flux_std_dev_present: bool = False
+    openmc_volume_flux_std_dev_shape: tuple[int, ...] | None = None
+    openmc_volume_flux_std_dev_max_rel: float | None = None
+    openmc_volume_flux_std_dev_worst: str | None = None
     h_factor_datasets: int = 0
     scatter_axes: list[str] = field(default_factory=list)
     transport_total_datasets: int = 0
@@ -221,6 +225,10 @@ def _report_payload(report: InputReport) -> dict[str, object]:
             "group_order": report.openmc_volume_flux_group_order,
             "source_group_order": report.openmc_volume_flux_source_group_order,
             "mixture_names": report.openmc_volume_flux_mixture_names,
+            "std_dev_present": report.openmc_volume_flux_std_dev_present,
+            "std_dev_shape": report.openmc_volume_flux_std_dev_shape,
+            "std_dev_max_rel": report.openmc_volume_flux_std_dev_max_rel,
+            "std_dev_worst": report.openmc_volume_flux_std_dev_worst,
         },
         "h_factor_datasets": report.h_factor_datasets,
         "scatter_axes": report.scatter_axes,
@@ -299,7 +307,16 @@ def _openmc_volume_flux_line(report: InputReport) -> str:
     return (
         f"{prefix}present shape={shape} group_order={group_order} "
         f"mixture_names={report.openmc_volume_flux_mixture_names}/{report.mixtures}"
+        f"{_openmc_volume_flux_std_dev_suffix(report)}"
     )
+
+
+def _openmc_volume_flux_std_dev_suffix(report: InputReport) -> str:
+    if not report.openmc_volume_flux_std_dev_present:
+        return " std_dev=missing"
+    if report.openmc_volume_flux_std_dev_max_rel is None:
+        return " std_dev=present max_rel=not evaluated"
+    return f" std_dev=present max_rel={report.openmc_volume_flux_std_dev_max_rel:.6e}"
 
 
 def _uncertainty_production_suffix(report: InputReport) -> str:

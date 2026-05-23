@@ -443,6 +443,31 @@ class MgxsInputContractTests(unittest.TestCase):
         self.assertFalse(missing_report.ok)
         self.assertIn("/openmc_volume_flux dataset is required", missing_report.issues)
 
+    def test_openmc_volume_flux_contract_validates_std_dev(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "flux_std_dev.h5"
+            write_single_state_fixture(path, total=[0.5, 0.7])
+            append_openmc_volume_flux(
+                path,
+                values=np.array([[10.0, 20.0]]),
+                std_dev=np.array([[0.1, 6.0]]),
+            )
+
+            report = validator.validate_input(
+                path,
+                require_openmc_volume_flux=True,
+                uncertainty=validator.UncertaintyConfig(warn_threshold=0.05),
+            )
+
+        self.assertTrue(report.ok, report.issues)
+        self.assertTrue(report.openmc_volume_flux_std_dev_present)
+        self.assertEqual(report.openmc_volume_flux_std_dev_shape, (1, 2))
+        self.assertAlmostEqual(report.openmc_volume_flux_std_dev_max_rel or 0.0, 0.3)
+        self.assertIn("g=2", report.openmc_volume_flux_std_dev_worst or "")
+        self.assertTrue(
+            any("volume-flux statistical uncertainty" in item for item in report.warnings)
+        )
+
     def test_energy_group_identity_gate_accepts_matching_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "c5g7.h5"
@@ -714,6 +739,7 @@ def append_openmc_volume_flux(
     path: Path,
     *,
     values: np.ndarray | None = None,
+    std_dev: np.ndarray | None = None,
     group_order: str = "mgxs_donjon",
     mixture_names: tuple[str, ...] = ("fuel",),
 ) -> None:
@@ -725,6 +751,11 @@ def append_openmc_volume_flux(
         dataset.attrs["group_order"] = group_order
         dataset.attrs["mixture_names"] = np.asarray(mixture_names, dtype="S")
         dataset.attrs["source_group_order"] = "unit_test"
+        if std_dev is not None:
+            std_dataset = h5.create_dataset("openmc_volume_flux_std_dev", data=std_dev)
+            std_dataset.attrs["group_order"] = group_order
+            std_dataset.attrs["mixture_names"] = np.asarray(mixture_names, dtype="S")
+            std_dataset.attrs["source_group_order"] = "unit_test"
 
 
 if __name__ == "__main__":
