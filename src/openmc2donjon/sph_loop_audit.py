@@ -253,6 +253,19 @@ def _format_preflight_audit_lines(
             "  minimum_required_flux_unknown_count="
             f"{report.minimum_required_flux_unknown_count}"
         )
+    mesh = report.mgxs_energy_mesh_id or "unknown"
+    digest = (
+        "none"
+        if report.mgxs_energy_bounds_sha256 is None
+        else report.mgxs_energy_bounds_sha256[:12]
+    )
+    lines.append(
+        "  mgxs_energy_bounds="
+        f"present={report.mgxs_energy_bounds_present} "
+        f"order={report.mgxs_energy_bounds_order or 'missing'} "
+        f"mesh={mesh} sha256={digest} "
+        f"errors={report.mgxs_energy_bounds_error_count}"
+    )
     lines.append(
         "  mgxs_volume="
         f"{report.mgxs_volume_attributes}/{report.mgxs_calculations} "

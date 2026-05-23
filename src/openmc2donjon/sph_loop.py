@@ -84,6 +84,13 @@ def _run_preflight(plan: SphLoopPlan) -> SphLoopFluxMapPreflightReport:
         scalar_flux_ids=plan.scalar_flux_ids,
         scalar_flux_column=plan.scalar_flux_column,
         require_mgxs_domain_order=plan.require_mgxs_domain_order,
+        require_mgxs_energy_bounds=bool(
+            plan.normalized_acceptance.get("require_mgxs_energy_bounds", False)
+        ),
+        require_known_mesh=bool(
+            plan.normalized_acceptance.get("require_known_mesh", False)
+        ),
+        mesh_tolerance=float(plan.normalized_acceptance.get("mesh_tolerance", 1.0e-6)),
     )
     if not preflight.passed:
         raise ValueError(format_preflight_failure(preflight))

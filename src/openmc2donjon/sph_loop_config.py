@@ -64,6 +64,9 @@ def acceptance_config(config: dict[str, Any]) -> dict[str, Any]:
         "max_mgxs_default_volume_count",
         "require_mgxs_h_factor",
         "max_mgxs_missing_h_factor_count",
+        "require_mgxs_energy_bounds",
+        "require_known_mesh",
+        "mesh_tolerance",
         "require_reference_flux_std_dev",
         "max_reference_flux_std_dev_rel",
         "max_sph_abs_change",
@@ -104,6 +107,7 @@ def acceptance_config(config: dict[str, Any]) -> dict[str, Any]:
         "max_sph_rel_change",
         "max_flux_ratio_residual",
         "max_reference_flux_std_dev_rel",
+        "mesh_tolerance",
         "max_final_to_initial_flux_residual_ratio",
         "max_final_clipped_fraction",
         "sph_minimum_floor",
@@ -151,6 +155,8 @@ def acceptance_config(config: dict[str, Any]) -> dict[str, Any]:
         "require_production_audit",
         "require_mgxs_explicit_volumes",
         "require_mgxs_h_factor",
+        "require_mgxs_energy_bounds",
+        "require_known_mesh",
         "require_reference_flux_std_dev",
         "fail_on_violation",
     ):
@@ -191,6 +197,7 @@ def _production_acceptance_defaults(config: dict[str, Any]) -> dict[str, Any]:
     out = _physics_acceptance_defaults(config)
     out["require_mgxs_explicit_volumes"] = True
     out["require_mgxs_h_factor"] = True
+    out["require_mgxs_energy_bounds"] = True
     return out
 
 

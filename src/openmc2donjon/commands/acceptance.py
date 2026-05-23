@@ -65,6 +65,25 @@ def add_sph_loop_acceptance_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     parser.add_argument(
+        "--acceptance-require-mgxs-energy-bounds",
+        action="store_true",
+        help="production acceptance: require a valid global /energy_bounds dataset",
+    )
+    parser.add_argument(
+        "--acceptance-require-known-mesh",
+        action="store_true",
+        help=(
+            "production acceptance: require /energy_bounds to match a bundled "
+            "known energy mesh"
+        ),
+    )
+    parser.add_argument(
+        "--acceptance-mesh-tolerance",
+        type=float,
+        default=None,
+        help="production acceptance: relative tolerance for known energy mesh matching",
+    )
+    parser.add_argument(
         "--acceptance-max-sph-rel-change",
         type=float,
         default=None,
@@ -139,6 +158,7 @@ def sph_loop_acceptance_from_args(
         "max_mgxs_missing_h_factor_count": (
             args.acceptance_max_mgxs_missing_h_factor_count
         ),
+        "mesh_tolerance": args.acceptance_mesh_tolerance,
         "max_sph_rel_change": args.acceptance_max_sph_rel_change,
         "max_flux_ratio_residual": args.acceptance_max_flux_ratio_residual,
         "max_final_to_initial_flux_residual_ratio": (
@@ -162,6 +182,10 @@ def sph_loop_acceptance_from_args(
         acceptance["require_mgxs_explicit_volumes"] = True
     if args.acceptance_require_mgxs_h_factor:
         acceptance["require_mgxs_h_factor"] = True
+    if args.acceptance_require_mgxs_energy_bounds:
+        acceptance["require_mgxs_energy_bounds"] = True
+    if args.acceptance_require_known_mesh:
+        acceptance["require_known_mesh"] = True
     if args.fail_on_acceptance_violation:
         acceptance["fail_on_violation"] = True
     return acceptance or None

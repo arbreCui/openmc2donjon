@@ -131,6 +131,10 @@ class SphLoopTests(unittest.TestCase):
             self.assertEqual(preflight["map_kind"], "scalar_flux_map")
             self.assertEqual(preflight["mixture_count"], 2)
             self.assertEqual(preflight["energy_groups"], 2)
+            self.assertTrue(preflight["mgxs_energy_bounds_present"])
+            self.assertEqual(preflight["mgxs_energy_bounds_order"], "ascending")
+            self.assertEqual(preflight["mgxs_energy_bounds_error_count"], 0)
+            self.assertIsNone(preflight["mgxs_energy_mesh_id"])
             self.assertTrue(preflight["mgxs_declared_mixture_order"])
             self.assertEqual(preflight["mgxs_source_domain_indices"], [1, 2])
             self.assertEqual(preflight["mgxs_source_domain_order_errors"], [])
@@ -204,6 +208,10 @@ class SphLoopTests(unittest.TestCase):
                 production_audit["flux_map"]["mgxs_source_domain_indices"],
                 [1, 2],
             )
+            self.assertTrue(
+                production_audit["flux_map"]["mgxs_energy_bounds_present"]
+            )
+            self.assertIsNone(production_audit["flux_map"]["mgxs_energy_mesh_id"])
             self.assertEqual(production_audit["flux_map"]["mgxs_volume_defaulted"], 0)
             self.assertEqual(production_audit["flux_map"]["mgxs_h_factor_missing"], 0)
             self.assertEqual(production_audit["artifact_counts"]["workflows"], 2)
@@ -567,6 +575,7 @@ class SphLoopTests(unittest.TestCase):
                     "require_production_audit",
                     "require_mgxs_explicit_volumes",
                     "require_mgxs_h_factor",
+                    "require_mgxs_energy_bounds",
                     "max_sph_rel_change",
                     "max_flux_ratio_residual",
                     "max_final_to_initial_flux_residual_ratio",
@@ -585,6 +594,113 @@ class SphLoopTests(unittest.TestCase):
             }
             self.assertTrue(audit_checks["flux_map_preflight_passed"]["passed"])
             self.assertTrue(audit_checks["final_sph_sidecar_present"]["passed"])
+
+    def test_production_acceptance_preset_rejects_missing_energy_bounds(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference = root / "reference_flux.h5"
+            solver = root / "fake_exact_donjon_solver.py"
+            config = root / "loop.json"
+            _write_mgxs(mgxs, with_energy_bounds=False)
+            _write_reference_flux(reference)
+            _write_exact_fake_solver(solver)
+            config.write_text(
+                json.dumps(
+                    {
+                        "schema": "openmc2donjon.sph-loop-config.v1",
+                        "input_h5": "mgxs.h5",
+                        "output_dir": "loop_run",
+                        "reference_flux": "reference_flux.h5::openmc_volume_flux",
+                        "iterations": 1,
+                        "format": "macrolib",
+                        "final_solve": True,
+                        "damping": 1.0,
+                        "scalar_flux_map": {"fuel": 2, "moderator": 4},
+                        "acceptance": {"preset": "production"},
+                        "solver": {
+                            "command": [
+                                sys.executable,
+                                str(solver),
+                                "--macrolib",
+                                "{ascii_input}",
+                                "--result",
+                                "{result}",
+                                "--iteration",
+                                "{iteration}",
+                            ],
+                            "result": "donjon_flux.result",
+                        },
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as raised:
+                    cli_main(["run-sph-loop", "--config", str(config)])
+
+            self.assertEqual(raised.exception.code, 1)
+            self.assertIn("/energy_bounds dataset is required", stderr.getvalue())
+            self.assertFalse((root / "loop_run/iter00_solve").exists())
+
+    def test_acceptance_rejects_unknown_energy_mesh_when_required(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference = root / "reference_flux.h5"
+            solver = root / "fake_exact_donjon_solver.py"
+            config = root / "loop.json"
+            _write_mgxs(mgxs)
+            _write_reference_flux(reference)
+            _write_exact_fake_solver(solver)
+            config.write_text(
+                json.dumps(
+                    {
+                        "schema": "openmc2donjon.sph-loop-config.v1",
+                        "input_h5": "mgxs.h5",
+                        "output_dir": "loop_run",
+                        "reference_flux": "reference_flux.h5::openmc_volume_flux",
+                        "iterations": 1,
+                        "format": "macrolib",
+                        "final_solve": True,
+                        "damping": 1.0,
+                        "scalar_flux_map": {"fuel": 2, "moderator": 4},
+                        "acceptance": {
+                            "require_known_mesh": True,
+                            "fail_on_violation": True,
+                        },
+                        "solver": {
+                            "command": [
+                                sys.executable,
+                                str(solver),
+                                "--macrolib",
+                                "{ascii_input}",
+                                "--result",
+                                "{result}",
+                                "--iteration",
+                                "{iteration}",
+                            ],
+                            "result": "donjon_flux.result",
+                        },
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as raised:
+                    cli_main(["run-sph-loop", "--config", str(config)])
+
+            self.assertEqual(raised.exception.code, 1)
+            self.assertIn("known energy mesh", stderr.getvalue())
+            self.assertFalse((root / "loop_run/iter00_solve").exists())
 
     def test_production_acceptance_preset_fails_on_defaulted_volume(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1261,10 +1377,12 @@ def _write_mgxs(
     source_domain_indices: tuple[int, int] = (1, 2),
     with_volume: bool = True,
     with_h_factor: bool = True,
+    with_energy_bounds: bool = True,
 ) -> None:
     with h5py.File(path, "w") as h5:
         h5.attrs["energy_groups"] = 2
-        h5.create_dataset("energy_bounds", data=np.array([1.0e-5, 1.0, 1.0e7]))
+        if with_energy_bounds:
+            h5.create_dataset("energy_bounds", data=np.array([1.0e-5, 1.0, 1.0e7]))
         h5.create_dataset("mixture_names", data=np.asarray(["fuel", "moderator"], dtype="S"))
         mixtures = h5.create_group("mixtures")
         fuel = mixtures.create_group("fuel")

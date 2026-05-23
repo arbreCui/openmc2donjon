@@ -115,6 +115,10 @@ class SphLoopMinicaseExampleTests(unittest.TestCase):
                 True,
             )
             self.assertEqual(plan.normalized_acceptance["require_mgxs_h_factor"], True)
+            self.assertEqual(
+                plan.normalized_acceptance["require_mgxs_energy_bounds"],
+                True,
+            )
 
     def test_minicase_production_preset_runs_with_artifact_metadata_gate(self) -> None:
         root = _repo_root()

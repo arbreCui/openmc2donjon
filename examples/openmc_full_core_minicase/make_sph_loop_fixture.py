@@ -166,6 +166,7 @@ def _write_config(
             "require_production_audit": True,
             "require_mgxs_explicit_volumes": True,
             "require_mgxs_h_factor": True,
+            "require_mgxs_energy_bounds": True,
             "fail_on_violation": True,
         },
         "solver": {

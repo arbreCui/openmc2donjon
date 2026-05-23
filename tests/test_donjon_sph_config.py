@@ -124,6 +124,10 @@ class DonjonSphConfigTests(unittest.TestCase):
                         "--acceptance-require-mgxs-h-factor",
                         "--acceptance-max-mgxs-missing-h-factor-count",
                         "0",
+                        "--acceptance-require-mgxs-energy-bounds",
+                        "--acceptance-require-known-mesh",
+                        "--acceptance-mesh-tolerance",
+                        "1e-5",
                         "--acceptance-max-final-keff-delta-pcm",
                         "5.0",
                         "--acceptance-max-final-to-initial-flux-residual-ratio",
@@ -156,6 +160,9 @@ class DonjonSphConfigTests(unittest.TestCase):
                 payload["acceptance"]["max_mgxs_missing_h_factor_count"],
                 0,
             )
+            self.assertTrue(payload["acceptance"]["require_mgxs_energy_bounds"])
+            self.assertTrue(payload["acceptance"]["require_known_mesh"])
+            self.assertEqual(payload["acceptance"]["mesh_tolerance"], 1.0e-5)
             self.assertEqual(payload["acceptance"]["max_final_keff_delta_pcm"], 5.0)
             self.assertEqual(
                 payload["acceptance"]["max_final_to_initial_flux_residual_ratio"],

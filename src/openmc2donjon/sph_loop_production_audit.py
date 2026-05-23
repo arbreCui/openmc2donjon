@@ -15,6 +15,13 @@ class FluxMapPreflightLike(Protocol):
     map_kind: str
     mixture_names: tuple[str, ...]
     energy_groups: int
+    mgxs_energy_bounds_present: bool
+    mgxs_energy_bounds_order: str | None
+    mgxs_energy_bounds_sha256: str | None
+    mgxs_energy_bounds_error_count: int
+    mgxs_energy_mesh_id: str | None
+    mgxs_energy_mesh_name: str | None
+    mgxs_energy_mesh_tolerance: float
     mgxs_declared_mixture_order: bool
     mgxs_source_domain_indices: tuple[int | None, ...]
     mgxs_source_domain_order_errors: tuple[str, ...]
@@ -184,6 +191,35 @@ def build_production_audit_payload(
             "mgxs_source_domain_order_errors": list(mgxs_domain_order_errors),
             "mgxs_calculations": int(
                 getattr(flux_map_preflight, "mgxs_calculations", 0)
+            ),
+            "mgxs_energy_bounds_present": bool(
+                getattr(flux_map_preflight, "mgxs_energy_bounds_present", False)
+            ),
+            "mgxs_energy_bounds_order": getattr(
+                flux_map_preflight,
+                "mgxs_energy_bounds_order",
+                None,
+            ),
+            "mgxs_energy_bounds_sha256": getattr(
+                flux_map_preflight,
+                "mgxs_energy_bounds_sha256",
+                None,
+            ),
+            "mgxs_energy_bounds_error_count": int(
+                getattr(flux_map_preflight, "mgxs_energy_bounds_error_count", 0)
+            ),
+            "mgxs_energy_mesh_id": getattr(
+                flux_map_preflight,
+                "mgxs_energy_mesh_id",
+                None,
+            ),
+            "mgxs_energy_mesh_name": getattr(
+                flux_map_preflight,
+                "mgxs_energy_mesh_name",
+                None,
+            ),
+            "mgxs_energy_mesh_tolerance": float(
+                getattr(flux_map_preflight, "mgxs_energy_mesh_tolerance", 0.0)
             ),
             "mgxs_volume_attributes": int(
                 getattr(flux_map_preflight, "mgxs_volume_attributes", 0)

@@ -121,6 +121,7 @@ class OpenMCFullCoreMinicaseExampleTests(unittest.TestCase):
         self.assertIn('"require_production_audit": True', text)
         self.assertIn('"require_mgxs_explicit_volumes": True', text)
         self.assertIn('"require_mgxs_h_factor": True', text)
+        self.assertIn('"require_mgxs_energy_bounds": True', text)
 
     def test_full_core_solver_uses_previous_sph_to_close_the_loop(self) -> None:
         text = (_example_dir() / "fake_full_core_low_order_solver.py").read_text(

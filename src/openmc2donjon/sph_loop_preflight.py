@@ -15,6 +15,14 @@ from .donjon_flux import (
     _normalize_scalar_flux_ids,
 )
 from .constants import MGXS_DONJON_GROUP_ORDER
+from .energy_groups import (
+    MESH_ABSOLUTE_TOLERANCE,
+    MESH_RELATIVE_TOLERANCE,
+    energy_bounds_order,
+    energy_bounds_sha256,
+    identify_mesh,
+    validate_energy_bounds_internal,
+)
 from .hdf5_names import read_mixture_names
 
 
@@ -40,6 +48,13 @@ class SphLoopFluxMapPreflightReport:
     mixture_names: tuple[str, ...]
     energy_groups: int
     mgxs_declared_mixture_order: bool
+    mgxs_energy_bounds_present: bool
+    mgxs_energy_bounds_order: str | None
+    mgxs_energy_bounds_sha256: str | None
+    mgxs_energy_bounds_error_count: int
+    mgxs_energy_mesh_id: str | None
+    mgxs_energy_mesh_name: str | None
+    mgxs_energy_mesh_tolerance: float
     mgxs_source_domain_indices: tuple[int | None, ...]
     mgxs_source_domain_order_errors: tuple[str, ...]
     mgxs_calculations: int
@@ -83,17 +98,37 @@ def build_flux_map_preflight_report(
     scalar_flux_ids: dict[str, int] | None,
     scalar_flux_column: int,
     require_mgxs_domain_order: bool = False,
+    require_mgxs_energy_bounds: bool = False,
+    require_known_mesh: bool = False,
+    mesh_tolerance: float = MESH_RELATIVE_TOLERANCE,
 ) -> SphLoopFluxMapPreflightReport:
     input_path = Path(input_h5)
-    mgxs_metadata = _read_mgxs_metadata(input_path)
+    mgxs_metadata = _read_mgxs_metadata(
+        input_path,
+        mesh_tolerance=mesh_tolerance,
+    )
     mixture_names = mgxs_metadata["mixture_names"]
     energy_groups = mgxs_metadata["energy_groups"]
     errors: list[str] = []
     warnings: list[str] = []
     if require_mgxs_domain_order:
         errors.extend(mgxs_metadata["source_domain_order_errors"])
+    if require_mgxs_energy_bounds and not mgxs_metadata["energy_bounds_present"]:
+        errors.append("/energy_bounds dataset is required for production SPH mapping")
+    if (
+        require_known_mesh
+        and mgxs_metadata["energy_bounds_present"]
+        and not mgxs_metadata["energy_bounds_errors"]
+        and mgxs_metadata["energy_mesh_id"] is None
+    ):
+        errors.append(
+            "/energy_bounds does not match a bundled known energy mesh "
+            f"within rtol={mesh_tolerance:g}"
+        )
+    errors.extend(mgxs_metadata["energy_bounds_errors"])
     errors.extend(mgxs_metadata["volume_errors"])
     errors.extend(mgxs_metadata["h_factor_errors"])
+    warnings.extend(mgxs_metadata["energy_bounds_warnings"])
     if mgxs_metadata["volume_defaulted"]:
         warnings.append(
             f"{mgxs_metadata['volume_defaulted']}/"
@@ -159,6 +194,13 @@ def build_flux_map_preflight_report(
         mixture_names=mixture_names,
         energy_groups=energy_groups,
         mgxs_declared_mixture_order=mgxs_metadata["declared_mixture_order"],
+        mgxs_energy_bounds_present=mgxs_metadata["energy_bounds_present"],
+        mgxs_energy_bounds_order=mgxs_metadata["energy_bounds_order"],
+        mgxs_energy_bounds_sha256=mgxs_metadata["energy_bounds_sha256"],
+        mgxs_energy_bounds_error_count=len(mgxs_metadata["energy_bounds_errors"]),
+        mgxs_energy_mesh_id=mgxs_metadata["energy_mesh_id"],
+        mgxs_energy_mesh_name=mgxs_metadata["energy_mesh_name"],
+        mgxs_energy_mesh_tolerance=float(mesh_tolerance),
         mgxs_source_domain_indices=mgxs_metadata["source_domain_indices"],
         mgxs_source_domain_order_errors=mgxs_metadata["source_domain_order_errors"],
         mgxs_calculations=mgxs_metadata["calculations"],
@@ -211,6 +253,13 @@ def payload(report: SphLoopFluxMapPreflightReport) -> dict[str, object]:
         "mixture_names": list(report.mixture_names),
         "energy_groups": report.energy_groups,
         "mgxs_declared_mixture_order": report.mgxs_declared_mixture_order,
+        "mgxs_energy_bounds_present": report.mgxs_energy_bounds_present,
+        "mgxs_energy_bounds_order": report.mgxs_energy_bounds_order,
+        "mgxs_energy_bounds_sha256": report.mgxs_energy_bounds_sha256,
+        "mgxs_energy_bounds_error_count": report.mgxs_energy_bounds_error_count,
+        "mgxs_energy_mesh_id": report.mgxs_energy_mesh_id,
+        "mgxs_energy_mesh_name": report.mgxs_energy_mesh_name,
+        "mgxs_energy_mesh_tolerance": report.mgxs_energy_mesh_tolerance,
         "mgxs_source_domain_indices": list(report.mgxs_source_domain_indices),
         "mgxs_source_domain_order_errors": list(
             report.mgxs_source_domain_order_errors
@@ -267,7 +316,11 @@ def format_failure(report: SphLoopFluxMapPreflightReport) -> str:
     return "flux-map preflight failed: " + "; ".join(report.errors)
 
 
-def _read_mgxs_metadata(path: Path) -> dict[str, Any]:
+def _read_mgxs_metadata(
+    path: Path,
+    *,
+    mesh_tolerance: float = MESH_RELATIVE_TOLERANCE,
+) -> dict[str, Any]:
     import h5py
 
     with h5py.File(path, "r") as h5:
@@ -286,6 +339,11 @@ def _read_mgxs_metadata(path: Path) -> dict[str, Any]:
             energy_groups = int(h5["energy_bounds"].shape[0]) - 1
         else:
             raise ValueError("input HDF5 must define energy_groups or energy_bounds")
+        energy_bounds_contract = _energy_bounds_contract(
+            h5,
+            energy_groups,
+            mesh_tolerance=mesh_tolerance,
+        )
         volume_contract = _volume_contract(h5, mixture_names)
         h_factor_contract = _h_factor_contract(h5, mixture_names, energy_groups)
     if not mixture_names:
@@ -298,8 +356,83 @@ def _read_mgxs_metadata(path: Path) -> dict[str, Any]:
         "declared_mixture_order": declared_mixture_order,
         "source_domain_indices": source_domain_indices,
         "source_domain_order_errors": source_domain_errors,
+        **energy_bounds_contract,
         **volume_contract,
         **h_factor_contract,
+    }
+
+
+def _energy_bounds_contract(
+    h5: Any,
+    energy_groups: int,
+    *,
+    mesh_tolerance: float,
+) -> dict[str, Any]:
+    if "energy_bounds" not in h5:
+        return {
+            "energy_bounds_present": False,
+            "energy_bounds_order": None,
+            "energy_bounds_sha256": None,
+            "energy_bounds_errors": (),
+            "energy_bounds_warnings": (),
+            "energy_mesh_id": None,
+            "energy_mesh_name": None,
+        }
+
+    try:
+        bounds = np.asarray(h5["energy_bounds"][:], dtype=float)
+    except (TypeError, ValueError, OSError):
+        return {
+            "energy_bounds_present": True,
+            "energy_bounds_order": "unreadable",
+            "energy_bounds_sha256": None,
+            "energy_bounds_errors": ("/energy_bounds must be a numeric vector",),
+            "energy_bounds_warnings": (),
+            "energy_mesh_id": None,
+            "energy_mesh_name": None,
+        }
+
+    errors = tuple(
+        f"/{issue}"
+        for issue in validate_energy_bounds_internal(
+            bounds,
+            expected_groups=energy_groups,
+            expected_order="ascending",
+        )
+    )
+    order = energy_bounds_order(bounds)
+    digest = energy_bounds_sha256(bounds)
+    if errors:
+        return {
+            "energy_bounds_present": True,
+            "energy_bounds_order": order,
+            "energy_bounds_sha256": digest,
+            "energy_bounds_errors": errors,
+            "energy_bounds_warnings": (),
+            "energy_mesh_id": None,
+            "energy_mesh_name": None,
+        }
+
+    mesh = identify_mesh(
+        bounds,
+        rtol=mesh_tolerance,
+        atol=MESH_ABSOLUTE_TOLERANCE,
+    )
+    warnings: tuple[str, ...] = ()
+    if mesh is None:
+        warnings = (
+            "/energy_bounds did not match a bundled known energy mesh "
+            f"within rtol={mesh_tolerance:g}",
+        )
+
+    return {
+        "energy_bounds_present": True,
+        "energy_bounds_order": order,
+        "energy_bounds_sha256": digest,
+        "energy_bounds_errors": (),
+        "energy_bounds_warnings": warnings,
+        "energy_mesh_id": None if mesh is None else mesh.mesh_id,
+        "energy_mesh_name": None if mesh is None else mesh.name,
     }
 
 

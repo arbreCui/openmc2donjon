@@ -1,0 +1,1 @@
+{"id":"casmo_2","name":"CASMO-2","short":"CASMO-2","description":"CASMO 2-group collapsed for nodal core.","purpose":"thermal","source":"Serpent wiki","source_url":"https://serpent.vtt.fi/mediawiki/index.php/CASMO_2-group_structure","n_groups":2,"boundaries":[10000000.0,0.625,9.999999999999999e-06]}

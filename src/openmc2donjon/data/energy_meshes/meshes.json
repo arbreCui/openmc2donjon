@@ -1,0 +1,335 @@
+{
+  "meshes": [
+    {
+      "id": "casmo_2",
+      "name": "CASMO-2",
+      "short": "CASMO-2",
+      "description": "CASMO 2-group collapsed for nodal core.",
+      "purpose": "thermal",
+      "n_groups": 2
+    },
+    {
+      "id": "casmo_3",
+      "name": "CASMO-3",
+      "short": "CASMO-3",
+      "description": "CASMO 3-group collapsed.",
+      "purpose": "thermal",
+      "n_groups": 3
+    },
+    {
+      "id": "casmo_4",
+      "name": "CASMO-4",
+      "short": "CASMO-4",
+      "description": "CASMO 4-group collapsed.",
+      "purpose": "thermal",
+      "n_groups": 4
+    },
+    {
+      "id": "casmo_7",
+      "name": "CASMO-7",
+      "short": "CASMO-7",
+      "description": "CASMO 7-group collapsed.",
+      "purpose": "thermal",
+      "n_groups": 7
+    },
+    {
+      "id": "casmo_8",
+      "name": "CASMO-8",
+      "short": "CASMO-8",
+      "description": "CASMO 8-group collapsed.",
+      "purpose": "thermal",
+      "n_groups": 8
+    },
+    {
+      "id": "casmo_9",
+      "name": "CASMO-9",
+      "short": "CASMO-9",
+      "description": "CASMO 9-group collapsed.",
+      "purpose": "thermal",
+      "n_groups": 9
+    },
+    {
+      "id": "casmo_12",
+      "name": "CASMO-12",
+      "short": "CASMO-12",
+      "description": "CASMO 12-group collapsed.",
+      "purpose": "thermal",
+      "n_groups": 12
+    },
+    {
+      "id": "casmo_14",
+      "name": "CASMO-14",
+      "short": "CASMO-14",
+      "description": "CASMO 14-group collapsed.",
+      "purpose": "thermal",
+      "n_groups": 14
+    },
+    {
+      "id": "casmo_16",
+      "name": "CASMO-16",
+      "short": "CASMO-16",
+      "description": "CASMO 16-group collapsed (LWR nodal).",
+      "purpose": "thermal",
+      "n_groups": 16
+    },
+    {
+      "id": "casmo_18",
+      "name": "CASMO-18",
+      "short": "CASMO-18",
+      "description": "CASMO 18-group collapsed.",
+      "purpose": "thermal",
+      "n_groups": 18
+    },
+    {
+      "id": "casmo_23",
+      "name": "CASMO-23",
+      "short": "CASMO-23",
+      "description": "CASMO 23-group collapsed.",
+      "purpose": "thermal",
+      "n_groups": 23
+    },
+    {
+      "id": "casmo_25",
+      "name": "CASMO-25",
+      "short": "CASMO-25",
+      "description": "CASMO 25-group collapsed.",
+      "purpose": "thermal",
+      "n_groups": 25
+    },
+    {
+      "id": "anl_27",
+      "name": "ANL-27",
+      "short": "ANL-27",
+      "description": "Classic ANL 27-group fast-reactor mesh.",
+      "purpose": "fast",
+      "n_groups": 27
+    },
+    {
+      "id": "lanl_30",
+      "name": "LANL-30",
+      "short": "LANL-30",
+      "description": "LANL 30-group fast-reactor mesh.",
+      "purpose": "fast",
+      "n_groups": 30
+    },
+    {
+      "id": "ecco_33",
+      "name": "ECCO-33",
+      "short": "ECCO-33",
+      "description": "ECCO 33-group condensed mesh (coarse core design).",
+      "purpose": "fast",
+      "n_groups": 33
+    },
+    {
+      "id": "laser_thermos_35",
+      "name": "Laser-Thermos-35",
+      "short": "Laser-Thermos-35",
+      "description": "Laser-Thermos 35-group early-thermal mesh.",
+      "purpose": "thermal",
+      "n_groups": 35
+    },
+    {
+      "id": "casmo_40",
+      "name": "CASMO-40",
+      "short": "CASMO-40",
+      "description": "CASMO 40-group (fine thermal).",
+      "purpose": "thermal",
+      "n_groups": 40
+    },
+    {
+      "id": "mupo_43",
+      "name": "MUPO-43",
+      "short": "MUPO-43",
+      "description": "MUPO 43-group (early LWR).",
+      "purpose": "thermal",
+      "n_groups": 43
+    },
+    {
+      "id": "scale_44",
+      "name": "SCALE-44",
+      "short": "SCALE-44",
+      "description": "SCALE 44-group condensed mesh.",
+      "purpose": "thermal",
+      "n_groups": 44
+    },
+    {
+      "id": "rrd_50",
+      "name": "RRD-50",
+      "short": "RRD-50",
+      "description": "RRD 50-group Russian fast-reactor mesh.",
+      "purpose": "fast",
+      "n_groups": 50
+    },
+    {
+      "id": "scale_56",
+      "name": "SCALE-56",
+      "short": "SCALE-56",
+      "description": "SCALE 56-group condensed (coupled).",
+      "purpose": "thermal",
+      "n_intervals": 55,
+      "n_groups": 56
+    },
+    {
+      "id": "epri_cpm_69",
+      "name": "EPRI-CPM-69",
+      "short": "EPRI-CPM-69",
+      "description": "EPRI-CPM 69-group LWR mesh.",
+      "purpose": "thermal",
+      "n_groups": 69
+    },
+    {
+      "id": "wims_69",
+      "name": "WIMS-69",
+      "short": "WIMS-69",
+      "description": "Classic WIMS-D thermal-reactor mesh. Widely used for LWR benchmarks.",
+      "purpose": "thermal",
+      "n_groups": 69
+    },
+    {
+      "id": "casmo_70",
+      "name": "CASMO-70",
+      "short": "CASMO-70",
+      "description": "CASMO 70-group commercial PWR/BWR production.",
+      "purpose": "thermal",
+      "n_groups": 70
+    },
+    {
+      "id": "lanl_70",
+      "name": "LANL-70",
+      "short": "LANL-70",
+      "description": "LANL 70-group (extended fast + thermal).",
+      "purpose": "universal",
+      "n_groups": 70
+    },
+    {
+      "id": "eurlib_100",
+      "name": "Eurlib-100",
+      "short": "Eurlib-100",
+      "description": "Eurlib 100-group European shielding/LWR mesh.",
+      "purpose": "universal",
+      "n_groups": 100
+    },
+    {
+      "id": "wims_172",
+      "name": "WIMS-172",
+      "short": "WIMS-172",
+      "description": "WIMS 172-group, fine thermal plus fast regions.",
+      "purpose": "universal",
+      "n_groups": 172
+    },
+    {
+      "id": "xmas_172",
+      "name": "XMAS-172",
+      "short": "XMAS-172",
+      "description": "XMAS 172-group, canonical for JEFF-based LWR deterministic.",
+      "purpose": "universal",
+      "n_groups": 172
+    },
+    {
+      "id": "xmas_lwpc_172",
+      "name": "XMAS-LWPC-172",
+      "short": "XMAS-LWPC-172",
+      "description": "XMAS LWPC 172-group (LWR + coupled shielding).",
+      "purpose": "universal",
+      "n_groups": 172
+    },
+    {
+      "id": "vitamin_e_174",
+      "name": "Vitamin-E-174",
+      "short": "Vitamin-E-174",
+      "description": "Vitamin-E 174-group (ORNL fast-reactor + shielding).",
+      "purpose": "fast",
+      "n_groups": 174
+    },
+    {
+      "id": "vit_j_lwpc_175",
+      "name": "VIT-J-LWPC-175",
+      "short": "VIT-J-LWPC-175",
+      "description": "VIT-J LWPC 175-group (ORNL shielding / LWR).",
+      "purpose": "universal",
+      "n_groups": 175
+    },
+    {
+      "id": "vitamin_j_175",
+      "name": "Vitamin-J-175",
+      "short": "Vitamin-J-175",
+      "description": "Vitamin-J 175-group (JEFF-based shielding).",
+      "purpose": "universal",
+      "n_groups": 175
+    },
+    {
+      "id": "scale_238",
+      "name": "SCALE-238",
+      "short": "SCALE-238",
+      "description": "SCALE 238-group (ORNL AMPX/SCALE default).",
+      "purpose": "universal",
+      "n_groups": 238
+    },
+    {
+      "id": "csewg_239",
+      "name": "CSEWG-239",
+      "short": "CSEWG-239",
+      "description": "CSEWG 239-group US ENDF-era mesh.",
+      "purpose": "universal",
+      "n_intervals": 240,
+      "n_groups": 239
+    },
+    {
+      "id": "scale_252",
+      "name": "SCALE-252",
+      "short": "SCALE-252",
+      "description": "SCALE 252-group (coupled neutron-photon).",
+      "purpose": "universal",
+      "n_intervals": 251,
+      "n_groups": 252
+    },
+    {
+      "id": "shem281",
+      "name": "SHEM-CEA 281",
+      "short": "SHEM-CEA 281",
+      "description": "SHEM CEA 281-group mesh, thermal-reactor focus.",
+      "purpose": "thermal",
+      "n_groups": 281
+    },
+    {
+      "id": "shem295",
+      "name": "SHEM-EPM 295",
+      "short": "SHEM-EPM 295",
+      "description": "SHEM EPM 295-group mesh, deeper Pu-240 / U-238 resolution.",
+      "purpose": "thermal",
+      "n_groups": 295
+    },
+    {
+      "id": "shem315",
+      "name": "SHEM-EPM 315",
+      "short": "SHEM-EPM 315",
+      "description": "SHEM EPM 315-group mesh, fast-reactor universal.",
+      "purpose": "fast",
+      "n_groups": 315
+    },
+    {
+      "id": "tripoli_315",
+      "name": "TRIPOLI-315",
+      "short": "TRIPOLI-315",
+      "description": "Tripoli 315-group structure used by CEA for coupled Monte Carlo.",
+      "purpose": "universal",
+      "n_groups": 315
+    },
+    {
+      "id": "shem370",
+      "name": "SHEM-EPM 370",
+      "short": "SHEM-370",
+      "description": "SHEM EPM 370-group mesh \u2014 next-gen custom extension of SHEM-361 with additional groups in the U-238 / Pu-240 / Fe resonance ranges. Extracted from NJOY2016/src/groupr.f90 eg27 parameter array.",
+      "purpose": "fast",
+      "n_groups": 370
+    },
+    {
+      "id": "ecco_1968",
+      "name": "ECCO-1968",
+      "short": "ECCO-1968",
+      "description": "ECCO 1968-group ultra-fine mesh for fast-reactor condensation.",
+      "purpose": "fast",
+      "n_groups": 1968
+    }
+  ]
+}

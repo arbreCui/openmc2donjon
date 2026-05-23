@@ -298,6 +298,47 @@ class SphLoopAcceptanceTests(unittest.TestCase):
         self.assertFalse(checks["require_mgxs_h_factor"].passed)
         self.assertFalse(checks["max_mgxs_missing_h_factor_count"].passed)
 
+    def test_mgxs_energy_bounds_acceptance_gate(self) -> None:
+        report = build_acceptance_report(
+            {
+                "require_mgxs_energy_bounds": True,
+                "require_known_mesh": True,
+            },
+            audit_rows=(),
+            convergence=(),
+            completed_iterations=1,
+            converged=False,
+            final_solve=None,
+            flux_map_preflight=_preflight(energy_mesh_id="casmo_2"),
+        )
+
+        self.assertTrue(report.passed)
+        actual = {check.name: check.actual for check in report.checks}
+        self.assertTrue(actual["require_mgxs_energy_bounds"])
+        self.assertTrue(actual["require_known_mesh"])
+
+    def test_mgxs_energy_bounds_gate_fails_on_missing_or_unknown_mesh(self) -> None:
+        report = build_acceptance_report(
+            {
+                "require_mgxs_energy_bounds": True,
+                "require_known_mesh": True,
+            },
+            audit_rows=(),
+            convergence=(),
+            completed_iterations=1,
+            converged=False,
+            final_solve=None,
+            flux_map_preflight=_preflight(
+                energy_bounds_present=False,
+                energy_mesh_id=None,
+            ),
+        )
+
+        self.assertFalse(report.passed)
+        checks = {check.name: check for check in report.checks}
+        self.assertFalse(checks["require_mgxs_energy_bounds"].passed)
+        self.assertFalse(checks["require_known_mesh"].passed)
+
     def test_production_audit_gate_reports_mismatch(self) -> None:
         report = build_acceptance_report(
             {"require_production_audit": True},
@@ -474,12 +515,18 @@ def _preflight(
     volume_defaulted: int = 0,
     h_factor_missing: int = 0,
     h_factor_invalid: int = 0,
+    energy_bounds_present: bool = True,
+    energy_bounds_error_count: int = 0,
+    energy_mesh_id: str | None = None,
 ) -> SimpleNamespace:
     return SimpleNamespace(
         passed=True,
         map_kind="scalar_flux_map",
         mixture_names=("fuel", "moderator"),
         energy_groups=2,
+        mgxs_energy_bounds_present=energy_bounds_present,
+        mgxs_energy_bounds_error_count=energy_bounds_error_count,
+        mgxs_energy_mesh_id=energy_mesh_id,
         mgxs_declared_mixture_order=True,
         mgxs_source_domain_indices=(1, 2),
         mgxs_source_domain_order_errors=(),

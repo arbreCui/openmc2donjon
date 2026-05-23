@@ -42,6 +42,9 @@ class _FluxMapPreflightLike(Protocol):
     map_kind: str
     mixture_names: tuple[str, ...]
     energy_groups: int
+    mgxs_energy_bounds_present: bool
+    mgxs_energy_bounds_error_count: int
+    mgxs_energy_mesh_id: str | None
     mgxs_volume_defaulted: int
     mgxs_volume_nonpositive: int
     mgxs_h_factor_missing: int
@@ -155,6 +158,22 @@ def build_acceptance_report(
                 actual=_mgxs_missing_h_factor_count(flux_map_preflight),
                 limit=int(config["max_mgxs_missing_h_factor_count"]),
                 units="calculations",
+            )
+        )
+    if bool(config.get("require_mgxs_energy_bounds", False)):
+        checks.append(
+            _boolean_check(
+                "require_mgxs_energy_bounds",
+                actual=_mgxs_energy_bounds_present(flux_map_preflight),
+                limit=True,
+            )
+        )
+    if bool(config.get("require_known_mesh", False)):
+        checks.append(
+            _boolean_check(
+                "require_known_mesh",
+                actual=_mgxs_known_mesh_present(flux_map_preflight),
+                limit=True,
             )
         )
     if bool(config.get("require_reference_flux_std_dev", False)):
@@ -502,6 +521,26 @@ def _mgxs_missing_h_factor_count(
     if flux_map_preflight is None:
         return None
     return int(getattr(flux_map_preflight, "mgxs_h_factor_missing", 0))
+
+
+def _mgxs_energy_bounds_present(
+    flux_map_preflight: _FluxMapPreflightLike | None,
+) -> bool:
+    if flux_map_preflight is None:
+        return False
+    return bool(getattr(flux_map_preflight, "mgxs_energy_bounds_present", False)) and (
+        int(getattr(flux_map_preflight, "mgxs_energy_bounds_error_count", 0)) == 0
+    )
+
+
+def _mgxs_known_mesh_present(
+    flux_map_preflight: _FluxMapPreflightLike | None,
+) -> bool:
+    if flux_map_preflight is None:
+        return False
+    if int(getattr(flux_map_preflight, "mgxs_energy_bounds_error_count", 0)) != 0:
+        return False
+    return bool(getattr(flux_map_preflight, "mgxs_energy_mesh_id", None))
 
 
 def _reference_flux_std_dev_max_rel(

@@ -21,7 +21,7 @@ openmc2donjon-from-openmc = "openmc2donjon.from_openmc_cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-openmc2donjon = ["templates/*.x2m.in"]
+openmc2donjon = ["templates/*.x2m.in", "data/energy_meshes/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

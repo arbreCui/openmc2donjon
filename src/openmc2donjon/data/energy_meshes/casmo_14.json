@@ -1,0 +1,1 @@
+{"id":"casmo_14","name":"CASMO-14","short":"CASMO-14","description":"CASMO 14-group collapsed.","purpose":"thermal","source":"Serpent wiki","source_url":"https://serpent.vtt.fi/mediawiki/index.php/CASMO_14-group_structure","n_groups":14,"boundaries":[10000000.0,2231000.0,821000.0,5530.0,48.052,4.0,1.15,0.972,0.625,0.35,0.28,0.14,0.058,0.03,9.999999999999999e-06]}
