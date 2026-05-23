@@ -42,6 +42,13 @@ INSPECT_SCHEMA = "openmc2donjon.mgxs-inspect.v1"
 MIXTURE_SCHEMA = "openmc2donjon.mgxs-mixture.v1"
 FILES_SCHEMA = "openmc2donjon.files.v1"
 
+# Hard caps on the ``/api/inspect`` peek panel so a pathological HDF5
+# (hundreds of root attrs, thousands of top-level datasets) can't blow
+# up the response payload or the frontend layout. The totals stay
+# accurate so the UI can honestly say "showing 200 of 1432 entries".
+_PEEK_MAX_ROOT_ATTRS = 50
+_PEEK_MAX_TOP_LEVEL_KEYS = 200
+
 # Synthetic directory tree returned by the file browser when running in
 # ``--mock``. Three levels deep, mimicking the typical ``$HOME/openmc-runs``
 # layout users will navigate in production.
@@ -152,8 +159,7 @@ def create_app(
         # at least sees what KIND of HDF5 they pointed at instead of
         # a bare "0 mixtures, FAIL".
         peek = _read_top_level_peek(real_path)
-        payload["root_attrs"] = peek["root_attrs"]
-        payload["top_level_keys"] = peek["top_level_keys"]
+        payload.update(peek)
         return payload
 
     @app.get("/api/files")
@@ -210,25 +216,47 @@ def _validate_hdf5_path(raw: str, http_exception: Any) -> Path:
 def _read_top_level_peek(real_path: Path) -> dict[str, Any]:
     """Read root attrs and one-level group/dataset names for a peek panel.
 
-    Returns ``{"root_attrs": [...], "top_level_keys": [...]}`` where
-    each ``root_attrs`` entry is ``{name, value}`` for scalar / short
-    attrs (long arrays / blobs are omitted to keep the payload light)
-    and each ``top_level_keys`` entry is ``{name, kind, shape, dtype}``.
-    Returns empty lists if the file can't be opened.
+    Returns a dict with five keys:
+
+    - ``root_attrs``: list of ``{name, value}`` (scalar / short-vector
+      attrs only; unsupported dtypes are silently dropped).
+    - ``top_level_keys``: list of ``{name, kind, shape, dtype}`` for
+      the immediate children of the HDF5 root.
+    - ``root_attrs_total``: total attribute count in the file (before
+      cap / drop).
+    - ``top_level_keys_total``: total root-level entry count in the
+      file (before cap).
+    - ``peek_truncated``: convenience flag — true when either list is
+      shorter than its total. Frontend renders a "showing X of Y" hint
+      so a 1432-entry file doesn't silently hide most of itself.
+
+    Returns empty lists / zero totals if the file can't be opened.
     """
 
     import h5py
 
+    empty = {
+        "root_attrs": [],
+        "top_level_keys": [],
+        "root_attrs_total": 0,
+        "top_level_keys_total": 0,
+        "peek_truncated": False,
+    }
     try:
         with h5py.File(real_path, "r") as h5:
+            attr_names = list(h5.attrs.keys())
             root_attrs: list[dict[str, Any]] = []
-            for name, raw in h5.attrs.items():
-                value = _attr_to_jsonable(raw)
+            for name in attr_names:
+                if len(root_attrs) >= _PEEK_MAX_ROOT_ATTRS:
+                    break
+                value = _attr_to_jsonable(h5.attrs[name])
                 if value is None:
                     continue
                 root_attrs.append({"name": str(name), "value": value})
+
+            all_top_names = sorted(h5)
             top_level_keys: list[dict[str, Any]] = []
-            for name in sorted(h5):
+            for name in all_top_names[:_PEEK_MAX_TOP_LEVEL_KEYS]:
                 node = h5[name]
                 if isinstance(node, h5py.Group):
                     top_level_keys.append(
@@ -255,9 +283,20 @@ def _read_top_level_peek(real_path: Path) -> dict[str, Any]:
                             "dtype": dtype,
                         }
                     )
+            root_attrs_total = len(attr_names)
+            top_level_keys_total = len(all_top_names)
     except (OSError, ValueError, KeyError):
-        return {"root_attrs": [], "top_level_keys": []}
-    return {"root_attrs": root_attrs, "top_level_keys": top_level_keys}
+        return empty
+    return {
+        "root_attrs": root_attrs,
+        "top_level_keys": top_level_keys,
+        "root_attrs_total": root_attrs_total,
+        "top_level_keys_total": top_level_keys_total,
+        "peek_truncated": (
+            len(root_attrs) < root_attrs_total
+            or len(top_level_keys) < top_level_keys_total
+        ),
+    }
 
 
 def _attr_to_jsonable(value: Any) -> Any:

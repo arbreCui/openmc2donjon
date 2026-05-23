@@ -26,6 +26,9 @@
     { "name": "energy_bounds", "kind": "dataset", "shape": [8], "dtype": "float64" },
     { "name": "mixtures", "kind": "group", "shape": null, "dtype": null }
   ],
+  "root_attrs_total": 5,
+  "top_level_keys_total": 2,
+  "peek_truncated": false,
   "burnup_axis": null,
   "burnup_axis_values": null,
   "mixture_count": 9,

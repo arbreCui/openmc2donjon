@@ -66,12 +66,24 @@ export interface HandoffInspection {
   energy_max: number | null;
   mesh_match: MeshMatch | null;
   /** Scalar / short-vector root HDF5 attributes (file-level metadata
-   * such as ``schema_version`` / ``source`` / ``batches``). */
+   * such as ``schema_version`` / ``source`` / ``batches``). Capped at
+   * the backend so a pathological file with hundreds of attributes
+   * can't blow up the payload. */
   root_attrs: HandoffRootAttr[];
   /** One-level peek of HDF5 root groups + datasets. Always present;
    * lets the UI tell a user that a non-handoff file is, say, an
-   * OpenMC tally export rather than a corrupted MGXS input. */
+   * OpenMC tally export rather than a corrupted MGXS input. Also
+   * capped on the backend. */
   top_level_keys: TopLevelEntry[];
+  /** Total root attribute count in the file (before backend cap or
+   * unsupported-value drops). */
+  root_attrs_total: number;
+  /** Total root-level entry count in the file (before backend cap). */
+  top_level_keys_total: number;
+  /** True when either ``root_attrs`` or ``top_level_keys`` was
+   * shortened against its total; the UI surfaces a "showing X of Y"
+   * hint when this is set. */
+  peek_truncated: boolean;
   root_attr_keys: string[];
   burnup_axis: string | null;
   burnup_axis_values: number | null;

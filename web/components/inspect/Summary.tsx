@@ -98,6 +98,9 @@ export default function Summary({ data }: { data: HandoffInspection }) {
         <FilePeek
           rootAttrs={data.root_attrs}
           topLevelKeys={data.top_level_keys}
+          rootAttrsTotal={data.root_attrs_total}
+          topLevelKeysTotal={data.top_level_keys_total}
+          peekTruncated={data.peek_truncated}
           mixtureCount={data.mixture_count}
           ok={data.ok}
         />
@@ -109,11 +112,17 @@ export default function Summary({ data }: { data: HandoffInspection }) {
 function FilePeek({
   rootAttrs,
   topLevelKeys,
+  rootAttrsTotal,
+  topLevelKeysTotal,
+  peekTruncated,
   mixtureCount,
   ok,
 }: {
   rootAttrs: HandoffRootAttr[];
   topLevelKeys: TopLevelEntry[];
+  rootAttrsTotal: number;
+  topLevelKeysTotal: number;
+  peekTruncated: boolean;
   mixtureCount: number;
   ok: boolean;
 }) {
@@ -135,24 +144,43 @@ function FilePeek({
           low-order driver, …).
         </p>
       ) : null}
+      {peekTruncated ? (
+        <p className="mt-2 text-[12px] text-amber-300">
+          Showing a capped slice of this file; the full counts are
+          listed below each section.
+        </p>
+      ) : null}
       <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
         {rootAttrs.length > 0 ? (
           <div>
-            <div className="text-[11px] uppercase tracking-wider text-[var(--fg-3)] mb-1">
-              Root attributes ({rootAttrs.length})
-            </div>
-            <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 font-mono text-[12px]">
+            <PeekSectionHeader
+              label="Root attributes"
+              shown={rootAttrs.length}
+              total={rootAttrsTotal}
+            />
+            {/* Stack name on top of value so very long attribute names
+                never push the value column off-screen. */}
+            <ul className="font-mono text-[12px] space-y-2">
               {rootAttrs.map((attr) => (
-                <ContiguousRow key={attr.name} attr={attr} />
+                <li key={attr.name}>
+                  <div className="text-[var(--fg-3)] break-all">
+                    {attr.name}
+                  </div>
+                  <div className="text-[var(--fg-1)] break-all">
+                    {formatAttrValue(attr.value)}
+                  </div>
+                </li>
               ))}
-            </dl>
+            </ul>
           </div>
         ) : null}
         {topLevelKeys.length > 0 ? (
           <div>
-            <div className="text-[11px] uppercase tracking-wider text-[var(--fg-3)] mb-1">
-              Top-level entries ({topLevelKeys.length})
-            </div>
+            <PeekSectionHeader
+              label="Top-level entries"
+              shown={topLevelKeys.length}
+              total={topLevelKeysTotal}
+            />
             <ul className="font-mono text-[12px] space-y-1">
               {topLevelKeys.map((entry) => (
                 <li
@@ -182,14 +210,23 @@ function FilePeek({
   );
 }
 
-function ContiguousRow({ attr }: { attr: HandoffRootAttr }) {
+function PeekSectionHeader({
+  label,
+  shown,
+  total,
+}: {
+  label: string;
+  shown: number;
+  total: number;
+}) {
+  const truncated = shown < total;
   return (
-    <>
-      <dt className="text-[var(--fg-3)] truncate">{attr.name}</dt>
-      <dd className="text-[var(--fg-1)] break-all">
-        {formatAttrValue(attr.value)}
-      </dd>
-    </>
+    <div className="text-[11px] uppercase tracking-wider text-[var(--fg-3)] mb-1">
+      {label}{" "}
+      <span className="tab-num">
+        {truncated ? `(showing ${shown} of ${total})` : `(${total})`}
+      </span>
+    </div>
   );
 }
 

@@ -189,6 +189,10 @@ class InspectEndpointTests(unittest.TestCase):
         self.assertIn("schema_version", attr_names)
         top_names = {t["name"] for t in payload["top_level_keys"]}
         self.assertEqual(top_names, {"energy_bounds", "mixtures"})
+        # M3-D: peek totals + truncation flag.
+        self.assertEqual(payload["root_attrs_total"], 5)
+        self.assertEqual(payload["top_level_keys_total"], 2)
+        self.assertFalse(payload["peek_truncated"])
 
     def test_mock_mode_returns_bundled_mixture_fixture(self) -> None:
         from openmc2donjon.web.server import MIXTURE_SCHEMA, create_app
@@ -458,6 +462,38 @@ class InspectEndpointTests(unittest.TestCase):
             self.assertEqual(top["surface_flux"]["kind"], "group")
             self.assertEqual(top["energy_bounds"]["kind"], "dataset")
             self.assertEqual(top["energy_bounds"]["shape"], [5])
+
+    def test_live_mode_inspect_peek_caps_root_attrs_and_reports_total(
+        self,
+    ) -> None:
+        """A pathological HDF5 with hundreds of attrs must not flood the
+        peek payload; the cap kicks in and the total stays honest."""
+
+        import h5py
+
+        from openmc2donjon.web.server import (
+            _PEEK_MAX_ROOT_ATTRS,
+            create_app,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "many_attrs.h5"
+            with h5py.File(path, "w") as h5:
+                for index in range(_PEEK_MAX_ROOT_ATTRS + 10):
+                    h5.attrs[f"attr_{index:03d}"] = index
+                h5.create_group("only")
+
+            client = TestClient(create_app(mock_mode=False))
+            response = client.get("/api/inspect", params={"path": str(path)})
+            self.assertEqual(response.status_code, 200)
+            payload = response.json()
+
+            self.assertEqual(len(payload["root_attrs"]), _PEEK_MAX_ROOT_ATTRS)
+            self.assertEqual(
+                payload["root_attrs_total"], _PEEK_MAX_ROOT_ATTRS + 10
+            )
+            self.assertEqual(payload["top_level_keys_total"], 1)
+            self.assertTrue(payload["peek_truncated"])
 
     def test_live_mode_scatter_moment_out_of_range_returns_404(self) -> None:
         from openmc2donjon.web.server import create_app
