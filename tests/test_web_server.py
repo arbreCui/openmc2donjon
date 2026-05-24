@@ -262,6 +262,22 @@ class CommandCatalogEndpointTests(unittest.TestCase):
             commands["prepare-openmc-sph-loop"]["web_path"],
             "/openmc?intent=sph-loop&workflow=one-step&production=1",
         )
+        self.assertEqual(
+            commands["make-adf-sidecar"]["web_path"],
+            "/equivalence?kind=adf-sidecar",
+        )
+        self.assertEqual(
+            commands["augment-adf"]["web_path"],
+            "/equivalence?kind=augment-adf",
+        )
+        self.assertEqual(
+            commands["make-sph-sidecar"]["web_path"],
+            "/equivalence?kind=sph-sidecar",
+        )
+        self.assertEqual(
+            commands["augment-sph"]["web_path"],
+            "/equivalence?kind=augment-sph",
+        )
 
     def test_catalog_entries_include_user_guidance(self) -> None:
         from openmc2donjon.web.server import create_app

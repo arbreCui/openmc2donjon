@@ -60,6 +60,22 @@ describe("commandWorkflowMapping", () => {
     expect(mapping.requiredInputs).toEqual(["SPH loop summary JSON path"]);
   });
 
+  it("describes ADF/SPH equivalence command-builder links", () => {
+    const mapping = commandWorkflowMapping(
+      command({
+        id: "make-adf-sidecar",
+        group: "adf",
+        web_path: "/equivalence?kind=adf-sidecar",
+      }),
+    );
+
+    expect(mapping.available).toBe(true);
+    expect(mapping.surface).toBe("Equivalence page");
+    expect(mapping.title).toBe("Sidecar command builder");
+    expect(mapping.presets).toContain("Builder: make ADF/DF sidecar");
+    expect(mapping.requiredInputs).toContain("ADF sidecar output path");
+  });
+
   it("gives a CLI-only explanation when no web surface exists", () => {
     const mapping = commandWorkflowMapping(
       command({

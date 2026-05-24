@@ -101,6 +101,20 @@ export function commandWorkflowMapping(
     };
   }
 
+  if (parsed.pathname === "/equivalence") {
+    const kind = parsed.searchParams.get("kind") ?? "adf-sidecar";
+    return {
+      available: true,
+      href: command.web_path,
+      surface: "Equivalence page",
+      title: "Sidecar command builder",
+      summary:
+        "Opens a non-mutating web form that builds the matching ADF/SPH sidecar or augmentation CLI command.",
+      presets: [`Builder: ${equivalenceBuilderLabel(kind)}`],
+      requiredInputs: equivalenceRequiredInputs(kind),
+    };
+  }
+
   return {
     available: true,
     href: command.web_path,
@@ -126,6 +140,26 @@ function equivalenceLabel(value: string): string {
   if (value === "sph") return "SPH sidecar";
   if (value === "flux-ratio-adf") return "flux-ratio ADF";
   return "direct";
+}
+
+function equivalenceBuilderLabel(value: string): string {
+  if (value === "augment-adf") return "inject ADF/DF";
+  if (value === "sph-sidecar") return "make SPH sidecar";
+  if (value === "augment-sph") return "inject SPH";
+  return "make ADF/DF sidecar";
+}
+
+function equivalenceRequiredInputs(value: string): string[] {
+  if (value === "augment-adf") {
+    return ["Input MGXS HDF5 path", "ADF sidecar HDF5 path", "Augmented HDF5 output path"];
+  }
+  if (value === "sph-sidecar") {
+    return ["Input MGXS HDF5 path", "SPH source mode/options", "SPH sidecar output path"];
+  }
+  if (value === "augment-sph") {
+    return ["Input MGXS HDF5 path", "SPH sidecar HDF5 path", "Augmented HDF5 output path"];
+  }
+  return ["Input MGXS HDF5 path", "ADF mode/options", "ADF sidecar output path"];
 }
 
 function queryPresetLabels(searchParams: URLSearchParams): string[] {
