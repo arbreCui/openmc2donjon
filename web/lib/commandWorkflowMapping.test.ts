@@ -89,6 +89,21 @@ describe("commandWorkflowMapping", () => {
     expect(mapping.surface).toBe("CLI only");
     expect(mapping.requiredInputs).toEqual(["Use the CLI form below"]);
   });
+
+  it("describes generic command-builder links", () => {
+    const mapping = commandWorkflowMapping(
+      command({
+        id: "diff",
+        group: "inspect",
+        web_path: "/builder?command=diff",
+      }),
+    );
+
+    expect(mapping.available).toBe(true);
+    expect(mapping.surface).toBe("Command builder");
+    expect(mapping.presets).toContain("Builder: diff");
+    expect(mapping.requiredInputs).toContain("Terminal execution after copy");
+  });
 });
 
 function command(

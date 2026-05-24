@@ -115,6 +115,20 @@ export function commandWorkflowMapping(
     };
   }
 
+  if (parsed.pathname === "/builder") {
+    const builderCommand = parsed.searchParams.get("command") ?? "unknown";
+    return {
+      available: true,
+      href: command.web_path,
+      surface: "Command builder",
+      title: "Copyable CLI command builder",
+      summary:
+        "Opens a non-mutating form that assembles the selected CLI command with paths and key options.",
+      presets: [`Builder: ${builderCommand}`],
+      requiredInputs: ["Command-specific paths and options", "Terminal execution after copy"],
+    };
+  }
+
   return {
     available: true,
     href: command.web_path,

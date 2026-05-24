@@ -278,6 +278,31 @@ class CommandCatalogEndpointTests(unittest.TestCase):
             commands["augment-sph"]["web_path"],
             "/equivalence?kind=augment-sph",
         )
+        self.assertEqual(commands["diff"]["web_path"], "/builder?command=diff")
+        self.assertEqual(commands["doctor"]["web_path"], "/builder?command=doctor")
+        self.assertEqual(commands["bundle"]["web_path"], "/builder?command=bundle")
+        self.assertEqual(
+            commands["make-low-order-driver"]["web_path"],
+            "/builder?command=make-low-order-driver",
+        )
+        self.assertEqual(
+            commands["make-sph-loop-scaffold"]["web_path"],
+            "/builder?command=make-sph-loop-scaffold",
+        )
+
+    def test_catalog_has_a_web_path_for_every_command(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.get("/api/commands")
+
+        self.assertEqual(response.status_code, 200)
+        missing = [
+            command["id"]
+            for command in response.json()["commands"]
+            if not command.get("web_path")
+        ]
+        self.assertEqual(missing, [])
 
     def test_catalog_entries_include_user_guidance(self) -> None:
         from openmc2donjon.web.server import create_app

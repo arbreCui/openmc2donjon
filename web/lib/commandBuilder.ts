@@ -1,0 +1,529 @@
+export type BuilderFieldKind = "path" | "text" | "select" | "toggle";
+export type BrowseMode = "file" | "directory";
+
+export interface BuilderOption {
+  value: string;
+  label: string;
+}
+
+export interface BuilderField {
+  name: string;
+  label: string;
+  kind: BuilderFieldKind;
+  help: string;
+  placeholder?: string;
+  defaultValue?: string | boolean;
+  flag?: string;
+  positional?: number;
+  required?: boolean;
+  includeDefault?: boolean;
+  repeatCsv?: boolean;
+  options?: BuilderOption[];
+  browse?: BrowseMode;
+  extensions?: string[];
+}
+
+export interface CommandBuilderSpec {
+  id: string;
+  title: string;
+  summary: string;
+  base: string[];
+  fields: BuilderField[];
+  notes: string[];
+}
+
+export type BuilderValues = Record<string, string | boolean>;
+
+const FACES = "FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX";
+
+const FORMAT_OPTIONS = [
+  { value: "macrolib", label: "MACROLIB" },
+  { value: "multicompo", label: "MULTICOMPO" },
+] as const;
+
+const FLUX_NORMALIZATION_OPTIONS = [
+  { value: "none", label: "none" },
+  { value: "total", label: "total" },
+  { value: "power", label: "power" },
+  { value: "auto", label: "auto" },
+] as const;
+
+const SIGN_CONVENTION_OPTIONS = [
+  { value: "", label: "default" },
+  { value: "auto", label: "auto" },
+  { value: "positive-outward", label: "positive outward" },
+  { value: "positive-inward", label: "positive inward" },
+] as const;
+
+const H5 = [".h5", ".hdf5"];
+const JSON = [".json"];
+const TEXT = [".txt", ".out", ".result", ".edt", ".x2m", ".mcompo.txt", ".macrolib.txt"];
+
+export const COMMAND_BUILDER_SPECS: readonly CommandBuilderSpec[] = [
+  {
+    id: "diff",
+    title: "Compare two MGXS HDF5 handoffs",
+    summary:
+      "Build the regression command that compares a reference and candidate HDF5 handoff.",
+    base: ["openmc2donjon", "diff"],
+    fields: [
+      path("reference_h5", "Reference HDF5", "Baseline MGXS handoff.", "<reference.h5>", 0, H5),
+      path("candidate_h5", "Candidate HDF5", "New MGXS handoff to compare.", "<candidate.h5>", 1, H5),
+      text("rtol", "Relative tolerance", "Numeric relative tolerance; empty keeps CLI default.", "--rtol"),
+      text("atol", "Absolute tolerance", "Numeric absolute tolerance; empty keeps CLI default.", "--atol"),
+      toggle("ignore_attrs", "Ignore attrs", "Compare tree/datasets only.", "--ignore-attrs"),
+      text(
+        "ignore_attr",
+        "Ignore attr names",
+        "Comma-separated attribute names; each becomes one --ignore-attr flag.",
+        "--ignore-attr",
+        undefined,
+        true,
+      ),
+      optionPath("summary_json", "Summary JSON", "Optional diff summary JSON.", "--summary-json", "diff.json", JSON),
+      text("max_diffs", "Max printed diffs", "Optional --max-diffs override.", "--max-diffs"),
+      toggle("no_fail", "No fail", "Always exit zero after printing the diff report.", "--no-fail"),
+    ],
+    notes: [
+      "Use this before accepting a new exporter or converter change.",
+      "The web page only assembles the command; the comparison still runs in your shell.",
+    ],
+  },
+  {
+    id: "export-surface-flux",
+    title: "Export OpenMC surface flux",
+    summary:
+      "Build the command that extracts MeshSurfaceFilter + MuSurfaceFilter current tallies.",
+    base: ["openmc2donjon", "export-surface-flux"],
+    fields: [
+      path("statepoint", "Statepoint", "OpenMC statepoint containing the surface tally.", "<statepoint.h5>", 0, H5),
+      optionPath("output", "Surface flux HDF5", "Output HDF5 sidecar.", "-o", "face_flux.h5", H5, true),
+      optionPath("mgxs", "MGXS handoff", "Optional MGXS file for energy bounds and mixture names.", "--mgxs", "mgxs_library.h5", H5),
+      text("tally_name", "Tally name", "OpenMC tally name; empty keeps CLI default.", "--tally-name"),
+      text("mesh_shape", "Mesh shape", "Y,X shape when mixture names are not enough.", "--mesh-shape"),
+      text("mixture_names", "Mixture names", "Comma-separated row-major mixture names.", "--mixture-names"),
+      text("energy_bounds", "Energy bounds", "Comma-separated ascending energy bounds in eV.", "--energy-bounds"),
+      text("mu_edges", "Mu edges", "Required MuSurfaceFilter bin edges.", "--mu-edges", "-1,-0.5,0.5,1", false, true),
+      text("face_area", "Face area", "Optional face area override.", "--face-area"),
+      text("faces", "Faces", "Comma-separated output face names.", "--faces", FACES),
+      optionPath("summary_json", "Summary JSON", "Optional export summary JSON.", "--summary-json", "surface_flux_summary.json", JSON),
+      toggle("force", "Force overwrite", "Allow replacing an existing output file.", "--force"),
+    ],
+    notes: [
+      "This is the OpenMC-side input for flux-ratio ADF.",
+      "Mu edges must match the OpenMC MuSurfaceFilter bins used by the tally.",
+    ],
+  },
+  {
+    id: "check-face-flux",
+    title: "Validate face-flux inputs",
+    summary: "Build a QA command before constructing flux-ratio ADF sidecars.",
+    base: ["openmc2donjon", "check-face-flux"],
+    fields: [
+      path("input_h5", "MGXS HDF5", "MGXS handoff used for metadata.", "<mgxs_library.h5>", 0, H5),
+      optionPath("surface_flux", "Heterogeneous face flux", "HDF5 file or FILE::DATASET.", "--surface-flux", "face_flux.h5", H5, true),
+      optionPath("homogeneous_face_flux", "Homogeneous face flux", "HDF5 file or FILE::DATASET.", "--homogeneous-face-flux", "homogeneous_face_flux.h5", H5, true),
+      text("faces", "Faces", "Comma-separated expected face names.", "--faces", FACES),
+      text("invalid_fill", "Invalid fill", "Optional fill value for invalid bins.", "--invalid-fill"),
+      text("clip_min", "Clip min", "Optional lower clip bound.", "--clip-min"),
+      text("clip_max", "Clip max", "Optional upper clip bound.", "--clip-max"),
+      optionPath("summary_json", "Summary JSON", "Optional contract summary JSON.", "--summary-json", "face_flux_check.json", JSON),
+      toggle("no_fail", "No fail", "Always exit zero after printing the report.", "--no-fail"),
+    ],
+    notes: ["Use this before make-adf-sidecar --mode flux-ratio."],
+  },
+  {
+    id: "make-low-order-driver",
+    title: "Canonicalize a low-order driver",
+    summary:
+      "Build the command that converts external low-order flux/current data into the canonical HDF5 layout.",
+    base: ["openmc2donjon", "make-low-order-driver"],
+    fields: [
+      path("input_h5", "MGXS HDF5", "MGXS handoff used for metadata.", "<mgxs_library.h5>", 0, H5),
+      optionPath("output", "Driver HDF5", "Canonical low-order driver output.", "-o", "driver.h5", H5, true),
+      optionPath("raw_driver", "Raw driver bundle", "Optional raw driver HDF5 bundle.", "--raw-driver", "raw_driver.h5", H5),
+      text("volume_flux", "Volume flux source", "HDF5 file or FILE::DATASET.", "--volume-flux"),
+      text("net_current", "Net current source", "HDF5 file or FILE::DATASET.", "--net-current"),
+      select("net_current_sign_convention", "Current sign", "Raw net-current sign convention.", "--net-current-sign-convention", SIGN_CONVENTION_OPTIONS),
+      text("faces", "Faces", "Comma-separated face names.", "--faces", FACES),
+      text("source_label", "Source label", "Provenance label stored in output HDF5.", "--source-label"),
+      optionPath("summary_json", "Summary JSON", "Optional summary JSON.", "--summary-json", "driver_summary.json", JSON),
+      toggle("force", "Force overwrite", "Allow replacing an existing output file.", "--force"),
+    ],
+    notes: ["The canonical driver feeds make-homogeneous-face-flux."],
+  },
+  {
+    id: "check-low-order-driver",
+    title: "Validate a low-order driver",
+    summary: "Build the QA command for a canonical low-order driver HDF5.",
+    base: ["openmc2donjon", "check-low-order-driver"],
+    fields: [
+      path("input_h5", "MGXS HDF5", "MGXS handoff used for metadata.", "<mgxs_library.h5>", 0, H5),
+      path("driver_h5", "Driver HDF5", "Canonical low-order driver HDF5.", "<driver.h5>", 1, H5),
+      text("faces", "Faces", "Optional expected face names.", "--faces"),
+      text("face_widths", "Face widths", "Optional one width or comma-separated widths.", "--face-widths"),
+      optionPath("summary_json", "Summary JSON", "Optional contract summary JSON.", "--summary-json", "driver_check.json", JSON),
+      toggle("no_fail", "No fail", "Always exit zero after printing the report.", "--no-fail"),
+    ],
+    notes: ["Run this before reconstructing homogeneous face flux."],
+  },
+  {
+    id: "make-homogeneous-face-flux",
+    title: "Reconstruct homogeneous face flux",
+    summary: "Build the homogeneous face-flux side of a flux-ratio ADF definition.",
+    base: ["openmc2donjon", "make-homogeneous-face-flux"],
+    fields: [
+      path("input_h5", "MGXS HDF5", "MGXS handoff with transport_total.", "<mgxs_library.h5>", 0, H5),
+      optionPath("output", "Homogeneous face flux", "Output HDF5.", "-o", "homogeneous_face_flux.h5", H5, true),
+      text("volume_flux", "Volume flux source", "HDF5 file or FILE::DATASET.", "--volume-flux", "<volume_flux>", false, true),
+      text("net_current", "Net current source", "HDF5 file or FILE::DATASET.", "--net-current", "<net_current>", false, true),
+      select("net_current_sign_convention", "Current sign", "Raw net-current sign convention.", "--net-current-sign-convention", SIGN_CONVENTION_OPTIONS),
+      text("faces", "Faces", "Comma-separated face names.", "--faces", FACES),
+      text("face_widths", "Face widths", "One width or comma-separated widths.", "--face-widths"),
+      optionPath("summary_json", "Summary JSON", "Optional summary JSON.", "--summary-json", "homogeneous_face_flux_summary.json", JSON),
+      toggle("force", "Force overwrite", "Allow replacing an existing output file.", "--force"),
+    ],
+    notes: ["The output pairs with exported OpenMC surface flux in make-adf-sidecar."],
+  },
+  {
+    id: "make-sph-update-table",
+    title: "Compute next SPH update table",
+    summary:
+      "Build the command that compares reference and low-order flux and writes the next SPH CSV table.",
+    base: ["openmc2donjon", "make-sph-update-table"],
+    fields: [
+      path("input_h5", "MGXS HDF5", "MGXS handoff used for metadata.", "<mgxs_library.h5>", 0, H5),
+      optionPath("output", "SPH table CSV", "Output SPH CSV table.", "-o", "sph_update.csv", [".csv"], true),
+      text("reference_flux", "Reference flux", "OpenMC reference flux CSV/HDF5 source.", "--reference-flux", "<reference_flux>", false, true),
+      text("low_order_flux", "Low-order flux", "Low-order flux CSV/HDF5 source.", "--low-order-flux", "<low_order_flux>", false, true),
+      text("previous_sph", "Previous SPH", "Previous SPH CSV or HDF5 sidecar/source.", "--previous-sph"),
+      text("damping", "Damping", "Optional multiplicative damping.", "--damping"),
+      text("clip_min", "Clip min", "Optional minimum SPH value.", "--clip-min"),
+      text("clip_max", "Clip max", "Optional maximum SPH value.", "--clip-max"),
+      select("flux_normalization", "Flux normalization", "Scale low-order flux before ratio.", "--flux-normalization", FLUX_NORMALIZATION_OPTIONS),
+      text("source_label", "Source label", "Provenance label recorded in the summary.", "--source-label"),
+      optionPath("summary_json", "Summary JSON", "Optional iteration summary JSON.", "--summary-json", "sph_update_summary.json", JSON),
+      toggle("force", "Force overwrite", "Allow replacing the CSV output.", "--force"),
+    ],
+    notes: ["This is the numerical core of a manual SPH iteration."],
+  },
+  {
+    id: "extract-donjon-volume-flux",
+    title: "Extract DONJON volume flux",
+    summary: "Build the adapter command from DONJON L_FLUX dumps to canonical volume-flux HDF5.",
+    base: ["openmc2donjon", "extract-donjon-volume-flux"],
+    fields: [
+      path("input_h5", "MGXS HDF5", "MGXS handoff used for metadata.", "<mgxs_library.h5>", 0, H5),
+      optionPath("flux_dump", "DONJON flux dump", "DONJON result containing a UTL L_FLUX dump.", "--flux-dump", "flux.edt", TEXT, true),
+      optionPath("output", "Volume flux HDF5", "Canonical volume-flux output.", "-o", "volume_flux.h5", H5, true),
+      optionPath("map_h5", "Flux map HDF5", "Optional HDF5 scalar flux map.", "--map-h5", "flux_map.h5", H5),
+      text("scalar_flux_map", "Scalar flux map", "Comma-separated one-based scalar IDs.", "--scalar-flux-map"),
+      text("kn_column", "KN column", "Optional one-based /kn column override.", "--kn-column"),
+      text("list_offset", "List offset", "Optional unnamed real list offset.", "--list-offset"),
+      text("source_label", "Source label", "Provenance label stored in output metadata.", "--source-label"),
+      optionPath("summary_json", "Summary JSON", "Optional extraction summary JSON.", "--summary-json", "extract_flux_summary.json", JSON),
+      toggle("force", "Force overwrite", "Allow replacing the output HDF5.", "--force"),
+    ],
+    notes: ["Use the output as low-order flux input for SPH updates."],
+  },
+  {
+    id: "run-sph-iteration",
+    title: "Run one SPH iteration",
+    summary: "Build the one-iteration workflow command from DONJON flux dump to updated ASCII.",
+    base: ["openmc2donjon", "run-sph-iteration"],
+    fields: [
+      path("input_h5", "Base MGXS HDF5", "Immutable OpenMC handoff.", "<mgxs_library.h5>", 0, H5),
+      optionPath("output_dir", "Output directory", "Directory for generated artifacts.", "--output-dir", "sph_iteration", undefined, true, "directory"),
+      text("reference_flux", "Reference flux", "OpenMC reference flux CSV/HDF5 source.", "--reference-flux", "<reference_flux>", false, true),
+      optionPath("flux_dump", "DONJON flux dump", "DONJON result containing L_FLUX.", "--flux-dump", "flux.edt", TEXT, true),
+      optionPath("map_h5", "Flux map HDF5", "Optional HDF5 scalar flux map.", "--map-h5", "flux_map.h5", H5),
+      text("scalar_flux_map", "Scalar flux map", "Comma-separated one-based scalar IDs.", "--scalar-flux-map"),
+      text("previous_sph", "Previous SPH", "Previous SPH CSV/HDF5 source.", "--previous-sph"),
+      text("damping", "Damping", "Optional update damping.", "--damping"),
+      text("clip_min", "Clip min", "Optional SPH lower clip.", "--clip-min"),
+      text("clip_max", "Clip max", "Optional SPH upper clip.", "--clip-max"),
+      select("flux_normalization", "Flux normalization", "Scale DONJON flux before ratio.", "--flux-normalization", FLUX_NORMALIZATION_OPTIONS),
+      select("format", "ASCII format", "Final DONJON ASCII output format.", "--format", FORMAT_OPTIONS),
+      optionPath("summary_json", "Summary JSON", "Optional workflow summary JSON.", "--summary-json", "sph_iteration_summary.json", JSON),
+      toggle("force", "Force overwrite", "Overwrite generated artifacts.", "--force"),
+    ],
+    notes: ["For repeated production use, prefer run-sph-loop with an explicit config."],
+  },
+  {
+    id: "make-donjon-sph-loop-config",
+    title: "Write DONJON SPH-loop config",
+    summary: "Build a generic DONJON-backed SPH loop JSON config.",
+    base: ["openmc2donjon", "make-donjon-sph-loop-config"],
+    fields: [
+      optionPath("output", "Config JSON", "Config JSON to write.", "--output", "loop.json", JSON, true),
+      optionPath("output_dir", "Loop output directory", "SPH loop run directory.", "--output-dir", "sph_loop", undefined, true, "directory"),
+      optionPath("mgxs", "MGXS HDF5", "Fixed OpenMC MGXS HDF5.", "--mgxs", "mgxs_library.h5", H5, true),
+      optionPath("solve_template", "DONJON solve template", "Case-specific solve deck template.", "--solve-template", "solve_template.c2m", TEXT, true),
+      optionPath("flux_map", "Flux map HDF5", "Scalar-flux map HDF5.", "--flux-map", "flux_map.h5", H5, true),
+      text("reference_flux", "Reference flux", "Optional reference flux source.", "--reference-flux"),
+      text("iterations", "Iterations", "Optional max iteration count.", "--iterations"),
+      text("damping", "Damping", "Optional damping.", "--damping"),
+      text("clip_min", "Clip min", "Optional SPH lower clip.", "--clip-min"),
+      text("clip_max", "Clip max", "Optional SPH upper clip.", "--clip-max"),
+      select("flux_normalization", "Flux normalization", "SPH flux normalization.", "--flux-normalization", FLUX_NORMALIZATION_OPTIONS),
+      text("sph_change_tolerance", "SPH change target", "Optional convergence target.", "--sph-change-tolerance"),
+      text("flux_ratio_tolerance", "Flux ratio target", "Optional convergence target.", "--flux-ratio-tolerance"),
+      toggle("fail_on_nonconvergence", "Fail on nonconvergence", "Make loop return error if targets are not met.", "--fail-on-nonconvergence"),
+      select("format", "ASCII format", "Loop handoff format.", "--format", FORMAT_OPTIONS),
+    ],
+    notes: ["Acceptance gates and convergence targets are independent production decisions."],
+  },
+  {
+    id: "make-sph-loop-scaffold",
+    title: "Make SPH-loop scaffold",
+    summary: "Build the OpenMC-side scaffold command for reference flux, flux map, and loop config.",
+    base: ["openmc2donjon", "make-sph-loop-scaffold"],
+    fields: [
+      path("input_h5", "MGXS HDF5", "OpenMC MGXS HDF5 handoff.", "<mgxs_library.h5>", 0, H5),
+      optionPath("output_dir", "Output directory", "Directory for scaffold artifacts.", "--output-dir", "sph_scaffold", undefined, true, "directory"),
+      text("reference_flux", "Reference flux", "OpenMC reference flux CSV/HDF5 source.", "--reference-flux", "<reference_flux>", false, true),
+      optionPath("solve_template", "DONJON solve template", "Case-specific solve deck template.", "--solve-template", "solve_template.c2m", TEXT, true),
+      text("scalar_flux_map", "Scalar flux map", "Comma-separated DONJON scalar IDs.", "--scalar-flux-map"),
+      toggle("sequential_scalar_flux_map", "Sequential scalar map", "Use scalar_flux_ids=1..N in MGXS order.", "--sequential-scalar-flux-map"),
+      text("iterations", "Iterations", "Optional max iteration count.", "--iterations"),
+      text("damping", "Damping", "Optional damping.", "--damping"),
+      text("sph_change_tolerance", "SPH change target", "Optional convergence target.", "--sph-change-tolerance"),
+      text("flux_ratio_tolerance", "Flux ratio target", "Optional convergence target.", "--flux-ratio-tolerance"),
+      toggle("fail_on_nonconvergence", "Fail on nonconvergence", "Make loop return error if targets are not met.", "--fail-on-nonconvergence"),
+      select("format", "ASCII format", "Loop handoff format.", "--format", FORMAT_OPTIONS),
+      optionPath("summary_json", "Summary JSON", "Optional scaffold summary JSON.", "--summary-json", "scaffold_summary.json", JSON),
+      toggle("force", "Force overwrite", "Overwrite generated artifacts.", "--force"),
+    ],
+    notes: ["This is a bridge from a fixed OpenMC handoff into run-sph-loop."],
+  },
+  {
+    id: "bundle",
+    title: "Bundle production artifacts",
+    summary: "Build a manifest-backed delivery bundle command.",
+    base: ["openmc2donjon", "bundle"],
+    fields: [
+      optionPath("output_dir", "Bundle directory", "Directory that receives artifacts and manifest.", "--output-dir", "bundle", undefined, true, "directory"),
+      optionPath("mgxs", "MGXS HDF5", "MGXS handoff to include.", "--mgxs", "mgxs_library.h5", H5),
+      optionPath("mcompo", "MULTICOMPO ASCII", "L_MULTICOMPO ASCII to include.", "--mcompo", "out.mcompo.txt", [".txt", ".mcompo.txt"]),
+      optionPath("macrolib", "MACROLIB ASCII", "L_MACROLIB ASCII to include.", "--macrolib", "out.macrolib.txt", [".txt", ".macrolib.txt"]),
+      optionPath("run_summary", "Run summary", "One-step conversion summary JSON.", "--run-summary", "run_summary.json", JSON),
+      optionPath("check_summary", "Check summary", "Preflight summary JSON.", "--check-summary", "check_summary.json", JSON),
+      optionPath("inspect_summary", "Inspect summary", "Inspect summary JSON.", "--inspect-summary", "inspect_summary.json", JSON),
+      optionPath("doctor_summary", "Doctor summary", "Doctor summary JSON.", "--doctor-summary", "doctor_summary.json", JSON),
+      optionPath("diff_summary", "Diff summary", "Diff summary JSON.", "--diff-summary", "diff_summary.json", JSON),
+      text("extra", "Extra artifacts", "Comma-separated LABEL=PATH entries; each becomes one --extra flag.", "--extra", undefined, true),
+      text("manifest_name", "Manifest name", "Optional manifest filename.", "--manifest-name"),
+      toggle("force", "Force overwrite", "Overwrite bundled files and manifest.", "--force"),
+    ],
+    notes: ["Bundle before sending a run to another machine or collaborator."],
+  },
+  {
+    id: "validate-bundle",
+    title: "Validate a production bundle",
+    summary: "Build the command that validates a manifest-backed bundle.",
+    base: ["openmc2donjon", "validate-bundle"],
+    fields: [
+      path("manifest", "Manifest JSON", "Bundle manifest JSON.", "manifest.json", 0, JSON),
+      optionPath("summary_json", "Summary JSON", "Optional validation summary JSON.", "--summary-json", "bundle_validation.json", JSON),
+      toggle("no_fail", "No fail", "Always exit zero after printing the report.", "--no-fail"),
+    ],
+    notes: ["Run this after bundle, before sharing the delivery directory."],
+  },
+  {
+    id: "doctor",
+    title: "Check local runtime",
+    summary: "Build a runtime diagnostics command for package, imports, and console scripts.",
+    base: ["openmc2donjon", "doctor"],
+    fields: [
+      optionPath("recipe", "Recipe", "Optional OpenMC export recipe to dry-run.", "--recipe", "recipe.py", [".py"]),
+      optionPath("statepoint", "Statepoint", "Optional OpenMC statepoint path.", "--statepoint", "statepoint.h5", H5),
+      toggle("load_statepoint", "Load statepoint", "Load the statepoint during recipe dry-run.", "--load-statepoint"),
+      optionPath("summary_json", "Summary JSON", "Optional doctor summary JSON.", "--summary-json", "doctor.json", JSON),
+      toggle("no_fail", "No fail", "Always exit zero after printing the report.", "--no-fail"),
+    ],
+    notes: ["Use this when a collaborator reports that local commands fail to start."],
+  },
+  {
+    id: "serve",
+    title: "Start localhost web backend",
+    summary: "Build the FastAPI backend command used by the Next.js web UI.",
+    base: ["openmc2donjon", "serve"],
+    fields: [
+      text("host", "Host", "Bind address; empty keeps CLI default.", "--host"),
+      text("port", "Port", "Bind port; empty keeps CLI default.", "--port"),
+      toggle("mock", "Mock mode", "Serve fixture data instead of real files.", "--mock"),
+      text("cors_origin", "Extra CORS origins", "Comma-separated origins; each becomes one --cors-origin flag.", "--cors-origin", undefined, true),
+      select("log_level", "Log level", "Explicit diagnostic log level.", "--log-level", [
+        { value: "", label: "default" },
+        { value: "ERROR", label: "ERROR" },
+        { value: "WARNING", label: "WARNING" },
+        { value: "INFO", label: "INFO" },
+        { value: "DEBUG", label: "DEBUG" },
+      ]),
+    ],
+    notes: ["Keep this backend running while using the localhost web UI."],
+  },
+];
+
+export function commandBuilderSpec(id: string): CommandBuilderSpec | null {
+  return COMMAND_BUILDER_SPECS.find((spec) => spec.id === id) ?? null;
+}
+
+export function defaultBuilderValues(spec: CommandBuilderSpec): BuilderValues {
+  const values: BuilderValues = {};
+  for (const field of spec.fields) {
+    values[field.name] =
+      field.kind === "toggle" ? Boolean(field.defaultValue) : String(field.defaultValue ?? "");
+  }
+  return values;
+}
+
+export function buildCommandCli(spec: CommandBuilderSpec, values: BuilderValues): string {
+  const tokens = [...spec.base];
+  const positionals = spec.fields
+    .filter((field) => field.positional != null)
+    .sort((a, b) => Number(a.positional) - Number(b.positional));
+  for (const field of positionals) {
+    tokens.push(valueOrPlaceholder(field, values[field.name]));
+  }
+  for (const field of spec.fields) {
+    if (!field.flag) continue;
+    const raw = values[field.name];
+    if (field.kind === "toggle") {
+      if (raw === true) tokens.push(field.flag);
+      continue;
+    }
+    const value = stringValue(raw);
+    if (field.repeatCsv) {
+      for (const item of splitCsv(value)) {
+        tokens.push(field.flag, item);
+      }
+      continue;
+    }
+    const shouldEmit =
+      field.required ||
+      value !== "" ||
+      (field.includeDefault && stringValue(field.defaultValue) !== "");
+    if (!shouldEmit) continue;
+    const emitted = value || stringValue(field.defaultValue) || field.placeholder || "";
+    if (emitted !== "") tokens.push(field.flag, emitted);
+  }
+  return tokens.map(shellQuote).join(" ");
+}
+
+function path(
+  name: string,
+  label: string,
+  help: string,
+  placeholder: string,
+  positional: number,
+  extensions?: string[],
+): BuilderField {
+  return {
+    name,
+    label,
+    kind: "path",
+    help,
+    placeholder,
+    positional,
+    required: true,
+    browse: "file",
+    extensions,
+  };
+}
+
+function optionPath(
+  name: string,
+  label: string,
+  help: string,
+  flag: string,
+  placeholder: string,
+  extensions?: string[],
+  required = false,
+  browse: BrowseMode = "file",
+): BuilderField {
+  return {
+    name,
+    label,
+    kind: "path",
+    help,
+    flag,
+    placeholder,
+    required,
+    browse,
+    extensions,
+  };
+}
+
+function text(
+  name: string,
+  label: string,
+  help: string,
+  flag?: string,
+  placeholder?: string,
+  repeatCsv = false,
+  required = false,
+): BuilderField {
+  return {
+    name,
+    label,
+    kind: "text",
+    help,
+    flag,
+    placeholder,
+    repeatCsv,
+    required,
+  };
+}
+
+function toggle(name: string, label: string, help: string, flag: string): BuilderField {
+  return {
+    name,
+    label,
+    kind: "toggle",
+    help,
+    flag,
+    defaultValue: false,
+  };
+}
+
+function select(
+  name: string,
+  label: string,
+  help: string,
+  flag: string,
+  options: readonly BuilderOption[],
+): BuilderField {
+  return {
+    name,
+    label,
+    kind: "select",
+    help,
+    flag,
+    options: [...options],
+    defaultValue: options[0]?.value ?? "",
+  };
+}
+
+function valueOrPlaceholder(field: BuilderField, value: string | boolean | undefined): string {
+  const stringified = stringValue(value);
+  return stringified || field.placeholder || `<${field.name}>`;
+}
+
+function stringValue(value: string | boolean | undefined): string {
+  if (value == null) return "";
+  if (typeof value === "boolean") return value ? "true" : "";
+  return value.trim();
+}
+
+function splitCsv(value: string): string[] {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function shellQuote(value: string): string {
+  if (/^[A-Za-z0-9_@%+=:,./<>-]+$/.test(value)) return value;
+  return `'${value.replaceAll("'", "'\"'\"'")}'`;
+}
