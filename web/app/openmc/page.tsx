@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useId, useMemo, useRef, useState } from "react";
 import {
   ApiError,
   ConvertFormat,
@@ -9,6 +9,7 @@ import {
   OpenmcWorkflowPlan,
   api,
 } from "@/lib/api";
+import FileBrowserModal from "@/components/inspect/FileBrowserModal";
 import OpenmcArtifactList from "@/components/openmc/OpenmcArtifactList";
 import OpenmcCommandList from "@/components/openmc/OpenmcCommandList";
 import OpenmcWorkflowChoices from "@/components/openmc/OpenmcWorkflowChoices";
@@ -20,6 +21,24 @@ type PlanState =
   | { kind: "loading" }
   | { kind: "ok"; data: OpenmcWorkflowPlan }
   | { kind: "error"; message: string; status?: number };
+
+type BrowserTarget =
+  | "recipe"
+  | "statepoint"
+  | "run-dir"
+  | "hdf5"
+  | "output"
+  | "adf"
+  | "sph";
+
+interface BrowserConfig {
+  initialPath: string;
+  extensions: readonly string[];
+  fileTypeLabel: string;
+  chipLabel: string;
+  recentScope: string;
+  selectMode?: "file" | "directory";
+}
 
 const FALLBACK_RUN_DIR = "/path/to/openmc2donjon-run";
 
@@ -41,6 +60,8 @@ export default function OpenmcPage() {
   const [strictDryRun, setStrictDryRun] = useState(false);
   const [hFactorText, setHFactorText] = useState("");
   const [state, setState] = useState<PlanState>({ kind: "idle" });
+  const [browserTarget, setBrowserTarget] = useState<BrowserTarget | null>(null);
+  const planButtonRef = useRef<HTMLButtonElement | null>(null);
   const [settings, , , settingsHydrated] = useSettings();
   const savedPrefix = settings.default_inspect_path.trim();
   const runDirPlaceholder = savedPrefix || FALLBACK_RUN_DIR;
@@ -52,6 +73,20 @@ export default function OpenmcPage() {
     () => defaultHdf5Path(runDir || savedPrefix),
     [runDir, savedPrefix],
   );
+  const browserConfig = browserTarget
+    ? openmcBrowserConfig(browserTarget, {
+        recipePath,
+        statepointPath,
+        runDir,
+        keepHdf5Path,
+        outputPath,
+        derivedOutput,
+        adfSource,
+        sphSource,
+        savedPrefix,
+        format,
+      })
+    : null;
 
   async function plan(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -89,6 +124,36 @@ export default function OpenmcPage() {
     } catch (err) {
       setState(toErrorState(err));
     }
+  }
+
+  function applyBrowserPick(picked: string) {
+    switch (browserTarget) {
+      case "recipe":
+        setRecipePath(picked);
+        break;
+      case "statepoint":
+        setStatepointPath(picked);
+        break;
+      case "run-dir":
+        setRunDir(picked);
+        break;
+      case "hdf5":
+        setKeepHdf5Path(picked);
+        break;
+      case "output":
+        setOutputPath(picked);
+        break;
+      case "adf":
+        setAdfSource(picked);
+        break;
+      case "sph":
+        setSphSource(picked);
+        break;
+      default:
+        break;
+    }
+    setBrowserTarget(null);
+    planButtonRef.current?.focus();
   }
 
   return (
@@ -134,6 +199,7 @@ export default function OpenmcPage() {
               label="Recipe Python"
               value={recipePath}
               onChange={setRecipePath}
+              onBrowse={() => setBrowserTarget("recipe")}
               placeholder={
                 settingsHydrated && savedPrefix
                   ? `${savedPrefix.replace(/\/?$/, "/")}export_recipe.py`
@@ -144,6 +210,7 @@ export default function OpenmcPage() {
               label="Statepoint HDF5"
               value={statepointPath}
               onChange={setStatepointPath}
+              onBrowse={() => setBrowserTarget("statepoint")}
               placeholder="/path/to/statepoint.h5"
               disabled={!loadStatepoint}
             />
@@ -154,18 +221,21 @@ export default function OpenmcPage() {
               label="Run directory"
               value={runDir}
               onChange={setRunDir}
+              onBrowse={() => setBrowserTarget("run-dir")}
               placeholder={runDirPlaceholder}
             />
             <TextField
               label="Intermediate HDF5"
               value={keepHdf5Path}
               onChange={setKeepHdf5Path}
+              onBrowse={() => setBrowserTarget("hdf5")}
               placeholder={derivedHdf5}
             />
             <TextField
               label="Output ASCII"
               value={outputPath}
               onChange={setOutputPath}
+              onBrowse={() => setBrowserTarget("output")}
               placeholder={derivedOutput}
             />
           </div>
@@ -187,6 +257,7 @@ export default function OpenmcPage() {
               label="ADF sidecar"
               value={adfSource}
               onChange={setAdfSource}
+              onBrowse={() => setBrowserTarget("adf")}
               placeholder="/path/to/adf_sidecar.h5"
             />
           ) : null}
@@ -195,6 +266,7 @@ export default function OpenmcPage() {
               label="SPH sidecar"
               value={sphSource}
               onChange={setSphSource}
+              onBrowse={() => setBrowserTarget("sph")}
               placeholder="/path/to/sph_sidecar.h5"
             />
           ) : null}
@@ -231,6 +303,7 @@ export default function OpenmcPage() {
           />
 
           <button
+            ref={planButtonRef}
             type="submit"
             className="btn btn-primary"
             disabled={state.kind === "loading"}
@@ -238,6 +311,20 @@ export default function OpenmcPage() {
             {state.kind === "loading" ? "Planning…" : "Plan workflow"}
           </button>
         </form>
+
+        {browserConfig ? (
+          <FileBrowserModal
+            open={browserTarget != null}
+            initialPath={browserConfig.initialPath}
+            extensions={browserConfig.extensions}
+            fileTypeLabel={browserConfig.fileTypeLabel}
+            chipLabel={browserConfig.chipLabel}
+            recentScope={browserConfig.recentScope}
+            selectMode={browserConfig.selectMode}
+            onClose={() => setBrowserTarget(null)}
+            onSelect={applyBrowserPick}
+          />
+        ) : null}
 
         <section className="mt-6">
           <PlanReport state={state} />
@@ -425,29 +512,48 @@ function TextField({
   onChange,
   placeholder,
   disabled = false,
+  onBrowse,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
   disabled?: boolean;
+  onBrowse?: () => void;
 }) {
+  const inputId = useId();
   return (
-    <label className="block">
-      <span className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
+    <div className="block">
+      <label
+        htmlFor={inputId}
+        className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]"
+      >
         {label}
+      </label>
+      <span className="mt-1 flex gap-2">
+        <input
+          id={inputId}
+          type="text"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          disabled={disabled}
+          className="w-full min-w-0 rounded-md border border-[var(--edge)] bg-[rgba(255,255,255,0.03)] px-3 py-2 font-mono text-sm text-[var(--fg-0)] focus:border-[var(--accent)] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+          spellCheck={false}
+          autoComplete="off"
+        />
+        {onBrowse ? (
+          <button
+            type="button"
+            onClick={onBrowse}
+            disabled={disabled}
+            className="btn btn-secondary shrink-0 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Browse…
+          </button>
+        ) : null}
       </span>
-      <input
-        type="text"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        disabled={disabled}
-        className="mt-1 w-full min-w-0 rounded-md border border-[var(--edge)] bg-[rgba(255,255,255,0.03)] px-3 py-2 font-mono text-sm text-[var(--fg-0)] focus:border-[var(--accent)] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-        spellCheck={false}
-        autoComplete="off"
-      />
-    </label>
+    </div>
   );
 }
 
@@ -498,6 +604,99 @@ function defaultAsciiPath(base: string, format: ConvertFormat): string {
 function defaultHdf5Path(base: string): string {
   const stem = base.trim().replace(/\/$/, "");
   return stem ? `${stem}/mgxs_library.h5` : "mgxs_library.h5";
+}
+
+function openmcBrowserConfig(
+  target: BrowserTarget,
+  values: {
+    recipePath: string;
+    statepointPath: string;
+    runDir: string;
+    keepHdf5Path: string;
+    outputPath: string;
+    derivedOutput: string;
+    adfSource: string;
+    sphSource: string;
+    savedPrefix: string;
+    format: ConvertFormat;
+  },
+): BrowserConfig {
+  const baseDir = values.runDir || values.savedPrefix;
+  if (target === "recipe") {
+    return {
+      initialPath: pickBrowserStart(values.recipePath || values.savedPrefix),
+      extensions: ["py"],
+      fileTypeLabel: "Python recipe",
+      chipLabel: "PY",
+      recentScope: "openmc-recipe",
+    };
+  }
+  if (target === "statepoint") {
+    return {
+      initialPath: pickBrowserStart(values.statepointPath || values.savedPrefix),
+      extensions: ["h5", "hdf5"],
+      fileTypeLabel: "statepoint HDF5",
+      chipLabel: "H5",
+      recentScope: "openmc-statepoint",
+    };
+  }
+  if (target === "run-dir") {
+    return {
+      initialPath: values.runDir || values.savedPrefix || "~",
+      extensions: [],
+      fileTypeLabel: "run",
+      chipLabel: "DIR",
+      recentScope: "openmc-run-dir",
+      selectMode: "directory",
+    };
+  }
+  if (target === "hdf5") {
+    return {
+      initialPath: pickBrowserStart(values.keepHdf5Path || baseDir),
+      extensions: ["h5", "hdf5"],
+      fileTypeLabel: "MGXS HDF5",
+      chipLabel: "H5",
+      recentScope: "openmc-hdf5",
+    };
+  }
+  if (target === "output") {
+    const outputSeed = values.outputPath || (baseDir ? values.derivedOutput : "");
+    return {
+      initialPath: pickBrowserStart(outputSeed),
+      extensions:
+        values.format === "macrolib" ? ["macrolib.txt"] : ["mcompo.txt"],
+      fileTypeLabel: "DONJON ASCII",
+      chipLabel: "TXT",
+      recentScope: `openmc-output-${values.format}`,
+    };
+  }
+  if (target === "adf") {
+    return {
+      initialPath: pickBrowserStart(values.adfSource || values.savedPrefix),
+      extensions: ["h5", "hdf5"],
+      fileTypeLabel: "ADF sidecar",
+      chipLabel: "H5",
+      recentScope: "openmc-adf",
+    };
+  }
+  return {
+    initialPath: pickBrowserStart(values.sphSource || values.savedPrefix),
+    extensions: ["h5", "hdf5"],
+    fileTypeLabel: "SPH sidecar",
+    chipLabel: "H5",
+    recentScope: "openmc-sph",
+  };
+}
+
+function pickBrowserStart(path: string): string {
+  const trimmed = path.trim();
+  if (!trimmed) return "~";
+  const lastSlash = trimmed.lastIndexOf("/");
+  if (lastSlash >= 0 && lastSlash < trimmed.length - 1) {
+    const tail = trimmed.slice(lastSlash + 1);
+    if (tail.includes(".")) return trimmed.slice(0, lastSlash + 1);
+  }
+  return trimmed;
 }
 
 function parseOptionalNumber(value: string): number | null | "invalid" {

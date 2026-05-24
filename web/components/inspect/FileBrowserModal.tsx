@@ -37,6 +37,11 @@ export interface FileBrowserModalProps {
    * each browser purpose keeps its own history (HDF5 picks shouldn't
    * appear in the JSON browser and vice versa). */
   recentScope: string;
+  /** Selection target. ``"file"`` keeps the historical behavior:
+   * directory rows navigate and matching file rows select. ``"directory"``
+   * still lets directory rows navigate, but adds a "Use this directory"
+   * action for selecting the currently listed directory. */
+  selectMode?: "file" | "directory";
   onSelect: (path: string) => void;
   onClose: () => void;
 }
@@ -48,6 +53,7 @@ export interface FileBrowserModalProps {
  * a literal dot) won't accidentally turn it into a regex metacharacter.
  */
 function buildExtensionRegex(extensions: readonly string[]): RegExp {
+  if (extensions.length === 0) return /^$/;
   const escaped = extensions.map((ext) =>
     ext.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
   );
@@ -60,7 +66,7 @@ type State =
   | { kind: "error"; path: string; message: string; status?: number };
 
 /**
- * Directory picker shared between the Inspect and Audit pages.
+ * File/directory picker shared between the workflow pages.
  *
  * Scope:
  * - Lists one directory at a time via ``/api/files``.
@@ -91,6 +97,7 @@ export default function FileBrowserModal({
   fileTypeLabel,
   chipLabel,
   recentScope,
+  selectMode = "file",
   onSelect,
   onClose,
 }: FileBrowserModalProps) {
@@ -106,8 +113,8 @@ export default function FileBrowserModal({
     path: initialPath,
   });
   const [currentPath, setCurrentPath] = useState(initialPath);
-  // Per-browser list of recently-picked handoff files. We record on
-  // every successful pick (not on inspect-success in the parent)
+  // Per-browser list of recently-picked paths. We record on every
+  // successful pick (not on inspect-success in the parent)
   // because the modal is self-contained that way - the trade-off is
   // that a recent entry might be a file that fails to open, which
   // shows up as the usual error card on the next inspect anyway.
@@ -282,7 +289,9 @@ export default function FileBrowserModal({
       }}
       role="dialog"
       aria-modal="true"
-      aria-label={`Browse for ${fileTypeLabel} file`}
+      aria-label={`Browse for ${fileTypeLabel} ${
+        selectMode === "directory" ? "directory" : "file"
+      }`}
     >
       <div
         ref={dialogRef}
@@ -295,7 +304,10 @@ export default function FileBrowserModal({
       >
         <div className="flex items-baseline justify-between gap-3 px-4 py-3 border-b border-[var(--edge)]">
           <h3 className="text-sm font-semibold tracking-tight">
-            <span className="grad-text">Browse for {fileTypeLabel} file</span>
+            <span className="grad-text">
+              Browse for {fileTypeLabel}{" "}
+              {selectMode === "directory" ? "directory" : "file"}
+            </span>
           </h3>
           <button
             type="button"
@@ -324,6 +336,16 @@ export default function FileBrowserModal({
             pending={state.kind !== "ok"}
             onPick={setCurrentPath}
           />
+          {selectMode === "directory" && state.kind === "ok" ? (
+            <button
+              type="button"
+              onClick={() => handleSelect(state.data.path)}
+              className="btn btn-primary text-[12px]"
+              aria-label="Use the current directory"
+            >
+              Use this directory
+            </button>
+          ) : null}
         </div>
 
         {/* Editable path bar. Companion to the breadcrumb above:
@@ -368,6 +390,11 @@ export default function FileBrowserModal({
               recent={recent}
               onPick={handleSelect}
               chipLabel={chipLabel}
+              itemLabel={
+                selectMode === "directory"
+                  ? `${fileTypeLabel} directories`
+                  : `${fileTypeLabel} files`
+              }
             />
           ) : null}
           <BrowserBody
@@ -377,6 +404,7 @@ export default function FileBrowserModal({
             extensionRegex={extensionRegex}
             fileTypeLabel={fileTypeLabel}
             chipLabel={chipLabel}
+            selectMode={selectMode}
           />
         </div>
       </div>
@@ -391,6 +419,7 @@ function BrowserBody({
   extensionRegex,
   fileTypeLabel,
   chipLabel,
+  selectMode,
 }: {
   state: State;
   onPickDir: (path: string) => void;
@@ -398,6 +427,7 @@ function BrowserBody({
   extensionRegex: RegExp;
   fileTypeLabel: string;
   chipLabel: string;
+  selectMode: "file" | "directory";
 }) {
   if (state.kind === "loading") {
     return (
@@ -417,9 +447,10 @@ function BrowserBody({
     );
   }
   const allEntries = state.data.entries;
-  const visible = allEntries.filter(
-    (e) => e.kind === "dir" || extensionRegex.test(e.name),
-  );
+  const visible =
+    selectMode === "directory"
+      ? allEntries.filter((e) => e.kind === "dir")
+      : allEntries.filter((e) => e.kind === "dir" || extensionRegex.test(e.name));
   const hiddenCount = allEntries.length - visible.length;
   // Dirs first (already alphabetical from backend), then files.
   const dirs = visible.filter((e) => e.kind === "dir");
@@ -428,10 +459,15 @@ function BrowserBody({
   if (visible.length === 0) {
     return (
       <div className="p-4 space-y-1 text-sm text-[var(--fg-3)]">
-        <div>No {fileTypeLabel} files or subdirectories here.</div>
+        <div>
+          {selectMode === "directory"
+            ? "No subdirectories here. Use the current directory if it is the intended target."
+            : `No ${fileTypeLabel} files or subdirectories here.`}
+        </div>
         {hiddenCount > 0 ? (
           <div className="text-[12px]">
-            ({hiddenCount} non-{fileTypeLabel} file
+            ({hiddenCount} non-{fileTypeLabel}{" "}
+            {selectMode === "directory" ? "entry" : "file"}
             {hiddenCount === 1 ? "" : "s"} hidden.)
           </div>
         ) : null}
@@ -463,7 +499,9 @@ function BrowserBody({
       ))}
       {hiddenCount > 0 ? (
         <li className="px-3 py-2 text-[12px] text-[var(--fg-3)]">
-          {hiddenCount} non-{fileTypeLabel} file{hiddenCount === 1 ? "" : "s"} hidden.
+          {hiddenCount} non-{fileTypeLabel}{" "}
+          {selectMode === "directory" ? "entry" : "file"}
+          {hiddenCount === 1 ? "" : "s"} hidden.
         </li>
       ) : null}
     </ul>
@@ -513,10 +551,12 @@ function RecentList({
   recent,
   onPick,
   chipLabel,
+  itemLabel,
 }: {
   recent: readonly RecentHandoff[];
   onPick: (path: string) => void;
   chipLabel: string;
+  itemLabel: string;
 }) {
   return (
     // Lives in the same scroll container as the directory listing so
@@ -524,7 +564,7 @@ function RecentList({
     // directory is unrelated. ``border-b`` separates from the listing
     // below; the "Recent" label keeps the two sections distinguishable.
     <section
-      aria-label="Recently picked files"
+      aria-label={`Recently picked ${itemLabel}`}
       className="px-3 pt-1 pb-2 border-b border-[var(--edge)] mb-1"
     >
       <div className="text-[11px] uppercase tracking-wider text-[var(--fg-3)] px-0 mb-1">
