@@ -47,6 +47,28 @@ const WORKFLOW_STEPS = [
     href: "/audit",
   },
 ];
+const SPH_LOOP_STEPS = [
+  {
+    label: "Run loop",
+    detail: "DONJON solve -> low-order flux",
+    href: "/commands/run-sph-loop",
+  },
+  {
+    label: "Update NSPH",
+    detail: "recompute equivalence factors",
+    href: "/commands/prepare-openmc-sph-loop",
+  },
+  {
+    label: "Reconvert",
+    detail: "write updated handoff",
+    href: "/convert?intent=direct-convert&format=multicompo&check=1&production=1",
+  },
+  {
+    label: "Audit",
+    detail: "acceptance and convergence",
+    href: "/audit",
+  },
+];
 
 export default function CommandsPage() {
   const [state, setState] = useState<State>({ kind: "loading" });
@@ -209,7 +231,7 @@ function WorkflowMap() {
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
         <h2 className="text-base font-semibold tracking-tight">Workflow map</h2>
         <span className="text-[12px] text-[var(--fg-3)]">
-          command families in production order
+          direct path plus SPH feedback loop
         </span>
       </div>
       <div className="grid gap-2 md:grid-cols-5">
@@ -231,6 +253,51 @@ function WorkflowMap() {
             <div className="mt-1 text-[12px] text-[var(--fg-2)]">{step.detail}</div>
           </Link>
         ))}
+      </div>
+      <div className="mt-3 rounded-lg border border-cyan-300/20 bg-cyan-300/[0.04] p-3">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-cyan-300">
+              iterative branch
+            </div>
+            <h3 className="mt-1 text-sm font-semibold tracking-tight">
+              SPH loop feedback
+            </h3>
+            <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--fg-2)]">
+              DONJON low-order flux can feed back into NSPH factors; the
+              converter writes a new handoff and the loop repeats until the
+              configured stop condition or production acceptance is reached.
+            </p>
+          </div>
+          <Link
+            href="/commands/run-sph-loop"
+            className="btn btn-secondary shrink-0"
+          >
+            SPH loop command
+          </Link>
+        </div>
+        <div className="mt-3 grid gap-2 md:grid-cols-4">
+          {SPH_LOOP_STEPS.map((step, index) => (
+            <Link
+              key={step.label}
+              href={step.href}
+              className="rounded-md border border-cyan-300/15 bg-black/10 p-3 hover:border-cyan-300/40"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] uppercase tracking-wider text-cyan-300/80">
+                  loop {index + 1}
+                </span>
+                <span className="text-[var(--fg-3)]">
+                  {index + 1 < SPH_LOOP_STEPS.length ? "then" : "review"}
+                </span>
+              </div>
+              <div className="mt-2 text-sm font-semibold">{step.label}</div>
+              <div className="mt-1 text-[12px] text-[var(--fg-2)]">
+                {step.detail}
+              </div>
+            </Link>
+          ))}
+        </div>
       </div>
     </section>
   );
