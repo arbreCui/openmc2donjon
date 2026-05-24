@@ -21,7 +21,7 @@ files that will be consumed as physics inputs, not for early format debugging.
 | ADF face consistency | hard fail when ADF exists | Prevent mixed face naming across calculations. |
 | Transport/P1 consistency | hard fail when both are present | Catch inconsistent explicit and derived transport data. |
 | NU ratio | warning | Flag suspicious `nu_fission / fission` values without rejecting valid fuel variations. |
-| Statistical uncertainty coverage | warning or production fail if configured | Keep OpenMC tally noise visible in the audit trail. |
+| Statistical uncertainty coverage | warning by default; optional hard fail | Keep OpenMC tally noise visible in the audit trail. |
 
 ## SPH Loop Acceptance
 
@@ -37,6 +37,8 @@ Production acceptance requires:
 - explicit MGXS volumes and fissionable H-FACTOR data;
 - root energy bounds plus local mixture/state energy-bounds consistency;
 - scatter row-balance, CHI, ADF-face, and transport/P1 consistency;
+- optional full MGXS `*_std_dev` coverage when
+  `acceptance.require_mgxs_std_dev_coverage = true`;
 - final-to-initial flux residual ratio no worse than `1.0`;
 - final clipped SPH fraction/count within configured limits;
 - convergence checks only when explicitly requested in `acceptance`
@@ -87,6 +89,12 @@ A summary can therefore show `acceptance.passed = true` while `converged =
 false`. In that case the handoff passed the configured production gates, but
 the SPH iteration did not reach its numerical convergence target before the
 configured stop condition.
+
+Statistical uncertainty coverage has the same opt-in shape. Production
+preflight reports missing `*_std_dev` coverage as audit information by default;
+use `--require-std-dev-coverage` or
+`acceptance.require_mgxs_std_dev_coverage = true` when the workflow policy
+requires OpenMC tally uncertainty to be present for every eligible MGXS field.
 
 ## What This Preset Does Not Prove
 

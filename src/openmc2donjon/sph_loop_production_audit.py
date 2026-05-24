@@ -45,6 +45,8 @@ class FluxMapPreflightLike(Protocol):
     mgxs_transport_p1_max_abs: float | None
     mgxs_transport_p1_worst: str | None
     mgxs_transport_p1_error_count: int
+    mgxs_std_dev_datasets: int
+    mgxs_std_dev_expected_datasets: int
     mgxs_declared_mixture_order: bool
     mgxs_source_domain_indices: tuple[int | None, ...]
     mgxs_source_domain_order_errors: tuple[str, ...]
@@ -359,6 +361,12 @@ def build_production_audit_payload(
             ),
             "mgxs_h_factor_invalid": int(
                 getattr(flux_map_preflight, "mgxs_h_factor_invalid", 0)
+            ),
+            "mgxs_std_dev_datasets": int(
+                getattr(flux_map_preflight, "mgxs_std_dev_datasets", 0)
+            ),
+            "mgxs_std_dev_expected_datasets": int(
+                getattr(flux_map_preflight, "mgxs_std_dev_expected_datasets", 0)
             ),
         },
         "artifact_counts": {

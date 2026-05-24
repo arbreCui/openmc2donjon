@@ -38,6 +38,22 @@ H_FACTOR_DATASETS = (
     "kappa_fission_xs",
     "kappa_fission_cross_section",
 )
+MGXS_STD_DEV_DATASETS = (
+    "total",
+    "absorption",
+    "fission",
+    "nu_fission",
+    "chi",
+    "transport_total",
+    "inverse_velocity",
+    "h_factor",
+    "H-FACTOR",
+    "H_FACTOR",
+    "kappa_fission",
+    "kappa_fission_xs",
+    "kappa_fission_cross_section",
+    "scatter_matrix",
+)
 
 
 @dataclass(frozen=True)
@@ -89,6 +105,8 @@ class SphLoopFluxMapPreflightReport:
     mgxs_h_factor_datasets: int
     mgxs_h_factor_missing: int
     mgxs_h_factor_invalid: int
+    mgxs_std_dev_datasets: int
+    mgxs_std_dev_expected_datasets: int
     scalar_flux_ids: tuple[int, ...]
     minimum_required_flux_unknown_count: int | None
     mixture_flux_map: tuple[tuple[str, int], ...]
@@ -287,6 +305,8 @@ def build_flux_map_preflight_report(
         mgxs_h_factor_datasets=mgxs_metadata["h_factor_datasets"],
         mgxs_h_factor_missing=mgxs_metadata["h_factor_missing"],
         mgxs_h_factor_invalid=mgxs_metadata["h_factor_invalid"],
+        mgxs_std_dev_datasets=mgxs_metadata["std_dev_datasets"],
+        mgxs_std_dev_expected_datasets=mgxs_metadata["std_dev_expected_datasets"],
         scalar_flux_ids=scalar_ids,
         minimum_required_flux_unknown_count=(
             None if not scalar_ids else int(max(scalar_ids))
@@ -381,6 +401,8 @@ def payload(report: SphLoopFluxMapPreflightReport) -> dict[str, object]:
         "mgxs_h_factor_datasets": report.mgxs_h_factor_datasets,
         "mgxs_h_factor_missing": report.mgxs_h_factor_missing,
         "mgxs_h_factor_invalid": report.mgxs_h_factor_invalid,
+        "mgxs_std_dev_datasets": report.mgxs_std_dev_datasets,
+        "mgxs_std_dev_expected_datasets": report.mgxs_std_dev_expected_datasets,
         "scalar_flux_ids": list(report.scalar_flux_ids),
         "minimum_required_flux_unknown_count": (
             report.minimum_required_flux_unknown_count
@@ -476,6 +498,7 @@ def _read_mgxs_metadata(
         )
         volume_contract = _volume_contract(h5, mixture_names)
         h_factor_contract = _h_factor_contract(h5, mixture_names, energy_groups)
+        std_dev_contract = _std_dev_contract(h5, mixture_names)
     if not mixture_names:
         raise ValueError("input HDF5 contains no mixtures")
     if energy_groups <= 0:
@@ -490,6 +513,7 @@ def _read_mgxs_metadata(
         **physics_contract,
         **volume_contract,
         **h_factor_contract,
+        **std_dev_contract,
     }
 
 
@@ -698,6 +722,32 @@ def _h_factor_contract(
     }
 
 
+def _std_dev_contract(h5: Any, mixture_names: tuple[str, ...]) -> dict[str, Any]:
+    expected = 0
+    present = 0
+    for _label, group, parent_group in _iter_calculations(h5, mixture_names):
+        parent_attrs = None if parent_group is None else parent_group.attrs
+        fissionable = bool(
+            _attr_with_parent(group.attrs, parent_attrs, "fissionable", False)
+        )
+        for dataset_name in MGXS_STD_DEV_DATASETS:
+            if dataset_name not in group:
+                continue
+            if _is_synthetic_nonfission_placeholder(
+                group,
+                dataset_name=dataset_name,
+                fissionable=fissionable,
+            ):
+                continue
+            expected += 1
+            if f"{dataset_name}_std_dev" in group:
+                present += 1
+    return {
+        "std_dev_datasets": present,
+        "std_dev_expected_datasets": expected,
+    }
+
+
 def _iter_calculations(h5: Any, mixture_names: tuple[str, ...]):
     mixtures = h5["mixtures"]
     for mixture_name in mixture_names:
@@ -754,6 +804,21 @@ def _h_factor_dataset_name(group: Any) -> str | None:
         if name in group:
             return name
     return None
+
+
+def _is_synthetic_nonfission_placeholder(
+    group: Any,
+    *,
+    dataset_name: str,
+    fissionable: bool,
+) -> bool:
+    if fissionable or dataset_name not in {"fission", "nu_fission", "chi"}:
+        return False
+    try:
+        values = np.asarray(group[dataset_name][:], dtype=float)
+    except (TypeError, ValueError, OSError):
+        return False
+    return bool(values.size and np.all(np.isfinite(values)) and not np.any(values))
 
 
 def _h_factor_issue(

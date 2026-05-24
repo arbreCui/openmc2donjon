@@ -77,6 +77,7 @@ def acceptance_config(config: dict[str, Any]) -> dict[str, Any]:
         "max_mgxs_chi_sum_error",
         "require_mgxs_adf_face_consistency",
         "max_mgxs_transport_p1_rel",
+        "require_mgxs_std_dev_coverage",
         "require_reference_flux_std_dev",
         "max_reference_flux_std_dev_rel",
         "max_sph_abs_change",
@@ -172,6 +173,7 @@ def acceptance_config(config: dict[str, Any]) -> dict[str, Any]:
         "require_known_mesh",
         "require_mgxs_energy_bounds_consistency",
         "require_mgxs_adf_face_consistency",
+        "require_mgxs_std_dev_coverage",
         "require_reference_flux_std_dev",
         "fail_on_violation",
     ):

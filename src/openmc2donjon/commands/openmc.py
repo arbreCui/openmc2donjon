@@ -87,6 +87,14 @@ def build_prepare_openmc_sph_loop_parser() -> argparse.ArgumentParser:
     parser.add_argument("--uncertainty-mean-abs-floor", type=float, default=1.0e-12)
     parser.add_argument("--no-uncertainty-check", action="store_true")
     parser.add_argument(
+        "--require-std-dev-coverage",
+        action="store_true",
+        help=(
+            "fail preflight if any expected MGXS mean dataset is missing a "
+            "matching *_std_dev uncertainty dataset"
+        ),
+    )
+    parser.add_argument(
         "--reference-flux",
         default=None,
         help=(
@@ -226,6 +234,9 @@ def prepare_openmc_sph_loop_handler(args: argparse.Namespace) -> int:
                 None if args.no_uncertainty_check else args.uncertainty_production_fail
             ),
             uncertainty_mean_abs_floor=args.uncertainty_mean_abs_floor,
+            require_std_dev_coverage=(
+                False if args.no_uncertainty_check else args.require_std_dev_coverage
+            ),
             reference_flux=args.reference_flux,
             reference_flux_dataset=args.reference_flux_dataset,
             scaffold_dir=args.scaffold_dir,

@@ -13,6 +13,7 @@ Monte Carlo tallies are exact.
 | CHI normalization | `1.0e-6` absolute | Max `abs(sum(chi) - 1)` for fissionable calculations. |
 | Transport/P1 consistency | `5.0e-2` relative | Max residual between explicit `transport_total` and `total - sum(P1 scatter out)`. |
 | Local energy bounds | exact shape + `rtol=1.0e-10` | Any local mixture/state `energy_bounds` must match root `/energy_bounds`. |
+| Statistical uncertainty coverage | off by default; exact coverage when required | If `--require-std-dev-coverage` or `acceptance.require_mgxs_std_dev_coverage` is set, every eligible mean MGXS dataset must have a matching `*_std_dev` dataset. |
 
 Scatter row balance and transport/P1 use `5.0e-2` because these checks are
 meant to catch wrong axes, transposed scatter matrices, and mismatched
@@ -55,11 +56,17 @@ summary itself must fail on nonconvergence.
 | --- | ---: | --- |
 | NU ratio | `[2.0, 3.5]` | Warn if `nu_fission / fission` falls outside this interval for fissionable bins with `fission > 1.0e-30`. |
 | Unknown energy mesh | warning by default | Warn when `/energy_bounds` does not match a bundled known mesh, unless the caller explicitly requires a known mesh. |
-| Missing uncertainty datasets | warning by default | Warn when `*_std_dev` datasets are absent or incomplete. |
+| Missing uncertainty datasets | warning by default | Warn when `*_std_dev` datasets are absent or incomplete, unless the caller promotes coverage to a hard gate. |
 
 NU ratio is warning-only because valid values depend on isotope mix, burnup,
 and spectrum. The range is still useful for catching swapped datasets or
 accidental unit/normalization errors.
+
+Uncertainty coverage is not required by the production preset because older
+fixtures and external MGXS HDF5 files may not carry OpenMC tally standard
+deviations. Production workflows that rely on Monte Carlo statistics should
+turn it into a hard gate with `--require-std-dev-coverage` for MGXS preflight
+or `acceptance.require_mgxs_std_dev_coverage = true` for SPH-loop acceptance.
 
 ## Override Policy
 

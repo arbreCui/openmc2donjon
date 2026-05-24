@@ -65,6 +65,7 @@ def prepare_openmc_sph_loop_handoff(
     uncertainty_fail: float | None = None,
     uncertainty_production_fail: float | None = None,
     uncertainty_mean_abs_floor: float = 1.0e-12,
+    require_std_dev_coverage: bool = False,
     reference_flux: str | Path | None = None,
     reference_flux_dataset: str = "openmc_volume_flux",
     scaffold_dir: str | Path | None = None,
@@ -184,6 +185,7 @@ def prepare_openmc_sph_loop_handoff(
         uncertainty_fail=uncertainty_fail,
         uncertainty_production_fail=uncertainty_production_fail,
         uncertainty_mean_abs_floor=uncertainty_mean_abs_floor,
+        require_std_dev_coverage=require_std_dev_coverage,
     )
     _write_ascii(
         mgxs_h5,
@@ -564,6 +566,7 @@ def _run_optional_preflight(
     uncertainty_fail: float | None,
     uncertainty_production_fail: float | None,
     uncertainty_mean_abs_floor: float,
+    require_std_dev_coverage: bool,
 ) -> None:
     if not check:
         return
@@ -585,6 +588,7 @@ def _run_optional_preflight(
         uncertainty_fail=uncertainty_fail,
         uncertainty_production_fail=uncertainty_production_fail,
         uncertainty_mean_abs_floor=uncertainty_mean_abs_floor,
+        require_std_dev_coverage=require_std_dev_coverage,
         summary_json=check_summary_json,
     )
     if not ok:

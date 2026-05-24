@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import argparse
 from types import SimpleNamespace
 import unittest
 
+from openmc2donjon.commands.acceptance import (
+    add_sph_loop_acceptance_args,
+    sph_loop_acceptance_from_args,
+)
 from openmc2donjon.sph_loop_acceptance import (
     ACCEPTANCE_FAIL_DECISION,
     ACCEPTANCE_PASS_DECISION,
@@ -12,6 +17,15 @@ from openmc2donjon.sph_loop_production_audit import build_production_audit_paylo
 
 
 class SphLoopAcceptanceTests(unittest.TestCase):
+    def test_cli_acceptance_args_can_require_mgxs_std_dev_coverage(self) -> None:
+        parser = argparse.ArgumentParser()
+        add_sph_loop_acceptance_args(parser)
+
+        args = parser.parse_args(["--acceptance-require-mgxs-std-dev-coverage"])
+        acceptance = sph_loop_acceptance_from_args(args)
+
+        self.assertEqual(acceptance, {"require_mgxs_std_dev_coverage": True})
+
     def test_builds_acceptance_metrics_from_audit_and_convergence(self) -> None:
         report = build_acceptance_report(
             {
@@ -222,7 +236,11 @@ class SphLoopAcceptanceTests(unittest.TestCase):
 
     def test_production_audit_payload_includes_nu_ratio_warning_count(self) -> None:
         payload = build_production_audit_payload(
-            flux_map_preflight=_preflight(nu_ratio_warning_count=1),
+            flux_map_preflight=_preflight(
+                nu_ratio_warning_count=1,
+                std_dev_datasets=6,
+                std_dev_expected_datasets=7,
+            ),
             artifact_metadata=SimpleNamespace(
                 reference_flux=_metadata(
                     "mgxs_donjon",
@@ -240,6 +258,8 @@ class SphLoopAcceptanceTests(unittest.TestCase):
             payload["flux_map"]["mgxs_nu_ratio_warning_count"],
             1,
         )
+        self.assertEqual(payload["flux_map"]["mgxs_std_dev_datasets"], 6)
+        self.assertEqual(payload["flux_map"]["mgxs_std_dev_expected_datasets"], 7)
 
     def test_mgxs_explicit_volume_acceptance_gate(self) -> None:
         report = build_acceptance_report(
@@ -428,6 +448,48 @@ class SphLoopAcceptanceTests(unittest.TestCase):
         self.assertFalse(checks["require_mgxs_adf_face_consistency"].passed)
         self.assertFalse(checks["max_mgxs_transport_p1_rel"].passed)
 
+    def test_mgxs_std_dev_coverage_acceptance_gate(self) -> None:
+        report = build_acceptance_report(
+            {"require_mgxs_std_dev_coverage": True},
+            audit_rows=(),
+            convergence=(),
+            completed_iterations=1,
+            converged=False,
+            final_solve=None,
+            flux_map_preflight=_preflight(
+                std_dev_datasets=7,
+                std_dev_expected_datasets=7,
+            ),
+        )
+
+        self.assertTrue(report.passed)
+        check = report.checks[0]
+        self.assertEqual(check.name, "require_mgxs_std_dev_coverage")
+        self.assertEqual(check.actual, 7)
+        self.assertEqual(check.limit, 7)
+
+    def test_mgxs_std_dev_coverage_acceptance_gate_fails_when_incomplete(
+        self,
+    ) -> None:
+        report = build_acceptance_report(
+            {"require_mgxs_std_dev_coverage": True},
+            audit_rows=(),
+            convergence=(),
+            completed_iterations=1,
+            converged=False,
+            final_solve=None,
+            flux_map_preflight=_preflight(
+                std_dev_datasets=3,
+                std_dev_expected_datasets=7,
+            ),
+        )
+
+        self.assertFalse(report.passed)
+        check = report.checks[0]
+        self.assertEqual(check.name, "require_mgxs_std_dev_coverage")
+        self.assertFalse(check.passed)
+        self.assertIn("actual 3 == required 7", check.message)
+
     def test_production_audit_gate_reports_mismatch(self) -> None:
         report = build_acceptance_report(
             {"require_production_audit": True},
@@ -615,6 +677,8 @@ def _preflight(
     transport_p1_rel: float | None = None,
     transport_p1_errors: int = 0,
     nu_ratio_warning_count: int = 0,
+    std_dev_datasets: int = 0,
+    std_dev_expected_datasets: int = 0,
 ) -> SimpleNamespace:
     return SimpleNamespace(
         passed=True,
@@ -658,6 +722,8 @@ def _preflight(
         mgxs_transport_p1_max_abs=None,
         mgxs_transport_p1_worst=None,
         mgxs_transport_p1_error_count=transport_p1_errors,
+        mgxs_std_dev_datasets=std_dev_datasets,
+        mgxs_std_dev_expected_datasets=std_dev_expected_datasets,
         scalar_flux_ids=(2, 4),
         minimum_required_flux_unknown_count=4,
         mixture_flux_map=(("fuel", 2), ("moderator", 4)),

@@ -312,6 +312,10 @@ def _format_preflight_audit_lines(
         f"missing={report.mgxs_h_factor_missing} "
         f"invalid={report.mgxs_h_factor_invalid}"
     )
+    lines.append(
+        "  mgxs_std_dev="
+        f"{report.mgxs_std_dev_datasets}/{report.mgxs_std_dev_expected_datasets}"
+    )
     if report.mesh_shape is not None:
         shape = "x".join(str(value) for value in report.mesh_shape)
         lines.append(

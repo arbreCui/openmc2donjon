@@ -25,6 +25,7 @@ class UncertaintyConfig:
     fail_threshold: float | None = None
     production_fail_threshold: float | None = None
     mean_abs_floor: float = 1.0e-12
+    require_coverage: bool = False
 
 
 def configure_uncertainty(report: InputReport, config: UncertaintyConfig) -> None:
@@ -32,11 +33,13 @@ def configure_uncertainty(report: InputReport, config: UncertaintyConfig) -> Non
         config.warn_threshold is not None
         or config.fail_threshold is not None
         or config.production_fail_threshold is not None
+        or config.require_coverage
     )
     report.uncertainty_warn_threshold = config.warn_threshold
     report.uncertainty_fail_threshold = config.fail_threshold
     report.uncertainty_production_fail_threshold = config.production_fail_threshold
     report.uncertainty_mean_abs_floor = config.mean_abs_floor
+    report.uncertainty_require_coverage = bool(config.require_coverage)
     if config.warn_threshold is not None and config.warn_threshold < 0.0:
         report.fail("--uncertainty-warn must be non-negative")
     if config.fail_threshold is not None and config.fail_threshold < 0.0:
@@ -55,6 +58,7 @@ def validate_uncertainty_for_calculation(
     name: str,
     mean_dataset_names: tuple[str, ...],
     *,
+    fissionable: bool,
     scatter_axes: str | None,
     ngroups: int,
     legendre_order: int,
@@ -65,6 +69,12 @@ def validate_uncertainty_for_calculation(
 
     for dataset_name in mean_dataset_names:
         if dataset_name not in group:
+            continue
+        if _is_synthetic_nonfission_placeholder(
+            group,
+            dataset_name=dataset_name,
+            fissionable=fissionable,
+        ):
             continue
         report.uncertainty_expected_datasets += 1
         std_name = f"{dataset_name}{STD_DEV_SUFFIX}"
@@ -95,7 +105,7 @@ def validate_uncertainty_for_calculation(
 def finalize_uncertainty(report: InputReport) -> None:
     if not report.uncertainty_checked:
         return
-    _warn_missing_std_dev_coverage(report)
+    _handle_missing_std_dev_coverage(report)
     if report.uncertainty_max_rel is None:
         return
     detail = (
@@ -122,21 +132,44 @@ def finalize_uncertainty(report: InputReport) -> None:
         report.warn(f"{detail} exceeds warn threshold {warn_threshold:.6e}")
 
 
-def _warn_missing_std_dev_coverage(report: InputReport) -> None:
+def _handle_missing_std_dev_coverage(report: InputReport) -> None:
     missing = report.uncertainty_expected_datasets - report.uncertainty_datasets
     if missing <= 0:
+        return
+    detail = (
+        "MGXS statistical uncertainty std_dev coverage incomplete: "
+        f"{report.uncertainty_datasets}/{report.uncertainty_expected_datasets} "
+        f"dataset(s) present, {missing} missing; export OpenMC MGXS *_std_dev "
+        "datasets to make tally noise visible in preflight"
+    )
+    if report.uncertainty_checked and _requires_std_dev_coverage(report):
+        report.fail(detail)
         return
     if (
         report.uncertainty_fail_threshold is None
         and report.uncertainty_production_fail_threshold is None
     ):
         return
-    report.warn(
-        "MGXS statistical uncertainty std_dev coverage incomplete: "
-        f"{report.uncertainty_datasets}/{report.uncertainty_expected_datasets} "
-        f"dataset(s) present, {missing} missing; export OpenMC MGXS *_std_dev "
-        "datasets to make tally noise visible in preflight"
-    )
+    report.warn(detail)
+
+
+def _requires_std_dev_coverage(report: InputReport) -> bool:
+    return bool(getattr(report, "uncertainty_require_coverage", False))
+
+
+def _is_synthetic_nonfission_placeholder(
+    group: h5py.Group,
+    *,
+    dataset_name: str,
+    fissionable: bool,
+) -> bool:
+    if fissionable or dataset_name not in {"fission", "nu_fission", "chi"}:
+        return False
+    try:
+        values = np.asarray(group[dataset_name][:], dtype=float)
+    except (TypeError, ValueError, OSError):
+        return False
+    return bool(values.size and np.all(np.isfinite(values)) and not np.any(values))
 
 
 def _validate_std_dev_dataset(

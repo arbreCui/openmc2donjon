@@ -184,7 +184,18 @@ openmc2donjon check mgxs_library.h5 \
 Production mode keeps the same data model and applies the configured
 production uncertainty gate to available `*_std_dev / |mean|` values above the
 mean floor. Missing or incomplete `*_std_dev` coverage is reported as a warning
-unless a stricter workflow gate is added by the caller.
+unless a stricter workflow gate is added by the caller:
+
+```sh
+openmc2donjon check mgxs_library.h5 \
+  --production \
+  --require-std-dev-coverage
+```
+
+The same policy is available in SPH-loop acceptance as
+`acceptance.require_mgxs_std_dev_coverage = true`. Exporter-synthesized zero
+fission placeholders in non-fissionable mixtures are excluded from the
+expected coverage count.
 
 ## Optional SPH Payload
 

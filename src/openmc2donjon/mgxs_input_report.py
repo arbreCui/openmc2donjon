@@ -75,6 +75,7 @@ class InputReport:
     uncertainty_fail_threshold: float | None = None
     uncertainty_production_fail_threshold: float | None = None
     uncertainty_mean_abs_floor: float = 1.0e-12
+    uncertainty_require_coverage: bool = False
     uncertainty_expected_datasets: int = 0
     uncertainty_datasets: int = 0
     uncertainty_bins_checked: int = 0
@@ -281,6 +282,7 @@ def _report_payload(report: InputReport) -> dict[str, object]:
                 report.uncertainty_production_fail_threshold
             ),
             "mean_abs_floor": report.uncertainty_mean_abs_floor,
+            "require_coverage": report.uncertainty_require_coverage,
             "expected_datasets": report.uncertainty_expected_datasets,
             "datasets": report.uncertainty_datasets,
             "missing_datasets": (

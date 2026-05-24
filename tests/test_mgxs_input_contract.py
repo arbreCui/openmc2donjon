@@ -838,6 +838,45 @@ class MgxsInputContractTests(unittest.TestCase):
             any("std_dev coverage incomplete" in item for item in report.warnings)
         )
 
+    def test_uncertainty_can_require_full_std_dev_coverage(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "missing_required_std_dev.h5"
+            write_single_state_fixture(path, total=[0.29, 0.38])
+
+            report = validator.validate_input(
+                path,
+                uncertainty=validator.UncertaintyConfig(
+                    warn_threshold=None,
+                    require_coverage=True,
+                ),
+            )
+
+        self.assertFalse(report.ok)
+        self.assertEqual(report.uncertainty_expected_datasets, 7)
+        self.assertEqual(report.uncertainty_datasets, 0)
+        self.assertTrue(
+            any("std_dev coverage incomplete" in item for item in report.issues)
+        )
+
+    def test_uncertainty_coverage_ignores_synthetic_nonfission_placeholders(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "moderator_std_dev.h5"
+            write_nonfission_zero_std_dev_fixture(path)
+
+            report = validator.validate_input(
+                path,
+                uncertainty=validator.UncertaintyConfig(
+                    warn_threshold=None,
+                    require_coverage=True,
+                ),
+            )
+
+        self.assertTrue(report.ok, report.issues)
+        self.assertEqual(report.uncertainty_expected_datasets, 4)
+        self.assertEqual(report.uncertainty_datasets, 4)
+
 
 def write_multistate_fixture(
     path: Path,
@@ -914,6 +953,35 @@ def write_one_state_payload(
             else scatter
         ),
     )
+
+
+def write_nonfission_zero_std_dev_fixture(path: Path) -> None:
+    with h5py.File(path, "w") as h5:
+        h5.attrs["energy_groups"] = 2
+        h5.attrs["legendre_order"] = 0
+        h5.create_dataset("energy_bounds", data=np.array([1.0e-5, 1.0, 1.0e7]))
+        mixtures = h5.create_group("mixtures")
+        moderator = mixtures.create_group("moderator")
+        moderator.attrs["fissionable"] = False
+        moderator.attrs["scatter_axes"] = "moment,from,to"
+        moderator.attrs["volume"] = 1.0
+        moderator.create_dataset("total", data=np.array([0.29, 0.38]))
+        moderator.create_dataset("absorption", data=np.array([0.05, 0.08]))
+        moderator.create_dataset("fission", data=np.zeros(2))
+        moderator.create_dataset("nu_fission", data=np.zeros(2))
+        moderator.create_dataset("chi", data=np.zeros(2))
+        moderator.create_dataset("transport_total", data=np.array([0.29, 0.38]))
+        moderator.create_dataset(
+            "scatter_matrix",
+            data=np.array([[[0.2, 0.04], [0.0, 0.3]]]),
+        )
+        moderator.create_dataset("total_std_dev", data=np.zeros(2))
+        moderator.create_dataset("absorption_std_dev", data=np.zeros(2))
+        moderator.create_dataset("transport_total_std_dev", data=np.zeros(2))
+        moderator.create_dataset(
+            "scatter_matrix_std_dev",
+            data=np.zeros((1, 2, 2)),
+        )
 
 
 def append_openmc_volume_flux(

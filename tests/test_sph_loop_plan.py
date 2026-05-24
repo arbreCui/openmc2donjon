@@ -54,6 +54,7 @@ class SphLoopPlanTests(unittest.TestCase):
                         "max_mgxs_chi_sum_error": "1.0e-7",
                         "require_mgxs_adf_face_consistency": True,
                         "max_mgxs_transport_p1_rel": "0.03",
+                        "require_mgxs_std_dev_coverage": True,
                         "require_reference_flux_std_dev": True,
                         "max_final_keff_delta_pcm": "5.0",
                         "max_reference_flux_std_dev_rel": "0.05",
@@ -131,6 +132,9 @@ class SphLoopPlanTests(unittest.TestCase):
             self.assertEqual(
                 plan.normalized_acceptance["max_mgxs_transport_p1_rel"],
                 0.03,
+            )
+            self.assertTrue(
+                plan.normalized_acceptance["require_mgxs_std_dev_coverage"]
             )
             self.assertEqual(
                 plan.normalized_acceptance["max_reference_flux_std_dev_rel"],

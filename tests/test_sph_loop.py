@@ -719,6 +719,26 @@ class SphLoopTests(unittest.TestCase):
             any("nu_fission/fission" in warning for warning in report.warnings)
         )
 
+    def test_flux_map_preflight_reports_std_dev_coverage(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference = root / "reference_flux.h5"
+            _write_mgxs(mgxs)
+            _write_reference_flux(reference)
+
+            report = build_flux_map_preflight_report(
+                input_h5=mgxs,
+                reference_flux=f"{reference}::openmc_volume_flux",
+                map_h5=None,
+                scalar_flux_ids={"fuel": 2, "moderator": 4},
+                scalar_flux_column=0,
+            )
+
+        self.assertTrue(report.passed, report.errors)
+        self.assertEqual(report.mgxs_std_dev_datasets, 0)
+        self.assertEqual(report.mgxs_std_dev_expected_datasets, 12)
+
     def test_acceptance_rejects_unknown_energy_mesh_when_required(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

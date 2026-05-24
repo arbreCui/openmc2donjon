@@ -284,6 +284,9 @@ def _print_dry_run_checks(args: argparse.Namespace) -> None:
             uncertainty_production_fail=(
                 None if args.no_uncertainty_check else args.uncertainty_production_fail
             ),
+            require_std_dev_coverage=(
+                False if args.no_uncertainty_check else args.require_std_dev_coverage
+            ),
         )
         print("  check: enabled after HDF5 export")
         print(f"    production: {_yes_no(args.production)}")
@@ -363,6 +366,10 @@ def _print_dry_run_checks(args: argparse.Namespace) -> None:
             print(
                 "    uncertainty_mean_abs_floor: "
                 f"{_render_optional_value(args.uncertainty_mean_abs_floor)}"
+            )
+            print(
+                "    require_std_dev_coverage: "
+                f"{_yes_no(settings['require_std_dev_coverage'])}"
             )
         if args.check_summary_json is None:
             print("    check_summary_json: none")
@@ -504,6 +511,9 @@ def _run_pipeline_preflight(
             None if args.no_uncertainty_check else args.uncertainty_production_fail
         ),
         uncertainty_mean_abs_floor=args.uncertainty_mean_abs_floor,
+        require_std_dev_coverage=(
+            False if args.no_uncertainty_check else args.require_std_dev_coverage
+        ),
         summary_json=args.check_summary_json,
     )
     if not ok and hdf5_kept:

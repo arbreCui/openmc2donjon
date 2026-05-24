@@ -65,6 +65,8 @@ def print_report(report: SphLoopReport) -> None:
         f"mesh={report.flux_map_preflight.mgxs_energy_mesh_id or 'unknown'} "
         f"volume_defaulted={report.flux_map_preflight.mgxs_volume_defaulted} "
         f"h_factor_missing={report.flux_map_preflight.mgxs_h_factor_missing} "
+        f"std_dev={report.flux_map_preflight.mgxs_std_dev_datasets}/"
+        f"{report.flux_map_preflight.mgxs_std_dev_expected_datasets} "
         "scatter_row_balance="
         f"{format_optional_float(report.flux_map_preflight.mgxs_scatter_row_balance_max_rel)} "
         "chi_error="

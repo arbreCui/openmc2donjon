@@ -119,6 +119,14 @@ def add_sph_loop_acceptance_args(parser: argparse.ArgumentParser) -> None:
         help="production acceptance: max relative transport_total/P1 residual",
     )
     parser.add_argument(
+        "--acceptance-require-mgxs-std-dev-coverage",
+        action="store_true",
+        help=(
+            "production acceptance: require every primary MGXS dataset with "
+            "uncertainty support to carry a matching *_std_dev dataset"
+        ),
+    )
+    parser.add_argument(
         "--acceptance-max-sph-rel-change",
         type=float,
         default=None,
@@ -236,6 +244,8 @@ def sph_loop_acceptance_from_args(
         acceptance["require_mgxs_energy_bounds_consistency"] = True
     if args.acceptance_require_mgxs_adf_face_consistency:
         acceptance["require_mgxs_adf_face_consistency"] = True
+    if args.acceptance_require_mgxs_std_dev_coverage:
+        acceptance["require_mgxs_std_dev_coverage"] = True
     if args.fail_on_acceptance_violation:
         acceptance["fail_on_violation"] = True
     return acceptance or None

@@ -243,6 +243,14 @@ def build_check_parser() -> argparse.ArgumentParser:
         help="disable *_std_dev relative uncertainty checks",
     )
     parser.add_argument(
+        "--require-std-dev-coverage",
+        action="store_true",
+        help=(
+            "fail if any expected MGXS mean dataset is missing a matching "
+            "*_std_dev uncertainty dataset"
+        ),
+    )
+    parser.add_argument(
         "--summary-json",
         type=Path,
         default=None,
@@ -509,6 +517,9 @@ def check_handler(args: argparse.Namespace) -> int:
             None if args.no_uncertainty_check else args.uncertainty_production_fail
         ),
         uncertainty_mean_abs_floor=args.uncertainty_mean_abs_floor,
+        require_std_dev_coverage=(
+            False if args.no_uncertainty_check else args.require_std_dev_coverage
+        ),
         summary_json=args.summary_json,
     )
     return 0 if ok or args.no_fail else 1

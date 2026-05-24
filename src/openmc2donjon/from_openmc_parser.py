@@ -514,6 +514,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="with --check, disable *_std_dev relative uncertainty checks",
     )
     parser.add_argument(
+        "--require-std-dev-coverage",
+        action="store_true",
+        help=(
+            "with --check, fail if any expected MGXS mean dataset is missing "
+            "a matching *_std_dev uncertainty dataset"
+        ),
+    )
+    parser.add_argument(
         "--check-summary-json",
         type=Path,
         default=None,

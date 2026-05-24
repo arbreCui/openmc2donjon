@@ -145,6 +145,7 @@ class FromOpenMCCliTests(unittest.TestCase):
                         "0.3",
                         "--uncertainty-mean-abs-floor",
                         "1e-9",
+                        "--require-std-dev-coverage",
                         "--check-summary-json",
                         str(check_summary),
                     ]
@@ -170,6 +171,7 @@ class FromOpenMCCliTests(unittest.TestCase):
         self.assertIn("uncertainty_fail: 0.4", rendered)
         self.assertIn("uncertainty_production_fail: 0.3", rendered)
         self.assertIn("uncertainty_mean_abs_floor: 1e-09", rendered)
+        self.assertIn("require_std_dev_coverage: yes", rendered)
         self.assertFalse(hdf5_exists)
         self.assertFalse(output_exists)
         self.assertFalse(summary_exists)
@@ -204,6 +206,7 @@ class FromOpenMCCliTests(unittest.TestCase):
         self.assertIn("require_adf_face_consistency: yes", rendered)
         self.assertIn("transport_p1_fail: 0.05", rendered)
         self.assertIn("uncertainty_production_fail: 1.0", rendered)
+        self.assertIn("require_std_dev_coverage: no", rendered)
 
     def test_check_can_fail_on_exported_std_dev_uncertainty(self) -> None:
         recipe_text = '''

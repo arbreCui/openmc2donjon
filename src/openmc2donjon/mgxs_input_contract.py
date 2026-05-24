@@ -90,6 +90,7 @@ def production_preflight_defaults(
     transport_p1_fail: float | None = None,
     uncertainty_warn: float | None,
     uncertainty_production_fail: float | None,
+    require_std_dev_coverage: bool = False,
 ) -> dict[str, Any]:
     """Return effective preflight options after applying the production preset."""
     if not production:
@@ -108,6 +109,7 @@ def production_preflight_defaults(
             "require_adf_face_consistency": require_adf_face_consistency,
             "transport_p1_fail": transport_p1_fail,
             "uncertainty_production_fail": uncertainty_production_fail,
+            "require_std_dev_coverage": require_std_dev_coverage,
         }
 
     if scatter_row_balance_fail is None:
@@ -134,6 +136,7 @@ def production_preflight_defaults(
         "require_adf_face_consistency": True,
         "transport_p1_fail": transport_p1_fail,
         "uncertainty_production_fail": uncertainty_production_fail,
+        "require_std_dev_coverage": require_std_dev_coverage,
     }
 
 
@@ -158,6 +161,9 @@ def main() -> int:
         uncertainty_warn=None if args.no_uncertainty_check else args.uncertainty_warn,
         uncertainty_production_fail=(
             None if args.no_uncertainty_check else args.uncertainty_production_fail
+        ),
+        require_std_dev_coverage=(
+            False if args.no_uncertainty_check else args.require_std_dev_coverage
         ),
     )
     reports = [
@@ -198,6 +204,7 @@ def main() -> int:
                 fail_threshold=None if args.no_uncertainty_check else args.uncertainty_fail,
                 production_fail_threshold=settings["uncertainty_production_fail"],
                 mean_abs_floor=args.uncertainty_mean_abs_floor,
+                require_coverage=settings["require_std_dev_coverage"],
             ),
         )
         for path in args.input_h5
@@ -401,6 +408,14 @@ def parse_args() -> argparse.Namespace:
         "--no-uncertainty-check",
         action="store_true",
         help="disable *_std_dev relative uncertainty checks",
+    )
+    parser.add_argument(
+        "--require-std-dev-coverage",
+        action="store_true",
+        help=(
+            "fail if any expected MGXS mean dataset is missing a matching "
+            "*_std_dev uncertainty dataset"
+        ),
     )
     parser.add_argument(
         "--summary-json",
@@ -1299,6 +1314,7 @@ def validate_calculation(
         name,
         REQUIRED_DATASETS
         + tuple(field for field in OPTIONAL_VECTOR_DATASETS if field in group),
+        fissionable=fissionable,
         scatter_axes=axes,
         ngroups=ngroups,
         legendre_order=legendre_order,
@@ -1444,6 +1460,7 @@ def run_preflight(
     uncertainty_fail: float | None = None,
     uncertainty_production_fail: float | None = None,
     uncertainty_mean_abs_floor: float = 1.0e-12,
+    require_std_dev_coverage: bool = False,
     summary_json: Path | None = None,
 ) -> bool:
     expected_faces = (
@@ -1471,6 +1488,7 @@ def run_preflight(
         transport_p1_fail=transport_p1_fail,
         uncertainty_warn=uncertainty_warn,
         uncertainty_production_fail=uncertainty_production_fail,
+        require_std_dev_coverage=require_std_dev_coverage,
     )
     reports = [
         validate_input(
@@ -1502,6 +1520,7 @@ def run_preflight(
                 fail_threshold=uncertainty_fail,
                 production_fail_threshold=settings["uncertainty_production_fail"],
                 mean_abs_floor=uncertainty_mean_abs_floor,
+                require_coverage=settings["require_std_dev_coverage"],
             ),
         )
         for path in input_paths

@@ -57,6 +57,8 @@ class _FluxMapPreflightLike(Protocol):
     mgxs_volume_nonpositive: int
     mgxs_h_factor_missing: int
     mgxs_h_factor_invalid: int
+    mgxs_std_dev_datasets: int
+    mgxs_std_dev_expected_datasets: int
     scalar_flux_ids: tuple[int, ...]
     minimum_required_flux_unknown_count: int | None
     mixture_flux_map: tuple[tuple[str, int], ...]
@@ -227,6 +229,8 @@ def build_acceptance_report(
                 units="relative",
             )
         )
+    if bool(config.get("require_mgxs_std_dev_coverage", False)):
+        checks.append(_mgxs_std_dev_coverage_check(flux_map_preflight))
     if bool(config.get("require_reference_flux_std_dev", False)):
         checks.append(
             _boolean_check(
@@ -534,6 +538,31 @@ def _reference_flux_std_dev_present(
     if artifact_metadata is None:
         return False
     return bool(getattr(artifact_metadata.reference_flux, "std_dev_dataset", None))
+
+
+def _mgxs_std_dev_coverage_check(
+    flux_map_preflight: _FluxMapPreflightLike | None,
+) -> SphLoopAcceptanceCheck:
+    if flux_map_preflight is None:
+        return SphLoopAcceptanceCheck(
+            name="require_mgxs_std_dev_coverage",
+            actual=None,
+            limit=None,
+            units="datasets",
+            passed=False,
+            message="flux map preflight unavailable",
+        )
+    expected = int(getattr(flux_map_preflight, "mgxs_std_dev_expected_datasets", 0))
+    present = int(getattr(flux_map_preflight, "mgxs_std_dev_datasets", 0))
+    passed = expected > 0 and present == expected
+    return SphLoopAcceptanceCheck(
+        name="require_mgxs_std_dev_coverage",
+        actual=present,
+        limit=expected,
+        units="datasets",
+        passed=passed,
+        message=f"actual {present} == required {expected} datasets",
+    )
 
 
 def _mgxs_explicit_volumes_present(
