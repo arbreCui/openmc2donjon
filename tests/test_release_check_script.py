@@ -54,6 +54,8 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertIn("examples/sph_loop_minicase/run_smoke.sh", default_section)
         self.assertIn("== External SPH handoff smoke ==", default_section)
         self.assertIn("examples/external_sph_handoff/run_smoke.sh", default_section)
+        self.assertIn("== Energy mesh contract smoke ==", default_section)
+        self.assertIn("scripts/run_energy_mesh_contract_smoke.sh", default_section)
         self.assertIn("== C5G7 ADF source reconstruction smoke ==", accepted_section)
         self.assertIn("scripts/run_c5g7_adf_source_smoke.sh", accepted_section)
         self.assertIn("== C5G7 DONJON face-flux regeneration smoke ==", accepted_section)
@@ -170,6 +172,31 @@ class ReleaseCheckScriptTests(unittest.TestCase):
             'metadata["reference_flux"]["std_dev_max_rel"] - 1.0e-3',
             smoke_text,
         )
+
+    def test_release_gate_covers_energy_mesh_contract(self) -> None:
+        release_text = _release_check().read_text(encoding="utf-8")
+        default_section = release_text.split(
+            'if [[ "$RUN_LOCAL_CANDIDATES" -eq 1 ]];',
+            maxsplit=1,
+        )[0]
+        smoke_text = (
+            _repo_root() / "scripts/run_energy_mesh_contract_smoke.sh"
+        ).read_text(encoding="utf-8")
+        scripts_readme = (_repo_root() / "scripts/README.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("== Energy mesh contract smoke ==", default_section)
+        self.assertIn("scripts/run_energy_mesh_contract_smoke.sh", default_section)
+        self.assertIn('load_energy_mesh("casmo_7")', smoke_text)
+        self.assertIn("--warn-unknown-energy-mesh", smoke_text)
+        self.assertIn("--require-known-energy-mesh", smoke_text)
+        self.assertIn('record["energy_mesh_id"] == "casmo_7"', smoke_text)
+        self.assertIn(
+            '"does not match a bundled known energy mesh" in item',
+            smoke_text,
+        )
+        self.assertIn("run_energy_mesh_contract_smoke.sh", scripts_readme)
 
 
 def _repo_root() -> Path:

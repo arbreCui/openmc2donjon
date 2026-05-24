@@ -178,6 +178,12 @@ echo "== CLI smoke =="
 "$PYTHON_BIN" -m openmc2donjon.from_openmc_cli --help >/dev/null
 
 echo
+echo "== Energy mesh contract smoke =="
+RUN_DIR="$RUN_DIR/energy_mesh_contract" \
+PYTHON_BIN="$PYTHON_BIN" \
+  bash "$REPO_ROOT/scripts/run_energy_mesh_contract_smoke.sh"
+
+echo
 echo "== Recipe export smoke =="
 RUN_DIR="$RUN_DIR/recipe_export_smoke" \
 PYTHON_BIN="$PYTHON_BIN" \
