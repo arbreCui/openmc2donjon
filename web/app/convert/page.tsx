@@ -135,6 +135,8 @@ export default function ConvertPage() {
           </p>
         </header>
 
+        <ConvertGuide />
+
         <form
           className="glass rounded-xl p-4 space-y-4"
           onSubmit={submitDryRun}
@@ -218,21 +220,25 @@ export default function ConvertPage() {
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <Toggle
               label="Preflight"
+              description="Validate the HDF5 contract and quick physics gates before writing."
               checked={check}
               onChange={setCheck}
             />
             <Toggle
               label="Production gates"
+              description="Use the stricter acceptance preset for production handoffs."
               checked={production}
               onChange={setProduction}
             />
             <Toggle
               label="Known mesh required"
+              description="Fail unless the energy grid matches a known standard mesh."
               checked={requireKnownMesh}
               onChange={setRequireKnownMesh}
             />
             <Toggle
               label="Overwrite output"
+              description="Allow Convert to replace an existing ASCII file."
               checked={overwrite}
               onChange={setOverwrite}
             />
@@ -369,24 +375,75 @@ export default function ConvertPage() {
   );
 }
 
+function ConvertGuide() {
+  return (
+    <section className="mb-5 grid gap-3 lg:grid-cols-3">
+      <GuideCard
+        step="01"
+        title="Inspect the HDF5"
+        body="Check the group structure, mixture roster, and optional equivalence data before selecting what to export."
+      />
+      <GuideCard
+        step="02"
+        title="Dry run first"
+        body="Run preflight without writing output; production gates catch common MGXS contract and physics issues."
+      />
+      <GuideCard
+        step="03"
+        title="Write ASCII"
+        body="Generate .mcompo.txt for mapped MULTICOMPO handoffs or .macrolib.txt for one-state MACROLIB input."
+      />
+    </section>
+  );
+}
+
+function GuideCard({
+  step,
+  title,
+  body,
+}: {
+  step: string;
+  title: string;
+  body: string;
+}) {
+  return (
+    <article className="rounded-lg border border-[var(--edge)] bg-white/[0.02] px-4 py-3">
+      <div className="flex items-center gap-2">
+        <span className="rounded border border-emerald-300/20 bg-emerald-300/[0.08] px-1.5 py-0.5 font-mono text-[10px] text-emerald-200">
+          {step}
+        </span>
+        <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
+      </div>
+      <p className="mt-2 text-sm leading-relaxed text-[var(--fg-2)]">{body}</p>
+    </article>
+  );
+}
+
 function Toggle({
   label,
+  description,
   checked,
   onChange,
 }: {
   label: string;
+  description: string;
   checked: boolean;
   onChange: (value: boolean) => void;
 }) {
   return (
-    <label className="flex items-center gap-2 rounded-md border border-[var(--edge)] bg-white/[0.02] px-3 py-2 text-sm text-[var(--fg-1)]">
+    <label className="flex items-start gap-2 rounded-md border border-[var(--edge)] bg-white/[0.02] px-3 py-2 text-sm text-[var(--fg-1)]">
       <input
         type="checkbox"
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
-        className="accent-emerald-500"
+        className="mt-0.5 accent-emerald-500"
       />
-      <span>{label}</span>
+      <span className="min-w-0">
+        <span className="block text-[var(--fg-0)]">{label}</span>
+        <span className="mt-0.5 block text-[12px] leading-snug text-[var(--fg-3)]">
+          {description}
+        </span>
+      </span>
     </label>
   );
 }
