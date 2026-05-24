@@ -23,6 +23,9 @@ EXPECTED_ENTRYPOINT_REFERENCE_FLUX = np.asarray(
     ],
     dtype=float,
 )
+EXPECTED_ENTRYPOINT_REFERENCE_FLUX_STD_DEV = (
+    np.abs(EXPECTED_ENTRYPOINT_REFERENCE_FLUX) * 1.0e-3
+)
 
 
 class OpenMCSphLoopHandoffTests(unittest.TestCase):
@@ -70,6 +73,18 @@ class OpenMCSphLoopHandoffTests(unittest.TestCase):
                     h5["openmc_volume_flux"][:],
                     EXPECTED_ENTRYPOINT_REFERENCE_FLUX,
                 )
+                np.testing.assert_allclose(
+                    h5["openmc_volume_flux_std_dev"][:],
+                    EXPECTED_ENTRYPOINT_REFERENCE_FLUX_STD_DEV,
+                )
+                self.assertEqual(
+                    h5["openmc_volume_flux_std_dev"].attrs["std_dev_of"],
+                    "openmc_volume_flux",
+                )
+                self.assertIn("total_std_dev", h5["mixtures/FUEL_A"])
+                self.assertIn("scatter_matrix_std_dev", h5["mixtures/FUEL_A"])
+                self.assertIn("transport_total_std_dev", h5["mixtures/MOD_A"])
+                self.assertNotIn("fission_std_dev", h5["mixtures/MOD_A"])
             summary = json.loads(
                 (run_dir / "openmc_sph_loop_handoff_summary.json").read_text(
                     encoding="utf-8"
@@ -198,6 +213,18 @@ class OpenMCSphLoopHandoffTests(unittest.TestCase):
             self.assertEqual(report.check_summary_json, run_dir / "check_summary.json")
             check_summary = json.loads(report.check_summary_json.read_text(encoding="utf-8"))
             self.assertTrue(check_summary["inputs"][0]["openmc_volume_flux"]["present"])
+            self.assertTrue(
+                check_summary["inputs"][0]["openmc_volume_flux"]["std_dev_present"]
+            )
+            self.assertAlmostEqual(
+                check_summary["inputs"][0]["openmc_volume_flux"]["std_dev_max_rel"],
+                1.0e-3,
+            )
+            self.assertEqual(check_summary["inputs"][0]["uncertainty"]["datasets"], 12)
+            self.assertEqual(
+                check_summary["inputs"][0]["uncertainty"]["expected_datasets"],
+                12,
+            )
             self.assertEqual(
                 check_summary["inputs"][0]["openmc_volume_flux"]["group_order"],
                 "mgxs_donjon",
@@ -258,6 +285,9 @@ class OpenMCSphLoopHandoffTests(unittest.TestCase):
                         "0.5",
                         "--acceptance-max-final-clipped-fraction",
                         "1.0",
+                        "--acceptance-require-reference-flux-std-dev",
+                        "--acceptance-max-reference-flux-std-dev-rel",
+                        "0.01",
                         "--no-check",
                         "--bundle-dir",
                         str(bundle_dir),
@@ -301,6 +331,14 @@ class OpenMCSphLoopHandoffTests(unittest.TestCase):
                 0.5,
             )
             self.assertEqual(loop_config["acceptance"]["max_final_clipped_fraction"], 1.0)
+            self.assertEqual(
+                loop_config["acceptance"]["require_reference_flux_std_dev"],
+                True,
+            )
+            self.assertEqual(
+                loop_config["acceptance"]["max_reference_flux_std_dev_rel"],
+                0.01,
+            )
 
     def test_require_h_factor_defaults_flux_normalization_to_auto(self) -> None:
         root = _repo_root()

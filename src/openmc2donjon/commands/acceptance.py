@@ -127,6 +127,23 @@ def add_sph_loop_acceptance_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     parser.add_argument(
+        "--acceptance-require-reference-flux-std-dev",
+        action="store_true",
+        help=(
+            "production acceptance: require the OpenMC reference flux dataset "
+            "to carry a matching *_std_dev dataset"
+        ),
+    )
+    parser.add_argument(
+        "--acceptance-max-reference-flux-std-dev-rel",
+        type=float,
+        default=None,
+        help=(
+            "production acceptance: max relative std_dev/mean on the OpenMC "
+            "reference flux"
+        ),
+    )
+    parser.add_argument(
         "--acceptance-max-sph-rel-change",
         type=float,
         default=None,
@@ -213,6 +230,9 @@ def sph_loop_acceptance_from_args(
         ),
         "max_mgxs_chi_sum_error": args.acceptance_max_mgxs_chi_sum_error,
         "max_mgxs_transport_p1_rel": args.acceptance_max_mgxs_transport_p1_rel,
+        "max_reference_flux_std_dev_rel": (
+            args.acceptance_max_reference_flux_std_dev_rel
+        ),
         "max_sph_rel_change": args.acceptance_max_sph_rel_change,
         "max_flux_ratio_residual": args.acceptance_max_flux_ratio_residual,
         "max_final_to_initial_flux_residual_ratio": (
@@ -246,6 +266,8 @@ def sph_loop_acceptance_from_args(
         acceptance["require_mgxs_adf_face_consistency"] = True
     if args.acceptance_require_mgxs_std_dev_coverage:
         acceptance["require_mgxs_std_dev_coverage"] = True
+    if args.acceptance_require_reference_flux_std_dev:
+        acceptance["require_reference_flux_std_dev"] = True
     if args.fail_on_acceptance_violation:
         acceptance["fail_on_violation"] = True
     return acceptance or None

@@ -16,6 +16,15 @@ The smoke writes:
 - `openmc_sph_loop_handoff/sph_loop_inputs/flux_map.h5`: DONJON scalar flux unknown map.
 - `openmc_sph_loop_handoff/sph_loop_inputs/loop_config.json`: config for `openmc2donjon run-sph-loop`.
 
+The recipe deliberately exports both uncertainty paths used by the production
+SPH audit: MGXS `*_std_dev` datasets and
+`/openmc_volume_flux_std_dev`. The smoke enables the matching strict gates with
+`--require-std-dev-coverage`,
+`--acceptance-require-mgxs-std-dev-coverage`, and
+`--acceptance-require-reference-flux-std-dev`.
+
 For a real case, the recipe should build the OpenMC `mgxs.Library`, load the
 statepoint, and either write `openmc_volume_flux` in `postprocess_hdf5` or pass
-an external OpenMC volume-flux CSV/HDF5 to `prepare-openmc-sph-loop`.
+an external OpenMC volume-flux CSV/HDF5 to `prepare-openmc-sph-loop`. When the
+case policy requires uncertainty auditing, export the corresponding std-dev
+datasets and turn on the same strict gates used by this smoke.

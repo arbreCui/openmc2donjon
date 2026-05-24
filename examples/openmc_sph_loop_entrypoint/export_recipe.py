@@ -17,6 +17,7 @@ REFERENCE_FLUX = np.array(
     ],
     dtype=float,
 )
+REFERENCE_FLUX_STD_DEV = np.abs(REFERENCE_FLUX) * 1.0e-3
 MGXS_TYPES = [
     "total",
     "absorption",
@@ -44,8 +45,11 @@ class EnergyGroups:
 class MGXS:
     def __init__(self, values) -> None:
         self.values = np.asarray(values, dtype=float)
+        self.std_dev = np.abs(self.values) * 1.0e-3
 
     def get_xs(self, **_kwargs):
+        if _kwargs.get("value") == "std_dev":
+            return self.std_dev
         return self.values
 
 
@@ -107,5 +111,12 @@ def postprocess_hdf5(output_path, summary):
     names = np.asarray([domain.name for domain in summary.domains], dtype="S")
     with h5py.File(output_path, "a") as h5:
         dataset = h5.create_dataset("openmc_volume_flux", data=REFERENCE_FLUX)
-        dataset.attrs["mixture_names"] = names
-        dataset.attrs["group_order"] = "mgxs_donjon"
+        std_dev = h5.create_dataset(
+            "openmc_volume_flux_std_dev",
+            data=REFERENCE_FLUX_STD_DEV,
+        )
+        for obj in (dataset, std_dev):
+            obj.attrs["mixture_names"] = names
+            obj.attrs["group_order"] = "mgxs_donjon"
+            obj.attrs["layout"] = "[mixture, group]"
+        std_dev.attrs["std_dev_of"] = "openmc_volume_flux"

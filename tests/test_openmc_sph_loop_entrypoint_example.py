@@ -17,6 +17,7 @@ EXPECTED_REFERENCE_FLUX = np.asarray(
     ],
     dtype=float,
 )
+EXPECTED_REFERENCE_FLUX_STD_DEV = np.abs(EXPECTED_REFERENCE_FLUX) * 1.0e-3
 
 
 class OpenmcSphLoopEntrypointExampleTests(unittest.TestCase):
@@ -48,13 +49,29 @@ class OpenmcSphLoopEntrypointExampleTests(unittest.TestCase):
                     h5["openmc_volume_flux"][:],
                     EXPECTED_REFERENCE_FLUX,
                 )
+                np.testing.assert_allclose(
+                    h5["openmc_volume_flux_std_dev"][:],
+                    EXPECTED_REFERENCE_FLUX_STD_DEV,
+                )
                 np.testing.assert_array_equal(
                     h5["openmc_volume_flux"].attrs["mixture_names"],
+                    np.asarray(["FUEL_A", "MOD_A"], dtype="S"),
+                )
+                np.testing.assert_array_equal(
+                    h5["openmc_volume_flux_std_dev"].attrs["mixture_names"],
                     np.asarray(["FUEL_A", "MOD_A"], dtype="S"),
                 )
                 self.assertEqual(
                     h5["openmc_volume_flux"].attrs["group_order"],
                     "mgxs_donjon",
+                )
+                self.assertEqual(
+                    h5["openmc_volume_flux_std_dev"].attrs["group_order"],
+                    "mgxs_donjon",
+                )
+                self.assertEqual(
+                    h5["openmc_volume_flux_std_dev"].attrs["std_dev_of"],
+                    "openmc_volume_flux",
                 )
 
     def test_smoke_script_uses_handoff_entrypoint(self) -> None:
@@ -66,9 +83,13 @@ class OpenmcSphLoopEntrypointExampleTests(unittest.TestCase):
         self.assertIn("prepare-openmc-sph-loop", text)
         self.assertIn("--production", text)
         self.assertIn("openmc_volume_flux", text)
+        self.assertIn("openmc_volume_flux_std_dev", text)
+        self.assertIn("--require-std-dev-coverage", text)
+        self.assertIn("--acceptance-require-reference-flux-std-dev", text)
+        self.assertIn("--acceptance-max-reference-flux-std-dev-rel", text)
         self.assertIn("FUEL_A=2,MOD_A=4", text)
         self.assertIn("loop_config.json", text)
-        self.assertIn('"preset": "production"', text)
+        self.assertIn('config["acceptance"]["preset"] == "production"', text)
         self.assertIn("RUN_REAL_DONJON", text)
         self.assertIn("real_sph_loop_summary.json", text)
         self.assertIn("OpenMC SPH loop entrypoint real DONJON loop OK", text)

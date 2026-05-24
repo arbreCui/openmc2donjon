@@ -21,6 +21,7 @@ RUN_SCRIPT="$SCAFFOLD_DIR/run_sph_loop.sh"
 BUNDLE_DIR="$HANDOFF_RUN_DIR/bundle"
 SOLVE_TEMPLATE="$REPO_ROOT/examples/sph_loop_minicase/templates/solve_lflux_dump.x2m.in"
 EXPECTED_REFERENCE_FLUX='[[617.96762, 156.844407], [47.4604219, 4.87293612]]'
+EXPECTED_REFERENCE_FLUX_STD_DEV='[[0.61796762, 0.156844407], [0.0474604219, 0.00487293612]]'
 
 echo "== openmc2donjon OpenMC SPH loop entrypoint smoke =="
 mkdir -p "$CASE_DIR"
@@ -33,7 +34,11 @@ printf "fake statepoint for openmc sph loop entrypoint\n" > "$STATEPOINT"
   --solve-template "$SOLVE_TEMPLATE" \
   --format macrolib \
   --production \
+  --require-std-dev-coverage \
   --scatter-row-balance-fail 1e-12 \
+  --acceptance-require-mgxs-std-dev-coverage \
+  --acceptance-require-reference-flux-std-dev \
+  --acceptance-max-reference-flux-std-dev-rel 0.01 \
   --scalar-flux-map FUEL_A=2,MOD_A=4 \
   --case-id-prefix openmc_sph_loop_entrypoint \
   --stage-prefix odj_openmc_sph_loop_entrypoint \
@@ -45,7 +50,7 @@ printf "fake statepoint for openmc sph loop entrypoint\n" > "$STATEPOINT"
   --bundle-dir "$BUNDLE_DIR" \
   --force
 
-"$PYTHON_BIN" - "$MGXS" "$SCAFFOLD_DIR" "$SCAFFOLD_SUMMARY" "$HANDOFF_SUMMARY" "$RUN_SCRIPT" "$BUNDLE_DIR" "$EXPECTED_REFERENCE_FLUX" <<'PY'
+"$PYTHON_BIN" - "$MGXS" "$SCAFFOLD_DIR" "$SCAFFOLD_SUMMARY" "$HANDOFF_SUMMARY" "$RUN_SCRIPT" "$BUNDLE_DIR" "$EXPECTED_REFERENCE_FLUX" "$EXPECTED_REFERENCE_FLUX_STD_DEV" <<'PY'
 from __future__ import annotations
 
 import json
@@ -66,16 +71,32 @@ handoff_summary = json.loads(Path(sys.argv[4]).read_text(encoding="utf-8"))
 run_script = Path(sys.argv[5])
 bundle_dir = Path(sys.argv[6])
 expected_reference_flux = np.asarray(json.loads(sys.argv[7]), dtype=float)
+expected_reference_flux_std_dev = np.asarray(json.loads(sys.argv[8]), dtype=float)
 
 with h5py.File(mgxs, "r") as h5:
     assert "openmc_volume_flux" in h5
     np.testing.assert_allclose(h5["openmc_volume_flux"][:], expected_reference_flux)
+    np.testing.assert_allclose(
+        h5["openmc_volume_flux_std_dev"][:],
+        expected_reference_flux_std_dev,
+    )
     assert h5["openmc_volume_flux"].attrs["group_order"] == "mgxs_donjon"
+    assert h5["openmc_volume_flux_std_dev"].attrs["std_dev_of"] == "openmc_volume_flux"
+    assert h5["openmc_volume_flux_std_dev"].attrs["group_order"] == "mgxs_donjon"
+    assert "total_std_dev" in h5["mixtures/FUEL_A"]
+    assert "scatter_matrix_std_dev" in h5["mixtures/FUEL_A"]
+    assert "transport_total_std_dev" in h5["mixtures/MOD_A"]
+    assert "fission_std_dev" not in h5["mixtures/MOD_A"]
     np.testing.assert_allclose(h5["mixtures/FUEL_A/kappa_fission"][:], [3.2e-12, 3.1e-12])
 
 with h5py.File(scaffold / "reference_flux.h5", "r") as h5:
     np.testing.assert_allclose(h5["openmc_volume_flux"][:], expected_reference_flux)
+    np.testing.assert_allclose(
+        h5["openmc_volume_flux_std_dev"][:],
+        expected_reference_flux_std_dev,
+    )
     assert h5["openmc_volume_flux"].attrs["group_order"] == "mgxs_donjon"
+    assert h5["openmc_volume_flux_std_dev"].attrs["std_dev_of"] == "openmc_volume_flux"
 
 with h5py.File(scaffold / "flux_map.h5", "r") as h5:
     np.testing.assert_array_equal(h5["scalar_flux_ids"][:], [2, 4])
@@ -86,7 +107,10 @@ assert config["map_h5"] == str(scaffold / "flux_map.h5")
 assert config["run_script"] == str(run_script)
 assert config["reference_flux"] == f"{scaffold / 'reference_flux.h5'}::openmc_volume_flux"
 assert config["flux_normalization"] == "auto"
-assert config["acceptance"] == {"preset": "production"}
+assert config["acceptance"]["preset"] == "production"
+assert config["acceptance"]["require_mgxs_std_dev_coverage"] is True
+assert config["acceptance"]["require_reference_flux_std_dev"] is True
+assert config["acceptance"]["max_reference_flux_std_dev_rel"] == 0.01
 assert "openmc2donjon.donjon_deck_runner" in config["solver"]["command"]
 plan = build_sph_loop_plan(scaffold / "loop_config.json")
 assert plan.normalized_acceptance["require_artifact_metadata_alignment"] is True
@@ -119,7 +143,10 @@ assert bundle_config["map_h5"] == "flux_map.h5"
 assert bundle_config["reference_flux"] == "reference_flux.h5::openmc_volume_flux"
 assert bundle_config["run_script"] == "run_sph_loop.sh"
 assert bundle_config["flux_normalization"] == "auto"
-assert bundle_config["acceptance"] == {"preset": "production"}
+assert bundle_config["acceptance"]["preset"] == "production"
+assert bundle_config["acceptance"]["require_mgxs_std_dev_coverage"] is True
+assert bundle_config["acceptance"]["require_reference_flux_std_dev"] is True
+assert bundle_config["acceptance"]["max_reference_flux_std_dev_rel"] == 0.01
 relocated = bundle_dir.parent / "relocated_bundle"
 if relocated.exists():
     shutil.rmtree(relocated)
@@ -161,9 +188,14 @@ assert summary["completed_iterations"] == 2
 assert summary["final_solve"]["iteration"] == 2
 checks = {item["name"]: item for item in summary["acceptance"]["checks"]}
 assert checks["require_artifact_metadata_alignment"]["passed"] is True
+assert checks["require_mgxs_std_dev_coverage"]["passed"] is True
+assert checks["require_reference_flux_std_dev"]["passed"] is True
+assert checks["max_reference_flux_std_dev_rel"]["passed"] is True
 assert checks["max_final_clipped_count"]["passed"] is True
 metadata = summary["artifact_metadata"]
 assert metadata["reference_flux"]["group_order"] == "mgxs_donjon"
+assert metadata["reference_flux"]["std_dev_dataset"] == "openmc_volume_flux_std_dev"
+assert abs(metadata["reference_flux"]["std_dev_max_rel"] - 0.001) < 1.0e-15
 for workflow in metadata["workflows"]:
     assert workflow["donjon_volume_flux"]["group_order"] == "mgxs_donjon"
     assert workflow["sph_sidecar"]["group_order"] == "mgxs_donjon"
