@@ -4,6 +4,7 @@ import Link from "next/link";
 import { CopyCliButton } from "@/components/commands/CopyCliButton";
 import { ConvertPreflightInput, ConvertResponse } from "@/lib/api";
 import AsciiPreview from "./AsciiPreview";
+import HandoffPipeline from "./HandoffPipeline";
 
 export type ConvertRunState =
   | { kind: "idle" }
@@ -131,6 +132,8 @@ function ConvertSummary({
           </pre>
         </div>
       </section>
+
+      <HandoffPipeline data={data} input={input} />
 
       {input ? (
         <>
