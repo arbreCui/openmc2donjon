@@ -128,6 +128,8 @@ function CommandDetail({ command }: { command: CommandCatalogEntry }) {
         <ExplainerCard title="Next Step" body={command.next_step} />
       </section>
 
+      <CommandUsePath command={command} />
+
       <section className="glass rounded-xl p-5">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
@@ -198,6 +200,87 @@ function CommandDetail({ command }: { command: CommandCatalogEntry }) {
   );
 }
 
+function CommandUsePath({ command }: { command: CommandCatalogEntry }) {
+  const mapping = commandWorkflowMapping(command);
+  return (
+    <section className="glass rounded-xl p-5">
+      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold tracking-tight">
+            How to use this command
+          </h2>
+          <p className="mt-1 text-sm text-[var(--fg-2)]">
+            Web form when available, CLI fallback always, and the intended next
+            workflow step.
+          </p>
+        </div>
+        <span className="rounded border border-[var(--edge)] px-2 py-1 text-[11px] uppercase tracking-wider text-[var(--fg-2)]">
+          {command.status_label}
+        </span>
+      </div>
+      <div className="grid gap-3 md:grid-cols-3">
+        <UsePathCard
+          title="Web form"
+          badge={mapping.available ? mapping.surface : "not yet"}
+          body={
+            mapping.available
+              ? mapping.summary
+              : "No dedicated web form is available yet. Use the CLI form and copy button below."
+          }
+          href={mapping.href}
+          hrefLabel={mapping.available ? "Open form" : null}
+          tone={mapping.available ? "pass" : "neutral"}
+        />
+        <UsePathCard
+          title="CLI fallback"
+          badge="always available"
+          body="The CLI form is the authoritative execution path. Web command builders only assemble this command; they do not mutate production files."
+          tone="accent"
+        />
+        <UsePathCard
+          title="Next step"
+          badge="workflow"
+          body={command.next_step}
+          tone="neutral"
+        />
+      </div>
+    </section>
+  );
+}
+
+function UsePathCard({
+  title,
+  badge,
+  body,
+  href,
+  hrefLabel,
+  tone,
+}: {
+  title: string;
+  badge: string;
+  body: string;
+  href?: string | null;
+  hrefLabel?: string | null;
+  tone: "pass" | "accent" | "neutral";
+}) {
+  return (
+    <article className={"rounded-lg border p-4 " + usePathCardClass(tone)}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
+        <span className="rounded border border-[var(--edge-bright)] px-2 py-0.5 text-[10px] uppercase tracking-wider text-[var(--fg-2)]">
+          {badge}
+        </span>
+      </div>
+      <p className="mt-3 text-sm leading-6 text-[var(--fg-2)]">{body}</p>
+      {href && hrefLabel ? (
+        <Link href={href} className="btn btn-secondary mt-4">
+          {hrefLabel}
+        </Link>
+      ) : null}
+    </article>
+  );
+}
+
 function MappingList({ title, items }: { title: string; items: string[] }) {
   return (
     <div className="rounded-lg border border-[var(--edge)] bg-black/15 p-3">
@@ -256,4 +339,14 @@ function statusBadgeClass(status: CommandStatus) {
     return "border-cyan-300/30 bg-cyan-300/10 text-cyan-200";
   }
   return "border-[var(--edge-bright)] bg-white/[0.04] text-[var(--fg-2)]";
+}
+
+function usePathCardClass(tone: "pass" | "accent" | "neutral") {
+  if (tone === "pass") {
+    return "border-emerald-400/20 bg-emerald-400/[0.06]";
+  }
+  if (tone === "accent") {
+    return "border-cyan-300/20 bg-cyan-300/[0.06]";
+  }
+  return "border-[var(--edge)] bg-white/[0.02]";
 }
