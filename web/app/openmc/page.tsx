@@ -9,6 +9,8 @@ import {
   OpenmcWorkflowPlan,
   api,
 } from "@/lib/api";
+import OpenmcArtifactList from "@/components/openmc/OpenmcArtifactList";
+import OpenmcCommandList from "@/components/openmc/OpenmcCommandList";
 import OpenmcWorkflowSummary from "@/components/openmc/OpenmcWorkflowSummary";
 import { useSettings } from "@/lib/settings";
 
@@ -313,21 +315,10 @@ function PlanReport({ state }: { state: PlanState }) {
         ))}
       </section>
 
-      <section className="glass rounded-xl p-5">
-        <h2 className="text-base font-semibold tracking-tight">CLI commands</h2>
-        <div className="mt-3 space-y-3">
-          {plan.commands.map((command) => (
-            <div key={command.label}>
-              <div className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
-                {command.label}
-              </div>
-              <pre className="mt-1 overflow-x-auto rounded-md border border-[var(--edge)] bg-black/20 px-3 py-2 text-[12px] text-[var(--fg-1)]">
-                {command.text}
-              </pre>
-            </div>
-          ))}
-        </div>
-      </section>
+      <OpenmcCommandList
+        commands={plan.commands}
+        primaryCommandText={plan.primary_command_text}
+      />
 
       <section className="grid gap-4 lg:grid-cols-2">
         <Cards
@@ -339,15 +330,7 @@ function PlanReport({ state }: { state: PlanState }) {
             tone: check.status,
           }))}
         />
-        <Cards
-          title="Artifacts"
-          items={plan.artifacts.map((artifact) => ({
-            key: artifact.label,
-            label: artifact.label,
-            detail: artifact.path,
-            tone: artifact.will_write ? "pass" : "skipped",
-          }))}
-        />
+        <OpenmcArtifactList artifacts={plan.artifacts} />
       </section>
 
       <section className="glass rounded-xl p-5">
