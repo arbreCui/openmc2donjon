@@ -11,10 +11,12 @@ written, and the compact physics-shape metadata needed for quick checks.
 ## Schema Id
 
 ```text
-openmc2donjon.from-openmc-summary.v2
+openmc2donjon.from-openmc-summary.v3
 ```
 
 The schema id is stored in the top-level `schema` field.
+The validator still accepts legacy v1/v2 summaries; new one-step exports write
+v3 so uncertainty coverage is visible in run manifests.
 
 ## Example
 
@@ -42,11 +44,13 @@ The schema id is stored in the top-level `schema` field.
   "package_version": "0.1.2",
   "recipe": "/case/export_recipe.py",
   "root_name": "CPO",
-  "schema": "openmc2donjon.from-openmc-summary.v2",
+  "schema": "openmc2donjon.from-openmc-summary.v3",
   "selected_mixtures": null,
   "single_point_burnup": null,
   "state_points": 1,
-  "statepoint": "/case/statepoint.120.h5"
+  "statepoint": "/case/statepoint.120.h5",
+  "std_dev_dataset_count": 0,
+  "std_dev_expected_dataset_count": 11
 }
 ```
 
@@ -65,6 +69,8 @@ The schema id is stored in the top-level `schema` field.
 | `format` | string | `multicompo` or `macrolib`. |
 | `energy_groups` | integer | Number of energy groups exported to HDF5. |
 | `legendre_order` | integer | Highest Legendre scattering order exported. |
+| `std_dev_dataset_count` | integer | Number of OpenMC MGXS `*_std_dev` uncertainty datasets written to the HDF5 handoff. |
+| `std_dev_expected_dataset_count` | integer | Number of mean MGXS datasets whose source MGXS could have supplied a matching `*_std_dev` dataset. Synthetic zero fission fields for non-fissionable mixtures are not counted. |
 | `mixture_count` | integer | Number of mixtures seen in the HDF5 handoff before optional output filtering. |
 | `mixture_names` | array of strings | Mixture names in HDF5 order. |
 | `state_points` | integer | Number of calculation states per mixture. One for the default production path. |
@@ -116,11 +122,12 @@ import json
 from pathlib import Path
 
 summary = json.loads(Path("run_summary.json").read_text())
-assert summary["schema"] == "openmc2donjon.from-openmc-summary.v2"
+assert summary["schema"] == "openmc2donjon.from-openmc-summary.v3"
 assert summary["format"] in {"multicompo", "macrolib"}
 assert summary["mixture_count"] == len(summary["mixture_names"])
 assert summary["energy_groups"] > 0
 assert summary["state_points"] > 0
+assert summary["std_dev_dataset_count"] <= summary["std_dev_expected_dataset_count"]
 if summary["checked"]:
     assert summary["check_passed"] is True
 ```

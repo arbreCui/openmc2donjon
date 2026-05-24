@@ -7,7 +7,8 @@ from typing import Any
 
 
 FROM_OPENMC_SUMMARY_SCHEMA_V1 = "openmc2donjon.from-openmc-summary.v1"
-FROM_OPENMC_SUMMARY_SCHEMA = "openmc2donjon.from-openmc-summary.v2"
+FROM_OPENMC_SUMMARY_SCHEMA_V2 = "openmc2donjon.from-openmc-summary.v2"
+FROM_OPENMC_SUMMARY_SCHEMA = "openmc2donjon.from-openmc-summary.v3"
 
 FROM_OPENMC_SUMMARY_V1_KEYS = frozenset(
     {
@@ -41,6 +42,13 @@ FROM_OPENMC_SUMMARY_V2_KEYS = FROM_OPENMC_SUMMARY_V1_KEYS | frozenset(
     }
 )
 
+FROM_OPENMC_SUMMARY_V3_KEYS = FROM_OPENMC_SUMMARY_V2_KEYS | frozenset(
+    {
+        "std_dev_dataset_count",
+        "std_dev_expected_dataset_count",
+    }
+)
+
 
 def validate_from_openmc_summary(payload: Mapping[str, Any]) -> list[str]:
     """Return schema validation errors for any supported from-OpenMC summary."""
@@ -48,7 +56,9 @@ def validate_from_openmc_summary(payload: Mapping[str, Any]) -> list[str]:
     schema = payload.get("schema")
     if schema == FROM_OPENMC_SUMMARY_SCHEMA_V1:
         return validate_from_openmc_summary_v1(payload)
-    return validate_from_openmc_summary_v2(payload)
+    if schema == FROM_OPENMC_SUMMARY_SCHEMA_V2:
+        return validate_from_openmc_summary_v2(payload)
+    return validate_from_openmc_summary_v3(payload)
 
 
 def validate_from_openmc_summary_v1(payload: Mapping[str, Any]) -> list[str]:
@@ -59,6 +69,7 @@ def validate_from_openmc_summary_v1(payload: Mapping[str, Any]) -> list[str]:
         schema=FROM_OPENMC_SUMMARY_SCHEMA_V1,
         keys=FROM_OPENMC_SUMMARY_V1_KEYS,
         validate_check_fields=False,
+        validate_std_dev_fields=False,
     )
 
 
@@ -67,9 +78,22 @@ def validate_from_openmc_summary_v2(payload: Mapping[str, Any]) -> list[str]:
 
     return _validate_from_openmc_summary(
         payload,
-        schema=FROM_OPENMC_SUMMARY_SCHEMA,
+        schema=FROM_OPENMC_SUMMARY_SCHEMA_V2,
         keys=FROM_OPENMC_SUMMARY_V2_KEYS,
         validate_check_fields=True,
+        validate_std_dev_fields=False,
+    )
+
+
+def validate_from_openmc_summary_v3(payload: Mapping[str, Any]) -> list[str]:
+    """Return schema validation errors for a v3 from-OpenMC summary payload."""
+
+    return _validate_from_openmc_summary(
+        payload,
+        schema=FROM_OPENMC_SUMMARY_SCHEMA,
+        keys=FROM_OPENMC_SUMMARY_V3_KEYS,
+        validate_check_fields=True,
+        validate_std_dev_fields=True,
     )
 
 
@@ -79,6 +103,7 @@ def _validate_from_openmc_summary(
     schema: str,
     keys: frozenset[str],
     validate_check_fields: bool,
+    validate_std_dev_fields: bool,
 ) -> list[str]:
     """Return schema validation errors for a from-OpenMC summary payload."""
 
@@ -117,6 +142,10 @@ def _validate_from_openmc_summary(
         _require_optional_bool(errors, payload, "check_passed")
         _require_optional_string(errors, payload, "check_summary_json")
         _validate_check_fields(errors, payload)
+    if validate_std_dev_fields:
+        _require_int_at_least(errors, payload, "std_dev_dataset_count", 0)
+        _require_int_at_least(errors, payload, "std_dev_expected_dataset_count", 0)
+        _validate_std_dev_fields(errors, payload)
     return errors
 
 
@@ -249,6 +278,13 @@ def _validate_check_fields(errors: list[str], payload: Mapping[str, Any]) -> Non
             errors.append("check_passed: expected null when checked is false")
         if check_summary_json is not None:
             errors.append("check_summary_json: expected null when checked is false")
+
+
+def _validate_std_dev_fields(errors: list[str], payload: Mapping[str, Any]) -> None:
+    present = payload.get("std_dev_dataset_count")
+    expected = payload.get("std_dev_expected_dataset_count")
+    if _is_int(present) and _is_int(expected) and present > expected:
+        errors.append("std_dev_dataset_count: expected <= std_dev_expected_dataset_count")
 
 
 def _validate_mixture_count(errors: list[str], payload: Mapping[str, Any]) -> None:

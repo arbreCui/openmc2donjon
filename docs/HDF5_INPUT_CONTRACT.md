@@ -143,6 +143,49 @@ STRD = NTOT0 - sum_out(SCAT01)
 
 If neither is available, `STRD` falls back to `NTOT0`.
 
+## Optional Statistical Uncertainty Datasets
+
+Any mean MGXS dataset may have a sibling dataset named `<dataset>_std_dev`
+with the same shape:
+
+```text
+/mixtures/<domain_name>/total
+/mixtures/<domain_name>/total_std_dev
+
+/mixtures/<domain_name>/scatter_matrix
+/mixtures/<domain_name>/scatter_matrix_std_dev
+```
+
+The OpenMC exporter writes these datasets when the source MGXS object exposes
+standard-deviation data, either through a `std_dev`/`stddev`/`std` attribute or
+through `get_xs(value="std_dev")`. This applies to `total`, `absorption`,
+`fission`, `kappa_fission`, `nu_fission`, `chi`, `transport_total`,
+`inverse_velocity`, and `scatter_matrix`.
+
+`openmc2donjon-from-openmc --summary-json` records two coverage counters:
+
+| Field | Meaning |
+| --- | --- |
+| `std_dev_dataset_count` | Number of `*_std_dev` datasets written. |
+| `std_dev_expected_dataset_count` | Number of source MGXS datasets that could have supplied matching uncertainty data. |
+
+The expected count intentionally excludes exporter-synthesized zero fission
+fields in non-fissionable mixtures. Those fields are deterministic placeholders,
+not OpenMC tally means with missing uncertainty.
+
+Preflight can consume these uncertainty datasets:
+
+```sh
+openmc2donjon check mgxs_library.h5 \
+  --uncertainty-warn 0.05 \
+  --uncertainty-fail 0.20
+```
+
+Production mode keeps the same data model and applies the configured
+production uncertainty gate to available `*_std_dev / |mean|` values above the
+mean floor. Missing or incomplete `*_std_dev` coverage is reported as a warning
+unless a stricter workflow gate is added by the caller.
+
 ## Optional SPH Payload
 
 SPH equivalence factors are stored as one positive vector per mixture:

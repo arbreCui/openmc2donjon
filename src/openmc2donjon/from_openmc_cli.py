@@ -406,6 +406,8 @@ def _run_pipeline(
         burnup_values=burnup_values,
         energy_groups=export_summary.energy_groups,
         legendre_order=export_summary.legendre_order,
+        std_dev_dataset_count=export_summary.std_dev_dataset_count,
+        std_dev_expected_dataset_count=export_summary.std_dev_expected_dataset_count,
     )
     return finalize_run_dir(
         _run_dir_config(args),
@@ -434,7 +436,9 @@ def _export_pipeline_hdf5(
     print(
         f"exported {len(export_summary.domains)} domains, "
         f"{export_summary.energy_groups} groups, P{export_summary.legendre_order} "
-        f"from recipe {recipe_summary.recipe_path}"
+        f"from recipe {recipe_summary.recipe_path} "
+        f"(std_dev {export_summary.std_dev_dataset_count}/"
+        f"{export_summary.std_dev_expected_dataset_count})"
     )
     return recipe_summary
 
@@ -555,6 +559,8 @@ def _write_pipeline_summary(
     burnup_values,
     energy_groups: int,
     legendre_order: int,
+    std_dev_dataset_count: int,
+    std_dev_expected_dataset_count: int,
 ) -> dict[str, object]:
     summary = _summary_payload(
         args,
@@ -568,6 +574,8 @@ def _write_pipeline_summary(
         burnup_values=burnup_values,
         energy_groups=energy_groups,
         legendre_order=legendre_order,
+        std_dev_dataset_count=std_dev_dataset_count,
+        std_dev_expected_dataset_count=std_dev_expected_dataset_count,
     )
     if args.summary_json is not None:
         _write_json(args.summary_json, summary)
@@ -604,6 +612,8 @@ def _summary_payload(
     burnup_values,
     energy_groups: int,
     legendre_order: int,
+    std_dev_dataset_count: int,
+    std_dev_expected_dataset_count: int,
 ) -> dict[str, object]:
     burnup_summary: dict[str, object] = {"present": burnup_values is not None}
     if burnup_values is not None:
@@ -627,6 +637,8 @@ def _summary_payload(
         "format": args.format,
         "energy_groups": energy_groups,
         "legendre_order": legendre_order,
+        "std_dev_dataset_count": std_dev_dataset_count,
+        "std_dev_expected_dataset_count": std_dev_expected_dataset_count,
         "mixture_count": len(mixture_names),
         "mixture_names": mixture_names,
         "state_points": nstates,

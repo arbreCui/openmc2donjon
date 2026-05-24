@@ -96,6 +96,8 @@ class FromOpenMCCliTests(unittest.TestCase):
             self.assertEqual(payload["output"], str(output))
             self.assertEqual(payload["energy_groups"], 2)
             self.assertEqual(payload["legendre_order"], 0)
+            self.assertEqual(payload["std_dev_dataset_count"], 0)
+            self.assertEqual(payload["std_dev_expected_dataset_count"], 11)
             self.assertEqual(payload["mixture_count"], 2)
             self.assertEqual(payload["mixture_names"], ["FUEL_A", "MOD_A"])
             self.assertEqual(payload["state_points"], 1)

@@ -161,6 +161,8 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
 
         self.assertEqual(summary.energy_groups, 3)
         self.assertEqual(summary.legendre_order, 1)
+        self.assertEqual(summary.std_dev_dataset_count, 0)
+        self.assertEqual(summary.std_dev_expected_dataset_count, 12)
         self.assertEqual([domain.name for domain in summary.domains], ["ASM_Y1_X1", "MOD"])
         self.assertEqual(mixture_names, ("ASM_Y1_X1", "MOD"))
         self.assertEqual(source_domain_index, 1)
@@ -323,9 +325,33 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
                         np.array([0.05, 0.06, 0.07]),
                         np.array([0.001, 0.002, 0.003]),
                     ),
+                    "fission": StdDevMGXS(
+                        np.array([0.01, 0.02, 0.03]),
+                        np.array([0.0001, 0.0002, 0.0003]),
+                    ),
+                    "kappa-fission": StdDevMGXS(
+                        np.array([3.2e-12, 3.1e-12, 3.0e-12]),
+                        np.array([1.0e-14, 1.1e-14, 1.2e-14]),
+                    ),
+                    "nu-fission": StdDevMGXS(
+                        np.array([0.025, 0.050, 0.075]),
+                        np.array([0.0005, 0.0006, 0.0007]),
+                    ),
+                    "chi": StdDevMGXS(
+                        np.array([1.0, 0.0, 0.0]),
+                        np.array([0.01, 0.0, 0.0]),
+                    ),
                     "scatter matrix": StdDevMGXS(
                         np.eye(3),
                         np.eye(3) * 0.001,
+                    ),
+                    "transport": StdDevMGXS(
+                        np.array([0.45, 0.55, 0.65]),
+                        np.array([0.0045, 0.0055, 0.0065]),
+                    ),
+                    "inverse-velocity": StdDevMGXS(
+                        np.array([1.0e-8, 2.0e-7, 3.0e-6]),
+                        np.array([1.0e-10, 2.0e-9, 3.0e-8]),
                     ),
                 }
 
@@ -336,17 +362,31 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "mgxs.h5"
-            export_openmc_mgxs_library(Library(), path)
+            summary = export_openmc_mgxs_library(Library(), path)
             with h5py.File(path, "r") as h5:
                 group = h5["mixtures"]["fuel"]
                 total_std_dev = group["total_std_dev"][:]
                 absorption_std_dev = group["absorption_std_dev"][:]
+                fission_std_dev = group["fission_std_dev"][:]
+                kappa_fission_std_dev = group["kappa_fission_std_dev"][:]
+                nu_fission_std_dev = group["nu_fission_std_dev"][:]
+                chi_std_dev = group["chi_std_dev"][:]
                 scatter_std_dev = group["scatter_matrix_std_dev"][:]
+                transport_total_std_dev = group["transport_total_std_dev"][:]
+                inverse_velocity_std_dev = group["inverse_velocity_std_dev"][:]
 
         np.testing.assert_allclose(total_std_dev, [0.01, 0.02, 0.03])
         np.testing.assert_allclose(absorption_std_dev, [0.001, 0.002, 0.003])
+        np.testing.assert_allclose(fission_std_dev, [0.0001, 0.0002, 0.0003])
+        np.testing.assert_allclose(kappa_fission_std_dev, [1.0e-14, 1.1e-14, 1.2e-14])
+        np.testing.assert_allclose(nu_fission_std_dev, [0.0005, 0.0006, 0.0007])
+        np.testing.assert_allclose(chi_std_dev, [0.01, 0.0, 0.0])
         self.assertEqual(scatter_std_dev.shape, (1, 3, 3))
         np.testing.assert_allclose(scatter_std_dev[0], np.eye(3) * 0.001)
+        np.testing.assert_allclose(transport_total_std_dev, [0.0045, 0.0055, 0.0065])
+        np.testing.assert_allclose(inverse_velocity_std_dev, [1.0e-10, 2.0e-9, 3.0e-8])
+        self.assertEqual(summary.std_dev_dataset_count, 9)
+        self.assertEqual(summary.std_dev_expected_dataset_count, 9)
 
     def test_exports_ambiguous_two_group_p1_scatter_as_openmc_moment_last(self) -> None:
         class EnergyGroups2:

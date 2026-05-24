@@ -35,6 +35,16 @@ MGXS_TYPE_ALIASES: dict[str, tuple[str, ...]] = {
     "inverse_velocity": ("inverse-velocity", "inverse_velocity"),
 }
 NU_SCATTER_MGXS_TYPES = ("consistent nu-scatter matrix", "nu-scatter matrix")
+VECTOR_DATASET_KEYS = (
+    "total",
+    "absorption",
+    "fission",
+    "kappa_fission",
+    "nu_fission",
+    "chi",
+    "transport_total",
+    "inverse_velocity",
+)
 
 
 @dataclass(frozen=True)
@@ -67,6 +77,8 @@ class ExportSummary:
     legendre_order: int
     domains: tuple[ExportedDomain, ...]
     scatter_mgxs_type: str = "scatter matrix"
+    std_dev_dataset_count: int = 0
+    std_dev_expected_dataset_count: int = 0
 
 
 def export_openmc_mgxs_library(
@@ -123,6 +135,8 @@ def export_openmc_mgxs_library(
     exported: list[tuple[ExportedDomain, dict[str, Any]]] = []
     legendre_order = 0
     used_names: set[str] = set()
+    std_dev_dataset_count = 0
+    std_dev_expected_dataset_count = 0
     for index, spec in enumerate(specs, start=1):
         name = _domain_name(spec.domain, index, domain_names, used_names, spec.name)
         data = _domain_data(
@@ -132,6 +146,9 @@ def export_openmc_mgxs_library(
             xs_kwargs=spec.xs_kwargs,
             scatter_mgxs_type=scatter_mgxs_type,
         )
+        present, expected = _std_dev_coverage(data)
+        std_dev_dataset_count += present
+        std_dev_expected_dataset_count += expected
         if spec.volume is not None:
             data["volume"] = float(spec.volume)
         legendre_order = max(legendre_order, data["scatter_matrix"].shape[0] - 1)
@@ -198,16 +215,7 @@ def export_openmc_mgxs_library(
                 group.attrs["volume"] = float(data["volume"])
             for attr_key, attr_value in data["attrs"].items():
                 _write_hdf5_attr(group, str(attr_key), attr_value)
-            for key in (
-                "total",
-                "absorption",
-                "fission",
-                "kappa_fission",
-                "nu_fission",
-                "chi",
-                "transport_total",
-                "inverse_velocity",
-            ):
+            for key in VECTOR_DATASET_KEYS:
                 value = data.get(key)
                 if value is not None:
                     group.create_dataset(key, data=value)
@@ -231,6 +239,8 @@ def export_openmc_mgxs_library(
         legendre_order=legendre_order,
         domains=tuple(domain for domain, _data in exported),
         scatter_mgxs_type=scatter_type_label,
+        std_dev_dataset_count=std_dev_dataset_count,
+        std_dev_expected_dataset_count=std_dev_expected_dataset_count,
     )
 
 
@@ -277,6 +287,7 @@ def _domain_data(
     )
 
     fission = _optional_vector(library, domain, "fission", ngroups, xs_kwargs=xs_kwargs)
+    fission_present = fission is not None
     kappa_fission = _optional_vector(
         library,
         domain,
@@ -285,7 +296,23 @@ def _domain_data(
         xs_kwargs=xs_kwargs,
     )
     nu_fission = _optional_vector(library, domain, "nu_fission", ngroups, xs_kwargs=xs_kwargs)
+    nu_fission_present = nu_fission is not None
     chi = _optional_vector(library, domain, "chi", ngroups, xs_kwargs=xs_kwargs)
+    chi_present = chi is not None
+    transport_total = _optional_vector(
+        library,
+        domain,
+        "transport_total",
+        ngroups,
+        xs_kwargs=xs_kwargs,
+    )
+    inverse_velocity = _optional_vector(
+        library,
+        domain,
+        "inverse_velocity",
+        ngroups,
+        xs_kwargs=xs_kwargs,
+    )
     has_fission_source = (
         nu_fission is not None
         and chi is not None
@@ -351,13 +378,7 @@ def _domain_data(
         "scatter_matrix": scatter,
         "scatter_matrix_std_dev": scatter_std_dev,
         "scatter_mgxs_type": actual_scatter_mgxs_type,
-        "transport_total": _optional_vector(
-            library,
-            domain,
-            "transport_total",
-            ngroups,
-            xs_kwargs=xs_kwargs,
-        ),
+        "transport_total": transport_total,
         "transport_total_std_dev": _optional_vector_std_dev(
             library,
             domain,
@@ -365,13 +386,7 @@ def _domain_data(
             ngroups,
             xs_kwargs=xs_kwargs,
         ),
-        "inverse_velocity": _optional_vector(
-            library,
-            domain,
-            "inverse_velocity",
-            ngroups,
-            xs_kwargs=xs_kwargs,
-        ),
+        "inverse_velocity": inverse_velocity,
         "inverse_velocity_std_dev": _optional_vector_std_dev(
             library,
             domain,
@@ -381,7 +396,46 @@ def _domain_data(
         ),
         "volume": _domain_volume(domain),
         "fissionable": bool(_domain_fissionable(domain, has_fission_source)),
+        "_std_dev_expected_keys": _std_dev_expected_keys(
+            fission_present=fission_present,
+            kappa_fission_present=kappa_fission is not None,
+            nu_fission_present=nu_fission_present,
+            chi_present=chi_present,
+            transport_total_present=transport_total is not None,
+            inverse_velocity_present=inverse_velocity is not None,
+        ),
     }
+
+
+def _std_dev_expected_keys(
+    *,
+    fission_present: bool,
+    kappa_fission_present: bool,
+    nu_fission_present: bool,
+    chi_present: bool,
+    transport_total_present: bool,
+    inverse_velocity_present: bool,
+) -> tuple[str, ...]:
+    keys = ["total", "absorption", "scatter_matrix"]
+    if fission_present:
+        keys.append("fission")
+    if kappa_fission_present:
+        keys.append("kappa_fission")
+    if nu_fission_present:
+        keys.append("nu_fission")
+    if chi_present:
+        keys.append("chi")
+    if transport_total_present:
+        keys.append("transport_total")
+    if inverse_velocity_present:
+        keys.append("inverse_velocity")
+    return tuple(keys)
+
+
+def _std_dev_coverage(data: Mapping[str, Any]) -> tuple[int, int]:
+    expected_keys = tuple(data.get("_std_dev_expected_keys", ()))
+    present = sum(1 for key in expected_keys if data.get(f"{key}_std_dev") is not None)
+    return present, len(expected_keys)
 
 
 def _required_vector(

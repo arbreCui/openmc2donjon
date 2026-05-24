@@ -5,6 +5,7 @@ import unittest
 from openmc2donjon.from_openmc_summary import (
     FROM_OPENMC_SUMMARY_SCHEMA,
     FROM_OPENMC_SUMMARY_SCHEMA_V1,
+    FROM_OPENMC_SUMMARY_SCHEMA_V2,
     validate_from_openmc_summary,
 )
 
@@ -33,6 +34,8 @@ def valid_summary() -> dict[str, object]:
         "single_point_burnup": None,
         "state_points": 1,
         "statepoint": "/case/statepoint.120.h5",
+        "std_dev_dataset_count": 6,
+        "std_dev_expected_dataset_count": 8,
     }
 
 
@@ -46,6 +49,16 @@ class FromOpenMCSummaryTests(unittest.TestCase):
         payload.pop("checked")
         payload.pop("check_passed")
         payload.pop("check_summary_json")
+        payload.pop("std_dev_dataset_count")
+        payload.pop("std_dev_expected_dataset_count")
+
+        self.assertEqual(validate_from_openmc_summary(payload), [])
+
+    def test_accepts_legacy_v2_summary(self) -> None:
+        payload = valid_summary()
+        payload["schema"] = FROM_OPENMC_SUMMARY_SCHEMA_V2
+        payload.pop("std_dev_dataset_count")
+        payload.pop("std_dev_expected_dataset_count")
 
         self.assertEqual(validate_from_openmc_summary(payload), [])
 
@@ -80,6 +93,15 @@ class FromOpenMCSummaryTests(unittest.TestCase):
 
         self.assertIn("check_passed: expected null when checked is false", errors)
         self.assertIn("check_summary_json: expected null when checked is false", errors)
+
+    def test_rejects_inconsistent_std_dev_counts(self) -> None:
+        payload = valid_summary()
+        payload["std_dev_dataset_count"] = 9
+
+        self.assertIn(
+            "std_dev_dataset_count: expected <= std_dev_expected_dataset_count",
+            validate_from_openmc_summary(payload),
+        )
 
 
 if __name__ == "__main__":

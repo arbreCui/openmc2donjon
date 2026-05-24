@@ -174,7 +174,9 @@ def main(argv: list[str] | None = None) -> int:
             print(
                 f"exported {len(summary.domains)} domains, "
                 f"{summary.energy_groups} groups, P{summary.legendre_order} "
-                f"from recipe {recipe_summary.recipe_path} to {summary.output_path}"
+                f"from recipe {recipe_summary.recipe_path} to {summary.output_path} "
+                f"(std_dev {summary.std_dev_dataset_count}/"
+                f"{summary.std_dev_expected_dataset_count})"
             )
             return 0
     except StatepointLoadError as exc:
@@ -192,7 +194,8 @@ def main(argv: list[str] | None = None) -> int:
     print(
         f"exported {len(summary.domains)} domains, "
         f"{summary.energy_groups} groups, P{summary.legendre_order} "
-        f"to {summary.output_path}"
+        f"to {summary.output_path} "
+        f"(std_dev {summary.std_dev_dataset_count}/{summary.std_dev_expected_dataset_count})"
     )
     return 0
 

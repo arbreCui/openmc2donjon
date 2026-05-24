@@ -285,7 +285,8 @@ Near-term work:
 
 Larger physics work remains separate from the format converter core:
 
-- uncertainty propagation from OpenMC tally `std_dev` data;
+- full downstream uncertainty propagation beyond exported OpenMC `std_dev`
+  coverage and preflight gates;
 - richer standard energy-mesh ID checks;
 - additional production examples and benchmark comparisons.
 
