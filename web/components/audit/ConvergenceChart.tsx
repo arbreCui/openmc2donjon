@@ -36,12 +36,16 @@ export default function ConvergenceChart({
     () => buildTraces(sorted, displayFloor, sphTolerance, fluxTolerance),
     [sorted, displayFloor, sphTolerance, fluxTolerance],
   );
+  const yRange = useMemo(
+    () => residualLogRange(sorted, displayFloor, sphTolerance, fluxTolerance),
+    [sorted, displayFloor, sphTolerance, fluxTolerance],
+  );
   const ref = usePlotlyPlot(
     () => {
       if (traces.length === 0) return null;
-      return { traces, layout: buildLayout() };
+      return { traces, layout: buildLayout(yRange) };
     },
-    [traces],
+    [traces, yRange],
   );
 
   if (sorted.length === 0) {
@@ -61,7 +65,7 @@ export default function ConvergenceChart({
             Convergence history
           </h2>
           <p className="mt-1 text-[12px] text-[var(--fg-3)]">
-            SPH update change and OpenMC/DONJON flux residual by iteration.
+            Lines should move downward; dashed lines are acceptance tolerances.
           </p>
         </div>
         <div className="text-[12px] text-[var(--fg-2)] tab-num">
@@ -73,11 +77,9 @@ export default function ConvergenceChart({
       </div>
       <div ref={ref} className="mt-3 h-80 w-full" />
       <p className="mt-2 text-[12px] text-[var(--fg-3)]">
-        Higher is better: the residual series are plotted as
-        -log10(residual), so 1e-6 reads as 6. Exact zeros are drawn one
-        decade beyond the tightest tolerance, while hover text keeps the
-        raw value. Red/green markers show whether that iteration met the
-        convergence criteria.
+        Y is the raw residual on a log scale. A drop from 1e-2 to 1e-4
+        means the error is 100x smaller. Exact zeros are drawn just below
+        tolerance while hover text keeps the raw value.
       </p>
     </section>
   );
@@ -94,12 +96,12 @@ function buildTraces(
     p.converged ? COLORS.converged : COLORS.notConverged,
   );
   const traces: Data[] = [];
-  const sph = convergenceDepthSeries(
+  const sph = residualSeries(
     points,
     (p) => p.sph_max_rel_change,
     displayFloor,
   );
-  const flux = convergenceDepthSeries(
+  const flux = residualSeries(
     points,
     (p) => p.flux_ratio_max_residual,
     displayFloor,
@@ -123,7 +125,6 @@ function buildTraces(
       hovertemplate:
         "iteration %{x}<br>" +
         "SPH max rel change = %{customdata[0]}<br>" +
-        "depth = %{y:.3g}<br>" +
         "%{customdata[1]}<extra></extra>",
       customdata: points.map((p) => [
         formatNumber(p.sph_max_rel_change),
@@ -148,7 +149,6 @@ function buildTraces(
       hovertemplate:
         "iteration %{x}<br>" +
         "flux residual = %{customdata[0]}<br>" +
-        "depth = %{y:.3g}<br>" +
         "%{customdata[1]}<extra></extra>",
       customdata: points.map((p) => [
         formatNumber(p.flux_ratio_max_residual),
@@ -179,7 +179,7 @@ function buildTraces(
   return traces;
 }
 
-function buildLayout(): Partial<Layout> {
+function buildLayout(yRange: [number, number]): Partial<Layout> {
   return {
     autosize: true,
     margin: { l: 58, r: 18, t: 14, b: 44 },
@@ -202,13 +202,15 @@ function buildLayout(): Partial<Layout> {
     },
     yaxis: {
       title: {
-        text: "Convergence depth (-log10 residual)",
+        text: "Residual (log scale)",
         font: { color: "#8b90a3", size: 11 },
       },
-      rangemode: "tozero",
+      type: "log",
+      range: yRange,
       gridcolor: "rgba(255,255,255,0.05)",
       zeroline: false,
       color: "#8b90a3",
+      exponentformat: "power",
     },
     yaxis2: {
       title: {
@@ -225,21 +227,20 @@ function buildLayout(): Partial<Layout> {
   };
 }
 
-function convergenceDepthSeries(
+function residualSeries(
   points: SphLoopConvergencePoint[],
   pick: (point: SphLoopConvergencePoint) => number | null,
   displayFloor: number,
 ): (number | null)[] {
-  return points.map((point) => convergenceDepth(pick(point), displayFloor));
+  return points.map((point) => residualDisplayValue(pick(point), displayFloor));
 }
 
-function convergenceDepth(
+function residualDisplayValue(
   value: number | null,
   displayFloor: number,
 ): number | null {
   if (value == null || !Number.isFinite(value)) return null;
-  const positive = value > 0 ? value : displayFloor;
-  return -Math.log10(positive);
+  return value > 0 ? value : displayFloor;
 }
 
 function nullableSeries(
@@ -271,18 +272,14 @@ function addToleranceTrace(
   if (tolerance == null || tolerance <= 0 || iterations.length === 0) return;
   const x0 = Math.min(...iterations);
   const x1 = Math.max(...iterations);
-  const depth = convergenceDepth(tolerance, tolerance);
-  if (depth == null) return;
   traces.push({
     x: [x0, x1],
-    y: [depth, depth],
+    y: [tolerance, tolerance],
     type: "scatter",
     mode: "lines",
     name,
     line: { color, width: 1, dash: "dash" },
-    hovertemplate:
-      `${name} = ${formatNumber(tolerance)}<br>` +
-      `depth = ${formatNumber(depth)}<extra></extra>`,
+    hovertemplate: `${name} = ${formatNumber(tolerance)}<extra></extra>`,
   });
 }
 
@@ -304,6 +301,29 @@ function convergenceDisplayFloor(
   );
   if (positives.length === 0) return 1.0e-16;
   return Math.min(...positives) / 10.0;
+}
+
+function residualLogRange(
+  points: SphLoopConvergencePoint[],
+  displayFloor: number,
+  sphTolerance: number | null,
+  fluxTolerance: number | null,
+): [number, number] {
+  const values = [
+    displayFloor,
+    sphTolerance,
+    fluxTolerance,
+    ...points.flatMap((point) => [
+      point.sph_max_rel_change,
+      point.flux_ratio_max_residual,
+    ]),
+  ].filter(
+    (value): value is number =>
+      value != null && Number.isFinite(value) && value > 0,
+  );
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  return [Math.log10(min) - 0.25, Math.log10(max) + 0.25];
 }
 
 function statusLabel(point: SphLoopConvergencePoint): string {
