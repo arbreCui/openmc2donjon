@@ -15,6 +15,8 @@ Endpoints (M1 scope):
   surface.
 - ``GET /api/text-preview?path=...`` - bounded UTF-8/ASCII preview for
   generated text artifacts such as ``.mcompo.txt`` and ``.macrolib.txt``.
+- ``GET /api/file-status?path=...`` - single-path existence / kind /
+  size probe used by localhost workflow cards.
 
 The ``create_app`` factory keeps the mock flag out of module globals so
 the CLI ``serve`` command can pass it in explicitly. Mock mode returns
@@ -56,6 +58,7 @@ DEFAULT_CORS_ORIGINS: tuple[str, ...] = (
 INSPECT_SCHEMA = "openmc2donjon.mgxs-inspect.v1"
 MIXTURE_SCHEMA = "openmc2donjon.mgxs-mixture.v1"
 FILES_SCHEMA = "openmc2donjon.files.v1"
+FILE_STATUS_SCHEMA = "openmc2donjon.file-status.v1"
 AUDIT_SCHEMA = "openmc2donjon.sph-loop.v1"
 _MOCK_REFERENCE_STD_DEV_DATASET = "openmc_volume_flux_std_dev"
 _MOCK_REFERENCE_STD_DEV_MAX_REL = 1.8e-2
@@ -214,6 +217,12 @@ def create_app(
         if mock_mode:
             return _mock_list_dir(path, HTTPException)
         return _list_dir(path, HTTPException)
+
+    @app.get("/api/file-status")
+    def api_file_status(path: str = Query(..., min_length=1)) -> dict[str, Any]:
+        if mock_mode:
+            return _mock_file_status(path)
+        return _file_status(path)
 
     register_text_preview_routes(app, mock_mode=mock_mode)
 
@@ -942,19 +951,66 @@ def _list_dir(raw: str, http_exception: Any) -> dict[str, Any]:
     return _files_payload(str(real), parent, entries)
 
 
+def _file_status(raw: str) -> dict[str, Any]:
+    """Single-path status probe for live-mode workflow hints.
+
+    Missing paths are a normal status, not an HTTP error: the frontend
+    uses this to tell users which smoke artifacts still need to be
+    generated. Permission / OS errors are surfaced in the payload so a
+    card can show "unreadable" without breaking the whole page.
+    """
+
+    real = Path(raw).expanduser().resolve()
+    try:
+        if not real.exists():
+            return _file_status_payload(
+                path=str(real),
+                exists=False,
+                kind="missing",
+                size=None,
+                detail="path not found",
+            )
+        if real.is_dir():
+            return _file_status_payload(
+                path=str(real),
+                exists=True,
+                kind="dir",
+                size=None,
+                detail=None,
+            )
+        if real.is_file():
+            try:
+                size = real.stat().st_size
+            except OSError:
+                size = None
+            return _file_status_payload(
+                path=str(real),
+                exists=True,
+                kind="file",
+                size=size,
+                detail=None,
+            )
+        return _file_status_payload(
+            path=str(real),
+            exists=True,
+            kind="other",
+            size=None,
+            detail="path exists but is not a regular file or directory",
+        )
+    except OSError as exc:
+        return _file_status_payload(
+            path=str(real),
+            exists=False,
+            kind="unknown",
+            size=None,
+            detail=f"cannot stat path: {exc}",
+        )
+
+
 def _mock_list_dir(raw: str, http_exception: Any) -> dict[str, Any]:
     """Mock-mode implementation of ``/api/files`` (returns the bundled tree)."""
 
-    # Honour the ``~`` home alias and any nested ``~/foo/`` form.
-    if raw in ("~", "~/"):
-        resolved = _MOCK_HOME
-    elif raw.startswith("~/"):
-        resolved = f"{_MOCK_HOME}/{raw[2:]}"
-    else:
-        resolved = raw
-    # A trailing slash (``~/openmc-runs/``) is a user habit, not a
-    # different directory; normalise before the tree lookup.
-    resolved = resolved.rstrip("/") or "/"
+    resolved = _resolve_mock_path(raw)
 
     if resolved not in _MOCK_TREE:
         raise http_exception(
@@ -974,6 +1030,47 @@ def _mock_list_dir(raw: str, http_exception: Any) -> dict[str, Any]:
     return _files_payload(resolved, parent, entries)
 
 
+def _mock_file_status(raw: str) -> dict[str, Any]:
+    """Mock-mode single-path status probe using ``_MOCK_TREE``."""
+
+    resolved = _resolve_mock_path(raw)
+    if resolved in _MOCK_TREE:
+        return _file_status_payload(
+            path=resolved,
+            exists=True,
+            kind="dir",
+            size=None,
+            detail=None,
+        )
+    parent, _, name = resolved.rpartition("/")
+    for entry_name, kind, size in _MOCK_TREE.get(parent, []):
+        if entry_name == name:
+            return _file_status_payload(
+                path=resolved,
+                exists=True,
+                kind=kind,
+                size=size,
+                detail=None,
+            )
+    return _file_status_payload(
+        path=resolved,
+        exists=False,
+        kind="missing",
+        size=None,
+        detail="path not found",
+    )
+
+
+def _resolve_mock_path(raw: str) -> str:
+    if raw in ("~", "~/"):
+        resolved = _MOCK_HOME
+    elif raw.startswith("~/"):
+        resolved = f"{_MOCK_HOME}/{raw[2:]}"
+    else:
+        resolved = raw
+    return resolved.rstrip("/") or "/"
+
+
 def _files_payload(
     path: str, parent: str | None, entries: list[dict[str, Any]]
 ) -> dict[str, Any]:
@@ -982,6 +1079,24 @@ def _files_payload(
         "path": path,
         "parent": parent,
         "entries": entries,
+    }
+
+
+def _file_status_payload(
+    *,
+    path: str,
+    exists: bool,
+    kind: str,
+    size: int | None,
+    detail: str | None,
+) -> dict[str, Any]:
+    return {
+        "schema": FILE_STATUS_SCHEMA,
+        "path": path,
+        "exists": exists,
+        "kind": kind,
+        "size": size,
+        "detail": detail,
     }
 
 

@@ -904,6 +904,74 @@ class FilesEndpointTests(unittest.TestCase):
 
 
 @unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
+class FileStatusEndpointTests(unittest.TestCase):
+    def test_live_mode_reports_file_directory_and_missing_path(self) -> None:
+        from openmc2donjon.web.server import FILE_STATUS_SCHEMA, create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            file_path = base / "artifact.mcompo.txt"
+            file_path.write_text("ascii handoff")
+
+            client = TestClient(create_app(mock_mode=False))
+
+            file_response = client.get(
+                "/api/file-status", params={"path": str(file_path)}
+            )
+            self.assertEqual(file_response.status_code, 200)
+            file_payload = file_response.json()
+            self.assertEqual(file_payload["schema"], FILE_STATUS_SCHEMA)
+            self.assertTrue(file_payload["exists"])
+            self.assertEqual(file_payload["kind"], "file")
+            self.assertEqual(file_payload["size"], len("ascii handoff"))
+            self.assertIsNone(file_payload["detail"])
+
+            dir_response = client.get("/api/file-status", params={"path": str(base)})
+            self.assertEqual(dir_response.status_code, 200)
+            dir_payload = dir_response.json()
+            self.assertTrue(dir_payload["exists"])
+            self.assertEqual(dir_payload["kind"], "dir")
+            self.assertIsNone(dir_payload["size"])
+
+            missing_response = client.get(
+                "/api/file-status", params={"path": str(base / "missing.h5")}
+            )
+            self.assertEqual(missing_response.status_code, 200)
+            missing_payload = missing_response.json()
+            self.assertFalse(missing_payload["exists"])
+            self.assertEqual(missing_payload["kind"], "missing")
+            self.assertIn("not found", missing_payload["detail"])
+
+    def test_mock_mode_reports_tree_entries(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+
+        dir_response = client.get("/api/file-status", params={"path": "~"})
+        self.assertEqual(dir_response.status_code, 200)
+        self.assertEqual(dir_response.json()["path"], "/mock/home")
+        self.assertEqual(dir_response.json()["kind"], "dir")
+
+        file_response = client.get(
+            "/api/file-status",
+            params={"path": "/mock/home/openmc-runs/c5g7/handoff.h5"},
+        )
+        self.assertEqual(file_response.status_code, 200)
+        file_payload = file_response.json()
+        self.assertTrue(file_payload["exists"])
+        self.assertEqual(file_payload["kind"], "file")
+        self.assertEqual(file_payload["size"], 832_000)
+
+        missing_response = client.get(
+            "/api/file-status",
+            params={"path": "/mock/home/openmc-runs/c5g7/out.mcompo.txt"},
+        )
+        self.assertEqual(missing_response.status_code, 200)
+        self.assertFalse(missing_response.json()["exists"])
+        self.assertEqual(missing_response.json()["kind"], "missing")
+
+
+@unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
 class TextPreviewEndpointTests(unittest.TestCase):
     def test_mock_mode_returns_ascii_output_preview(self) -> None:
         from openmc2donjon.web.server import TEXT_PREVIEW_SCHEMA, create_app

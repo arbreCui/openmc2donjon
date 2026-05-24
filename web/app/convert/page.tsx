@@ -12,9 +12,9 @@ import MixturePicker from "@/components/convert/MixturePicker";
 import FileBrowserModal from "@/components/inspect/FileBrowserModal";
 import {
   ApiError,
-  ConvertFormat,
   api,
 } from "@/lib/api";
+import type { ConvertFormat, FileStatus } from "@/lib/api";
 import {
   buildConvertCliPreview,
   convertAdvancedPayload,
@@ -34,11 +34,17 @@ import {
   outputPathInDirectory,
   pickConvertBrowserStart,
 } from "@/lib/convertPaths";
+import { fileStatusLabel, fileStatusTone } from "@/lib/fileStatus";
 import { useSettings } from "@/lib/settings";
 import { parseConvertFormat, queryFlag } from "@/lib/workflowQuery";
 
 const FALLBACK_INPUT = "/path/to/mgxs_library.h5";
 type BrowserTarget = "input" | "output-directory";
+type ArtifactStatusState =
+  | { kind: "loading" }
+  | { kind: "ok"; status: FileStatus }
+  | { kind: "error"; message: string };
+type ArtifactStatusMap = Record<string, ArtifactStatusState>;
 
 export default function ConvertPage() {
   return (
@@ -642,6 +648,65 @@ function MockDemoCard({ onApply }: { onApply: () => void }) {
 
 function LiveMinicaseCard({ onApply }: { onApply: () => void }) {
   const steps = convertDemoWalkthrough(PRODUCTION_MINICASE_DEMO);
+  const [statuses, setStatuses] = useState<ArtifactStatusMap>(
+    loadingArtifactStatuses,
+  );
+  const [refreshToken, setRefreshToken] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    setStatuses(loadingArtifactStatuses());
+    Promise.all(
+      PRODUCTION_MINICASE_ARTIFACTS.map(async (artifact) => {
+        try {
+          return {
+            id: artifact.id,
+            state: {
+              kind: "ok",
+              status: await api.fileStatus(artifact.path),
+            } satisfies ArtifactStatusState,
+          };
+        } catch (err) {
+          const message =
+            err instanceof ApiError
+              ? err.detail ?? err.message
+              : err instanceof Error
+                ? err.message
+                : "status check failed";
+          return {
+            id: artifact.id,
+            state: { kind: "error", message } satisfies ArtifactStatusState,
+          };
+        }
+      }),
+    ).then((items) => {
+      if (cancelled) return;
+      setStatuses(Object.fromEntries(items.map((item) => [item.id, item.state])));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshToken]);
+
+  const missingCount = PRODUCTION_MINICASE_ARTIFACTS.filter((artifact) => {
+    const state = statuses[artifact.id];
+    return (
+      state?.kind === "ok" &&
+      (!state.status.exists || state.status.kind === "missing")
+    );
+  }).length;
+  const loadingCount = PRODUCTION_MINICASE_ARTIFACTS.filter(
+    (artifact) => statuses[artifact.id]?.kind === "loading",
+  ).length;
+  const errorCount = PRODUCTION_MINICASE_ARTIFACTS.filter(
+    (artifact) => statuses[artifact.id]?.kind === "error",
+  ).length;
+  const statusMessage = artifactStatusSummary({
+    loadingCount,
+    errorCount,
+    missingCount,
+  });
+
   return (
     <section className="mb-5 rounded-xl border border-emerald-300/20 bg-emerald-300/[0.05] p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -703,6 +768,9 @@ function LiveMinicaseCard({ onApply }: { onApply: () => void }) {
                 </Link>
               ) : null}
             </div>
+            <div className="mt-2">
+              <ArtifactStatusBadge state={statuses[artifact.id]} />
+            </div>
             <h3 className="mt-2 text-[12px] font-semibold tracking-tight text-emerald-50">
               {artifact.title}
             </h3>
@@ -726,6 +794,17 @@ function LiveMinicaseCard({ onApply }: { onApply: () => void }) {
             </div>
           </article>
         ))}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--edge)] bg-black/10 px-3 py-2 text-[12px] text-[var(--fg-2)]">
+        <span>{statusMessage}</span>
+        <button
+          type="button"
+          onClick={() => setRefreshToken((value) => value + 1)}
+          className="text-[var(--accent-2)] hover:underline"
+        >
+          Refresh status
+        </button>
       </div>
 
       <div className="mt-4 grid gap-3 lg:grid-cols-4">
@@ -754,6 +833,91 @@ function LiveMinicaseCard({ onApply }: { onApply: () => void }) {
         ))}
       </div>
     </section>
+  );
+}
+
+function loadingArtifactStatuses(): ArtifactStatusMap {
+  return Object.fromEntries(
+    PRODUCTION_MINICASE_ARTIFACTS.map((artifact) => [
+      artifact.id,
+      { kind: "loading" } satisfies ArtifactStatusState,
+    ]),
+  );
+}
+
+function artifactStatusSummary({
+  loadingCount,
+  errorCount,
+  missingCount,
+}: {
+  loadingCount: number;
+  errorCount: number;
+  missingCount: number;
+}): string {
+  if (loadingCount > 0) {
+    return "Checking artifact status on the localhost filesystem…";
+  }
+  if (errorCount > 0) {
+    return `${errorCount} status check${errorCount === 1 ? "" : "s"} failed.`;
+  }
+  if (missingCount > 0) {
+    return (
+      `${missingCount} artifact${missingCount === 1 ? "" : "s"} missing — ` +
+      "run the smoke command before inspecting or bundling."
+    );
+  }
+  return "Artifact status is ready for the current localhost filesystem.";
+}
+
+function ArtifactStatusBadge({
+  state,
+}: {
+  state: ArtifactStatusState | undefined;
+}) {
+  if (state === undefined || state.kind === "loading") {
+    return (
+      <span className="inline-flex rounded border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[10px] uppercase tracking-[0.14em] text-[var(--fg-2)]">
+        checking
+      </span>
+    );
+  }
+  if (state.kind === "error") {
+    return (
+      <span
+        className="inline-flex max-w-full rounded border border-amber-300/25 bg-amber-300/[0.08] px-1.5 py-0.5 text-[10px] uppercase tracking-[0.14em] text-amber-200"
+        title={state.message}
+      >
+        status unknown
+      </span>
+    );
+  }
+
+  const tone = fileStatusTone(state.status);
+  const label = fileStatusLabel(state.status);
+  if (tone === "ready") {
+    return (
+      <span className="inline-flex rounded border border-emerald-300/25 bg-emerald-300/[0.08] px-1.5 py-0.5 text-[10px] uppercase tracking-[0.14em] text-emerald-200">
+        {label}
+      </span>
+    );
+  }
+  if (tone === "missing") {
+    return (
+      <span
+        className="inline-flex rounded border border-rose-300/25 bg-rose-300/[0.08] px-1.5 py-0.5 text-[10px] uppercase tracking-[0.14em] text-rose-200"
+        title={state.status.detail ?? undefined}
+      >
+        {label}
+      </span>
+    );
+  }
+  return (
+    <span
+      className="inline-flex rounded border border-amber-300/25 bg-amber-300/[0.08] px-1.5 py-0.5 text-[10px] uppercase tracking-[0.14em] text-amber-200"
+      title={state.status.detail ?? undefined}
+    >
+      {label}
+    </span>
   );
 }
 

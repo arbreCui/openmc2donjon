@@ -222,6 +222,15 @@ export interface FileListing {
   entries: FileEntry[];
 }
 
+export interface FileStatus {
+  schema: string;
+  path: string;
+  exists: boolean;
+  kind: "file" | "dir" | "missing" | "other" | "unknown";
+  size: number | null;
+  detail: string | null;
+}
+
 /**
  * The ``run-sph-loop`` summary JSON, schema
  * ``openmc2donjon.sph-loop.v1``. The endpoint returns the full payload;
@@ -604,5 +613,7 @@ export const api = {
       moment,
     }),
   listFiles: (path: string) => getJson<FileListing>("/api/files", { path }),
+  fileStatus: (path: string) =>
+    getJson<FileStatus>("/api/file-status", { path }),
   audit: (path: string) => getJson<SphLoopSummary>("/api/audit", { path }),
 };
