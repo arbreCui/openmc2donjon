@@ -5,6 +5,7 @@ import ConvertReport, {
   ConvertRunState,
 } from "@/components/convert/ConvertReport";
 import { CopyCliButton } from "@/components/commands/CopyCliButton";
+import ConvertConcepts from "@/components/convert/ConvertConcepts";
 import MixturePicker from "@/components/convert/MixturePicker";
 import FileBrowserModal from "@/components/inspect/FileBrowserModal";
 import {
@@ -136,6 +137,7 @@ export default function ConvertPage() {
         </header>
 
         <ConvertGuide />
+        <ConvertConcepts />
 
         <form
           className="glass rounded-xl p-4 space-y-4"
