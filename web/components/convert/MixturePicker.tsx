@@ -68,7 +68,7 @@ export default function MixturePicker({
           className="btn btn-secondary"
           disabled={state.kind === "loading"}
         >
-          {state.kind === "loading" ? "Loading mixtures…" : "Load mixtures"}
+          {state.kind === "loading" ? "Inspecting HDF5…" : "Inspect HDF5"}
         </button>
         {mixtures.length > 0 ? (
           <>
@@ -119,14 +119,15 @@ function LoadStateView({
   if (state.kind === "idle") {
     return (
       <p className="text-[12px] text-[var(--fg-3)]">
-        Load mixtures from the selected HDF5 to choose a subset visually.
+        Inspect the selected HDF5 to review the handoff summary and choose a
+        mixture subset visually.
       </p>
     );
   }
   if (state.kind === "loading") {
     return (
       <p className="text-[12px] text-[var(--fg-2)] tab-num">
-        Reading HDF5 mixture roster…
+        Reading HDF5 inspection payload…
       </p>
     );
   }
@@ -143,23 +144,177 @@ function LoadStateView({
   const mixtures = state.data.mixtures;
   if (mixtures.length === 0) {
     return (
-      <p className="text-[12px] text-[var(--fg-3)]">
-        No mixtures were reported by the HDF5 inspection endpoint.
-      </p>
+      <div className="space-y-3">
+        <InspectionMiniSummary data={state.data} />
+        <p className="text-[12px] text-[var(--fg-3)]">
+          No mixtures were reported by the HDF5 inspection endpoint.
+        </p>
+      </div>
     );
   }
   return (
-    <div className="grid max-h-72 gap-2 overflow-auto rounded-md border border-[var(--edge)] bg-black/10 p-2 sm:grid-cols-2 lg:grid-cols-3">
-      {mixtures.map((mixture) => (
-        <MixtureChip
-          key={mixture.name}
-          mixture={mixture}
-          active={selected.has(mixture.name)}
-          onClick={() => onToggle(mixture.name)}
-        />
-      ))}
+    <div className="space-y-3">
+      <InspectionMiniSummary data={state.data} />
+      <div className="grid max-h-72 gap-2 overflow-auto rounded-md border border-[var(--edge)] bg-black/10 p-2 sm:grid-cols-2 lg:grid-cols-3">
+        {mixtures.map((mixture) => (
+          <MixtureChip
+            key={mixture.name}
+            mixture={mixture}
+            active={selected.has(mixture.name)}
+            onClick={() => onToggle(mixture.name)}
+          />
+        ))}
+      </div>
     </div>
   );
+}
+
+function InspectionMiniSummary({ data }: { data: HandoffInspection }) {
+  const denominator = data.calculation_count || data.mixture_count;
+  const mesh = meshLabel(data);
+  return (
+    <div className="rounded-md border border-[var(--edge)] bg-white/[0.025] p-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--fg-3)]">
+            Input inspection
+          </div>
+          <div className="mt-1 break-all font-mono text-[12px] text-[var(--fg-1)]">
+            {data.path}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          <StatusPill ok={data.ok} />
+          <span className="rounded border border-cyan-300/25 bg-cyan-300/[0.08] px-2 py-1 text-[11px] font-medium text-cyan-200">
+            {mesh}
+          </span>
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+        <MiniStat label="groups" value={formatNullable(data.energy_groups)} />
+        <MiniStat label="moments" value={momentLabel(data.legendre_order)} />
+        <MiniStat label="mixtures" value={formatNullable(data.mixture_count)} />
+        <MiniStat
+          label="fissionable"
+          value={coverage(data.fissionable_mixtures, data.mixture_count)}
+        />
+        <MiniStat label="ADF" value={coverage(data.adf_mixtures, denominator)} />
+        <MiniStat label="SPH" value={coverage(data.sph_calculations, denominator)} />
+        <MiniStat label="H-factor" value={coverage(data.h_factor, denominator)} />
+        <MiniStat
+          label="transport"
+          value={coverage(data.transport_total, denominator)}
+        />
+      </div>
+
+      <div className="mt-3 grid gap-2 text-[12px] sm:grid-cols-2">
+        <MiniDetail label="Scatter" value={scatterShapeLabel(data.scatter_shapes)} />
+        <MiniDetail
+          label="Issues"
+          value={data.issues.length === 0 ? "none" : String(data.issues.length)}
+          tone={data.issues.length === 0 ? "normal" : data.ok ? "warn" : "fail"}
+        />
+      </div>
+
+      <p className="mt-2 text-[11px] leading-relaxed text-[var(--fg-3)]">
+        Uncertainty and std_dev gates are checked by dry-run / production
+        acceptance; this card shows the quick HDF5 inspection payload.
+      </p>
+
+      {data.issues.length > 0 ? (
+        <ul className="mt-2 space-y-1 rounded border border-amber-300/20 bg-amber-300/[0.05] p-2 text-[12px] text-amber-100">
+          {data.issues.slice(0, 4).map((issue) => (
+            <li key={issue}>- {issue}</li>
+          ))}
+          {data.issues.length > 4 ? (
+            <li className="text-amber-200/70">
+              + {data.issues.length - 4} more issue(s)
+            </li>
+          ) : null}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+function StatusPill({ ok }: { ok: boolean }) {
+  return (
+    <span
+      className={
+        "rounded border px-2 py-1 text-[11px] font-semibold " +
+        (ok
+          ? "border-emerald-300/25 bg-emerald-300/[0.08] text-emerald-200"
+          : "border-rose-300/25 bg-rose-300/[0.08] text-rose-200")
+      }
+    >
+      {ok ? "OK" : "CHECK"}
+    </span>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded border border-[var(--edge)] bg-black/10 px-2.5 py-2">
+      <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+        {label}
+      </div>
+      <div className="mt-1 font-mono text-[13px] text-[var(--fg-0)]">{value}</div>
+    </div>
+  );
+}
+
+function MiniDetail({
+  label,
+  value,
+  tone = "normal",
+}: {
+  label: string;
+  value: string;
+  tone?: "normal" | "warn" | "fail";
+}) {
+  const color =
+    tone === "fail"
+      ? "text-rose-200"
+      : tone === "warn"
+        ? "text-amber-200"
+        : "text-[var(--fg-1)]";
+  return (
+    <div className="min-w-0 rounded border border-[var(--edge)] bg-black/10 px-2.5 py-2">
+      <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+        {label}
+      </div>
+      <div className={`mt-1 truncate font-mono text-[12px] ${color}`}>{value}</div>
+    </div>
+  );
+}
+
+function meshLabel(data: HandoffInspection): string {
+  if (!data.mesh_match) return "unknown mesh";
+  return (
+    data.mesh_match.short ??
+    data.mesh_match.name ??
+    data.mesh_match.id ??
+    "known mesh"
+  );
+}
+
+function momentLabel(order: number | null): string {
+  if (order === null) return "-";
+  return order === 0 ? "P0" : `P0-P${order}`;
+}
+
+function formatNullable(value: number | null): string | number {
+  return value ?? "-";
+}
+
+function coverage(count: number, denominator: number): string {
+  return denominator > 0 ? `${count}/${denominator}` : `${count}/?`;
+}
+
+function scatterShapeLabel(shapes: number[][]): string {
+  if (shapes.length === 0) return "-";
+  return shapes.map((shape) => `[${shape.join(",")}]`).join(" ");
 }
 
 function MixtureChip({
