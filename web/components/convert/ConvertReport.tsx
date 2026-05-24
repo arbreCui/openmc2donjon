@@ -5,6 +5,7 @@ import { ConvertPreflightInput, ConvertResponse } from "@/lib/api";
 import { convertNextSteps } from "@/lib/convertNextSteps";
 import AsciiPreview from "./AsciiPreview";
 import ConversionSummaryStrip from "./ConversionSummaryStrip";
+import DeliveryChecklist from "./DeliveryChecklist";
 import HandoffPipeline from "./HandoffPipeline";
 import OutputActions from "./OutputActions";
 
@@ -128,6 +129,8 @@ function ConvertSummary({
         {input ? <ProductionEvidenceStrip input={input} /> : null}
 
         {input ? <PreflightDecisionPanel data={data} input={input} /> : null}
+
+        <DeliveryChecklist data={data} input={input} onConvert={onConvert} />
 
         <OutputActions data={data} onConvert={onConvert} />
 
