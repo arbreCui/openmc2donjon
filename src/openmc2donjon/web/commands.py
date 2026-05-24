@@ -128,8 +128,9 @@ DETAILS: dict[str, CommandDetail] = {
             "Export an OpenMC recipe/statepoint and prepare the initial "
             "handoff, reference flux, map, and loop config."
         ),
-        status="planned",
-        status_label="CLI only",
+        status="partial",
+        status_label="Workflow planner ready",
+        web_path="/openmc",
         cli="openmc2donjon prepare-openmc-sph-loop --recipe recipe.py --run-dir run",
         tags=("OpenMC", "recipe", "production"),
     ),
@@ -140,8 +141,9 @@ DETAILS: dict[str, CommandDetail] = {
             "Export an OpenMC mgxs.Library-like object or recipe/statepoint "
             "into the openmc2donjon HDF5 contract."
         ),
-        status="planned",
-        status_label="CLI only",
+        status="partial",
+        status_label="Workflow planner ready",
+        web_path="/openmc",
         cli="openmc2donjon-export --recipe recipe.py --statepoint statepoint.h5 -o mgxs_library.h5",
         tags=("OpenMC", "HDF5", "two-step"),
     ),
@@ -152,8 +154,9 @@ DETAILS: dict[str, CommandDetail] = {
             "Export MGXS from an OpenMC recipe/statepoint, optionally inject "
             "ADF/SPH data, run preflight, convert, and bundle artifacts."
         ),
-        status="planned",
-        status_label="CLI only",
+        status="partial",
+        status_label="Workflow planner ready",
+        web_path="/openmc",
         cli="openmc2donjon-from-openmc --recipe recipe.py --statepoint statepoint.h5 -o out.mcompo.txt",
         tags=("OpenMC", "one-step", "bundle"),
     ),

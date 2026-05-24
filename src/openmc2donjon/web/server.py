@@ -39,6 +39,7 @@ from ..mgxs_inspect import _report_payload, inspect_file
 from ..mgxs_physics_checks import scatter_moment_matrix
 from .commands import register_command_routes
 from .convert import register_convert_routes
+from .openmc_workflow import register_openmc_workflow_routes
 from .text_preview import (
     TEXT_PREVIEW_SCHEMA as TEXT_PREVIEW_SCHEMA,
     register_text_preview_routes,
@@ -181,6 +182,7 @@ def create_app(
         }
 
     register_command_routes(app)
+    register_openmc_workflow_routes(app, mock_mode=mock_mode)
 
     @app.get("/api/inspect")
     def api_inspect(path: str = Query(..., min_length=1)) -> dict[str, Any]:

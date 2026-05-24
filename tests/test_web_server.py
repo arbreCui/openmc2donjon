@@ -984,6 +984,166 @@ class ConvertEndpointTests(unittest.TestCase):
 
 
 @unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
+class OpenmcWorkflowEndpointTests(unittest.TestCase):
+    def test_mock_mode_plans_one_step_openmc_handoff(self) -> None:
+        from openmc2donjon.web.openmc_workflow import OPENMC_WORKFLOW_SCHEMA
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.post(
+            "/api/openmc-workflow/plan",
+            json={
+                "workflow": "one-step",
+                "recipe_path": "/mock/home/openmc-runs/export_recipe.py",
+                "statepoint_path": "/mock/home/openmc-runs/statepoint.h5",
+                "load_statepoint": True,
+                "format": "multicompo",
+                "output_path": "/mock/home/openmc-runs/out.mcompo.txt",
+                "run_dir": "/mock/home/openmc-runs/c5g7",
+                "keep_hdf5_path": "/mock/home/openmc-runs/c5g7/mgxs_library.h5",
+                "check": True,
+                "production": True,
+                "strict_dry_run": True,
+                "h_factor_default": 200.0,
+                "require_known_energy_mesh": True,
+                "warn_unknown_energy_mesh": True,
+                "equivalence": "direct",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["schema"], OPENMC_WORKFLOW_SCHEMA)
+        self.assertTrue(payload["ok"])
+        self.assertTrue(payload["mock_mode"])
+        self.assertEqual(payload["workflow"], "one-step")
+        self.assertEqual(len(payload["commands"]), 1)
+        command = payload["commands"][0]["text"]
+        self.assertIn("openmc2donjon-from-openmc", command)
+        self.assertIn("--production", command)
+        self.assertIn("--strict-dry-run", command)
+        self.assertIn("--require-known-energy-mesh", command)
+        self.assertIn("--h-factor-default 200.0", command)
+        artifact_paths = {artifact["path"] for artifact in payload["artifacts"]}
+        self.assertIn("/mock/home/openmc-runs/c5g7/mgxs_library.h5", artifact_paths)
+
+    def test_mock_mode_two_step_plan_has_export_and_convert_commands(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.post(
+            "/api/openmc-workflow/plan",
+            json={
+                "workflow": "two-step",
+                "recipe_path": "/mock/home/openmc-runs/export_recipe.py",
+                "statepoint_path": "/mock/home/openmc-runs/statepoint.h5",
+                "load_statepoint": True,
+                "format": "macrolib",
+                "output_path": "/mock/home/openmc-runs/out.macrolib.txt",
+                "run_dir": "/mock/home/openmc-runs/c5g7",
+                "keep_hdf5_path": "/mock/home/openmc-runs/c5g7/mgxs_library.h5",
+                "check": True,
+                "production": True,
+                "strict_dry_run": False,
+                "equivalence": "direct",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        labels = [command["label"] for command in payload["commands"]]
+        self.assertEqual(labels, ["Export MGXS HDF5", "Convert HDF5 to ASCII"])
+        export_text, convert_text = [command["text"] for command in payload["commands"]]
+        self.assertIn("openmc2donjon-export", export_text)
+        self.assertIn("openmc2donjon /mock/home/openmc-runs/c5g7/mgxs_library.h5", convert_text)
+        self.assertIn("--format macrolib", convert_text)
+        self.assertIn("--check", convert_text)
+        self.assertIn("--production", convert_text)
+
+    def test_mock_mode_two_step_adf_inserts_augment_command(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.post(
+            "/api/openmc-workflow/plan",
+            json={
+                "workflow": "two-step",
+                "recipe_path": "/mock/home/openmc-runs/export_recipe.py",
+                "statepoint_path": "/mock/home/openmc-runs/statepoint.h5",
+                "load_statepoint": True,
+                "format": "multicompo",
+                "output_path": "/mock/home/openmc-runs/out.mcompo.txt",
+                "run_dir": "/mock/home/openmc-runs/c5g7",
+                "keep_hdf5_path": "/mock/home/openmc-runs/c5g7/mgxs_library.h5",
+                "check": True,
+                "production": False,
+                "equivalence": "adf",
+                "adf_source": "/mock/home/openmc-runs/c5g7/adf_sidecar.h5",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        labels = [command["label"] for command in payload["commands"]]
+        self.assertEqual(labels, ["Export MGXS HDF5", "Inject ADF/DF", "Convert HDF5 to ASCII"])
+        augment_text = payload["commands"][1]["text"]
+        convert_text = payload["commands"][2]["text"]
+        self.assertIn("augment-adf", augment_text)
+        self.assertIn("--adf-source /mock/home/openmc-runs/c5g7/adf_sidecar.h5", augment_text)
+        self.assertIn("/mock/home/openmc-runs/c5g7/mgxs_library_adf.h5", convert_text)
+        artifact_paths = {artifact["path"] for artifact in payload["artifacts"]}
+        self.assertIn("/mock/home/openmc-runs/c5g7/mgxs_library_adf.h5", artifact_paths)
+
+    def test_live_mode_reports_missing_recipe_as_not_ready(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=False))
+        response = client.post(
+            "/api/openmc-workflow/plan",
+            json={
+                "workflow": "one-step",
+                "recipe_path": "/definitely/missing/export_recipe.py",
+                "statepoint_path": "",
+                "load_statepoint": False,
+                "format": "multicompo",
+                "output_path": "/tmp/out.mcompo.txt",
+                "run_dir": "",
+                "keep_hdf5_path": "/tmp/mgxs_library.h5",
+                "check": True,
+                "production": False,
+                "equivalence": "direct",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload["ok"])
+        checks = {check["name"]: check for check in payload["checks"]}
+        self.assertEqual(checks["recipe"]["status"], "fail")
+        self.assertIn("not found", checks["recipe"]["message"])
+        self.assertEqual(checks["statepoint"]["status"], "skipped")
+
+    def test_rejects_invalid_h_factor_default(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.post(
+            "/api/openmc-workflow/plan",
+            json={
+                "workflow": "one-step",
+                "recipe_path": "/mock/home/openmc-runs/export_recipe.py",
+                "format": "multicompo",
+                "h_factor_default": "not-a-number",
+            },
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("h_factor_default", response.json()["detail"])
+
+
+@unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
 class AuditEndpointTests(unittest.TestCase):
     def test_mock_mode_returns_bundled_sph_loop_fixture(self) -> None:
         from openmc2donjon.web.server import AUDIT_SCHEMA, create_app

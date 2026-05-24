@@ -11,6 +11,7 @@ type Item = {
 const ITEMS: Item[] = [
   { href: "/", label: "Home" },
   { href: "/commands", label: "Commands" },
+  { href: "/openmc", label: "OpenMC" },
   { href: "/convert", label: "Convert" },
   { href: "/inspect", label: "Inspect" },
   { href: "/audit", label: "Audit" },

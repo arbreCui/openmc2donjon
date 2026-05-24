@@ -481,6 +481,70 @@ export interface TextPreview {
   text: string;
 }
 
+export type OpenmcWorkflowKind = "one-step" | "two-step";
+export type OpenmcEquivalenceMode = "direct" | "adf" | "sph" | "flux-ratio-adf";
+
+export interface OpenmcWorkflowRequest {
+  workflow: OpenmcWorkflowKind;
+  recipe_path: string;
+  statepoint_path: string;
+  load_statepoint: boolean;
+  format: ConvertFormat;
+  output_path: string;
+  run_dir: string;
+  keep_hdf5_path: string;
+  check: boolean;
+  production: boolean;
+  strict_dry_run: boolean;
+  h_factor_default: number | null;
+  require_known_energy_mesh: boolean;
+  warn_unknown_energy_mesh: boolean;
+  equivalence: OpenmcEquivalenceMode;
+  adf_source: string;
+  sph_source: string;
+  build_flux_ratio_adf: boolean;
+}
+
+export interface OpenmcWorkflowStep {
+  id: string;
+  title: string;
+  summary: string;
+}
+
+export interface OpenmcWorkflowArtifact {
+  label: string;
+  path: string;
+  kind: string;
+  will_write: boolean;
+}
+
+export interface OpenmcWorkflowCheck {
+  name: string;
+  status: "pass" | "warn" | "fail" | "skipped";
+  message: string;
+}
+
+export interface OpenmcWorkflowCommand {
+  label: string;
+  argv: string[];
+  text: string;
+}
+
+export interface OpenmcWorkflowPlan {
+  schema: string;
+  ok: boolean;
+  mock_mode: boolean;
+  workflow: OpenmcWorkflowKind;
+  workflow_label: string;
+  equivalence: OpenmcEquivalenceMode;
+  steps: OpenmcWorkflowStep[];
+  artifacts: OpenmcWorkflowArtifact[];
+  checks: OpenmcWorkflowCheck[];
+  commands: OpenmcWorkflowCommand[];
+  primary_command_text: string;
+  next_actions: string[];
+}
+
 export type CommandStatus = "ready" | "partial" | "planned";
 
 export interface CommandGroup {
@@ -524,6 +588,8 @@ export const api = {
       max_bytes: maxBytes,
       max_lines: maxLines,
     }),
+  openmcWorkflowPlan: (request: OpenmcWorkflowRequest) =>
+    postJson<OpenmcWorkflowPlan>("/api/openmc-workflow/plan", request),
   inspect: (path: string) =>
     getJson<HandoffInspection>("/api/inspect", { path }),
   inspectMixture: (path: string, mixture: string, moment: number = 0) =>
