@@ -30,6 +30,7 @@ echo "== openmc2donjon minimal SPH loop minicase =="
 "$PYTHON_BIN" -m openmc2donjon.cli check "$MGXS" \
   --require-volume \
   --require-transport-dataset \
+  --require-std-dev-coverage \
   --scatter-row-balance-fail 1e-12
 
 "$PYTHON_BIN" -m openmc2donjon.cli run-sph-loop \
@@ -157,6 +158,9 @@ assert summary["final_ascii"].endswith("corrected.macrolib.txt")
 
 checks = {item["name"]: item for item in summary["acceptance"]["checks"]}
 assert checks["require_artifact_metadata_alignment"]["passed"] is True
+assert checks["require_mgxs_std_dev_coverage"]["passed"] is True
+assert summary["flux_map_preflight"]["mgxs_std_dev_datasets"] == 12
+assert summary["flux_map_preflight"]["mgxs_std_dev_expected_datasets"] == 12
 metadata = summary["artifact_metadata"]
 assert metadata["reference_flux"]["group_order"] == "mgxs_donjon"
 assert metadata["reference_flux"]["mixture_names"] == ["FUEL_ASM", "REFL_ASM"]

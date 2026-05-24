@@ -129,24 +129,46 @@ def _write_mixture(
     group.attrs["source_domain_index"] = int(source_domain_index)
     group.attrs["source_domain_id"] = int(source_domain_id)
     group.attrs["source_domain_type"] = "assembly"
-    group.create_dataset("total", data=total)
-    group.create_dataset("absorption", data=absorption)
-    group.create_dataset(
-        "fission",
-        data=np.array([0.01, 0.03]) if fissionable else np.zeros(2),
-    )
-    group.create_dataset(
-        "nu_fission",
-        data=np.array([0.025, 0.075]) if fissionable else np.zeros(2),
-    )
+    _create_mean_and_std_dev(group, "total", total)
+    _create_mean_and_std_dev(group, "absorption", absorption)
+    fission = np.array([0.01, 0.03]) if fissionable else np.zeros(2)
+    nu_fission = np.array([0.025, 0.075]) if fissionable else np.zeros(2)
+    chi = np.array([1.0, 0.0]) if fissionable else np.zeros(2)
+    group.create_dataset("fission", data=fission)
+    group.create_dataset("nu_fission", data=nu_fission)
+    group.create_dataset("chi", data=chi)
     if fissionable:
-        group.create_dataset("kappa_fission", data=np.array([3.2e-12, 3.1e-12]))
-    group.create_dataset(
-        "chi",
-        data=np.array([1.0, 0.0]) if fissionable else np.zeros(2),
-    )
-    group.create_dataset("scatter_matrix", data=scatter)
-    group.create_dataset("transport_total", data=transport)
+        _create_std_dev(group, "fission_std_dev", fission)
+        _create_std_dev(group, "nu_fission_std_dev", nu_fission)
+        _create_std_dev(group, "chi_std_dev", chi)
+        _create_mean_and_std_dev(
+            group,
+            "kappa_fission",
+            np.array([3.2e-12, 3.1e-12]),
+        )
+    _create_mean_and_std_dev(group, "scatter_matrix", scatter)
+    _create_mean_and_std_dev(group, "transport_total", transport)
+
+
+def _create_mean_and_std_dev(
+    group: h5py.Group,
+    name: str,
+    values: np.ndarray,
+) -> None:
+    group.create_dataset(name, data=values)
+    _create_std_dev(group, f"{name}_std_dev", values)
+
+
+def _create_std_dev(
+    group: h5py.Group,
+    name: str,
+    mean_values: np.ndarray,
+) -> None:
+    values = np.asarray(mean_values, dtype=float)
+    # Synthetic but production-shaped: all eligible MGXS means carry
+    # matching non-negative std_dev arrays so the strict coverage gate can
+    # be exercised without making the minicase statistically meaningful.
+    group.create_dataset(name, data=np.abs(values) * 1.0e-3)
 
 
 def _write_reference_flux(path: Path) -> None:
@@ -201,6 +223,7 @@ def _write_config(path: Path, *, driver: Path, python_bin: str) -> None:
         },
         "acceptance": {
             "preset": "production",
+            "require_mgxs_std_dev_coverage": True,
         },
         "solver": {
             "command": [

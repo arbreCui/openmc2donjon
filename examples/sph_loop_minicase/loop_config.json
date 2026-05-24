@@ -6,6 +6,7 @@
     "min_completed_iterations": 2,
     "require_converged": true,
     "require_final_solve": true,
+    "require_mgxs_std_dev_coverage": true,
     "sph_maximum_ceiling": 1.0,
     "sph_minimum_floor": 0.5
   },

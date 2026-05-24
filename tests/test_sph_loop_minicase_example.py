@@ -60,6 +60,11 @@ class SphLoopMinicaseExampleTests(unittest.TestCase):
                 )
                 self.assertIn("transport_total", h5["mixtures/FUEL_ASM"])
                 self.assertIn("kappa_fission", h5["mixtures/FUEL_ASM"])
+                self.assertIn("total_std_dev", h5["mixtures/FUEL_ASM"])
+                self.assertIn("scatter_matrix_std_dev", h5["mixtures/FUEL_ASM"])
+                self.assertIn("kappa_fission_std_dev", h5["mixtures/FUEL_ASM"])
+                self.assertIn("transport_total_std_dev", h5["mixtures/REFL_ASM"])
+                self.assertNotIn("fission_std_dev", h5["mixtures/REFL_ASM"])
                 np.testing.assert_allclose(
                     h5["energy_bounds"][:],
                     [1.0e-5, 1.0, 1.0e7],
@@ -90,6 +95,10 @@ class SphLoopMinicaseExampleTests(unittest.TestCase):
             self.assertEqual(payload["iterations"], 2)
             self.assertEqual(payload["damping"], 0.5)
             self.assertEqual(payload["acceptance"]["preset"], "production")
+            self.assertEqual(
+                payload["acceptance"]["require_mgxs_std_dev_coverage"],
+                True,
+            )
             self.assertEqual(payload["solver"]["result"], "low_order_flux.result")
             self.assertIn("{ascii_input}", payload["solver"]["command"])
             self.assertIn("{result}", payload["solver"]["command"])
@@ -119,6 +128,10 @@ class SphLoopMinicaseExampleTests(unittest.TestCase):
             self.assertEqual(plan.normalized_acceptance["require_mgxs_h_factor"], True)
             self.assertEqual(
                 plan.normalized_acceptance["require_mgxs_energy_bounds"],
+                True,
+            )
+            self.assertEqual(
+                plan.normalized_acceptance["require_mgxs_std_dev_coverage"],
                 True,
             )
 
@@ -171,6 +184,12 @@ class SphLoopMinicaseExampleTests(unittest.TestCase):
             checks = {item["name"]: item for item in payload["acceptance"]["checks"]}
             self.assertTrue(checks["require_artifact_metadata_alignment"]["passed"])
             self.assertTrue(checks["require_production_audit"]["passed"])
+            self.assertTrue(checks["require_mgxs_std_dev_coverage"]["passed"])
+            self.assertEqual(payload["flux_map_preflight"]["mgxs_std_dev_datasets"], 12)
+            self.assertEqual(
+                payload["flux_map_preflight"]["mgxs_std_dev_expected_datasets"],
+                12,
+            )
             metadata = payload["artifact_metadata"]
             self.assertEqual(
                 metadata["reference_flux"]["mixture_names"],
@@ -316,6 +335,7 @@ class SphLoopMinicaseExampleTests(unittest.TestCase):
         self.assertIn("make_real_config.py", text)
         self.assertIn("run-sph-loop", text)
         self.assertIn("validate-bundle", text)
+        self.assertIn("--require-std-dev-coverage", text)
         self.assertIn("openmc2donjon.donjon_deck_runner", text)
         self.assertIn("--dry-run", text)
         self.assertIn("corrected.macrolib.txt", text)
