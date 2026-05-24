@@ -100,6 +100,8 @@ function ConvertSummary({ data }: { data: ConvertResponse }) {
           <Meta label="Preflight" value={data.preflight_ok ? "pass" : "fail"} />
         </dl>
 
+        {input ? <PreflightDecisionPanel data={data} input={input} /> : null}
+
         <PostConvertActions data={data} />
 
         <div className="mt-4">
@@ -156,6 +158,67 @@ function WorkflowStepper({ statuses }: { statuses: Record<string, StepStatus> })
   );
 }
 
+function PreflightDecisionPanel({
+  data,
+  input,
+}: {
+  data: ConvertResponse;
+  input: ConvertPreflightInput;
+}) {
+  const outputIssue = data.preflight?.output_issue ?? null;
+  return (
+    <section className="mt-4 rounded-lg border border-[var(--edge)] bg-black/15 p-3">
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <DecisionTile
+          label="mode"
+          value={preflightMode(data)}
+          tone={data.cli_command.includes("--production") ? "accent" : "neutral"}
+        />
+        <DecisionTile
+          label="decision"
+          value={humanDecision(data.preflight?.decision)}
+          tone={data.preflight_ok ? "pass" : "fail"}
+        />
+        <DecisionTile
+          label="issues"
+          value={String(input.issues.length)}
+          tone={input.issues.length === 0 ? "pass" : "fail"}
+        />
+        <DecisionTile
+          label="warnings"
+          value={String(input.warnings.length)}
+          tone={input.warnings.length === 0 ? "pass" : "warn"}
+        />
+      </div>
+      {outputIssue ? (
+        <div className="mt-3 rounded-md border border-amber-300/20 bg-amber-300/[0.06] px-3 py-2 text-sm text-amber-100">
+          <span className="font-semibold">Output issue:</span>{" "}
+          <span className="text-[var(--fg-1)]">{outputIssue}</span>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function DecisionTile({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: "pass" | "warn" | "fail" | "accent" | "neutral";
+}) {
+  return (
+    <div className={"rounded-md border px-3 py-2 " + decisionTileClass(tone)}>
+      <div className="text-[10px] uppercase tracking-[0.14em] opacity-70">
+        {label}
+      </div>
+      <div className="mt-1 font-mono text-[13px]">{value}</div>
+    </div>
+  );
+}
+
 function PostConvertActions({ data }: { data: ConvertResponse }) {
   const notice = outputNotice(data);
   return (
@@ -198,16 +261,18 @@ function GateCards({
   input: ConvertPreflightInput;
 }) {
   const gates = buildGates(data, input);
+  const production = data.cli_command.includes("--production");
   return (
     <section>
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold tracking-tight">
-            Production gates
+            {production ? "Production gates" : "Preflight gates"}
           </h2>
           <p className="mt-1 text-sm text-[var(--fg-2)]">
-            A compact view of the checks that decide whether this HDF5 is ready
-            to become DONJON input.
+            {production
+              ? "Strict acceptance checks for a production DONJON handoff."
+              : "Basic contract and output checks before writing ASCII."}
           </p>
         </div>
       </div>
@@ -487,6 +552,14 @@ function outputNoticeClass(tone: "pass" | "warn" | "fail" | "neutral") {
   return "border-[var(--edge)] bg-white/[0.03] text-[var(--fg-2)]";
 }
 
+function decisionTileClass(tone: "pass" | "warn" | "fail" | "accent" | "neutral") {
+  if (tone === "pass") return "border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-100";
+  if (tone === "warn") return "border-amber-400/25 bg-amber-400/[0.06] text-amber-100";
+  if (tone === "fail") return "border-rose-400/25 bg-rose-400/[0.06] text-rose-100";
+  if (tone === "accent") return "border-cyan-300/25 bg-cyan-300/[0.06] text-cyan-100";
+  return "border-[var(--edge)] bg-white/[0.02] text-[var(--fg-1)]";
+}
+
 function stepStatuses(state: ConvertRunState): Record<string, StepStatus> {
   if (state.kind === "idle") {
     return {
@@ -569,6 +642,17 @@ function statusLabel(status: StepStatus) {
   if (status === "current") return "active";
   if (status === "fail") return "failed";
   return "pending";
+}
+
+function preflightMode(data: ConvertResponse): string {
+  if (data.cli_command.includes("--production")) return "production";
+  if (data.cli_command.includes("--check") || data.preflight) return "preflight";
+  return "none";
+}
+
+function humanDecision(value: string | null | undefined): string {
+  if (!value) return "not reported";
+  return value.replaceAll("_", " ");
 }
 
 function coverage(input: ConvertPreflightInput): string | null {
