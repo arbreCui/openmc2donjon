@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   C5G7_PRODUCTION_DEMO,
+  PRODUCTION_MINICASE_COMMAND,
+  PRODUCTION_MINICASE_DEMO,
   convertDemoHref,
   convertDemoInspectHref,
   convertDemoWalkthrough,
@@ -17,6 +19,19 @@ describe("convert demo presets", () => {
     expect(C5G7_PRODUCTION_DEMO.format).toBe("multicompo");
     expect(C5G7_PRODUCTION_DEMO.check).toBe(true);
     expect(C5G7_PRODUCTION_DEMO.production).toBe(true);
+  });
+
+  it("points the live minicase preset at the smoke-run managed output", () => {
+    expect(PRODUCTION_MINICASE_COMMAND).toBe(
+      "bash scripts/run_production_minicase_smoke.sh",
+    );
+    expect(PRODUCTION_MINICASE_DEMO.inputPath).toBe(
+      "/private/tmp/openmc2donjon_production_minicase_smoke/openmc2donjon_run/mgxs_library.h5",
+    );
+    expect(PRODUCTION_MINICASE_DEMO.outputPath).toBe(
+      "/private/tmp/openmc2donjon_production_minicase_smoke/openmc2donjon_run/web_repeat.mcompo.txt",
+    );
+    expect(PRODUCTION_MINICASE_DEMO.production).toBe(true);
   });
 
   it("builds stable deep links for the converter walkthrough", () => {

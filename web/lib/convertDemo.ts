@@ -33,6 +33,24 @@ export const C5G7_PRODUCTION_DEMO: ConvertDemoPreset = {
   requireKnownMesh: false,
 };
 
+export const PRODUCTION_MINICASE_DEMO: ConvertDemoPreset = {
+  id: "production-minicase-live",
+  label: "Production minicase",
+  description:
+    "Generate a tiny real OpenMC handoff with the repository smoke, then review and repeat the direct MULTICOMPO conversion from the localhost UI.",
+  inputPath:
+    "/private/tmp/openmc2donjon_production_minicase_smoke/openmc2donjon_run/mgxs_library.h5",
+  outputPath:
+    "/private/tmp/openmc2donjon_production_minicase_smoke/openmc2donjon_run/web_repeat.mcompo.txt",
+  format: "multicompo",
+  check: true,
+  production: true,
+  requireKnownMesh: false,
+};
+
+export const PRODUCTION_MINICASE_COMMAND =
+  "bash scripts/run_production_minicase_smoke.sh";
+
 export function convertDemoHref(preset: ConvertDemoPreset): string {
   const params = new URLSearchParams({
     intent: "direct-convert",
