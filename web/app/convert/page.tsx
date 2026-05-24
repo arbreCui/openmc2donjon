@@ -368,7 +368,7 @@ export default function ConvertPage() {
         />
 
         <section className="mt-6">
-          <ConvertReport state={state} />
+          <ConvertReport state={state} onConvert={() => void run("convert")} />
         </section>
       </div>
     </main>

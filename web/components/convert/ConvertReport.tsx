@@ -21,16 +21,28 @@ const STEPS = [
   { id: "review", label: "Review" },
 ] as const;
 
-export default function ConvertReport({ state }: { state: ConvertRunState }) {
+export default function ConvertReport({
+  state,
+  onConvert,
+}: {
+  state: ConvertRunState;
+  onConvert?: () => void;
+}) {
   return (
     <div className="space-y-4">
       <WorkflowStepper statuses={stepStatuses(state)} />
-      <ResultBody state={state} />
+      <ResultBody state={state} onConvert={onConvert} />
     </div>
   );
 }
 
-function ResultBody({ state }: { state: ConvertRunState }) {
+function ResultBody({
+  state,
+  onConvert,
+}: {
+  state: ConvertRunState;
+  onConvert?: () => void;
+}) {
   if (state.kind === "idle") {
     return (
       <section className="glass rounded-xl p-5">
@@ -63,10 +75,16 @@ function ResultBody({ state }: { state: ConvertRunState }) {
       </section>
     );
   }
-  return <ConvertSummary data={state.data} />;
+  return <ConvertSummary data={state.data} onConvert={onConvert} />;
 }
 
-function ConvertSummary({ data }: { data: ConvertResponse }) {
+function ConvertSummary({
+  data,
+  onConvert,
+}: {
+  data: ConvertResponse;
+  onConvert?: () => void;
+}) {
   const input = data.preflight?.inputs[0] ?? null;
   const headline = data.dry_run
     ? "Dry run complete"
@@ -102,7 +120,7 @@ function ConvertSummary({ data }: { data: ConvertResponse }) {
 
         {input ? <PreflightDecisionPanel data={data} input={input} /> : null}
 
-        <PostConvertActions data={data} />
+        <PostConvertActions data={data} onConvert={onConvert} />
 
         <div className="mt-4">
           <div className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
@@ -219,8 +237,15 @@ function DecisionTile({
   );
 }
 
-function PostConvertActions({ data }: { data: ConvertResponse }) {
+function PostConvertActions({
+  data,
+  onConvert,
+}: {
+  data: ConvertResponse;
+  onConvert?: () => void;
+}) {
   const notice = outputNotice(data);
+  const canConvertNow = data.dry_run && data.ok && !data.output_exists && onConvert;
   return (
     <div className="mt-4 space-y-3">
       <div className="flex flex-wrap gap-2">
@@ -230,6 +255,11 @@ function PostConvertActions({ data }: { data: ConvertResponse }) {
         >
           Inspect input
         </Link>
+        {canConvertNow ? (
+          <button type="button" onClick={onConvert} className="btn btn-primary">
+            Convert now
+          </button>
+        ) : null}
         <CopyCliButton
           value={data.output_path}
           label="Copy output path"
