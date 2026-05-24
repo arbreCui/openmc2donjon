@@ -196,11 +196,13 @@ def create_app(
     @app.get("/api/audit")
     def api_audit(path: str = Query(..., min_length=1)) -> dict[str, Any]:
         # Returns the raw ``run-sph-loop`` summary JSON. The frontend
-        # decides which sections to surface; the schema field on the
-        # payload (when present) lets it tell a real summary apart from
-        # an arbitrary JSON the user pointed at.
+        # decides which sections to surface, but the backend still
+        # validates the fields M6-A dereferences so an arbitrary JSON
+        # object can't crash the page at render time.
         if mock_mode:
-            return _load_fixture("audit_sph_loop.json")
+            payload = _load_fixture("audit_sph_loop.json")
+            _validate_audit_summary_payload(payload, HTTPException)
+            return payload
         real_path = _validate_audit_path(path, HTTPException)
         try:
             payload = json.loads(real_path.read_text(encoding="utf-8"))
@@ -213,6 +215,7 @@ def create_app(
                 status_code=422,
                 detail="audit file is not a JSON object",
             )
+        _validate_audit_summary_payload(payload, HTTPException)
         return payload
 
     if mock_mode:
@@ -247,9 +250,8 @@ def _validate_hdf5_path(raw: str, http_exception: Any) -> Path:
 def _validate_audit_path(raw: str, http_exception: Any) -> Path:
     """Resolve a user-supplied path and confirm it is a regular file.
 
-    The audit endpoint accepts any JSON file; schema-level validation
-    is deferred to the frontend so users can point at near-misses (an
-    older summary, a partial one) and still see what's there.
+    Schema-level validation happens after parsing so users get a
+    precise 422 when the file is JSON but not a SPH loop summary.
     """
 
     real = Path(raw).expanduser().resolve()
@@ -258,6 +260,85 @@ def _validate_audit_path(raw: str, http_exception: Any) -> Path:
     if not real.is_file():
         raise http_exception(status_code=400, detail=f"path is not a file: {raw}")
     return real
+
+
+def _validate_audit_summary_payload(payload: dict[str, Any], http_exception: Any) -> None:
+    """Validate the SPH-loop summary fields consumed by the M6-A page."""
+
+    errors: list[str] = []
+    _require_type(payload, "schema", str, errors)
+    if payload.get("schema") != AUDIT_SCHEMA:
+        errors.append(f"schema must be {AUDIT_SCHEMA!r}")
+    for key in ("decision", "package_version", "stop_reason"):
+        _require_type(payload, key, str, errors)
+    for key in ("iterations", "completed_iterations"):
+        _require_type(payload, key, int, errors)
+    for key in ("converged", "convergence_enabled"):
+        _require_type(payload, key, bool, errors)
+
+    acceptance = payload.get("acceptance")
+    if not isinstance(acceptance, dict):
+        errors.append("acceptance must be an object")
+    else:
+        _validate_audit_gate("acceptance", acceptance, require_errors=False, errors=errors)
+
+    production_audit = payload.get("production_audit")
+    if not isinstance(production_audit, dict):
+        errors.append("production_audit must be an object")
+    else:
+        _validate_audit_gate(
+            "production_audit",
+            production_audit,
+            require_errors=True,
+            errors=errors,
+        )
+
+    if errors:
+        raise http_exception(
+            status_code=422,
+            detail="invalid SPH loop summary: " + "; ".join(errors),
+        )
+
+
+def _validate_audit_gate(
+    name: str,
+    payload: dict[str, Any],
+    *,
+    require_errors: bool,
+    errors: list[str],
+) -> None:
+    _require_type(payload, "passed", bool, errors, prefix=name)
+    if name == "acceptance":
+        _require_type(payload, "enabled", bool, errors, prefix=name)
+    checks = payload.get("checks")
+    if not isinstance(checks, list):
+        errors.append(f"{name}.checks must be a list")
+    else:
+        for index, item in enumerate(checks):
+            if not isinstance(item, dict):
+                errors.append(f"{name}.checks[{index}] must be an object")
+                continue
+            _require_type(item, "passed", bool, errors, prefix=f"{name}.checks[{index}]")
+    if require_errors:
+        gate_errors = payload.get("errors")
+        if not isinstance(gate_errors, list) or not all(
+            isinstance(item, str) for item in gate_errors
+        ):
+            errors.append(f"{name}.errors must be a list of strings")
+
+
+def _require_type(
+    payload: dict[str, Any],
+    key: str,
+    expected: type,
+    errors: list[str],
+    *,
+    prefix: str | None = None,
+) -> None:
+    value = payload.get(key)
+    if not isinstance(value, expected) or (expected is int and isinstance(value, bool)):
+        qualified = key if prefix is None else f"{prefix}.{key}"
+        errors.append(f"{qualified} must be {expected.__name__}")
 
 
 def _read_top_level_peek(real_path: Path) -> dict[str, Any]:

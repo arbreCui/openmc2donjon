@@ -63,6 +63,43 @@ def _write_fake_hdf5(path: Path) -> None:
             scatter_dataset.attrs["axes"] = "moment,from,to"
 
 
+def _minimal_sph_loop_summary() -> dict[str, object]:
+    return {
+        "schema": "openmc2donjon.sph-loop.v1",
+        "decision": "openmc2donjon_sph_loop_passed",
+        "package_version": "0.1.2",
+        "iterations": 2,
+        "completed_iterations": 2,
+        "converged": True,
+        "convergence_enabled": True,
+        "stop_reason": "converged",
+        "acceptance": {
+            "enabled": True,
+            "passed": True,
+            "checks": [
+                {
+                    "name": "require_converged",
+                    "actual": True,
+                    "limit": True,
+                    "passed": True,
+                },
+            ],
+        },
+        "production_audit": {
+            "passed": True,
+            "errors": [],
+            "checks": [
+                {
+                    "name": "require_production_audit",
+                    "actual": True,
+                    "limit": True,
+                    "passed": True,
+                },
+            ],
+        },
+    }
+
+
 @unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
 class HealthEndpointTests(unittest.TestCase):
     def test_live_mode_payload(self) -> None:
@@ -688,6 +725,47 @@ class AuditEndpointTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             summary_path = Path(tmp) / "sph_loop_summary.json"
             summary_path.write_text(
+                json.dumps(_minimal_sph_loop_summary()),
+                encoding="utf-8",
+            )
+
+            client = TestClient(create_app(mock_mode=False))
+            response = client.get(
+                "/api/audit", params={"path": str(summary_path)},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["decision"], "openmc2donjon_sph_loop_passed",
+        )
+
+    def test_live_mode_rejects_wrong_audit_schema(self) -> None:
+        import json
+
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            summary = _minimal_sph_loop_summary()
+            summary["schema"] = "openmc2donjon.other.v1"
+            summary_path = Path(tmp) / "wrong_schema.json"
+            summary_path.write_text(json.dumps(summary), encoding="utf-8")
+
+            client = TestClient(create_app(mock_mode=False))
+            response = client.get(
+                "/api/audit", params={"path": str(summary_path)},
+            )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("schema must be", response.json()["detail"])
+
+    def test_live_mode_rejects_incomplete_audit_summary(self) -> None:
+        import json
+
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            summary_path = Path(tmp) / "partial_summary.json"
+            summary_path.write_text(
                 json.dumps(
                     {
                         "schema": "openmc2donjon.sph-loop.v1",
@@ -703,10 +781,11 @@ class AuditEndpointTests(unittest.TestCase):
                 "/api/audit", params={"path": str(summary_path)},
             )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            response.json()["decision"], "openmc2donjon_sph_loop_passed",
-        )
+        self.assertEqual(response.status_code, 422)
+        detail = response.json()["detail"]
+        self.assertIn("invalid SPH loop summary", detail)
+        self.assertIn("acceptance must be an object", detail)
+        self.assertIn("production_audit must be an object", detail)
 
     def test_live_mode_path_not_found_returns_404(self) -> None:
         from openmc2donjon.web.server import create_app
