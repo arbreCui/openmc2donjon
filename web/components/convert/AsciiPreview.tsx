@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { ApiError, TextPreview, api } from "@/lib/api";
-import { analyzeDonjonAsciiPreview } from "@/lib/asciiPreview";
+import {
+  analyzeDonjonAsciiPreview,
+  type LcmBlockPreview,
+} from "@/lib/asciiPreview";
 
 type PreviewState =
   | { kind: "idle" }
@@ -133,9 +136,67 @@ function PreviewBody({ state }: { state: PreviewState }) {
           </div>
         </div>
       </div>
+      {analysis.blockTree.length > 0 ? (
+        <LcmBlockTree
+          blocks={analysis.blockTree}
+          truncated={analysis.blockTreeTruncated}
+        />
+      ) : null}
       <pre className="max-h-[34rem] overflow-auto rounded-md border border-[var(--edge)] bg-black/25 px-3 py-3 font-mono text-[12px] leading-5 text-[var(--fg-1)]">
         {data.text || "(empty file)"}
       </pre>
+    </div>
+  );
+}
+
+function LcmBlockTree({
+  blocks,
+  truncated,
+}: {
+  blocks: LcmBlockPreview[];
+  truncated: boolean;
+}) {
+  return (
+    <div className="rounded-md border border-[var(--edge)] bg-black/15 p-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+            LCM block tree
+          </div>
+          <p className="mt-1 text-[12px] text-[var(--fg-3)]">
+            Header-level view of the visible ASCII slice.
+          </p>
+        </div>
+        {truncated ? (
+          <span className="rounded border border-amber-300/25 bg-amber-300/[0.06] px-2 py-1 text-[11px] text-amber-100">
+            first {blocks.length} blocks
+          </span>
+        ) : null}
+      </div>
+
+      <div className="mt-3 overflow-x-auto rounded border border-[var(--edge)] bg-black/20">
+        {blocks.map((block) => (
+          <div
+            key={block.id}
+            className="grid min-w-[34rem] grid-cols-[1fr_84px_84px] items-center gap-3 border-b border-[var(--edge)] px-3 py-1.5 text-[12px] last:border-b-0"
+          >
+            <div
+              className="min-w-0 truncate font-mono text-[var(--fg-1)]"
+              style={{ paddingLeft: `${Math.min((block.level - 1) * 14, 98)}px` }}
+              title={block.name}
+            >
+              <span className="mr-2 text-[var(--fg-3)]">L{block.level}</span>
+              {block.name}
+            </div>
+            <div className="font-mono text-[var(--fg-2)]">
+              {typeLabel(block.type)}
+            </div>
+            <div className="font-mono text-[var(--fg-2)]">
+              count {block.count}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -154,6 +215,15 @@ function BlockChip({ label, present }: { label: string; present: boolean }) {
       {label}
     </span>
   );
+}
+
+function typeLabel(type: number): string {
+  if (type === 0) return "dir";
+  if (type === 10) return "list";
+  if (type === 1) return "int";
+  if (type === 2) return "real8";
+  if (type === 3) return "string";
+  return `type ${type}`;
 }
 
 function toPreviewError(err: unknown): Extract<PreviewState, { kind: "error" }> {

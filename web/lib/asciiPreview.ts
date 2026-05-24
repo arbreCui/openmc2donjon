@@ -6,16 +6,28 @@ export interface BlockHit {
   present: boolean;
 }
 
+export interface LcmBlockPreview {
+  id: string;
+  level: number;
+  type: number;
+  count: number;
+  name: string;
+}
+
 export interface AsciiPreviewAnalysis {
   format: DonjonAsciiFormat;
   signature: string | null;
   likelyDonjonAscii: boolean;
   blockHits: BlockHit[];
+  blockTree: LcmBlockPreview[];
+  blockTreeTruncated: boolean;
   notes: string[];
 }
 
 const MULTICOMPO_SIGNATURE = "L_MULTICOMPO";
 const MACROLIB_SIGNATURE = "L_MACROLIB";
+const MAX_BLOCK_TREE_ITEMS = 18;
+const BLOCK_HEADER_RE = /^\s*->\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+<-/;
 
 export function analyzeDonjonAsciiPreview(text: string): AsciiPreviewAnalysis {
   const lineSet = new Set(
@@ -26,6 +38,8 @@ export function analyzeDonjonAsciiPreview(text: string): AsciiPreviewAnalysis {
   );
   const signature = signatureFromText(text);
   const format = formatFromSignature(signature);
+  const allBlocks = parseLcmBlocks(text);
+  const blockTree = allBlocks.slice(0, MAX_BLOCK_TREE_ITEMS);
   const blockHits = [
     blockHit("signature", "SIGNATURE", lineSet.has("SIGNATURE")),
     blockHit("state", "STATE-VECTOR", lineSet.has("STATE-VECTOR")),
@@ -51,8 +65,34 @@ export function analyzeDonjonAsciiPreview(text: string): AsciiPreviewAnalysis {
     signature,
     likelyDonjonAscii,
     blockHits,
+    blockTree,
+    blockTreeTruncated: allBlocks.length > blockTree.length,
     notes: analysisNotes({ signature, likelyDonjonAscii, blockHits }),
   };
+}
+
+function parseLcmBlocks(text: string): LcmBlockPreview[] {
+  const lines = text.split(/\r?\n/);
+  const blocks: LcmBlockPreview[] = [];
+  for (let index = 0; index < lines.length - 1; index += 1) {
+    const match = lines[index].match(BLOCK_HEADER_RE);
+    if (!match) continue;
+    const [, levelText, , typeText, countText] = match;
+    const level = Number(levelText);
+    const type = Number(typeText);
+    const count = Number(countText);
+    if (level <= 0 || count < 0 || type === 99) continue;
+    const name = lines[index + 1]?.trim();
+    if (!name || BLOCK_HEADER_RE.test(name)) continue;
+    blocks.push({
+      id: `${index}:${level}:${type}:${count}:${name}`,
+      level,
+      type,
+      count,
+      name,
+    });
+  }
+  return blocks;
 }
 
 function signatureFromText(text: string): string | null {
