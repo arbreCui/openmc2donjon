@@ -1,9 +1,13 @@
+"use client";
+
+import { useMemo, useState } from "react";
 import type {
   JsonValue,
   SphLoopAcceptance,
   SphLoopAcceptanceCheck,
   SphLoopProductionAudit,
 } from "@/lib/api";
+import { filterAuditChecks } from "@/lib/auditCheckFilter";
 import type { StdDevCoverageSummary } from "@/lib/stdDevCoverage";
 import { summarizeStdDevCoverage } from "@/lib/stdDevCoverage";
 import type { ReferenceFluxUncertaintySummary } from "@/lib/referenceFluxUncertainty";
@@ -309,47 +313,86 @@ function CheckTable({
   emptyText: string;
   compact?: boolean;
 }) {
+  const [query, setQuery] = useState("");
+  const filteredChecks = useMemo(
+    () => filterAuditChecks(checks, query),
+    [checks, query],
+  );
   if (checks.length === 0) {
     return <p className="mt-4 text-sm text-[var(--fg-3)]">{emptyText}</p>;
   }
   return (
-    <div className="mt-3 overflow-x-auto">
-      <table className="w-full min-w-[680px] border-collapse text-left text-[12px]">
-        <thead className="text-[var(--fg-3)]">
-          <tr className="border-b border-[var(--edge)]">
-            <th className="py-2 pr-3 font-medium">Status</th>
-            <th className="py-2 pr-3 font-medium">Check</th>
-            {!compact ? <th className="py-2 pr-3 font-medium">Actual</th> : null}
-            {!compact ? <th className="py-2 pr-3 font-medium">Limit</th> : null}
-            <th className="py-2 pr-3 font-medium">Message</th>
-          </tr>
-        </thead>
-        <tbody>
-          {checks.map((check, index) => (
-            <tr key={`${check.name}-${index}`} className="border-b border-[var(--edge)] last:border-0">
-              <td className="py-2 pr-3 align-top">
-                <StatusPill passed={check.passed} />
-              </td>
-              <td className="py-2 pr-3 align-top font-mono text-[var(--fg-1)]">
-                {check.name}
-              </td>
-              {!compact ? (
-                <td className="py-2 pr-3 align-top tab-num text-[var(--fg-2)]">
-                  {formatValue(check.actual, check.units)}
-                </td>
-              ) : null}
-              {!compact ? (
-                <td className="py-2 pr-3 align-top tab-num text-[var(--fg-2)]">
-                  {formatValue(check.limit, check.units)}
-                </td>
-              ) : null}
-              <td className="py-2 pr-3 align-top text-[var(--fg-2)]">
-                {check.message ?? "—"}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="mt-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <label className="min-w-0 flex-1">
+          <span className="sr-only">Filter checks</span>
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Filter checks: std_dev, h_factor, scatter..."
+            className="w-full rounded-md border border-[var(--edge)] bg-white/[0.03] px-3 py-2 text-[12px] text-[var(--fg-0)] outline-none transition placeholder:text-[var(--fg-3)] focus:border-emerald-400/50 focus:bg-white/[0.05]"
+          />
+        </label>
+        <div className="flex shrink-0 items-center gap-2 text-[12px] text-[var(--fg-3)] tab-num">
+          <span>
+            {filteredChecks.length} / {checks.length} shown
+          </span>
+          {query.trim() !== "" ? (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              className="rounded-md border border-[var(--edge)] bg-white/[0.03] px-2 py-1 text-[var(--fg-2)] transition hover:border-[var(--edge-bright)] hover:bg-white/[0.06] hover:text-[var(--fg-0)]"
+            >
+              Clear
+            </button>
+          ) : null}
+        </div>
+      </div>
+      {filteredChecks.length === 0 ? (
+        <p className="mt-4 rounded-md border border-[var(--edge)] bg-white/[0.02] p-3 text-sm text-[var(--fg-3)]">
+          No checks match this filter.
+        </p>
+      ) : (
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full min-w-[680px] border-collapse text-left text-[12px]">
+            <thead className="text-[var(--fg-3)]">
+              <tr className="border-b border-[var(--edge)]">
+                <th className="py-2 pr-3 font-medium">Status</th>
+                <th className="py-2 pr-3 font-medium">Check</th>
+                {!compact ? <th className="py-2 pr-3 font-medium">Actual</th> : null}
+                {!compact ? <th className="py-2 pr-3 font-medium">Limit</th> : null}
+                <th className="py-2 pr-3 font-medium">Message</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredChecks.map((check, index) => (
+                <tr key={`${check.name}-${index}`} className="border-b border-[var(--edge)] last:border-0">
+                  <td className="py-2 pr-3 align-top">
+                    <StatusPill passed={check.passed} />
+                  </td>
+                  <td className="py-2 pr-3 align-top font-mono text-[var(--fg-1)]">
+                    {check.name}
+                  </td>
+                  {!compact ? (
+                    <td className="py-2 pr-3 align-top tab-num text-[var(--fg-2)]">
+                      {formatValue(check.actual, check.units)}
+                    </td>
+                  ) : null}
+                  {!compact ? (
+                    <td className="py-2 pr-3 align-top tab-num text-[var(--fg-2)]">
+                      {formatValue(check.limit, check.units)}
+                    </td>
+                  ) : null}
+                  <td className="py-2 pr-3 align-top text-[var(--fg-2)]">
+                    {check.message ?? "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
