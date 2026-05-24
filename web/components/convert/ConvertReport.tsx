@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { ConvertPreflightInput, ConvertResponse } from "@/lib/api";
+import { convertNextSteps } from "@/lib/convertNextSteps";
 import AsciiPreview from "./AsciiPreview";
 import ConversionSummaryStrip from "./ConversionSummaryStrip";
 import HandoffPipeline from "./HandoffPipeline";
@@ -129,6 +131,8 @@ function ConvertSummary({
 
         <OutputActions data={data} onConvert={onConvert} />
 
+        <NextStepsPanel data={data} input={input} />
+
         <div className="mt-4">
           <div className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
             CLI equivalent
@@ -154,6 +158,75 @@ function ConvertSummary({
       ) : null}
     </div>
   );
+}
+
+function NextStepsPanel({
+  data,
+  input,
+}: {
+  data: ConvertResponse;
+  input: ConvertPreflightInput | null;
+}) {
+  const steps = convertNextSteps(data, input);
+  return (
+    <section className="mt-4 rounded-lg border border-[var(--edge)] bg-black/10 p-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <h3 className="text-sm font-semibold tracking-tight">
+          Production handoff next steps
+        </h3>
+        <span className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
+          after convert
+        </span>
+      </div>
+      <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+        {steps.map((step) => (
+          <article
+            key={step.id}
+            className={"rounded-md border px-3 py-2 " + nextStepClass(step.status)}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="rounded border border-current/25 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.14em]">
+                {step.label}
+              </span>
+              {step.href ? <StepLink href={step.href} /> : null}
+            </div>
+            <h4 className="mt-2 text-sm font-semibold tracking-tight">
+              {step.title}
+            </h4>
+            <p className="mt-1 text-[12px] leading-5 text-[var(--fg-2)]">
+              {step.body}
+            </p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function StepLink({ href }: { href: string }) {
+  const label = href.startsWith("#") ? "jump" : "open";
+  if (href.startsWith("#")) {
+    return (
+      <a href={href} className="text-[11px] text-[var(--accent-2)] hover:underline">
+        {label}
+      </a>
+    );
+  }
+  return (
+    <Link href={href} className="text-[11px] text-[var(--accent-2)] hover:underline">
+      {label}
+    </Link>
+  );
+}
+
+function nextStepClass(status: "ready" | "blocked" | "reference"): string {
+  if (status === "ready") {
+    return "border-emerald-400/20 bg-emerald-400/[0.05] text-emerald-100";
+  }
+  if (status === "blocked") {
+    return "border-rose-400/25 bg-rose-400/[0.06] text-rose-100";
+  }
+  return "border-cyan-300/20 bg-cyan-300/[0.045] text-cyan-100";
 }
 
 function ProductionEvidenceStrip({ input }: { input: ConvertPreflightInput }) {
