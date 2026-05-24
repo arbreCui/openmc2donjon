@@ -2,7 +2,19 @@
 
 import { useState } from "react";
 
-export function CopyCliButton({ value, compact = false }: { value: string; compact?: boolean }) {
+export function CopyCliButton({
+  value,
+  compact = false,
+  label = "Copy CLI",
+  copiedLabel = "Copied",
+  ariaLabel,
+}: {
+  value: string;
+  compact?: boolean;
+  label?: string;
+  copiedLabel?: string;
+  ariaLabel?: string;
+}) {
   const [copied, setCopied] = useState(false);
 
   async function copy() {
@@ -15,10 +27,12 @@ export function CopyCliButton({ value, compact = false }: { value: string; compa
     <button
       type="button"
       onClick={copy}
-      className={compact ? "btn btn-secondary px-2 py-1 text-[11px]" : "btn btn-secondary"}
-      aria-label="Copy CLI command"
+      className={
+        compact ? "btn btn-secondary px-2 py-1 text-[11px]" : "btn btn-secondary"
+      }
+      aria-label={ariaLabel ?? label}
     >
-      {copied ? "Copied" : "Copy CLI"}
+      {copied ? copiedLabel : label}
     </button>
   );
 }

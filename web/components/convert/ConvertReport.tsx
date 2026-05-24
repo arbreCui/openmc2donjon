@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { CopyCliButton } from "@/components/commands/CopyCliButton";
 import { ConvertPreflightInput, ConvertResponse } from "@/lib/api";
 import AsciiPreview from "./AsciiPreview";
 
@@ -118,7 +119,9 @@ function ConvertSummary({ data }: { data: ConvertResponse }) {
         </>
       ) : null}
       {data.converted && data.output_exists ? (
-        <AsciiPreview path={data.output_path} />
+        <div id="ascii-output-preview">
+          <AsciiPreview path={data.output_path} />
+        </div>
       ) : null}
     </div>
   );
@@ -154,27 +157,35 @@ function WorkflowStepper({ statuses }: { statuses: Record<string, StepStatus> })
 }
 
 function PostConvertActions({ data }: { data: ConvertResponse }) {
+  const notice = outputNotice(data);
   return (
-    <div className="mt-4 flex flex-wrap gap-2">
-      <Link
-        href={`/inspect?path=${encodeURIComponent(data.input_path)}`}
-        className="btn btn-secondary"
+    <div className="mt-4 space-y-3">
+      <div className="flex flex-wrap gap-2">
+        <Link
+          href={`/inspect?path=${encodeURIComponent(data.input_path)}`}
+          className="btn btn-secondary"
+        >
+          Inspect input
+        </Link>
+        <CopyCliButton
+          value={data.output_path}
+          label="Copy output path"
+          ariaLabel="Copy output path"
+        />
+        {data.converted && data.output_exists ? (
+          <a href="#ascii-output-preview" className="btn btn-secondary">
+            Preview ASCII
+          </a>
+        ) : null}
+      </div>
+      <div
+        className={
+          "rounded-md border px-3 py-2 text-sm " + outputNoticeClass(notice.tone)
+        }
       >
-        Inspect input
-      </Link>
-      {data.converted ? (
-        <span className="rounded-md border border-emerald-400/25 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-200">
-          Output file written
-        </span>
-      ) : data.dry_run ? (
-        <span className="rounded-md border border-[var(--edge)] bg-white/[0.03] px-3 py-2 text-sm text-[var(--fg-2)]">
-          Dry run only: no file written
-        </span>
-      ) : (
-        <span className="rounded-md border border-rose-400/25 bg-rose-400/10 px-3 py-2 text-sm text-rose-200">
-          No output file written
-        </span>
-      )}
+        <span className="font-semibold">{notice.title}</span>
+        <span className="ml-2 text-[var(--fg-1)]">{notice.body}</span>
+      </div>
     </div>
   );
 }
@@ -344,11 +355,7 @@ function buildGates(data: ConvertResponse, input: ConvertPreflightInput) {
   const rowBalance = formatRelative(input.scatter_row_balance?.max_rel);
   const chiError = formatRelative(input.physics_checks?.chi_sum_max_abs_error);
   const uncertainty = input.uncertainty;
-  const outputStatus: GateStatus = data.dry_run
-    ? "skipped"
-    : data.converted
-      ? "pass"
-      : "fail";
+  const output = outputGate(data);
 
   return [
     {
@@ -389,13 +396,9 @@ function buildGates(data: ConvertResponse, input: ConvertPreflightInput) {
     },
     {
       title: "Output safety",
-      status: outputStatus,
-      summary: data.dry_run
-        ? "Dry run validated the output path without writing a file."
-        : data.converted
-          ? "ASCII output was written successfully."
-          : "Conversion stopped before writing output.",
-      detail: data.output_exists ? "output exists" : "no existing output",
+      status: output.status,
+      summary: output.summary,
+      detail: output.detail,
     },
   ] satisfies {
     title: string;
@@ -403,6 +406,85 @@ function buildGates(data: ConvertResponse, input: ConvertPreflightInput) {
     summary: string;
     detail: string;
   }[];
+}
+
+function outputGate(data: ConvertResponse): {
+  status: GateStatus;
+  summary: string;
+  detail: string;
+} {
+  if (data.converted) {
+    return {
+      status: "pass",
+      summary: "ASCII output was written successfully.",
+      detail: data.output_exists ? "output file exists" : "output existence unknown",
+    };
+  }
+  if (!data.dry_run) {
+    return {
+      status: "fail",
+      summary: "Conversion stopped before writing output.",
+      detail: "no output written",
+    };
+  }
+  if (data.output_exists) {
+    return {
+      status: "warn",
+      summary: "Dry run found an existing output file at the target path.",
+      detail: "enable overwrite before converting if replacement is intended",
+    };
+  }
+  return {
+    status: "pass",
+    summary: "Dry run validated a writable output target without writing a file.",
+    detail: "target path is clear",
+  };
+}
+
+function outputNotice(data: ConvertResponse): {
+  tone: "pass" | "warn" | "fail" | "neutral";
+  title: string;
+  body: string;
+} {
+  if (data.converted) {
+    return {
+      tone: "pass",
+      title: "Output file written.",
+      body: "Review the ASCII preview below before handing the file to DONJON.",
+    };
+  }
+  if (!data.dry_run) {
+    return {
+      tone: "fail",
+      title: "No output file written.",
+      body: "Fix the failing checks or request error, then run Convert again.",
+    };
+  }
+  if (data.output_exists) {
+    return {
+      tone: "warn",
+      title: "Dry run only; target already exists.",
+      body: "Enable Overwrite output before converting if this file should be replaced.",
+    };
+  }
+  return {
+    tone: "neutral",
+    title: "Dry run only; no file written.",
+    body: "The target path is clear, so Convert will write the ASCII file there.",
+  };
+}
+
+function outputNoticeClass(tone: "pass" | "warn" | "fail" | "neutral") {
+  if (tone === "pass") {
+    return "border-emerald-400/25 bg-emerald-400/10 text-emerald-200";
+  }
+  if (tone === "warn") {
+    return "border-amber-400/25 bg-amber-400/10 text-amber-200";
+  }
+  if (tone === "fail") {
+    return "border-rose-400/25 bg-rose-400/10 text-rose-200";
+  }
+  return "border-[var(--edge)] bg-white/[0.03] text-[var(--fg-2)]";
 }
 
 function stepStatuses(state: ConvertRunState): Record<string, StepStatus> {
