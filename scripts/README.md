@@ -20,6 +20,8 @@ These are stable entry points used directly by the release check.
   macrolib output.
 - `run_donjon_sph_solver_response_smoke.sh` - DONJON solver responds to SPH
   perturbations.
+- `../examples/sph_loop_minicase/run_smoke.sh` - minimal fixed-OpenMC SPH loop
+  user case; release-checks the reference-flux `std_dev` acceptance gates.
 
 ## C5G7 Accepted-Baseline Gates
 

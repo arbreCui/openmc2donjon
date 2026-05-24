@@ -134,6 +134,43 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertIn("require_production_audit", example)
         self.assertIn("production_audit", example)
 
+    def test_release_gate_covers_reference_flux_uncertainty_contract(self) -> None:
+        release_text = _release_check().read_text(encoding="utf-8")
+        default_section = release_text.split(
+            'if [[ "$RUN_LOCAL_CANDIDATES" -eq 1 ]]; then',
+            maxsplit=1,
+        )[0]
+        smoke_text = (
+            _repo_root() / "examples/sph_loop_minicase/run_smoke.sh"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("== Minimal SPH loop user-case smoke ==", default_section)
+        self.assertIn("examples/sph_loop_minicase/run_smoke.sh", default_section)
+        self.assertIn(
+            'config["acceptance"]["require_reference_flux_std_dev"] is True',
+            smoke_text,
+        )
+        self.assertIn(
+            'config["acceptance"]["max_reference_flux_std_dev_rel"] == 1.0e-2',
+            smoke_text,
+        )
+        self.assertIn(
+            'checks["require_reference_flux_std_dev"]["passed"] is True',
+            smoke_text,
+        )
+        self.assertIn(
+            'checks["max_reference_flux_std_dev_rel"]["passed"] is True',
+            smoke_text,
+        )
+        self.assertIn(
+            'metadata["reference_flux"]["std_dev_dataset"] == "openmc_volume_flux_std_dev"',
+            smoke_text,
+        )
+        self.assertIn(
+            'metadata["reference_flux"]["std_dev_max_rel"] - 1.0e-3',
+            smoke_text,
+        )
+
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
