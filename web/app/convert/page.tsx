@@ -5,6 +5,7 @@ import ConvertReport, {
   ConvertRunState,
 } from "@/components/convert/ConvertReport";
 import { CopyCliButton } from "@/components/commands/CopyCliButton";
+import MixturePicker from "@/components/convert/MixturePicker";
 import FileBrowserModal from "@/components/inspect/FileBrowserModal";
 import {
   ApiError,
@@ -279,16 +280,23 @@ export default function ConvertPage() {
                 hint="Optional comment written into MULTICOMPO output."
               />
               <label className="block lg:col-span-2">
-                <span className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
+                <div className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
                   Mixture filter
-                </span>
-                <textarea
-                  value={mixturesText}
-                  onChange={(event) => setMixturesText(event.target.value)}
-                  placeholder="ASM_Y01_X01, ASM_Y01_X02"
-                  className="mt-1 min-h-20 w-full min-w-0 rounded-md border border-[var(--edge)] bg-[rgba(255,255,255,0.03)] px-3 py-2 font-mono text-sm text-[var(--fg-0)] focus:border-[var(--accent)] focus:outline-none"
-                  spellCheck={false}
-                />
+                </div>
+                <div className="mt-1 space-y-3">
+                  <MixturePicker
+                    inputPath={inputPath}
+                    value={mixturesText}
+                    onChange={setMixturesText}
+                  />
+                  <textarea
+                    value={mixturesText}
+                    onChange={(event) => setMixturesText(event.target.value)}
+                    placeholder="ASM_Y01_X01, ASM_Y01_X02"
+                    className="min-h-20 w-full min-w-0 rounded-md border border-[var(--edge)] bg-[rgba(255,255,255,0.03)] px-3 py-2 font-mono text-sm text-[var(--fg-0)] focus:border-[var(--accent)] focus:outline-none"
+                    spellCheck={false}
+                  />
+                </div>
                 <span className="mt-1 block text-[12px] text-[var(--fg-3)]">
                   Optional comma/newline list. Empty means write every mixture.
                 </span>
