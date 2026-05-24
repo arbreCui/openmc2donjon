@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ApiError, TextPreview, api } from "@/lib/api";
+import { analyzeDonjonAsciiPreview } from "@/lib/asciiPreview";
 
 type PreviewState =
   | { kind: "idle" }
@@ -70,6 +71,7 @@ function PreviewBody({ state }: { state: PreviewState }) {
     );
   }
   const { data } = state;
+  const analysis = analyzeDonjonAsciiPreview(data.text);
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-[var(--fg-2)] tab-num">
@@ -85,10 +87,72 @@ function PreviewBody({ state }: { state: PreviewState }) {
           <span className="text-emerald-300">complete within preview limit</span>
         )}
       </div>
+      <div className="rounded-md border border-[var(--edge)] bg-black/15 p-3">
+        <div className="grid gap-2 md:grid-cols-[180px_1fr]">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+              Handoff signature
+            </div>
+            <div
+              className={
+                "mt-1 rounded border px-2 py-1 font-mono text-[12px] " +
+                (analysis.likelyDonjonAscii
+                  ? "border-emerald-300/25 bg-emerald-300/[0.08] text-emerald-100"
+                  : "border-amber-300/25 bg-amber-300/[0.08] text-amber-100")
+              }
+            >
+              {analysis.signature ?? "not found"}
+            </div>
+            <div className="mt-1 text-[12px] text-[var(--fg-3)]">
+              {analysis.format === "unknown"
+                ? "format unknown"
+                : `${analysis.format} ASCII`}
+            </div>
+          </div>
+
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+              Visible block scan
+            </div>
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {analysis.blockHits.map((hit) => (
+                <BlockChip key={hit.id} label={hit.label} present={hit.present} />
+              ))}
+            </div>
+            {analysis.notes.length > 0 ? (
+              <ul className="mt-2 space-y-1 text-[12px] text-amber-100">
+                {analysis.notes.map((note) => (
+                  <li key={note}>- {note}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-[12px] text-emerald-200">
+                Signature and core visible blocks look consistent in this preview slice.
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
       <pre className="max-h-[34rem] overflow-auto rounded-md border border-[var(--edge)] bg-black/25 px-3 py-3 font-mono text-[12px] leading-5 text-[var(--fg-1)]">
         {data.text || "(empty file)"}
       </pre>
     </div>
+  );
+}
+
+function BlockChip({ label, present }: { label: string; present: boolean }) {
+  return (
+    <span
+      className={
+        "rounded border px-2 py-1 text-[11px] " +
+        (present
+          ? "border-emerald-300/20 bg-emerald-300/[0.06] text-emerald-100"
+          : "border-[var(--edge)] bg-white/[0.02] text-[var(--fg-3)]")
+      }
+    >
+      {present ? "✓ " : ""}
+      {label}
+    </span>
   );
 }
 
