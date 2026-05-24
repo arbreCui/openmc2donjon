@@ -1,0 +1,1058 @@
+{
+  "acceptance": {
+    "checks": [
+      {
+        "actual": 2,
+        "limit": 2,
+        "message": "actual 2 >= limit 2 iterations",
+        "name": "min_completed_iterations",
+        "passed": true,
+        "units": "iterations"
+      },
+      {
+        "actual": true,
+        "limit": true,
+        "message": "actual True == required True",
+        "name": "require_final_solve",
+        "passed": true,
+        "units": "boolean"
+      },
+      {
+        "actual": true,
+        "limit": true,
+        "message": "actual True == required True",
+        "name": "require_converged",
+        "passed": true,
+        "units": "boolean"
+      },
+      {
+        "actual": true,
+        "limit": true,
+        "message": "all artifact metadata aligned",
+        "name": "require_artifact_metadata_alignment",
+        "passed": true,
+        "units": "boolean"
+      },
+      {
+        "actual": true,
+        "limit": true,
+        "message": "production audit passed",
+        "name": "require_production_audit",
+        "passed": true,
+        "units": "boolean"
+      },
+      {
+        "actual": true,
+        "limit": true,
+        "message": "actual True == required True",
+        "name": "require_mgxs_explicit_volumes",
+        "passed": true,
+        "units": "boolean"
+      },
+      {
+        "actual": true,
+        "limit": true,
+        "message": "actual True == required True",
+        "name": "require_mgxs_h_factor",
+        "passed": true,
+        "units": "boolean"
+      },
+      {
+        "actual": true,
+        "limit": true,
+        "message": "actual True == required True",
+        "name": "require_mgxs_energy_bounds",
+        "passed": true,
+        "units": "boolean"
+      },
+      {
+        "actual": true,
+        "limit": true,
+        "message": "actual True == required True",
+        "name": "require_mgxs_energy_bounds_consistency",
+        "passed": true,
+        "units": "boolean"
+      },
+      {
+        "actual": 1.8503717077085943e-16,
+        "limit": 0.05,
+        "message": "actual 1.85037170771e-16 <= limit 0.05 relative",
+        "name": "max_mgxs_scatter_row_balance_rel",
+        "passed": true,
+        "units": "relative"
+      },
+      {
+        "actual": 0.0,
+        "limit": 1e-06,
+        "message": "actual 0 <= limit 1e-06 absolute",
+        "name": "max_mgxs_chi_sum_error",
+        "passed": true,
+        "units": "absolute"
+      },
+      {
+        "actual": true,
+        "limit": true,
+        "message": "actual True == required True",
+        "name": "require_mgxs_adf_face_consistency",
+        "passed": true,
+        "units": "boolean"
+      },
+      {
+        "actual": 0.0,
+        "limit": 0.05,
+        "message": "actual 0 <= limit 0.05 relative",
+        "name": "max_mgxs_transport_p1_rel",
+        "passed": true,
+        "units": "relative"
+      },
+      {
+        "actual": 0.0,
+        "limit": 1e-12,
+        "message": "actual 0 <= limit 1e-12 relative",
+        "name": "max_sph_rel_change",
+        "passed": true,
+        "units": "relative"
+      },
+      {
+        "actual": 0.0,
+        "limit": 1e-12,
+        "message": "actual 0 <= limit 1e-12 relative",
+        "name": "max_flux_ratio_residual",
+        "passed": true,
+        "units": "relative"
+      },
+      {
+        "actual": 0.0,
+        "limit": 1.0,
+        "message": "actual 0 <= limit 1 ratio",
+        "name": "max_final_to_initial_flux_residual_ratio",
+        "passed": true,
+        "units": "ratio"
+      },
+      {
+        "actual": 0.0,
+        "limit": 0.0,
+        "message": "actual 0 <= limit 0 fraction",
+        "name": "max_final_clipped_fraction",
+        "passed": true,
+        "units": "fraction"
+      },
+      {
+        "actual": 0,
+        "limit": 0,
+        "message": "actual 0 <= limit 0 bins",
+        "name": "max_final_clipped_count",
+        "passed": true,
+        "units": "bins"
+      }
+    ],
+    "decision": "openmc2donjon_sph_loop_acceptance_passed",
+    "enabled": true,
+    "fail_on_violation": true,
+    "passed": true
+  },
+  "acceptance_decision": "openmc2donjon_sph_loop_acceptance_passed",
+  "acceptance_enabled": true,
+  "acceptance_passed": true,
+  "artifact_metadata": {
+    "final_sph_sidecar": {
+      "dataset": "sph",
+      "energy_groups": 2,
+      "group_order": "mgxs_donjon",
+      "mixture_count": 2,
+      "mixture_names": [
+        "FUEL_ASM",
+        "REFL_ASM"
+      ],
+      "path": "/mock/sph_loop_run/sph_loop/iter02_sph/next_sph.sidecar.h5",
+      "requested_source": "/mock/sph_loop_run/sph_loop/iter02_sph/next_sph.sidecar.h5::sph",
+      "shape": [
+        2,
+        2
+      ],
+      "source": "/mock/sph_loop_run/sph_loop/iter02_sph/next_sph.sidecar.h5::sph",
+      "std_dev_dataset": null,
+      "std_dev_max_rel": null,
+      "std_dev_shape": null,
+      "std_dev_source": null,
+      "std_dev_worst": null
+    },
+    "reference_flux": {
+      "dataset": "openmc_volume_flux",
+      "energy_groups": 2,
+      "group_order": "mgxs_donjon",
+      "mixture_count": 2,
+      "mixture_names": [
+        "FUEL_ASM",
+        "REFL_ASM"
+      ],
+      "path": "/mock/sph_loop_run/inputs/reference_flux.h5",
+      "requested_source": "/mock/sph_loop_run/inputs/reference_flux.h5::openmc_volume_flux",
+      "shape": [
+        2,
+        2
+      ],
+      "source": "/mock/sph_loop_run/inputs/reference_flux.h5::openmc_volume_flux",
+      "std_dev_dataset": null,
+      "std_dev_max_rel": null,
+      "std_dev_shape": null,
+      "std_dev_source": null,
+      "std_dev_worst": null
+    },
+    "workflows": [
+      {
+        "donjon_volume_flux": {
+          "dataset": "donjon_volume_flux",
+          "energy_groups": 2,
+          "group_order": "mgxs_donjon",
+          "mixture_count": 2,
+          "mixture_names": [
+            "FUEL_ASM",
+            "REFL_ASM"
+          ],
+          "path": "/mock/sph_loop_run/sph_loop/iter01_sph/donjon_volume_flux.h5",
+          "requested_source": "/mock/sph_loop_run/sph_loop/iter01_sph/donjon_volume_flux.h5::donjon_volume_flux",
+          "shape": [
+            2,
+            2
+          ],
+          "source": "/mock/sph_loop_run/sph_loop/iter01_sph/donjon_volume_flux.h5::donjon_volume_flux",
+          "std_dev_dataset": null,
+          "std_dev_max_rel": null,
+          "std_dev_shape": null,
+          "std_dev_source": null,
+          "std_dev_worst": null
+        },
+        "iteration": 1,
+        "sph_sidecar": {
+          "dataset": "sph",
+          "energy_groups": 2,
+          "group_order": "mgxs_donjon",
+          "mixture_count": 2,
+          "mixture_names": [
+            "FUEL_ASM",
+            "REFL_ASM"
+          ],
+          "path": "/mock/sph_loop_run/sph_loop/iter01_sph/next_sph.sidecar.h5",
+          "requested_source": "/mock/sph_loop_run/sph_loop/iter01_sph/next_sph.sidecar.h5::sph",
+          "shape": [
+            2,
+            2
+          ],
+          "source": "/mock/sph_loop_run/sph_loop/iter01_sph/next_sph.sidecar.h5::sph",
+          "std_dev_dataset": null,
+          "std_dev_max_rel": null,
+          "std_dev_shape": null,
+          "std_dev_source": null,
+          "std_dev_worst": null
+        }
+      },
+      {
+        "donjon_volume_flux": {
+          "dataset": "donjon_volume_flux",
+          "energy_groups": 2,
+          "group_order": "mgxs_donjon",
+          "mixture_count": 2,
+          "mixture_names": [
+            "FUEL_ASM",
+            "REFL_ASM"
+          ],
+          "path": "/mock/sph_loop_run/sph_loop/iter02_sph/donjon_volume_flux.h5",
+          "requested_source": "/mock/sph_loop_run/sph_loop/iter02_sph/donjon_volume_flux.h5::donjon_volume_flux",
+          "shape": [
+            2,
+            2
+          ],
+          "source": "/mock/sph_loop_run/sph_loop/iter02_sph/donjon_volume_flux.h5::donjon_volume_flux",
+          "std_dev_dataset": null,
+          "std_dev_max_rel": null,
+          "std_dev_shape": null,
+          "std_dev_source": null,
+          "std_dev_worst": null
+        },
+        "iteration": 2,
+        "sph_sidecar": {
+          "dataset": "sph",
+          "energy_groups": 2,
+          "group_order": "mgxs_donjon",
+          "mixture_count": 2,
+          "mixture_names": [
+            "FUEL_ASM",
+            "REFL_ASM"
+          ],
+          "path": "/mock/sph_loop_run/sph_loop/iter02_sph/next_sph.sidecar.h5",
+          "requested_source": "/mock/sph_loop_run/sph_loop/iter02_sph/next_sph.sidecar.h5::sph",
+          "shape": [
+            2,
+            2
+          ],
+          "source": "/mock/sph_loop_run/sph_loop/iter02_sph/next_sph.sidecar.h5::sph",
+          "std_dev_dataset": null,
+          "std_dev_max_rel": null,
+          "std_dev_shape": null,
+          "std_dev_source": null,
+          "std_dev_worst": null
+        }
+      }
+    ]
+  },
+  "audit_csv": "/mock/sph_loop_run/sph_loop/sph_loop_audit.csv",
+  "audit_rows": [
+    {
+      "ascii_output": "/mock/sph_loop_run/sph_loop/iter01_sph/out.macrolib.txt",
+      "converged": false,
+      "flux_ratio_max_residual": 1.0,
+      "iteration": 1,
+      "keff": null,
+      "postprocess_output": "/mock/sph_loop_run/sph_loop/iter01_sph/corrected.macrolib.txt",
+      "solve_result": "/mock/sph_loop_run/sph_loop/iter00_solve/low_order_flux.result",
+      "sph_max_abs_change": 0.41421356237000007,
+      "sph_max_rel_change": 0.41421356237000007,
+      "sph_maximum": 1.41421356237,
+      "sph_minimum": 1.41421356237,
+      "stage": "iteration",
+      "worst_residual": 1.0,
+      "worst_residual_group": 2,
+      "worst_residual_mixture": "REFL_ASM",
+      "worst_residual_raw_update": 2.0
+    },
+    {
+      "ascii_output": "/mock/sph_loop_run/sph_loop/iter02_sph/out.macrolib.txt",
+      "converged": true,
+      "flux_ratio_max_residual": 0.0,
+      "iteration": 2,
+      "keff": null,
+      "postprocess_output": "/mock/sph_loop_run/sph_loop/iter02_sph/corrected.macrolib.txt",
+      "solve_result": "/mock/sph_loop_run/sph_loop/iter01_solve/low_order_flux.result",
+      "sph_max_abs_change": 0.0,
+      "sph_max_rel_change": 0.0,
+      "sph_maximum": 1.41421356237,
+      "sph_minimum": 1.41421356237,
+      "stage": "iteration",
+      "worst_residual": 0.0,
+      "worst_residual_group": 2,
+      "worst_residual_mixture": "REFL_ASM",
+      "worst_residual_raw_update": 1.0
+    },
+    {
+      "ascii_output": "/mock/sph_loop_run/sph_loop/iter02_sph/corrected.macrolib.txt",
+      "converged": null,
+      "flux_ratio_max_residual": null,
+      "iteration": 2,
+      "keff": null,
+      "postprocess_output": null,
+      "solve_result": "/mock/sph_loop_run/sph_loop/iter02_solve/low_order_flux.result",
+      "sph_max_abs_change": null,
+      "sph_max_rel_change": null,
+      "sph_maximum": null,
+      "sph_minimum": null,
+      "stage": "final",
+      "worst_residual": null,
+      "worst_residual_group": null,
+      "worst_residual_mixture": null,
+      "worst_residual_raw_update": null
+    }
+  ],
+  "audit_text": "/mock/sph_loop_run/sph_loop/sph_loop_audit.txt",
+  "bundle_manifest": "/mock/sph_loop_run/sph_loop/bundle/manifest.json",
+  "completed_iterations": 2,
+  "config_path": "/mock/sph_loop_run/loop_config.json",
+  "converged": true,
+  "convergence": [
+    {
+      "clipped_bins": [],
+      "clipped_count": 0,
+      "clipped_fraction": 0.0,
+      "converged": false,
+      "flux_ratio_max_residual": 1.0,
+      "iteration": 1,
+      "sph_max_abs_change": 0.41421356237000007,
+      "sph_max_rel_change": 0.41421356237000007,
+      "worst_residual_bins": [
+        {
+          "clipped": false,
+          "group": 2,
+          "low_order_flux": 300.0,
+          "mixture": "REFL_ASM",
+          "previous_sph": 1.0,
+          "raw_update": 2.0,
+          "reference_flux": 600.0,
+          "residual": 1.0,
+          "signed_residual": 1.0,
+          "sph": 1.4142135623730951,
+          "unclipped_sph": 1.4142135623730951
+        },
+        {
+          "clipped": false,
+          "group": 1,
+          "low_order_flux": 60.0,
+          "mixture": "REFL_ASM",
+          "previous_sph": 1.0,
+          "raw_update": 2.0,
+          "reference_flux": 120.0,
+          "residual": 1.0,
+          "signed_residual": 1.0,
+          "sph": 1.4142135623730951,
+          "unclipped_sph": 1.4142135623730951
+        },
+        {
+          "clipped": false,
+          "group": 2,
+          "low_order_flux": 400.0,
+          "mixture": "FUEL_ASM",
+          "previous_sph": 1.0,
+          "raw_update": 2.0,
+          "reference_flux": 800.0,
+          "residual": 1.0,
+          "signed_residual": 1.0,
+          "sph": 1.4142135623730951,
+          "unclipped_sph": 1.4142135623730951
+        },
+        {
+          "clipped": false,
+          "group": 1,
+          "low_order_flux": 40.0,
+          "mixture": "FUEL_ASM",
+          "previous_sph": 1.0,
+          "raw_update": 2.0,
+          "reference_flux": 80.0,
+          "residual": 1.0,
+          "signed_residual": 1.0,
+          "sph": 1.4142135623730951,
+          "unclipped_sph": 1.4142135623730951
+        }
+      ]
+    },
+    {
+      "clipped_bins": [],
+      "clipped_count": 0,
+      "clipped_fraction": 0.0,
+      "converged": true,
+      "flux_ratio_max_residual": 0.0,
+      "iteration": 2,
+      "sph_max_abs_change": 0.0,
+      "sph_max_rel_change": 0.0,
+      "worst_residual_bins": [
+        {
+          "clipped": false,
+          "group": 2,
+          "low_order_flux": 600.0,
+          "mixture": "REFL_ASM",
+          "previous_sph": 1.41421356237,
+          "raw_update": 1.0,
+          "reference_flux": 600.0,
+          "residual": 0.0,
+          "signed_residual": 0.0,
+          "sph": 1.41421356237,
+          "unclipped_sph": 1.41421356237
+        },
+        {
+          "clipped": false,
+          "group": 1,
+          "low_order_flux": 120.0,
+          "mixture": "REFL_ASM",
+          "previous_sph": 1.41421356237,
+          "raw_update": 1.0,
+          "reference_flux": 120.0,
+          "residual": 0.0,
+          "signed_residual": 0.0,
+          "sph": 1.41421356237,
+          "unclipped_sph": 1.41421356237
+        },
+        {
+          "clipped": false,
+          "group": 2,
+          "low_order_flux": 800.0,
+          "mixture": "FUEL_ASM",
+          "previous_sph": 1.41421356237,
+          "raw_update": 1.0,
+          "reference_flux": 800.0,
+          "residual": 0.0,
+          "signed_residual": 0.0,
+          "sph": 1.41421356237,
+          "unclipped_sph": 1.41421356237
+        },
+        {
+          "clipped": false,
+          "group": 1,
+          "low_order_flux": 80.0,
+          "mixture": "FUEL_ASM",
+          "previous_sph": 1.41421356237,
+          "raw_update": 1.0,
+          "reference_flux": 80.0,
+          "residual": 0.0,
+          "signed_residual": 0.0,
+          "sph": 1.41421356237,
+          "unclipped_sph": 1.41421356237
+        }
+      ]
+    }
+  ],
+  "convergence_enabled": true,
+  "decision": "openmc2donjon_sph_loop_passed",
+  "final_ascii": "/mock/sph_loop_run/sph_loop/iter02_sph/corrected.macrolib.txt",
+  "final_solve": {
+    "flux_unknown_count": 4,
+    "flux_vector_count": 2,
+    "iteration": 2,
+    "keff": null,
+    "result": "/mock/sph_loop_run/sph_loop/iter02_solve/low_order_flux.result",
+    "returncode": 0
+  },
+  "final_sph_sidecar": "/mock/sph_loop_run/sph_loop/iter02_sph/next_sph.sidecar.h5",
+  "flux_map_preflight": {
+    "decision": "openmc2donjon_sph_loop_flux_map_preflight_passed",
+    "duplicate_scalar_flux_ids": [],
+    "energy_groups": 2,
+    "errors": [],
+    "input_h5": "/mock/sph_loop_run/inputs/mgxs_library.h5",
+    "map_h5": "/mock/sph_loop_run/inputs/flux_map.h5",
+    "map_kind": "map_h5:/scalar_flux_ids",
+    "mesh_cell_count": null,
+    "mesh_missing_mixture_names": [],
+    "mesh_mixture_cell_counts": [],
+    "mesh_shape": null,
+    "mesh_unknown_mixture_names": [],
+    "mesh_zero_or_negative_id_count": null,
+    "mgxs_adf_calculations": 0,
+    "mgxs_adf_face_error_count": 0,
+    "mgxs_adf_faces": [],
+    "mgxs_calculations": 2,
+    "mgxs_chi_checked": 1,
+    "mgxs_chi_error_count": 0,
+    "mgxs_chi_sum_max_abs_error": 0.0,
+    "mgxs_chi_sum_worst": "FUEL_ASM: sum(chi)=1.000000000000e+00",
+    "mgxs_declared_mixture_order": true,
+    "mgxs_energy_bounds_consistency_error_count": 0,
+    "mgxs_energy_bounds_error_count": 0,
+    "mgxs_energy_bounds_local_count": 0,
+    "mgxs_energy_bounds_order": "ascending",
+    "mgxs_energy_bounds_present": true,
+    "mgxs_energy_bounds_sha256": "d6792ed403ed65a0f361c390d4be6e7a97d9334db7f5c2705e6b92815e43f0ff",
+    "mgxs_energy_mesh_id": null,
+    "mgxs_energy_mesh_name": null,
+    "mgxs_energy_mesh_tolerance": 1e-06,
+    "mgxs_fissionable_calculations": 1,
+    "mgxs_h_factor_datasets": 1,
+    "mgxs_h_factor_invalid": 0,
+    "mgxs_h_factor_missing": 0,
+    "mgxs_nu_ratio_checked_bins": 2,
+    "mgxs_nu_ratio_max": 2.5,
+    "mgxs_nu_ratio_min": 2.5,
+    "mgxs_nu_ratio_warning_count": 0,
+    "mgxs_nu_ratio_worst": null,
+    "mgxs_scatter_row_balance_checked": 2,
+    "mgxs_scatter_row_balance_max_abs": 5.551115123125783e-17,
+    "mgxs_scatter_row_balance_max_rel": 1.8503717077085943e-16,
+    "mgxs_scatter_row_balance_worst": "REFL_ASM: group=1 residual=-5.551115e-17",
+    "mgxs_source_domain_indices": [
+      1,
+      2
+    ],
+    "mgxs_source_domain_order_errors": [],
+    "mgxs_transport_p1_checked": 0,
+    "mgxs_transport_p1_error_count": 0,
+    "mgxs_transport_p1_max_abs": null,
+    "mgxs_transport_p1_max_rel": null,
+    "mgxs_transport_p1_worst": null,
+    "mgxs_volume_attributes": 2,
+    "mgxs_volume_defaulted": 0,
+    "mgxs_volume_nonpositive": 0,
+    "minimum_required_flux_unknown_count": 4,
+    "mixture_count": 2,
+    "mixture_flux_map": [
+      {
+        "mixture": "FUEL_ASM",
+        "scalar_flux_id": 2
+      },
+      {
+        "mixture": "REFL_ASM",
+        "scalar_flux_id": 4
+      }
+    ],
+    "mixture_names": [
+      "FUEL_ASM",
+      "REFL_ASM"
+    ],
+    "passed": true,
+    "reference_flux": "/mock/sph_loop_run/inputs/reference_flux.h5::openmc_volume_flux",
+    "reference_flux_dataset": "openmc_volume_flux",
+    "reference_flux_group_count": 2,
+    "reference_flux_group_order": "mgxs_donjon",
+    "reference_flux_mixture_names": [
+      "FUEL_ASM",
+      "REFL_ASM"
+    ],
+    "reference_flux_shape": [
+      2,
+      2
+    ],
+    "reference_flux_source": "/mock/sph_loop_run/inputs/reference_flux.h5",
+    "scalar_flux_ids": [
+      2,
+      4
+    ],
+    "schema": "openmc2donjon.sph-loop-flux-map-preflight.v1",
+    "warnings": [
+      "/energy_bounds did not match a bundled known energy mesh within rtol=1e-06"
+    ]
+  },
+  "flux_ratio_tolerance": 1e-12,
+  "initial_ascii": "/mock/sph_loop_run/sph_loop/iter00_initial/out.macrolib.txt",
+  "input_h5": "/mock/sph_loop_run/inputs/mgxs_library.h5",
+  "iterations": 2,
+  "min_iterations": 2,
+  "openmc_xs_policy": "fixed base MGXS; DONJON solves consume updated ASCII SPH handoffs",
+  "output_dir": "/mock/sph_loop_run/sph_loop",
+  "output_format": "macrolib",
+  "package_version": "0.1.2",
+  "postprocesses": [
+    {
+      "block_count": 40,
+      "command": [
+        "/mock/miniforge3/envs/openmc-dev/bin/python",
+        "/mock/openmc-workspace/openmc2donjon/examples/sph_loop_minicase/fake_low_order_solver.py",
+        "apply",
+        "--input",
+        "/mock/sph_loop_run/sph_loop/iter01_sph/out.macrolib.txt",
+        "--output",
+        "/mock/sph_loop_run/sph_loop/iter01_sph/corrected.macrolib.txt",
+        "--sph",
+        "/mock/sph_loop_run/sph_loop/iter01_sph/next_sph.sidecar.h5",
+        "--iteration",
+        "1"
+      ],
+      "cwd": "/mock/sph_loop_run/sph_loop/iter01_sph",
+      "iteration": 1,
+      "output": "/mock/sph_loop_run/sph_loop/iter01_sph/corrected.macrolib.txt",
+      "output_bytes": 7252,
+      "returncode": 0,
+      "sph_sidecar": "/mock/sph_loop_run/sph_loop/iter01_sph/next_sph.sidecar.h5",
+      "stderr": "/mock/sph_loop_run/sph_loop/iter01_sph/postprocess.stderr.txt",
+      "stdout": "/mock/sph_loop_run/sph_loop/iter01_sph/postprocess.stdout.txt",
+      "workflow_ascii": "/mock/sph_loop_run/sph_loop/iter01_sph/out.macrolib.txt"
+    },
+    {
+      "block_count": 40,
+      "command": [
+        "/mock/miniforge3/envs/openmc-dev/bin/python",
+        "/mock/openmc-workspace/openmc2donjon/examples/sph_loop_minicase/fake_low_order_solver.py",
+        "apply",
+        "--input",
+        "/mock/sph_loop_run/sph_loop/iter02_sph/out.macrolib.txt",
+        "--output",
+        "/mock/sph_loop_run/sph_loop/iter02_sph/corrected.macrolib.txt",
+        "--sph",
+        "/mock/sph_loop_run/sph_loop/iter02_sph/next_sph.sidecar.h5",
+        "--iteration",
+        "2"
+      ],
+      "cwd": "/mock/sph_loop_run/sph_loop/iter02_sph",
+      "iteration": 2,
+      "output": "/mock/sph_loop_run/sph_loop/iter02_sph/corrected.macrolib.txt",
+      "output_bytes": 7252,
+      "returncode": 0,
+      "sph_sidecar": "/mock/sph_loop_run/sph_loop/iter02_sph/next_sph.sidecar.h5",
+      "stderr": "/mock/sph_loop_run/sph_loop/iter02_sph/postprocess.stderr.txt",
+      "stdout": "/mock/sph_loop_run/sph_loop/iter02_sph/postprocess.stdout.txt",
+      "workflow_ascii": "/mock/sph_loop_run/sph_loop/iter02_sph/out.macrolib.txt"
+    }
+  ],
+  "production_audit": {
+    "artifact_counts": {
+      "postprocesses": 2,
+      "solves": 3,
+      "workflows": 2
+    },
+    "checks": [
+      {
+        "message": "flux map preflight passed",
+        "name": "flux_map_preflight_passed",
+        "passed": true
+      },
+      {
+        "message": "reference_flux group_order='mgxs_donjon'",
+        "name": "reference_group_order",
+        "passed": true
+      },
+      {
+        "message": "reference_flux mixture_names match MGXS mixture order",
+        "name": "reference_mixture_order",
+        "passed": true
+      },
+      {
+        "message": "reference_flux energy group count matches MGXS",
+        "name": "reference_energy_groups",
+        "passed": true
+      },
+      {
+        "message": "MGXS declares /mixture_names order",
+        "name": "mgxs_mixture_order_declared",
+        "passed": true
+      },
+      {
+        "message": "MGXS source_domain_index values match /mixture_names order",
+        "name": "mgxs_source_domain_order",
+        "passed": true
+      },
+      {
+        "message": "iter1_donjon_volume_flux group_order='mgxs_donjon'",
+        "name": "iter1_donjon_volume_flux_group_order",
+        "passed": true
+      },
+      {
+        "message": "iter1_donjon_volume_flux mixture_names match reference_flux",
+        "name": "iter1_donjon_volume_flux_mixture_order",
+        "passed": true
+      },
+      {
+        "message": "iter1_donjon_volume_flux energy_groups=2",
+        "name": "iter1_donjon_volume_flux_energy_groups",
+        "passed": true
+      },
+      {
+        "message": "iter1_sph_sidecar group_order='mgxs_donjon'",
+        "name": "iter1_sph_sidecar_group_order",
+        "passed": true
+      },
+      {
+        "message": "iter1_sph_sidecar mixture_names match reference_flux",
+        "name": "iter1_sph_sidecar_mixture_order",
+        "passed": true
+      },
+      {
+        "message": "iter1_sph_sidecar energy_groups=2",
+        "name": "iter1_sph_sidecar_energy_groups",
+        "passed": true
+      },
+      {
+        "message": "iter2_donjon_volume_flux group_order='mgxs_donjon'",
+        "name": "iter2_donjon_volume_flux_group_order",
+        "passed": true
+      },
+      {
+        "message": "iter2_donjon_volume_flux mixture_names match reference_flux",
+        "name": "iter2_donjon_volume_flux_mixture_order",
+        "passed": true
+      },
+      {
+        "message": "iter2_donjon_volume_flux energy_groups=2",
+        "name": "iter2_donjon_volume_flux_energy_groups",
+        "passed": true
+      },
+      {
+        "message": "iter2_sph_sidecar group_order='mgxs_donjon'",
+        "name": "iter2_sph_sidecar_group_order",
+        "passed": true
+      },
+      {
+        "message": "iter2_sph_sidecar mixture_names match reference_flux",
+        "name": "iter2_sph_sidecar_mixture_order",
+        "passed": true
+      },
+      {
+        "message": "iter2_sph_sidecar energy_groups=2",
+        "name": "iter2_sph_sidecar_energy_groups",
+        "passed": true
+      },
+      {
+        "message": "final SPH sidecar metadata present",
+        "name": "final_sph_sidecar_present",
+        "passed": true
+      },
+      {
+        "message": "final_sph_sidecar group_order='mgxs_donjon'",
+        "name": "final_sph_sidecar_group_order",
+        "passed": true
+      },
+      {
+        "message": "final_sph_sidecar mixture_names match reference_flux",
+        "name": "final_sph_sidecar_mixture_order",
+        "passed": true
+      },
+      {
+        "message": "final_sph_sidecar energy_groups=2",
+        "name": "final_sph_sidecar_energy_groups",
+        "passed": true
+      }
+    ],
+    "errors": [],
+    "flux_map": {
+      "map_kind": "map_h5:/scalar_flux_ids",
+      "mgxs_adf_calculations": 0,
+      "mgxs_adf_face_error_count": 0,
+      "mgxs_adf_faces": [],
+      "mgxs_calculations": 2,
+      "mgxs_chi_checked": 1,
+      "mgxs_chi_error_count": 0,
+      "mgxs_chi_sum_max_abs_error": 0.0,
+      "mgxs_chi_sum_worst": "FUEL_ASM: sum(chi)=1.000000000000e+00",
+      "mgxs_declared_mixture_order": true,
+      "mgxs_energy_bounds_consistency_error_count": 0,
+      "mgxs_energy_bounds_error_count": 0,
+      "mgxs_energy_bounds_local_count": 0,
+      "mgxs_energy_bounds_order": "ascending",
+      "mgxs_energy_bounds_present": true,
+      "mgxs_energy_bounds_sha256": "d6792ed403ed65a0f361c390d4be6e7a97d9334db7f5c2705e6b92815e43f0ff",
+      "mgxs_energy_mesh_id": null,
+      "mgxs_energy_mesh_name": null,
+      "mgxs_energy_mesh_tolerance": 1e-06,
+      "mgxs_fissionable_calculations": 1,
+      "mgxs_h_factor_datasets": 1,
+      "mgxs_h_factor_invalid": 0,
+      "mgxs_h_factor_missing": 0,
+      "mgxs_nu_ratio_checked_bins": 2,
+      "mgxs_nu_ratio_max": 2.5,
+      "mgxs_nu_ratio_min": 2.5,
+      "mgxs_nu_ratio_warning_count": 0,
+      "mgxs_nu_ratio_worst": null,
+      "mgxs_scatter_row_balance_checked": 2,
+      "mgxs_scatter_row_balance_max_abs": 5.551115123125783e-17,
+      "mgxs_scatter_row_balance_max_rel": 1.8503717077085943e-16,
+      "mgxs_scatter_row_balance_worst": "REFL_ASM: group=1 residual=-5.551115e-17",
+      "mgxs_source_domain_indices": [
+        1,
+        2
+      ],
+      "mgxs_source_domain_order_errors": [],
+      "mgxs_transport_p1_checked": 0,
+      "mgxs_transport_p1_error_count": 0,
+      "mgxs_transport_p1_max_abs": null,
+      "mgxs_transport_p1_max_rel": null,
+      "mgxs_transport_p1_worst": null,
+      "mgxs_volume_attributes": 2,
+      "mgxs_volume_defaulted": 0,
+      "mgxs_volume_nonpositive": 0,
+      "minimum_required_flux_unknown_count": 4,
+      "mixture_flux_map": [
+        {
+          "mixture": "FUEL_ASM",
+          "scalar_flux_id": 2
+        },
+        {
+          "mixture": "REFL_ASM",
+          "scalar_flux_id": 4
+        }
+      ],
+      "passed": true,
+      "scalar_flux_ids": [
+        2,
+        4
+      ]
+    },
+    "openmc_xs_policy": "fixed base MGXS; only SPH/NSPH factors are iterated",
+    "passed": true,
+    "reference": {
+      "energy_groups": 2,
+      "group_order": "mgxs_donjon",
+      "mixture_names": [
+        "FUEL_ASM",
+        "REFL_ASM"
+      ],
+      "source": "/mock/sph_loop_run/inputs/reference_flux.h5::openmc_volume_flux",
+      "std_dev_dataset": null,
+      "std_dev_max_rel": null,
+      "std_dev_source": null,
+      "std_dev_worst": null
+    }
+  },
+  "quality": {
+    "clipping_observed": false,
+    "final_clipped_bins": [],
+    "final_clipped_count": 0,
+    "final_clipped_fraction": 0.0,
+    "final_flux_ratio_max_residual": 0.0,
+    "final_sph_maximum": 1.41421356237,
+    "final_sph_minimum": 1.41421356237,
+    "final_to_initial_flux_residual_ratio": 0.0,
+    "final_worst_residual_bin": {
+      "clipped": false,
+      "group": 2,
+      "low_order_flux": 600.0,
+      "mixture": "REFL_ASM",
+      "previous_sph": 1.41421356237,
+      "raw_update": 1.0,
+      "reference_flux": 600.0,
+      "residual": 0.0,
+      "signed_residual": 0.0,
+      "sph": 1.41421356237,
+      "unclipped_sph": 1.41421356237
+    },
+    "final_worst_residual_bins": [
+      {
+        "clipped": false,
+        "group": 2,
+        "low_order_flux": 600.0,
+        "mixture": "REFL_ASM",
+        "previous_sph": 1.41421356237,
+        "raw_update": 1.0,
+        "reference_flux": 600.0,
+        "residual": 0.0,
+        "signed_residual": 0.0,
+        "sph": 1.41421356237,
+        "unclipped_sph": 1.41421356237
+      },
+      {
+        "clipped": false,
+        "group": 1,
+        "low_order_flux": 120.0,
+        "mixture": "REFL_ASM",
+        "previous_sph": 1.41421356237,
+        "raw_update": 1.0,
+        "reference_flux": 120.0,
+        "residual": 0.0,
+        "signed_residual": 0.0,
+        "sph": 1.41421356237,
+        "unclipped_sph": 1.41421356237
+      },
+      {
+        "clipped": false,
+        "group": 2,
+        "low_order_flux": 800.0,
+        "mixture": "FUEL_ASM",
+        "previous_sph": 1.41421356237,
+        "raw_update": 1.0,
+        "reference_flux": 800.0,
+        "residual": 0.0,
+        "signed_residual": 0.0,
+        "sph": 1.41421356237,
+        "unclipped_sph": 1.41421356237
+      },
+      {
+        "clipped": false,
+        "group": 1,
+        "low_order_flux": 80.0,
+        "mixture": "FUEL_ASM",
+        "previous_sph": 1.41421356237,
+        "raw_update": 1.0,
+        "reference_flux": 80.0,
+        "residual": 0.0,
+        "signed_residual": 0.0,
+        "sph": 1.41421356237,
+        "unclipped_sph": 1.41421356237
+      }
+    ],
+    "flux_residual_improved": true,
+    "initial_flux_ratio_max_residual": 1.0,
+    "initial_worst_residual_bin": {
+      "clipped": false,
+      "group": 2,
+      "low_order_flux": 300.0,
+      "mixture": "REFL_ASM",
+      "previous_sph": 1.0,
+      "raw_update": 2.0,
+      "reference_flux": 600.0,
+      "residual": 1.0,
+      "signed_residual": 1.0,
+      "sph": 1.4142135623730951,
+      "unclipped_sph": 1.4142135623730951
+    },
+    "maximum_clipped_count": 0,
+    "maximum_clipped_fraction": 0.0
+  },
+  "reference_flux": "/mock/sph_loop_run/inputs/reference_flux.h5::openmc_volume_flux",
+  "run_script": null,
+  "schema": "openmc2donjon.sph-loop.v1",
+  "solves": [
+    {
+      "ascii_input": "/mock/sph_loop_run/sph_loop/iter00_initial/out.macrolib.txt",
+      "command": [
+        "/mock/miniforge3/envs/openmc-dev/bin/python",
+        "/mock/openmc-workspace/openmc2donjon/examples/sph_loop_minicase/fake_low_order_solver.py",
+        "solve",
+        "--macrolib",
+        "/mock/sph_loop_run/sph_loop/iter00_initial/out.macrolib.txt",
+        "--result",
+        "/mock/sph_loop_run/sph_loop/iter00_solve/low_order_flux.result",
+        "--iteration",
+        "0"
+      ],
+      "cwd": "/mock/sph_loop_run/sph_loop/iter00_solve",
+      "flux_unknown_count": 4,
+      "flux_vector_count": 2,
+      "iteration": 0,
+      "keff": null,
+      "result": "/mock/sph_loop_run/sph_loop/iter00_solve/low_order_flux.result",
+      "result_bytes": 1127,
+      "returncode": 0,
+      "stderr": "/mock/sph_loop_run/sph_loop/iter00_solve/solver.stderr.txt",
+      "stdout": "/mock/sph_loop_run/sph_loop/iter00_solve/solver.stdout.txt"
+    },
+    {
+      "ascii_input": "/mock/sph_loop_run/sph_loop/iter01_sph/corrected.macrolib.txt",
+      "command": [
+        "/mock/miniforge3/envs/openmc-dev/bin/python",
+        "/mock/openmc-workspace/openmc2donjon/examples/sph_loop_minicase/fake_low_order_solver.py",
+        "solve",
+        "--macrolib",
+        "/mock/sph_loop_run/sph_loop/iter01_sph/corrected.macrolib.txt",
+        "--result",
+        "/mock/sph_loop_run/sph_loop/iter01_solve/low_order_flux.result",
+        "--iteration",
+        "1"
+      ],
+      "cwd": "/mock/sph_loop_run/sph_loop/iter01_solve",
+      "flux_unknown_count": 4,
+      "flux_vector_count": 2,
+      "iteration": 1,
+      "keff": null,
+      "result": "/mock/sph_loop_run/sph_loop/iter01_solve/low_order_flux.result",
+      "result_bytes": 1127,
+      "returncode": 0,
+      "stderr": "/mock/sph_loop_run/sph_loop/iter01_solve/solver.stderr.txt",
+      "stdout": "/mock/sph_loop_run/sph_loop/iter01_solve/solver.stdout.txt"
+    },
+    {
+      "ascii_input": "/mock/sph_loop_run/sph_loop/iter02_sph/corrected.macrolib.txt",
+      "command": [
+        "/mock/miniforge3/envs/openmc-dev/bin/python",
+        "/mock/openmc-workspace/openmc2donjon/examples/sph_loop_minicase/fake_low_order_solver.py",
+        "solve",
+        "--macrolib",
+        "/mock/sph_loop_run/sph_loop/iter02_sph/corrected.macrolib.txt",
+        "--result",
+        "/mock/sph_loop_run/sph_loop/iter02_solve/low_order_flux.result",
+        "--iteration",
+        "2"
+      ],
+      "cwd": "/mock/sph_loop_run/sph_loop/iter02_solve",
+      "flux_unknown_count": 4,
+      "flux_vector_count": 2,
+      "iteration": 2,
+      "keff": null,
+      "result": "/mock/sph_loop_run/sph_loop/iter02_solve/low_order_flux.result",
+      "result_bytes": 1127,
+      "returncode": 0,
+      "stderr": "/mock/sph_loop_run/sph_loop/iter02_solve/solver.stderr.txt",
+      "stdout": "/mock/sph_loop_run/sph_loop/iter02_solve/solver.stdout.txt"
+    }
+  ],
+  "sph_change_tolerance": 1e-12,
+  "stop_reason": "converged",
+  "workflows": [
+    {
+      "ascii_output": "/mock/sph_loop_run/sph_loop/iter01_sph/out.macrolib.txt",
+      "augmented_h5": "/mock/sph_loop_run/sph_loop/iter01_sph/mgxs_with_sph.h5",
+      "donjon_volume_flux_h5": "/mock/sph_loop_run/sph_loop/iter01_sph/donjon_volume_flux.h5",
+      "flux_normalization": "none",
+      "iteration": 1,
+      "normalization_factor": 1.0,
+      "sph_maximum": 1.41421356237,
+      "sph_minimum": 1.41421356237,
+      "sph_sidecar": "/mock/sph_loop_run/sph_loop/iter01_sph/next_sph.sidecar.h5",
+      "summary_json": "/mock/sph_loop_run/sph_loop/iter01_sph/sph_iteration_workflow_summary.json"
+    },
+    {
+      "ascii_output": "/mock/sph_loop_run/sph_loop/iter02_sph/out.macrolib.txt",
+      "augmented_h5": "/mock/sph_loop_run/sph_loop/iter02_sph/mgxs_with_sph.h5",
+      "donjon_volume_flux_h5": "/mock/sph_loop_run/sph_loop/iter02_sph/donjon_volume_flux.h5",
+      "flux_normalization": "none",
+      "iteration": 2,
+      "normalization_factor": 1.0,
+      "sph_maximum": 1.41421356237,
+      "sph_minimum": 1.41421356237,
+      "sph_sidecar": "/mock/sph_loop_run/sph_loop/iter02_sph/next_sph.sidecar.h5",
+      "summary_json": "/mock/sph_loop_run/sph_loop/iter02_sph/sph_iteration_workflow_summary.json"
+    }
+  ]
+}

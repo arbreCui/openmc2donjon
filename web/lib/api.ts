@@ -195,6 +195,47 @@ export interface FileListing {
   entries: FileEntry[];
 }
 
+/**
+ * The ``run-sph-loop`` summary JSON, schema
+ * ``openmc2donjon.sph-loop.v1``. M6-A only models the headline-card
+ * fields; the endpoint returns the full payload and later slices
+ * (convergence chart, acceptance table, audit rows) will extend this
+ * interface as they consume more.
+ */
+export interface SphLoopAcceptanceCheck {
+  name: string;
+  passed: boolean;
+  actual: number | string | boolean | null;
+  limit: number | string | boolean | null;
+  units?: string | null;
+  message?: string | null;
+}
+
+export interface SphLoopAcceptance {
+  enabled: boolean;
+  passed: boolean;
+  checks: SphLoopAcceptanceCheck[];
+}
+
+export interface SphLoopProductionAudit {
+  passed: boolean;
+  errors: string[];
+  checks: SphLoopAcceptanceCheck[];
+}
+
+export interface SphLoopSummary {
+  schema: string;
+  decision: string;
+  package_version: string;
+  iterations: number;
+  completed_iterations: number;
+  converged: boolean;
+  convergence_enabled: boolean;
+  stop_reason: string;
+  acceptance: SphLoopAcceptance;
+  production_audit: SphLoopProductionAudit;
+}
+
 export const api = {
   health: () => getJson<HealthResponse>("/api/health"),
   inspect: (path: string) =>
@@ -206,4 +247,5 @@ export const api = {
       moment,
     }),
   listFiles: (path: string) => getJson<FileListing>("/api/files", { path }),
+  audit: (path: string) => getJson<SphLoopSummary>("/api/audit", { path }),
 };

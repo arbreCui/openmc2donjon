@@ -7,6 +7,10 @@ Endpoints (M1 scope):
   handoff, plus standard energy-mesh ID match when present.
 - ``GET /api/inspect/mixture?path=...&mixture=...&moment=0`` - per-mixture
   cross sections and one scatter moment.
+- ``GET /api/audit?path=...`` - returns the JSON payload written by
+  ``run-sph-loop`` (schema ``openmc2donjon.sph-loop.v1``). The
+  response is the raw parsed JSON; the frontend chooses what to
+  surface.
 
 The ``create_app`` factory keeps the mock flag out of module globals so
 the CLI ``serve`` command can pass it in explicitly. Mock mode returns
@@ -41,6 +45,7 @@ DEFAULT_CORS_ORIGINS: tuple[str, ...] = (
 INSPECT_SCHEMA = "openmc2donjon.mgxs-inspect.v1"
 MIXTURE_SCHEMA = "openmc2donjon.mgxs-mixture.v1"
 FILES_SCHEMA = "openmc2donjon.files.v1"
+AUDIT_SCHEMA = "openmc2donjon.sph-loop.v1"
 
 # Hard caps on the ``/api/inspect`` peek panel so a pathological HDF5
 # (hundreds of root attrs, thousands of top-level datasets) can't blow
@@ -66,6 +71,10 @@ _MOCK_TREE: dict[str, list[tuple[str, str, int | None]]] = {
     f"{_MOCK_HOME}/openmc-runs/c5g7": [
         ("handoff.h5", "file", 832_000),
         ("handoff_aug.h5", "file", 856_000),
+        # ``sph_loop_summary.json`` is what ``/api/audit`` consumes;
+        # putting it next to the handoff mirrors what users see after
+        # ``run-sph-loop`` finishes.
+        ("sph_loop_summary.json", "file", 34_353),
         ("README.md", "file", 1_024),
     ],
     f"{_MOCK_HOME}/openmc-runs/u238_33g": [
@@ -184,6 +193,28 @@ def create_app(
                 status_code=422, detail=f"mixture read failed: {exc}"
             ) from exc
 
+    @app.get("/api/audit")
+    def api_audit(path: str = Query(..., min_length=1)) -> dict[str, Any]:
+        # Returns the raw ``run-sph-loop`` summary JSON. The frontend
+        # decides which sections to surface; the schema field on the
+        # payload (when present) lets it tell a real summary apart from
+        # an arbitrary JSON the user pointed at.
+        if mock_mode:
+            return _load_fixture("audit_sph_loop.json")
+        real_path = _validate_audit_path(path, HTTPException)
+        try:
+            payload = json.loads(real_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise HTTPException(
+                status_code=422, detail=f"audit read failed: {exc}"
+            ) from exc
+        if not isinstance(payload, dict):
+            raise HTTPException(
+                status_code=422,
+                detail="audit file is not a JSON object",
+            )
+        return payload
+
     if mock_mode:
         logger.info("openmc2donjon web server starting in MOCK mode")
     else:
@@ -210,6 +241,22 @@ def _validate_hdf5_path(raw: str, http_exception: Any) -> Path:
         ) from exc
     if not is_hdf5:
         raise http_exception(status_code=400, detail=f"not an HDF5 file: {raw}")
+    return real
+
+
+def _validate_audit_path(raw: str, http_exception: Any) -> Path:
+    """Resolve a user-supplied path and confirm it is a regular file.
+
+    The audit endpoint accepts any JSON file; schema-level validation
+    is deferred to the frontend so users can point at near-misses (an
+    older summary, a partial one) and still see what's there.
+    """
+
+    real = Path(raw).expanduser().resolve()
+    if not real.exists():
+        raise http_exception(status_code=404, detail=f"path not found: {raw}")
+    if not real.is_file():
+        raise http_exception(status_code=400, detail=f"path is not a file: {raw}")
     return real
 
 

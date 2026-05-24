@@ -26,8 +26,17 @@ export interface RecentHandoff {
 }
 
 export const RECENT_CAPACITY = 8;
-export const RECENT_STORAGE_KEY = "openmc2donjon-web:recent-handoffs:v1";
+const STORAGE_KEY_PREFIX = "openmc2donjon-web:recent-handoffs:v1";
 const STORAGE_VERSION = 1;
+
+/**
+ * Build the localStorage key for a given browser ``scope``. Each
+ * file-type-specific browser gets its own slot so HDF5 picks don't
+ * pollute the JSON browser's recent list (and vice versa).
+ */
+export function recentStorageKey(scope: string): string {
+  return `${STORAGE_KEY_PREFIX}:${scope}`;
+}
 
 /**
  * Prepend a freshly-picked path to the recent list, deduplicating
@@ -92,7 +101,7 @@ export function serializeRecent(list: readonly RecentHandoff[]): string {
  * returns an empty list (so server and client markup agree) and the
  * stored value hydrates on mount.
  */
-export function useRecentHandoffs(): {
+export function useRecentHandoffs(scope: string): {
   recent: RecentHandoff[];
   recordPick: (path: string) => void;
   hydrated: boolean;
@@ -103,29 +112,34 @@ export function useRecentHandoffs(): {
   useEffect(() => {
     if (typeof window === "undefined") return;
     setRecent(
-      parseStoredRecent(window.localStorage.getItem(RECENT_STORAGE_KEY)),
+      parseStoredRecent(
+        window.localStorage.getItem(recentStorageKey(scope)),
+      ),
     );
     setHydrated(true);
-  }, []);
+  }, [scope]);
 
-  const recordPick = useCallback((path: string) => {
-    setRecent((current) => {
-      const updated = mergeRecentPick(current, path, Date.now());
-      if (typeof window !== "undefined") {
-        try {
-          window.localStorage.setItem(
-            RECENT_STORAGE_KEY,
-            serializeRecent(updated),
-          );
-        } catch {
-          // localStorage write can fail in private browsing or under
-          // quota - the UI keeps the in-memory list so the current
-          // session still benefits.
+  const recordPick = useCallback(
+    (path: string) => {
+      setRecent((current) => {
+        const updated = mergeRecentPick(current, path, Date.now());
+        if (typeof window !== "undefined") {
+          try {
+            window.localStorage.setItem(
+              recentStorageKey(scope),
+              serializeRecent(updated),
+            );
+          } catch {
+            // localStorage write can fail in private browsing or under
+            // quota - the UI keeps the in-memory list so the current
+            // session still benefits.
+          }
         }
-      }
-      return updated;
-    });
-  }, []);
+        return updated;
+      });
+    },
+    [scope],
+  );
 
   return { recent, recordPick, hydrated };
 }

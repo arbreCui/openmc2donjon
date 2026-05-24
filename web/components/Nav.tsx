@@ -11,6 +11,7 @@ type Item = {
 const ITEMS: Item[] = [
   { href: "/", label: "Home" },
   { href: "/inspect", label: "Inspect" },
+  { href: "/audit", label: "Audit" },
   { href: "/settings", label: "Settings" },
 ];
 

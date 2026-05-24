@@ -4,6 +4,7 @@ import {
   FormEvent,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -15,16 +16,42 @@ import { RecentHandoff, useRecentHandoffs } from "@/lib/recentHandoffs";
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-const HDF5_EXTENSIONS = /\.(h5|hdf5)$/i;
-
 export interface FileBrowserModalProps {
   open: boolean;
   /** Initial directory to load when the modal opens. ``"~"`` is the
    * common default and the backend will resolve it to the server
    * home (or to the mock-home tree in mock mode). */
   initialPath: string;
+  /** File extensions (without the leading dot, case-insensitive) the
+   * picker should surface. Everything else is filtered out with a
+   * footer counting how many got hidden. */
+  extensions: readonly string[];
+  /** Short noun phrase used in the dialog title and the "hidden"
+   * footer: ``"HDF5"`` renders "Browse for HDF5 file" / "N non-HDF5
+   * files hidden". Pass exactly what should land in that slot. */
+  fileTypeLabel: string;
+  /** Even shorter label for the per-row chip (max ~4 chars).
+   * ``"H5"`` for HDF5 callers, ``"JSON"`` for JSON callers. */
+  chipLabel: string;
+  /** Suffix appended to the ``recent-handoffs`` localStorage key so
+   * each browser purpose keeps its own history (HDF5 picks shouldn't
+   * appear in the JSON browser and vice versa). */
+  recentScope: string;
   onSelect: (path: string) => void;
   onClose: () => void;
+}
+
+/**
+ * Compile a list of extensions (``["h5", "hdf5"]``) into a single
+ * case-insensitive regex matching any of them at end-of-name. Each
+ * extension is escaped so a future caller passing ``"foo.bar"`` (with
+ * a literal dot) won't accidentally turn it into a regex metacharacter.
+ */
+function buildExtensionRegex(extensions: readonly string[]): RegExp {
+  const escaped = extensions.map((ext) =>
+    ext.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+  );
+  return new RegExp(`\\.(${escaped.join("|")})$`, "i");
 }
 
 type State =
@@ -33,14 +60,15 @@ type State =
   | { kind: "error"; path: string; message: string; status?: number };
 
 /**
- * Directory picker for the Inspect page.
+ * Directory picker shared between the Inspect and Audit pages.
  *
  * Scope:
  * - Lists one directory at a time via ``/api/files``.
- * - Click a directory to navigate into it; click an HDF5 file to
+ * - Click a directory to navigate into it; click a matching file to
  *   select it and close.
- * - Hides non-HDF5 files (with a count footer so the user knows the
- *   listing isn't lying about emptiness).
+ * - Hides files whose extension is not in ``extensions`` (with a
+ *   count footer so the user knows the listing isn't lying about
+ *   emptiness).
  * - ESC and backdrop click cancel without selecting.
  *
  * Focus management:
@@ -59,9 +87,20 @@ type State =
 export default function FileBrowserModal({
   open,
   initialPath,
+  extensions,
+  fileTypeLabel,
+  chipLabel,
+  recentScope,
   onSelect,
   onClose,
 }: FileBrowserModalProps) {
+  // Memoise so the regex isn't rebuilt on every render. The set of
+  // extensions is callsite-static in practice, but treating it as a
+  // value rather than a constant is cheap insurance.
+  const extensionRegex = useMemo(
+    () => buildExtensionRegex(extensions),
+    [extensions],
+  );
   const [state, setState] = useState<State>({
     kind: "loading",
     path: initialPath,
@@ -72,7 +111,7 @@ export default function FileBrowserModal({
   // because the modal is self-contained that way - the trade-off is
   // that a recent entry might be a file that fails to open, which
   // shows up as the usual error card on the next inspect anyway.
-  const { recent, recordPick } = useRecentHandoffs();
+  const { recent, recordPick } = useRecentHandoffs(recentScope);
   // Editable path bar draft. The committed location is ``currentPath``
   // (drives the fetch); ``pathDraft`` is the user-controlled string in
   // the input. We sync the draft back to ``currentPath`` any time it
@@ -243,7 +282,7 @@ export default function FileBrowserModal({
       }}
       role="dialog"
       aria-modal="true"
-      aria-label="Browse for HDF5 file"
+      aria-label={`Browse for ${fileTypeLabel} file`}
     >
       <div
         ref={dialogRef}
@@ -256,7 +295,7 @@ export default function FileBrowserModal({
       >
         <div className="flex items-baseline justify-between gap-3 px-4 py-3 border-b border-[var(--edge)]">
           <h3 className="text-sm font-semibold tracking-tight">
-            <span className="grad-text">Browse for HDF5 file</span>
+            <span className="grad-text">Browse for {fileTypeLabel} file</span>
           </h3>
           <button
             type="button"
@@ -325,9 +364,20 @@ export default function FileBrowserModal({
 
         <div className="flex-1 overflow-y-auto px-1 py-1">
           {recent.length > 0 ? (
-            <RecentList recent={recent} onPick={handleSelect} />
+            <RecentList
+              recent={recent}
+              onPick={handleSelect}
+              chipLabel={chipLabel}
+            />
           ) : null}
-          <BrowserBody state={state} onPickDir={setCurrentPath} onPickFile={handleSelect} />
+          <BrowserBody
+            state={state}
+            onPickDir={setCurrentPath}
+            onPickFile={handleSelect}
+            extensionRegex={extensionRegex}
+            fileTypeLabel={fileTypeLabel}
+            chipLabel={chipLabel}
+          />
         </div>
       </div>
     </div>
@@ -338,10 +388,16 @@ function BrowserBody({
   state,
   onPickDir,
   onPickFile,
+  extensionRegex,
+  fileTypeLabel,
+  chipLabel,
 }: {
   state: State;
   onPickDir: (path: string) => void;
   onPickFile: (path: string) => void;
+  extensionRegex: RegExp;
+  fileTypeLabel: string;
+  chipLabel: string;
 }) {
   if (state.kind === "loading") {
     return (
@@ -362,7 +418,7 @@ function BrowserBody({
   }
   const allEntries = state.data.entries;
   const visible = allEntries.filter(
-    (e) => e.kind === "dir" || HDF5_EXTENSIONS.test(e.name),
+    (e) => e.kind === "dir" || extensionRegex.test(e.name),
   );
   const hiddenCount = allEntries.length - visible.length;
   // Dirs first (already alphabetical from backend), then files.
@@ -372,10 +428,10 @@ function BrowserBody({
   if (visible.length === 0) {
     return (
       <div className="p-4 space-y-1 text-sm text-[var(--fg-3)]">
-        <div>No HDF5 files or subdirectories here.</div>
+        <div>No {fileTypeLabel} files or subdirectories here.</div>
         {hiddenCount > 0 ? (
           <div className="text-[12px]">
-            ({hiddenCount} non-HDF5 file
+            ({hiddenCount} non-{fileTypeLabel} file
             {hiddenCount === 1 ? "" : "s"} hidden.)
           </div>
         ) : null}
@@ -393,6 +449,7 @@ function BrowserBody({
         <EntryRow
           key={`dir:${entry.name}`}
           entry={entry}
+          chipLabel={chipLabel}
           onClick={() => onPickDir(joinPath(state.data.path, entry.name))}
         />
       ))}
@@ -400,12 +457,13 @@ function BrowserBody({
         <EntryRow
           key={`file:${entry.name}`}
           entry={entry}
+          chipLabel={chipLabel}
           onClick={() => onPickFile(joinPath(state.data.path, entry.name))}
         />
       ))}
       {hiddenCount > 0 ? (
         <li className="px-3 py-2 text-[12px] text-[var(--fg-3)]">
-          {hiddenCount} non-HDF5 file{hiddenCount === 1 ? "" : "s"} hidden.
+          {hiddenCount} non-{fileTypeLabel} file{hiddenCount === 1 ? "" : "s"} hidden.
         </li>
       ) : null}
     </ul>
@@ -414,9 +472,11 @@ function BrowserBody({
 
 function EntryRow({
   entry,
+  chipLabel,
   onClick,
 }: {
   entry: FileEntry;
+  chipLabel: string;
   onClick: () => void;
 }) {
   const isDir = entry.kind === "dir";
@@ -428,7 +488,7 @@ function EntryRow({
         className="w-full px-3 py-1.5 flex items-baseline gap-3 text-left rounded hover:bg-white/[0.04]"
       >
         <span className="inline-flex items-center justify-center min-w-[28px] h-5 px-1 rounded border border-[var(--edge)] bg-white/[0.03] text-[10px] font-semibold uppercase tracking-wider text-[var(--fg-2)] tab-num">
-          {isDir ? "DIR" : "H5"}
+          {isDir ? "DIR" : chipLabel}
         </span>
         <span
           className={
@@ -452,9 +512,11 @@ function EntryRow({
 function RecentList({
   recent,
   onPick,
+  chipLabel,
 }: {
   recent: readonly RecentHandoff[];
   onPick: (path: string) => void;
+  chipLabel: string;
 }) {
   return (
     // Lives in the same scroll container as the directory listing so
@@ -478,7 +540,7 @@ function RecentList({
               className="w-full px-2 py-1 flex items-baseline gap-3 text-left rounded hover:bg-white/[0.04]"
             >
               <span className="inline-flex items-center justify-center min-w-[28px] h-5 px-1 rounded border border-[var(--edge)] bg-white/[0.03] text-[10px] font-semibold uppercase tracking-wider text-[var(--fg-2)] tab-num">
-                H5
+                {chipLabel}
               </span>
               <span className="font-mono flex-1 min-w-0 truncate text-[var(--accent-2)]">
                 {entry.path}

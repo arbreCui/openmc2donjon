@@ -218,6 +218,10 @@ export default function InspectPage() {
           // strips a trailing file segment so opening the modal lands
           // in the right directory.
           initialPath={pickBrowserStart(path.trim() || savedPrefix)}
+          extensions={["h5", "hdf5"]}
+          fileTypeLabel="HDF5"
+          chipLabel="H5"
+          recentScope="hdf5"
           onClose={() => setBrowserOpen(false)}
           onSelect={(picked) => {
             setPath(picked);

@@ -637,6 +637,128 @@ class FilesEndpointTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["path"], "/mock/home")
 
+    def test_mock_mode_lists_sph_loop_summary_next_to_handoff(self) -> None:
+        # The audit page picks ``sph_loop_summary.json`` through the
+        # same file browser used by ``inspect``; the mock tree exposes
+        # it as a sibling of the handoff so users hit a realistic
+        # layout in mock mode.
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.get(
+            "/api/files", params={"path": "/mock/home/openmc-runs/c5g7"},
+        )
+        self.assertEqual(response.status_code, 200)
+        names = {e["name"] for e in response.json()["entries"]}
+        self.assertIn("sph_loop_summary.json", names)
+        self.assertIn("handoff.h5", names)
+
+
+@unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
+class AuditEndpointTests(unittest.TestCase):
+    def test_mock_mode_returns_bundled_sph_loop_fixture(self) -> None:
+        from openmc2donjon.web.server import AUDIT_SCHEMA, create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.get("/api/audit", params={"path": "/any.json"})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["schema"], AUDIT_SCHEMA)
+        # Top-level keys the M6-A summary header relies on; if these
+        # change the frontend breaks silently, so test them here.
+        for key in (
+            "decision",
+            "iterations",
+            "completed_iterations",
+            "acceptance",
+            "production_audit",
+            "convergence",
+            "audit_rows",
+        ):
+            self.assertIn(key, payload, key)
+        self.assertIn("passed", payload["acceptance"])
+        self.assertIn("passed", payload["production_audit"])
+
+    def test_live_mode_reads_real_summary_from_disk(self) -> None:
+        import json
+
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            summary_path = Path(tmp) / "sph_loop_summary.json"
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "schema": "openmc2donjon.sph-loop.v1",
+                        "decision": "openmc2donjon_sph_loop_passed",
+                        "iterations": 2,
+                    },
+                ),
+                encoding="utf-8",
+            )
+
+            client = TestClient(create_app(mock_mode=False))
+            response = client.get(
+                "/api/audit", params={"path": str(summary_path)},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["decision"], "openmc2donjon_sph_loop_passed",
+        )
+
+    def test_live_mode_path_not_found_returns_404(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=False))
+        response = client.get(
+            "/api/audit", params={"path": "/nonexistent/audit.json"},
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_live_mode_directory_returns_400(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            client = TestClient(create_app(mock_mode=False))
+            response = client.get("/api/audit", params={"path": tmp})
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_live_mode_malformed_json_returns_422(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = Path(tmp) / "bad.json"
+            bad.write_text("{not valid json", encoding="utf-8")
+
+            client = TestClient(create_app(mock_mode=False))
+            response = client.get("/api/audit", params={"path": str(bad)})
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("audit read failed", response.json()["detail"])
+
+    def test_live_mode_non_object_json_returns_422(self) -> None:
+        # The frontend treats the payload as ``Record<string, ...>``;
+        # a list or scalar at the root would crash render. We catch it
+        # here with a clear error instead.
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            list_path = Path(tmp) / "list.json"
+            list_path.write_text("[1, 2, 3]", encoding="utf-8")
+
+            client = TestClient(create_app(mock_mode=False))
+            response = client.get(
+                "/api/audit", params={"path": str(list_path)},
+            )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn(
+            "not a JSON object", response.json()["detail"],
+        )
+
 
 class UvicornLogLevelMappingTests(unittest.TestCase):
     def _ns(self, **kwargs: object) -> object:
