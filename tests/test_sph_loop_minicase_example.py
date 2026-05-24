@@ -82,6 +82,14 @@ class SphLoopMinicaseExampleTests(unittest.TestCase):
                     h5["openmc_volume_flux"].attrs["group_order"],
                     "mgxs_donjon",
                 )
+                self.assertEqual(
+                    h5["openmc_volume_flux_std_dev"].attrs["std_dev_of"],
+                    "openmc_volume_flux",
+                )
+                np.testing.assert_allclose(
+                    h5["openmc_volume_flux_std_dev"][:],
+                    h5["openmc_volume_flux"][:] * 1.0e-3,
+                )
 
             with h5py.File(case_dir / "expected_sph.h5", "r") as h5:
                 np.testing.assert_allclose(
@@ -98,6 +106,14 @@ class SphLoopMinicaseExampleTests(unittest.TestCase):
             self.assertEqual(
                 payload["acceptance"]["require_mgxs_std_dev_coverage"],
                 True,
+            )
+            self.assertEqual(
+                payload["acceptance"]["require_reference_flux_std_dev"],
+                True,
+            )
+            self.assertEqual(
+                payload["acceptance"]["max_reference_flux_std_dev_rel"],
+                1.0e-2,
             )
             self.assertEqual(payload["solver"]["result"], "low_order_flux.result")
             self.assertIn("{ascii_input}", payload["solver"]["command"])
@@ -133,6 +149,14 @@ class SphLoopMinicaseExampleTests(unittest.TestCase):
             self.assertEqual(
                 plan.normalized_acceptance["require_mgxs_std_dev_coverage"],
                 True,
+            )
+            self.assertEqual(
+                plan.normalized_acceptance["require_reference_flux_std_dev"],
+                True,
+            )
+            self.assertEqual(
+                plan.normalized_acceptance["max_reference_flux_std_dev_rel"],
+                1.0e-2,
             )
 
     def test_minicase_production_preset_runs_with_artifact_metadata_gate(self) -> None:
@@ -185,6 +209,12 @@ class SphLoopMinicaseExampleTests(unittest.TestCase):
             self.assertTrue(checks["require_artifact_metadata_alignment"]["passed"])
             self.assertTrue(checks["require_production_audit"]["passed"])
             self.assertTrue(checks["require_mgxs_std_dev_coverage"]["passed"])
+            self.assertTrue(checks["require_reference_flux_std_dev"]["passed"])
+            self.assertTrue(checks["max_reference_flux_std_dev_rel"]["passed"])
+            self.assertAlmostEqual(
+                checks["max_reference_flux_std_dev_rel"]["actual"],
+                1.0e-3,
+            )
             self.assertEqual(payload["flux_map_preflight"]["mgxs_std_dev_datasets"], 12)
             self.assertEqual(
                 payload["flux_map_preflight"]["mgxs_std_dev_expected_datasets"],
@@ -196,6 +226,14 @@ class SphLoopMinicaseExampleTests(unittest.TestCase):
                 ["FUEL_ASM", "REFL_ASM"],
             )
             self.assertEqual(metadata["reference_flux"]["group_order"], "mgxs_donjon")
+            self.assertEqual(
+                metadata["reference_flux"]["std_dev_dataset"],
+                "openmc_volume_flux_std_dev",
+            )
+            self.assertAlmostEqual(
+                metadata["reference_flux"]["std_dev_max_rel"],
+                1.0e-3,
+            )
             self.assertEqual(len(metadata["workflows"]), 2)
             for workflow in metadata["workflows"]:
                 self.assertEqual(
@@ -301,6 +339,14 @@ class SphLoopMinicaseExampleTests(unittest.TestCase):
             postprocess = payload["postprocess"]["command"]
             self.assertEqual(payload["schema"], "openmc2donjon.sph-loop-config.v1")
             self.assertEqual(payload["sph_kind"], "sph-loop-minicase-donjon")
+            self.assertEqual(
+                payload["acceptance"]["require_reference_flux_std_dev"],
+                True,
+            )
+            self.assertEqual(
+                payload["acceptance"]["max_reference_flux_std_dev_rel"],
+                1.0e-2,
+            )
             self.assertIn("-m", solver)
             self.assertIn("openmc2donjon.donjon_deck_runner", solver)
             self.assertIn("openmc2donjon.donjon_deck_runner", postprocess)
@@ -336,6 +382,8 @@ class SphLoopMinicaseExampleTests(unittest.TestCase):
         self.assertIn("run-sph-loop", text)
         self.assertIn("validate-bundle", text)
         self.assertIn("--require-std-dev-coverage", text)
+        self.assertIn("require_reference_flux_std_dev", text)
+        self.assertIn("max_reference_flux_std_dev_rel", text)
         self.assertIn("openmc2donjon.donjon_deck_runner", text)
         self.assertIn("--dry-run", text)
         self.assertIn("corrected.macrolib.txt", text)

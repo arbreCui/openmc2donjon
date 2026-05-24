@@ -15,6 +15,7 @@ ENERGY_BOUNDS = np.array([1.0e-5, 1.0, 1.0e7], dtype=float)
 MIXTURE_NAMES = ("FUEL_ASM", "REFL_ASM")
 SCALAR_FLUX_IDS = np.array([2, 4], dtype=int)
 REFERENCE_FLUX = np.array([[80.0, 800.0], [120.0, 600.0]], dtype=float)
+REFERENCE_FLUX_STD_DEV = np.abs(REFERENCE_FLUX) * 1.0e-3
 EXPECTED_SPH = np.full((2, 2), np.sqrt(0.5), dtype=float)
 
 
@@ -175,9 +176,16 @@ def _write_reference_flux(path: Path) -> None:
     with h5py.File(path, "w") as h5:
         h5.attrs["schema"] = "openmc2donjon.reference-flux.v1"
         dataset = h5.create_dataset("openmc_volume_flux", data=REFERENCE_FLUX)
+        std_dev = h5.create_dataset(
+            "openmc_volume_flux_std_dev",
+            data=REFERENCE_FLUX_STD_DEV,
+        )
         names = np.asarray(MIXTURE_NAMES, dtype="S")
-        dataset.attrs["mixture_names"] = names
-        dataset.attrs["group_order"] = "mgxs_donjon"
+        for obj in (dataset, std_dev):
+            obj.attrs["mixture_names"] = names
+            obj.attrs["group_order"] = "mgxs_donjon"
+            obj.attrs["layout"] = "[mixture, group]"
+        std_dev.attrs["std_dev_of"] = "openmc_volume_flux"
         h5.create_dataset("mixture_names", data=names)
 
 
@@ -224,6 +232,8 @@ def _write_config(path: Path, *, driver: Path, python_bin: str) -> None:
         "acceptance": {
             "preset": "production",
             "require_mgxs_std_dev_coverage": True,
+            "require_reference_flux_std_dev": True,
+            "max_reference_flux_std_dev_rel": 1.0e-2,
         },
         "solver": {
             "command": [

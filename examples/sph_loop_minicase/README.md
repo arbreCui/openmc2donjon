@@ -33,22 +33,27 @@ The checked-in `loop_config.json` shows the shape of the user config. The smoke
 script generates an equivalent concrete config with paths resolved for the run
 directory.
 
-This minicase deliberately includes `*_std_dev` arrays for every eligible MGXS
-dataset and enables the strict uncertainty-coverage gate:
+This minicase deliberately carries uncertainty data on both production inputs:
+`*_std_dev` arrays for every eligible MGXS dataset and
+`/openmc_volume_flux_std_dev` for the fixed OpenMC reference flux. The smoke
+enables strict gates for both:
 
 ```json
 {
   "acceptance": {
     "preset": "production",
-    "require_mgxs_std_dev_coverage": true
+    "require_mgxs_std_dev_coverage": true,
+    "require_reference_flux_std_dev": true,
+    "max_reference_flux_std_dev_rel": 0.01
   }
 }
 ```
 
-That gate is optional in the production preset because older or external HDF5
-handoffs may not carry OpenMC tally standard deviations. Turn it on when the
-case policy requires the downstream SPH audit to prove that Monte Carlo tally
-uncertainty was exported alongside the mean cross sections.
+Those gates are optional in the production preset because older or external
+HDF5 handoffs may not carry OpenMC tally standard deviations. Turn them on when
+the case policy requires the downstream SPH audit to prove that Monte Carlo
+tally uncertainty was exported alongside the mean cross sections and the
+reference flux used by the SPH update.
 
 For a DONJON-backed handoff, generate the real-runner config:
 

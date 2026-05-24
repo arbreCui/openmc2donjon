@@ -66,6 +66,12 @@ def main(argv: list[str] | None = None) -> int:
         case_dir=args.case_dir,
         sph_kind="sph-loop-minicase-donjon",
         source_label="SPH loop minicase DONJON runner",
+        acceptance={
+            "preset": "production",
+            "require_mgxs_std_dev_coverage": True,
+            "require_reference_flux_std_dev": True,
+            "max_reference_flux_std_dev_rel": 1.0e-2,
+        },
     )
     print(f"SPH loop minicase DONJON config: {args.output}")
     return 0

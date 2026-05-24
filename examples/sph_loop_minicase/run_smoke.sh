@@ -64,6 +64,9 @@ solver = config["solver"]["command"]
 postprocess = config["postprocess"]["command"]
 assert config["schema"] == "openmc2donjon.sph-loop-config.v1"
 assert config["sph_kind"] == "sph-loop-minicase-donjon"
+assert config["acceptance"]["require_mgxs_std_dev_coverage"] is True
+assert config["acceptance"]["require_reference_flux_std_dev"] is True
+assert config["acceptance"]["max_reference_flux_std_dev_rel"] == 1.0e-2
 assert "-m" in solver
 assert "openmc2donjon.donjon_deck_runner" in solver
 assert "openmc2donjon.donjon_deck_runner" in postprocess
@@ -159,11 +162,16 @@ assert summary["final_ascii"].endswith("corrected.macrolib.txt")
 checks = {item["name"]: item for item in summary["acceptance"]["checks"]}
 assert checks["require_artifact_metadata_alignment"]["passed"] is True
 assert checks["require_mgxs_std_dev_coverage"]["passed"] is True
+assert checks["require_reference_flux_std_dev"]["passed"] is True
+assert checks["max_reference_flux_std_dev_rel"]["passed"] is True
+assert abs(checks["max_reference_flux_std_dev_rel"]["actual"] - 1.0e-3) < 1.0e-15
 assert summary["flux_map_preflight"]["mgxs_std_dev_datasets"] == 12
 assert summary["flux_map_preflight"]["mgxs_std_dev_expected_datasets"] == 12
 metadata = summary["artifact_metadata"]
 assert metadata["reference_flux"]["group_order"] == "mgxs_donjon"
 assert metadata["reference_flux"]["mixture_names"] == ["FUEL_ASM", "REFL_ASM"]
+assert metadata["reference_flux"]["std_dev_dataset"] == "openmc_volume_flux_std_dev"
+assert abs(metadata["reference_flux"]["std_dev_max_rel"] - 1.0e-3) < 1.0e-15
 for workflow in metadata["workflows"]:
     assert workflow["donjon_volume_flux"]["group_order"] == "mgxs_donjon"
     assert workflow["donjon_volume_flux"]["mixture_names"] == ["FUEL_ASM", "REFL_ASM"]
