@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   C5G7_PRODUCTION_DEMO,
+  PRODUCTION_MINICASE_ARTIFACTS,
   PRODUCTION_MINICASE_COMMAND,
   PRODUCTION_MINICASE_DEMO,
   PRODUCTION_MINICASE_RUN_ROOT,
@@ -35,6 +36,21 @@ describe("convert demo presets", () => {
       "/private/tmp/openmc2donjon_production_minicase_smoke/openmc2donjon_run/web_repeat.mcompo.txt",
     );
     expect(PRODUCTION_MINICASE_DEMO.production).toBe(true);
+  });
+
+  it("documents the live minicase artifacts used by the web walkthrough", () => {
+    expect(PRODUCTION_MINICASE_ARTIFACTS.map((artifact) => artifact.id)).toEqual([
+      "run-root",
+      "mgxs",
+      "ascii",
+      "bundle",
+    ]);
+    expect(PRODUCTION_MINICASE_ARTIFACTS[0].path).toBe(PRODUCTION_MINICASE_RUN_ROOT);
+    expect(PRODUCTION_MINICASE_ARTIFACTS[1].href).toContain("/inspect?");
+    expect(PRODUCTION_MINICASE_ARTIFACTS[2].href).toContain("/convert?");
+    expect(PRODUCTION_MINICASE_ARTIFACTS[3].href).toContain(
+      "/builder?command=bundle",
+    );
   });
 
   it("detects paths inside the production minicase run root", () => {

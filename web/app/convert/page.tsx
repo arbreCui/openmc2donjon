@@ -21,6 +21,7 @@ import {
 } from "@/lib/convertCommand";
 import {
   C5G7_PRODUCTION_DEMO,
+  PRODUCTION_MINICASE_ARTIFACTS,
   PRODUCTION_MINICASE_COMMAND,
   PRODUCTION_MINICASE_DEMO,
   convertDemoWalkthrough,
@@ -681,6 +682,50 @@ function LiveMinicaseCard({ onApply }: { onApply: () => void }) {
         <pre className="mt-3 overflow-x-auto rounded-md border border-[var(--edge)] bg-black/25 px-3 py-2 text-[12px] text-[var(--fg-1)]">
           {PRODUCTION_MINICASE_COMMAND}
         </pre>
+      </div>
+
+      <div className="mt-4 grid gap-2 lg:grid-cols-4">
+        {PRODUCTION_MINICASE_ARTIFACTS.map((artifact) => (
+          <article
+            key={artifact.id}
+            className="min-w-0 rounded-lg border border-[var(--edge)] bg-black/10 p-3"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="rounded border border-emerald-200/25 bg-emerald-200/[0.08] px-1.5 py-0.5 text-[10px] uppercase tracking-[0.14em] text-emerald-100">
+                {artifact.label}
+              </span>
+              {artifact.href ? (
+                <Link
+                  href={artifact.href}
+                  className="text-[11px] text-[var(--accent-2)] hover:underline"
+                >
+                  open
+                </Link>
+              ) : null}
+            </div>
+            <h3 className="mt-2 text-[12px] font-semibold tracking-tight text-emerald-50">
+              {artifact.title}
+            </h3>
+            <div
+              className="mt-1 truncate font-mono text-[11px] text-[var(--fg-1)]"
+              title={artifact.path}
+            >
+              {artifact.path}
+            </div>
+            <p className="mt-2 text-[12px] leading-5 text-[var(--fg-2)]">
+              {artifact.body}
+            </p>
+            <div className="mt-2">
+              <CopyCliButton
+                value={artifact.path}
+                compact
+                label="Copy path"
+                copiedLabel="Copied"
+                ariaLabel={`Copy ${artifact.label} path`}
+              />
+            </div>
+          </article>
+        ))}
       </div>
 
       <div className="mt-4 grid gap-3 lg:grid-cols-4">

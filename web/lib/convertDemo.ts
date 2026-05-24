@@ -20,6 +20,15 @@ export interface ConvertDemoStep {
   href?: string;
 }
 
+export interface ConvertDemoArtifact {
+  id: string;
+  label: string;
+  title: string;
+  path: string;
+  body: string;
+  href?: string;
+}
+
 export const C5G7_PRODUCTION_DEMO: ConvertDemoPreset = {
   id: "c5g7-production",
   label: "C5G7 production demo",
@@ -53,6 +62,40 @@ export const PRODUCTION_MINICASE_COMMAND =
 
 export const PRODUCTION_MINICASE_RUN_ROOT =
   "/private/tmp/openmc2donjon_production_minicase_smoke";
+
+export const PRODUCTION_MINICASE_ARTIFACTS: readonly ConvertDemoArtifact[] = [
+  {
+    id: "run-root",
+    label: "Run root",
+    title: "Managed smoke directory",
+    path: PRODUCTION_MINICASE_RUN_ROOT,
+    body: "The smoke recreates this directory; remove it or rerun the script when you need a fresh handoff.",
+  },
+  {
+    id: "mgxs",
+    label: "MGXS",
+    title: "OpenMC HDF5 handoff",
+    path: PRODUCTION_MINICASE_DEMO.inputPath,
+    body: "The converter reads this file. Inspect it first to confirm mesh, mixtures, std_dev, and H-FACTOR visibility.",
+    href: convertDemoInspectHref(PRODUCTION_MINICASE_DEMO),
+  },
+  {
+    id: "ascii",
+    label: "ASCII",
+    title: "Web repeat output",
+    path: PRODUCTION_MINICASE_DEMO.outputPath,
+    body: "The web demo writes a repeat MULTICOMPO file here so the original smoke output stays comparable.",
+    href: convertDemoHref(PRODUCTION_MINICASE_DEMO),
+  },
+  {
+    id: "bundle",
+    label: "Bundle",
+    title: "Portable delivery record",
+    path: `${parentDir(PRODUCTION_MINICASE_DEMO.outputPath)}/bundle`,
+    body: "The bundle builder is prefilled from these paths after the ASCII file exists.",
+    href: convertDemoBundleHref(PRODUCTION_MINICASE_DEMO),
+  },
+];
 
 export function isProductionMinicasePath(path: string): boolean {
   return path.trim().startsWith(PRODUCTION_MINICASE_RUN_ROOT);
