@@ -36,6 +36,8 @@ class MixtureInspection:
     sph: bool
     scatter_shape: tuple[int, ...] | None
     scatter_axes: str | None
+    std_dev_datasets: int
+    std_dev_expected_datasets: int
     attr_keys: tuple[str, ...]
 
 
@@ -63,6 +65,8 @@ class Hdf5Inspection:
     adf_mixtures: int = 0
     adf_faces: tuple[str, ...] = ()
     sph_calculations: int = 0
+    std_dev_datasets: int = 0
+    std_dev_expected_datasets: int = 0
     scatter_axes: tuple[str, ...] = ()
     scatter_shapes: tuple[tuple[int, ...], ...] = ()
     mixtures: list[MixtureInspection] = field(default_factory=list)
@@ -160,6 +164,8 @@ def _inspect_open_h5(h5: h5py.File, report: Hdf5Inspection) -> None:
             adf_layouts.append(info.adf_faces)
         if info.sph:
             report.sph_calculations += calculations
+        report.std_dev_datasets += info.std_dev_datasets
+        report.std_dev_expected_datasets += info.std_dev_expected_datasets
         if info.scatter_axes:
             scatter_axes_seen.add(info.scatter_axes)
         if info.scatter_shape:
@@ -187,9 +193,15 @@ def _inspect_mixture(
         states = group["states"]
         state_names = _sorted_state_names(states)
         first_group = states[state_names[0]] if state_names else group
+        calculation_groups = tuple(
+            states[state_name]
+            for state_name in state_names
+            if isinstance(states[state_name], h5py.Group)
+        )
         calculations = len(state_names)
     else:
         first_group = group
+        calculation_groups = (group,)
         calculations = 1
 
     parent_attrs = group.attrs if first_group is not group else None
@@ -206,6 +218,12 @@ def _inspect_mixture(
     )
     scatter_axes = _scatter_axes(first_group, group, h5)
     present_required = sum(1 for field in REQUIRED_DATASETS if field in first_group)
+    std_dev_datasets = 0
+    std_dev_expected_datasets = 0
+    for calculation_group in calculation_groups:
+        present, expected = _std_dev_coverage_counts(calculation_group)
+        std_dev_datasets += present
+        std_dev_expected_datasets += expected
     attrs = set(str(key) for key in group.attrs)
     attrs.update(str(key) for key in first_group.attrs)
 
@@ -222,6 +240,8 @@ def _inspect_mixture(
             sph=sph,
             scatter_shape=scatter_shape,
             scatter_axes=scatter_axes,
+            std_dev_datasets=std_dev_datasets,
+            std_dev_expected_datasets=std_dev_expected_datasets,
             attr_keys=tuple(sorted(attrs)),
         ),
         calculations,
@@ -263,7 +283,8 @@ def print_report(
         f"h_factor={report.h_factor}/{calculation_count} "
         f"inverse_velocity={report.inverse_velocity}/{calculation_count} "
         f"flux_weight={report.flux_weight}/{calculation_count} "
-        f"sph={report.sph_calculations}/{calculation_count}"
+        f"sph={report.sph_calculations}/{calculation_count} "
+        f"std_dev={report.std_dev_datasets}/{report.std_dev_expected_datasets}"
     )
     print(
         "        scatter="
@@ -332,6 +353,8 @@ def _report_payload(report: Hdf5Inspection) -> dict[str, Any]:
         "adf_mixtures": report.adf_mixtures,
         "adf_faces": list(report.adf_faces),
         "sph_calculations": report.sph_calculations,
+        "std_dev_datasets": report.std_dev_datasets,
+        "std_dev_expected_datasets": report.std_dev_expected_datasets,
         "scatter_axes": list(report.scatter_axes),
         "scatter_shapes": [list(shape) for shape in report.scatter_shapes],
         "issues": list(report.issues),
@@ -350,11 +373,27 @@ def _report_payload(report: Hdf5Inspection) -> dict[str, Any]:
                     None if mixture.scatter_shape is None else list(mixture.scatter_shape)
                 ),
                 "scatter_axes": mixture.scatter_axes,
+                "std_dev_datasets": mixture.std_dev_datasets,
+                "std_dev_expected_datasets": mixture.std_dev_expected_datasets,
                 "attr_keys": list(mixture.attr_keys),
             }
             for mixture in report.mixtures
         ],
     }
+
+
+def _std_dev_coverage_counts(group: h5py.Group) -> tuple[int, int]:
+    mean_datasets = tuple(
+        name
+        for name in REQUIRED_DATASETS + OPTIONAL_VECTOR_DATASETS
+        if name in group and isinstance(group[name], h5py.Dataset)
+    )
+    present = sum(
+        1
+        for name in mean_datasets
+        if f"{name}_std_dev" in group and isinstance(group[f"{name}_std_dev"], h5py.Dataset)
+    )
+    return present, len(mean_datasets)
 
 
 def _burnup_axis(h5: h5py.File) -> tuple[str, int] | None:

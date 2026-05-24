@@ -32,6 +32,12 @@ export interface CommandBuilderSpec {
   notes: string[];
 }
 
+export interface CommandBuilderStage {
+  label: string;
+  summary: string;
+  reference: string;
+}
+
 export type BuilderValues = Record<string, string | boolean>;
 
 const FACES = "FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX";
@@ -367,6 +373,65 @@ export const COMMAND_BUILDER_SPECS: readonly CommandBuilderSpec[] = [
 
 export function commandBuilderSpec(id: string): CommandBuilderSpec | null {
   return COMMAND_BUILDER_SPECS.find((spec) => spec.id === id) ?? null;
+}
+
+export function commandBuilderStage(id: string): CommandBuilderStage {
+  if (id === "diff" || id === "doctor") {
+    return {
+      label: "Inspect and preflight",
+      summary:
+        "Diagnostic command: use it before accepting a handoff or when a local environment looks suspicious.",
+      reference: "HDF5 / runtime QA",
+    };
+  }
+  if (
+    id === "export-surface-flux" ||
+    id === "check-face-flux" ||
+    id === "make-low-order-driver" ||
+    id === "check-low-order-driver" ||
+    id === "make-homogeneous-face-flux"
+  ) {
+    return {
+      label: "ADF/DF equivalence",
+      summary:
+        "One-shot equivalence command: prepare face-flux or low-order inputs before ADF sidecar generation.",
+      reference: "OpenMC reference plus low-order face data",
+    };
+  }
+  if (
+    id === "make-sph-update-table" ||
+    id === "extract-donjon-volume-flux" ||
+    id === "run-sph-iteration" ||
+    id === "make-donjon-sph-loop-config" ||
+    id === "make-sph-loop-scaffold"
+  ) {
+    return {
+      label: "SPH feedback loop",
+      summary:
+        "Fixed-OpenMC SPH command: DONJON flux is compared to the OpenMC reference, NSPH is updated, then the handoff is reconverted.",
+      reference: "Frozen OpenMC MGXS and reference flux",
+    };
+  }
+  if (id === "bundle" || id === "validate-bundle") {
+    return {
+      label: "Package and archive",
+      summary:
+        "Delivery command: collect or validate the artifacts that make a production handoff reproducible.",
+      reference: "Run directory artifacts",
+    };
+  }
+  if (id === "serve") {
+    return {
+      label: "Local web service",
+      summary: "Operational command: start the localhost API backend used by the web UI.",
+      reference: "FastAPI backend",
+    };
+  }
+  return {
+    label: "Command-line workflow",
+    summary: "Generic command builder: copy the CLI and run it locally.",
+    reference: "CLI",
+  };
 }
 
 export function defaultBuilderValues(spec: CommandBuilderSpec): BuilderValues {

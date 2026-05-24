@@ -43,6 +43,8 @@
   "adf_mixtures": 9,
   "adf_faces": ["XMIN", "XMAX", "YMIN", "YMAX"],
   "sph_calculations": 9,
+  "std_dev_datasets": 0,
+  "std_dev_expected_datasets": 58,
   "scatter_axes": ["moment,from,to"],
   "scatter_shapes": [[2, 7, 7]],
   "issues": [],

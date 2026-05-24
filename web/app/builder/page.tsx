@@ -16,6 +16,7 @@ import {
   BuilderValues,
   buildCommandCli,
   commandBuilderSpec,
+  commandBuilderStage,
   defaultBuilderValues,
 } from "@/lib/commandBuilder";
 import { useSettings } from "@/lib/settings";
@@ -90,6 +91,7 @@ function CommandBuilderPageContent() {
   );
 
   const cli = spec ? buildCommandCli(spec, values) : command?.cli ?? "";
+  const stage = spec ? commandBuilderStage(spec.id) : null;
   const canUseSavedPrefix =
     settingsHydrated &&
     savedPrefix !== "" &&
@@ -169,6 +171,8 @@ function CommandBuilderPageContent() {
               </div>
             </div>
 
+            {stage ? <WorkflowHint stage={stage} /> : null}
+
             {canUseSavedPrefix ? (
               <button
                 type="button"
@@ -230,6 +234,32 @@ function CommandBuilderPageContent() {
         />
       </div>
     </main>
+  );
+}
+
+function WorkflowHint({
+  stage,
+}: {
+  stage: ReturnType<typeof commandBuilderStage>;
+}) {
+  return (
+    <div className="mt-4 rounded-lg border border-cyan-300/20 bg-cyan-300/[0.045] p-3">
+      <div className="grid gap-3 md:grid-cols-[180px_1fr_180px] md:items-start">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.14em] text-cyan-300">
+            workflow step
+          </div>
+          <div className="mt-1 text-sm font-semibold tracking-tight">{stage.label}</div>
+        </div>
+        <p className="text-sm leading-relaxed text-[var(--fg-2)]">{stage.summary}</p>
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+            fixed reference
+          </div>
+          <div className="mt-1 text-[12px] text-[var(--fg-1)]">{stage.reference}</div>
+        </div>
+      </div>
+    </div>
   );
 }
 

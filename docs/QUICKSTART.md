@@ -52,6 +52,36 @@ production-style case:
 bash scripts/run_production_minicase_smoke.sh
 ```
 
+## Open The Local Web UI
+
+The CLI remains the authoritative execution path, but the localhost Web UI is
+the fastest way to inspect a handoff, dry-run conversion gates, preview command
+lines, and review SPH-loop audit summaries:
+
+```sh
+python -m pip install -e ".[web]"
+openmc2donjon serve
+
+# In another shell:
+cd web
+npm install
+npm run dev
+```
+
+Open <http://localhost:3000>. The main surfaces are:
+
+- `Commands` - workflow map plus every CLI command linked to a Web surface;
+- `Convert` - direct HDF5 -> MULTICOMPO/MACROLIB dry-run and conversion;
+- `Inspect` - HDF5 mixture, energy mesh, scatter, ADF/SPH, and std_dev hints;
+- `Equivalence` - copyable ADF/SPH sidecar and augmentation commands;
+- `Builder` - copyable command builders for diagnostics, bundles, and SPH
+  support commands;
+- `Audit` - SPH-loop summary viewer separating production acceptance from
+  convergence.
+
+For fixture-backed UI work without local files, start the backend with
+`openmc2donjon serve --mock`.
+
 ## One-Step OpenMC To DONJON
 
 For a real OpenMC case, write a small recipe that builds the case's

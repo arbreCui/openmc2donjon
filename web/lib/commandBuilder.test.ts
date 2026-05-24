@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCommandCli,
+  commandBuilderStage,
   commandBuilderSpec,
   defaultBuilderValues,
 } from "./commandBuilder";
@@ -48,5 +49,13 @@ describe("commandBuilder", () => {
         "--cors-origin http://localhost:3000 --cors-origin http://127.0.0.1:3000 " +
         "--log-level DEBUG",
     );
+  });
+
+  it("labels SPH builders with the fixed-OpenMC feedback-loop stage", () => {
+    const stage = commandBuilderStage("make-sph-loop-scaffold");
+
+    expect(stage.label).toBe("SPH feedback loop");
+    expect(stage.summary).toContain("Fixed-OpenMC");
+    expect(stage.reference).toContain("OpenMC");
   });
 });

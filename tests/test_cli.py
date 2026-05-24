@@ -221,6 +221,7 @@ class CliTests(unittest.TestCase):
             with h5py.File(path, "a") as h5:
                 fuel = h5["mixtures/fuel"]
                 fuel.create_dataset("H-FACTOR", data=np.array([10.0, 20.0]))
+                fuel.create_dataset("total_std_dev", data=np.array([0.001, 0.002]))
                 adf = fuel.create_group("adf")
                 adf.create_dataset("FD_XMIN", data=np.array([1.01, 0.99]))
                 adf.create_dataset("FD_XMAX", data=np.array([1.02, 0.98]))
@@ -244,14 +245,70 @@ class CliTests(unittest.TestCase):
         self.assertIn("mixtures=1 calculations=1 state_points=1", output)
         self.assertIn("transport_total=1/1", output)
         self.assertIn("h_factor=1/1", output)
+        self.assertIn("std_dev=1/8", output)
         self.assertIn("adf=1/1 faces=FD_XMAX,FD_XMIN", output)
         self.assertIn("fuel states=1", output)
         self.assertEqual(payload["schema"], "openmc2donjon.mgxs-inspect.v1")
         self.assertEqual(payload["inputs"][0]["mixture_count"], 1)
+        self.assertEqual(payload["inputs"][0]["std_dev_datasets"], 1)
+        self.assertEqual(payload["inputs"][0]["std_dev_expected_datasets"], 8)
         self.assertEqual(payload["inputs"][0]["mixtures"][0]["name"], "fuel")
+        self.assertEqual(payload["inputs"][0]["mixtures"][0]["std_dev_datasets"], 1)
+        self.assertEqual(
+            payload["inputs"][0]["mixtures"][0]["std_dev_expected_datasets"],
+            8,
+        )
         self.assertEqual(
             set(payload["inputs"][0]["mixtures"][0]["adf_faces"]),
             {"FD_XMIN", "FD_XMAX"},
+        )
+
+    def test_inspect_std_dev_coverage_counts_each_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            path = tmp / "states_mgxs.h5"
+            summary_path = tmp / "inspect_summary.json"
+            write_valid_mgxs(path)
+            with h5py.File(path, "a") as h5:
+                fuel = h5["mixtures/fuel"]
+                states = fuel.create_group("states")
+                first = states.create_group("00000001")
+                second = states.create_group("00000002")
+                for dataset in (
+                    "total",
+                    "absorption",
+                    "fission",
+                    "nu_fission",
+                    "chi",
+                    "transport_total",
+                    "scatter_matrix",
+                ):
+                    fuel.copy(dataset, first)
+                    fuel.copy(dataset, second)
+                    del fuel[dataset]
+                first.create_dataset("total_std_dev", data=np.array([0.001, 0.002]))
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = cli_main(
+                    [
+                        "inspect",
+                        str(path),
+                        "--summary-json",
+                        str(summary_path),
+                    ]
+                )
+
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(rc, 0)
+        self.assertIn("std_dev=1/14", stream.getvalue())
+        self.assertEqual(payload["inputs"][0]["std_dev_datasets"], 1)
+        self.assertEqual(payload["inputs"][0]["std_dev_expected_datasets"], 14)
+        self.assertEqual(payload["inputs"][0]["mixtures"][0]["std_dev_datasets"], 1)
+        self.assertEqual(
+            payload["inputs"][0]["mixtures"][0]["std_dev_expected_datasets"],
+            14,
         )
 
     def test_diff_command_accepts_identical_hdf5(self) -> None:

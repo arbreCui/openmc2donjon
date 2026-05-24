@@ -99,6 +99,8 @@ export interface HandoffInspection {
   adf_mixtures: number;
   adf_faces: string[];
   sph_calculations: number;
+  std_dev_datasets?: number;
+  std_dev_expected_datasets?: number;
   scatter_axes: string[];
   scatter_shapes: number[][];
   mixtures: MixtureSummary[];

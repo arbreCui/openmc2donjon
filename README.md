@@ -259,7 +259,8 @@ and builds the `web/` Next.js project.
 A localhost-only Next.js + FastAPI web UI lives in [`web/`](web/), wired to
 the same Python package as the CLI. It includes a command workspace
 (`Commands`), the direct converter workflow (`Convert`), HDF5 inspection
-(`Inspect`), and SPH-loop audit viewing (`Audit`).
+(`Inspect`), ADF/SPH sidecar builders (`Equivalence`), generic CLI command
+builders (`Builder`), and SPH-loop audit viewing (`Audit`).
 
 ```sh
 python -m pip install -e ".[web]"
@@ -275,21 +276,25 @@ npm run dev                      # Next.js on http://localhost:3000
 real package APIs — useful for frontend-only development. See
 [`web/README.md`](web/README.md) for full layout and conventions.
 
+The Web UI is intentionally localhost-first. Direct conversion can be dry-run
+or executed through `/convert`; equivalence and generic builders only assemble
+copyable CLI commands for sidecar, bundle, diagnostic, and SPH-loop support
+commands.
+
 ## Roadmap
 
 Near-term work:
 
-- expand the localhost web UI from the M0 scaffold to preflight, conversion,
-  inspection, and SPH-loop monitoring pages;
-- tighter integration with standard energy-group resources for mesh ID
-  cross-validation;
+- tighten the production examples around full OpenMC -> HDF5 -> Web inspect /
+  convert -> DONJON handoff records;
+- keep standard energy-mesh identification and uncertainty coverage visible in
+  every production audit surface;
 - broader mypy coverage for small pure helper modules.
 
 Larger physics work remains separate from the format converter core:
 
 - full downstream uncertainty propagation beyond exported OpenMC `std_dev`
   coverage and preflight gates;
-- richer standard energy-mesh ID checks;
 - additional production examples and benchmark comparisons.
 
 See [docs/ROADMAP.md](docs/ROADMAP.md).

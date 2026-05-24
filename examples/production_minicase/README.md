@@ -66,6 +66,31 @@ manifest.json
 export_recipe.py
 ```
 
+## Review In The Web UI
+
+After the run, start the localhost UI and point it at the managed artifacts:
+
+```sh
+python -m pip install -e ".[web]"
+openmc2donjon serve
+
+# In another shell:
+cd web
+npm install
+npm run dev
+```
+
+Then open <http://localhost:3000>:
+
+- `Inspect` -> `$RUN_DIR/mgxs_library.h5` to review mixtures, energy mesh
+  identification, transport/H-factor coverage, scatter, and std_dev hints.
+- `Convert` -> same HDF5 plus `$RUN_DIR/out.mcompo.txt` for a dry-run or
+  conversion repeat with the production gate summary visible.
+- `Commands` -> `make-sph-loop-scaffold`, `run-sph-loop`, `bundle`, and
+  `validate-bundle` to see the exact CLI builders for the follow-up workflow.
+- `Audit` -> the SPH loop `sph_loop_summary.json` when you run the loop section
+  below.
+
 The recipe also writes `openmc_volume_flux` from a real OpenMC cell/energy flux
 tally.  That lets the same statepoint prepare a fixed-OpenMC SPH loop handoff:
 

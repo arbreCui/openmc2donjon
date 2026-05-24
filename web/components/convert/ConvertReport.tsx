@@ -123,6 +123,8 @@ function ConvertSummary({
 
         <ConversionSummaryStrip data={data} input={input} />
 
+        {input ? <ProductionEvidenceStrip input={input} /> : null}
+
         {input ? <PreflightDecisionPanel data={data} input={input} /> : null}
 
         <OutputActions data={data} onConvert={onConvert} />
@@ -151,6 +153,77 @@ function ConvertSummary({
         </div>
       ) : null}
     </div>
+  );
+}
+
+function ProductionEvidenceStrip({ input }: { input: ConvertPreflightInput }) {
+  const uncertaintyCoverage = coverage(input);
+  const items = [
+    {
+      label: "Energy mesh",
+      value: input.energy_mesh_name ?? input.energy_mesh_id ?? "unknown",
+      tone: input.energy_mesh_id ? "pass" : "warn",
+      detail: input.energy_mesh_id
+        ? "Known group structure identified."
+        : "Unknown/custom mesh: acceptable only when intentional.",
+    },
+    {
+      label: "std_dev coverage",
+      value: uncertaintyCoverage ?? "not reported",
+      tone:
+        input.uncertainty?.expected_datasets == null ||
+        input.uncertainty.expected_datasets === input.uncertainty.datasets
+          ? "pass"
+          : "warn",
+      detail: "OpenMC tally uncertainty visibility for production review.",
+    },
+    {
+      label: "max std_dev / mean",
+      value:
+        input.uncertainty?.max_rel == null
+          ? "—"
+          : formatRelative(input.uncertainty.max_rel),
+      tone:
+        input.uncertainty?.max_rel == null || input.uncertainty.max_rel <= 0.05
+          ? "pass"
+          : "warn",
+      detail: "Default warning level is 5e-2 unless the run overrides it.",
+    },
+  ] as const;
+  return (
+    <section className="mt-4 rounded-lg border border-[var(--edge)] bg-black/10 p-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <h3 className="text-sm font-semibold tracking-tight">
+          Production evidence
+        </h3>
+        <span className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
+          audit trail
+        </span>
+      </div>
+      <div className="mt-3 grid gap-2 md:grid-cols-3">
+        {items.map((item) => (
+          <div
+            key={item.label}
+            className={
+              "rounded-md border px-3 py-2 " +
+              (item.tone === "pass"
+                ? "border-emerald-400/20 bg-emerald-400/[0.05]"
+                : "border-amber-400/25 bg-amber-400/[0.06]")
+            }
+          >
+            <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+              {item.label}
+            </div>
+            <div className="mt-1 font-mono text-[12px] text-[var(--fg-0)]">
+              {item.value}
+            </div>
+            <p className="mt-1 text-[11px] leading-4 text-[var(--fg-2)]">
+              {item.detail}
+            </p>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

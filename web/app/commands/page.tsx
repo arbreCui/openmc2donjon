@@ -259,6 +259,8 @@ function CoverageDashboard({ coverage }: { coverage: CommandCoverage }) {
         <CoverageTile label="CLI only" value={coverage.cliOnly} tone="warn" />
       </div>
 
+      <StatusLegend />
+
       <div className="mt-4 grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
         <div className="rounded-lg border border-[var(--edge)] bg-black/10 p-3">
           <div className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
@@ -314,6 +316,44 @@ function CoverageDashboard({ coverage }: { coverage: CommandCoverage }) {
         </div>
       </div>
     </section>
+  );
+}
+
+function StatusLegend() {
+  const items = [
+    {
+      label: "Ready",
+      tone: "pass",
+      text: "First-class web workflow: inspect, convert, or review directly in the browser.",
+    },
+    {
+      label: "Partial",
+      tone: "accent",
+      text: "Planner/viewer/builder: the web UI prepares the command or report, while production file mutation stays in the CLI.",
+    },
+    {
+      label: "Command builder",
+      tone: "neutral",
+      text: "A structured form for paths and common flags. It never executes the command.",
+    },
+    {
+      label: "CLI only",
+      tone: "warn",
+      text: "No web path yet. The catalog still documents the command and equivalent CLI.",
+    },
+  ] as const;
+  return (
+    <div className="mt-4 grid gap-2 md:grid-cols-4">
+      {items.map((item) => (
+        <div
+          key={item.label}
+          className={"rounded-md border px-3 py-2 " + coverageTileClass(item.tone)}
+        >
+          <div className="text-[12px] font-semibold tracking-tight">{item.label}</div>
+          <div className="mt-1 text-[11px] leading-4 opacity-80">{item.text}</div>
+        </div>
+      ))}
+    </div>
   );
 }
 

@@ -48,6 +48,7 @@ export default function Summary({ data }: { data: HandoffInspection }) {
           label="H-factor"
           value={`${data.h_factor} / ${data.mixture_count}`}
         />
+        <Stat label="std_dev" value={stdDevCoverage(data)} />
       </dl>
 
       <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4 text-[13px] tab-num">
@@ -94,6 +95,8 @@ export default function Summary({ data }: { data: HandoffInspection }) {
         </div>
       ) : null}
 
+      <ProductionHints data={data} />
+
       {data.root_attrs.length > 0 || data.top_level_keys.length > 0 ? (
         <FilePeek
           rootAttrs={data.root_attrs}
@@ -107,6 +110,84 @@ export default function Summary({ data }: { data: HandoffInspection }) {
       ) : null}
     </div>
   );
+}
+
+function ProductionHints({ data }: { data: HandoffInspection }) {
+  const calcCount = data.calculation_count || data.mixture_count;
+  const hints = [
+    {
+      label: "Energy mesh",
+      value: data.mesh_match
+        ? `${data.mesh_match.short ?? data.mesh_match.name ?? data.mesh_match.id} (${data.mesh_match.n_groups}g)`
+        : "unknown mesh",
+      tone: data.mesh_match ? "pass" : "warn",
+      detail: data.mesh_match
+        ? "Root energy_bounds match a bundled standard mesh."
+        : "Production preflight will warn unless this custom mesh is expected.",
+    },
+    {
+      label: "Transport",
+      value: `${data.transport_total} / ${calcCount}`,
+      tone: data.transport_total === calcCount ? "pass" : "warn",
+      detail: "Explicit transport_total supports deterministic diffusion/SPN handoff.",
+    },
+    {
+      label: "H-factor",
+      value: `${data.h_factor} / ${calcCount}`,
+      tone: data.h_factor >= data.fissionable_mixtures ? "pass" : "warn",
+      detail: "Needed for power normalization in fissionable mixtures.",
+    },
+    {
+      label: "OpenMC std_dev",
+      value: stdDevCoverage(data),
+      tone:
+        (data.std_dev_expected_datasets ?? 0) === 0 ||
+        data.std_dev_datasets === data.std_dev_expected_datasets
+          ? "pass"
+          : "warn",
+      detail: "Tally uncertainty is optional by default but important for production audits.",
+    },
+  ] as const;
+  return (
+    <section className="mt-5 rounded-lg border border-[var(--edge)] bg-black/10 p-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <h2 className="text-sm font-semibold tracking-tight">Production hints</h2>
+        <span className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
+          inspect only
+        </span>
+      </div>
+      <div className="mt-3 grid gap-2 md:grid-cols-4">
+        {hints.map((hint) => (
+          <div
+            key={hint.label}
+            className={
+              "rounded-md border px-3 py-2 " +
+              (hint.tone === "pass"
+                ? "border-emerald-400/20 bg-emerald-400/[0.05]"
+                : "border-amber-400/25 bg-amber-400/[0.06]")
+            }
+          >
+            <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+              {hint.label}
+            </div>
+            <div className="mt-1 font-mono text-[12px] text-[var(--fg-0)]">
+              {hint.value}
+            </div>
+            <div className="mt-1 text-[11px] leading-4 text-[var(--fg-2)]">
+              {hint.detail}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function stdDevCoverage(data: HandoffInspection): string {
+  const datasets = data.std_dev_datasets;
+  const expected = data.std_dev_expected_datasets;
+  if (datasets == null || expected == null) return "—";
+  return `${datasets} / ${expected}`;
 }
 
 function FilePeek({

@@ -618,6 +618,8 @@ class InspectEndpointTests(unittest.TestCase):
             self.assertEqual(payload["schema"], INSPECT_SCHEMA)
             self.assertEqual(payload["energy_groups"], 7)
             self.assertEqual(payload["mixture_count"], 2)
+            self.assertEqual(payload["std_dev_datasets"], 0)
+            self.assertEqual(payload["std_dev_expected_datasets"], 14)
             self.assertIsNotNone(payload["mesh_match"])
             self.assertEqual(payload["mesh_match"]["id"], "casmo_7")
             mixture_names = sorted(m["name"] for m in payload["mixtures"])
