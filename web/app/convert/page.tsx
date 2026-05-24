@@ -14,7 +14,7 @@ import {
   ApiError,
   api,
 } from "@/lib/api";
-import type { ConvertFormat, FileStatus } from "@/lib/api";
+import type { ConvertFormat } from "@/lib/api";
 import {
   buildConvertCliPreview,
   convertAdvancedPayload,
@@ -34,17 +34,17 @@ import {
   outputPathInDirectory,
   pickConvertBrowserStart,
 } from "@/lib/convertPaths";
-import { fileStatusLabel, fileStatusTone } from "@/lib/fileStatus";
+import {
+  fileStatusLabel,
+  fileStatusTone,
+  type FileStatusState,
+} from "@/lib/fileStatus";
 import { useSettings } from "@/lib/settings";
 import { parseConvertFormat, queryFlag } from "@/lib/workflowQuery";
 
 const FALLBACK_INPUT = "/path/to/mgxs_library.h5";
 type BrowserTarget = "input" | "output-directory";
-type ArtifactStatusState =
-  | { kind: "loading" }
-  | { kind: "ok"; status: FileStatus }
-  | { kind: "error"; message: string };
-type ArtifactStatusMap = Record<string, ArtifactStatusState>;
+type ArtifactStatusMap = Record<string, FileStatusState>;
 
 export default function ConvertPage() {
   return (
@@ -664,7 +664,7 @@ function LiveMinicaseCard({ onApply }: { onApply: () => void }) {
             state: {
               kind: "ok",
               status: await api.fileStatus(artifact.path),
-            } satisfies ArtifactStatusState,
+            } satisfies FileStatusState,
           };
         } catch (err) {
           const message =
@@ -675,7 +675,7 @@ function LiveMinicaseCard({ onApply }: { onApply: () => void }) {
                 : "status check failed";
           return {
             id: artifact.id,
-            state: { kind: "error", message } satisfies ArtifactStatusState,
+            state: { kind: "error", message } satisfies FileStatusState,
           };
         }
       }),
@@ -840,7 +840,7 @@ function loadingArtifactStatuses(): ArtifactStatusMap {
   return Object.fromEntries(
     PRODUCTION_MINICASE_ARTIFACTS.map((artifact) => [
       artifact.id,
-      { kind: "loading" } satisfies ArtifactStatusState,
+      { kind: "loading" } satisfies FileStatusState,
     ]),
   );
 }
@@ -872,7 +872,7 @@ function artifactStatusSummary({
 function ArtifactStatusBadge({
   state,
 }: {
-  state: ArtifactStatusState | undefined;
+  state: FileStatusState | undefined;
 }) {
   if (state === undefined || state.kind === "loading") {
     return (

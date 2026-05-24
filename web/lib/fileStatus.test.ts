@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { FileStatus } from "./api";
-import { fileStatusLabel, fileStatusTone, formatBytes } from "./fileStatus";
+import {
+  fileStatusIsDirectory,
+  fileStatusIsFile,
+  fileStatusLabel,
+  fileStatusTone,
+  formatBytes,
+} from "./fileStatus";
 
 function status(overrides: Partial<FileStatus>): FileStatus {
   return {
@@ -32,6 +38,21 @@ describe("file status helpers", () => {
       "missing",
     );
     expect(fileStatusTone(status({ kind: "unknown" }))).toBe("warning");
+  });
+
+  it("detects file and directory states", () => {
+    expect(fileStatusIsFile({ kind: "ok", status: status({ kind: "file" }) })).toBe(
+      true,
+    );
+    expect(
+      fileStatusIsDirectory({ kind: "ok", status: status({ kind: "dir" }) }),
+    ).toBe(true);
+    expect(
+      fileStatusIsFile({
+        kind: "ok",
+        status: status({ exists: false, kind: "missing" }),
+      }),
+    ).toBe(false);
   });
 
   it("formats byte counts compactly", () => {

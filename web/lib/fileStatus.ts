@@ -1,6 +1,10 @@
 import type { FileStatus } from "./api";
 
 export type FileStatusTone = "ready" | "missing" | "warning";
+export type FileStatusState =
+  | { kind: "loading" }
+  | { kind: "ok"; status: FileStatus }
+  | { kind: "error"; message: string };
 
 export function fileStatusTone(status: FileStatus): FileStatusTone {
   if (!status.exists || status.kind === "missing") return "missing";
@@ -15,6 +19,24 @@ export function fileStatusLabel(status: FileStatus): string {
     return status.size === null ? "file" : `file · ${formatBytes(status.size)}`;
   }
   return status.kind;
+}
+
+export function fileStatusIsFile(state: FileStatusState | undefined): boolean {
+  return (
+    state?.kind === "ok" &&
+    state.status.exists &&
+    state.status.kind === "file"
+  );
+}
+
+export function fileStatusIsDirectory(
+  state: FileStatusState | undefined,
+): boolean {
+  return (
+    state?.kind === "ok" &&
+    state.status.exists &&
+    state.status.kind === "dir"
+  );
 }
 
 export function formatBytes(bytes: number): string {

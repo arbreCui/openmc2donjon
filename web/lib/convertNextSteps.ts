@@ -23,7 +23,7 @@ export function convertObjectDescription(format: ConvertResponse["format"]): str
 export function convertBundleHref(data: ConvertResponse): string {
   const params = new URLSearchParams({
     command: "bundle",
-    output_dir: siblingBundleDir(data.output_path),
+    output_dir: convertBundleOutputDir(data),
     mgxs: data.input_path,
   });
   if (data.format === "macrolib") {
@@ -32,6 +32,10 @@ export function convertBundleHref(data: ConvertResponse): string {
     params.set("mcompo", data.output_path);
   }
   return `/builder?${params.toString()}`;
+}
+
+export function convertBundleOutputDir(data: ConvertResponse): string {
+  return siblingBundleDir(data.output_path);
 }
 
 function siblingBundleDir(outputPath: string): string {
