@@ -4,12 +4,17 @@ import { FormEvent, useMemo, useRef, useState } from "react";
 import ConvertReport, {
   ConvertRunState,
 } from "@/components/convert/ConvertReport";
+import { CopyCliButton } from "@/components/commands/CopyCliButton";
 import FileBrowserModal from "@/components/inspect/FileBrowserModal";
 import {
   ApiError,
   ConvertFormat,
   api,
 } from "@/lib/api";
+import {
+  buildConvertCliPreview,
+  convertAdvancedPayload,
+} from "@/lib/convertCommand";
 import { useSettings } from "@/lib/settings";
 
 const FALLBACK_INPUT = "/path/to/mgxs_library.h5";
@@ -22,6 +27,11 @@ export default function ConvertPage() {
   const [production, setProduction] = useState(false);
   const [requireKnownMesh, setRequireKnownMesh] = useState(false);
   const [overwrite, setOverwrite] = useState(false);
+  const [rootName, setRootName] = useState("CPO");
+  const [comment, setComment] = useState("");
+  const [burnup, setBurnup] = useState("");
+  const [hFactorDefault, setHFactorDefault] = useState("");
+  const [mixturesText, setMixturesText] = useState("");
   const [browserOpen, setBrowserOpen] = useState(false);
   const [outputTouched, setOutputTouched] = useState(false);
   const [state, setState] = useState<ConvertRunState>({ kind: "idle" });
@@ -38,6 +48,20 @@ export default function ConvertPage() {
     settingsHydrated &&
     savedPrefix !== "" &&
     !inputPath.startsWith(savedPrefix);
+  const cliPreview = buildConvertCliPreview({
+    inputPath,
+    outputPath: displayedOutput,
+    format,
+    check,
+    production,
+    warnUnknownEnergyMesh: true,
+    requireKnownEnergyMesh: requireKnownMesh,
+    rootName,
+    comment,
+    burnup,
+    hFactorDefault,
+    mixturesText,
+  });
 
   function updateInput(value: string) {
     setInputPath(value);
@@ -65,6 +89,13 @@ export default function ConvertPage() {
       setState({ kind: "error", message: "Enter an output path first." });
       return;
     }
+    const numberError =
+      optionalNumberError("Burnup", burnup) ??
+      optionalNumberError("H-FACTOR default", hFactorDefault);
+    if (numberError) {
+      setState({ kind: "error", message: numberError });
+      return;
+    }
     setState({ kind: "loading", mode });
     try {
       const data = await api.convert({
@@ -77,6 +108,13 @@ export default function ConvertPage() {
         production,
         warn_unknown_energy_mesh: true,
         require_known_energy_mesh: requireKnownMesh,
+        ...convertAdvancedPayload({
+          rootName,
+          comment,
+          burnup,
+          hFactorDefault,
+          mixturesText,
+        }),
       });
       setState({ kind: "ok", data });
     } catch (err) {
@@ -199,6 +237,83 @@ export default function ConvertPage() {
             />
           </div>
 
+          <details className="rounded-lg border border-[var(--edge)] bg-white/[0.015] p-4">
+            <summary className="cursor-pointer text-sm font-semibold tracking-tight text-[var(--fg-0)]">
+              Advanced converter options
+            </summary>
+            <div className="mt-4 grid gap-3 lg:grid-cols-2">
+              <Field
+                label="LCM root name"
+                value={rootName}
+                onChange={setRootName}
+                placeholder="CPO"
+                mono
+                disabled={format === "macrolib"}
+                hint={
+                  format === "macrolib"
+                    ? "MACROLIB output does not use a MULTICOMPO root directory."
+                    : "Top-level MULTICOMPO directory name."
+                }
+              />
+              <Field
+                label="Burnup value"
+                value={burnup}
+                onChange={setBurnup}
+                placeholder="0.0"
+                mono
+                hint="Optional single-point BURN axis metadata."
+              />
+              <Field
+                label="H-FACTOR default"
+                value={hFactorDefault}
+                onChange={setHFactorDefault}
+                placeholder="200.0"
+                mono
+                hint="Only for plumbing/demo cases when the HDF5 lacks H-FACTOR."
+              />
+              <Field
+                label="COMMENT block"
+                value={comment}
+                onChange={setComment}
+                placeholder="OpenMC direct homogenization"
+                hint="Optional comment written into MULTICOMPO output."
+              />
+              <label className="block lg:col-span-2">
+                <span className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
+                  Mixture filter
+                </span>
+                <textarea
+                  value={mixturesText}
+                  onChange={(event) => setMixturesText(event.target.value)}
+                  placeholder="ASM_Y01_X01, ASM_Y01_X02"
+                  className="mt-1 min-h-20 w-full min-w-0 rounded-md border border-[var(--edge)] bg-[rgba(255,255,255,0.03)] px-3 py-2 font-mono text-sm text-[var(--fg-0)] focus:border-[var(--accent)] focus:outline-none"
+                  spellCheck={false}
+                />
+                <span className="mt-1 block text-[12px] text-[var(--fg-3)]">
+                  Optional comma/newline list. Empty means write every mixture.
+                </span>
+              </label>
+            </div>
+          </details>
+
+          <section className="rounded-lg border border-[var(--edge)] bg-black/15 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold tracking-tight">
+                  CLI preview
+                </div>
+                <div className="mt-1 text-[12px] text-[var(--fg-3)]">
+                  The web endpoint calls the Python converter directly; this is
+                  the equivalent terminal command.
+                </div>
+              </div>
+              <CopyCliButton value={cliPreview} />
+            </div>
+            <pre className="mt-3 overflow-x-auto rounded-md border border-[var(--edge)] bg-black/25 px-3 py-2 text-[12px] text-[var(--fg-1)]">
+              {cliPreview}
+            </pre>
+          </section>
+
           <div className="flex flex-wrap gap-3">
             <button
               type="submit"
@@ -268,6 +383,46 @@ function Toggle({
   );
 }
 
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+  hint,
+  mono = false,
+  disabled = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  hint: string;
+  mono?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <label className="block">
+      <span className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
+        {label}
+      </span>
+      <input
+        type="text"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        disabled={disabled}
+        className={
+          "mt-1 w-full min-w-0 rounded-md border border-[var(--edge)] bg-[rgba(255,255,255,0.03)] px-3 py-2 text-sm text-[var(--fg-0)] focus:border-[var(--accent)] focus:outline-none disabled:cursor-not-allowed disabled:text-[var(--fg-3)] " +
+          (mono ? "font-mono" : "")
+        }
+        spellCheck={false}
+        autoComplete="off"
+      />
+      <span className="mt-1 block text-[12px] text-[var(--fg-3)]">{hint}</span>
+    </label>
+  );
+}
+
 function segmentClass(active: boolean): string {
   return (
     "px-3 py-2 text-[12px] font-semibold uppercase tracking-wider transition " +
@@ -275,6 +430,13 @@ function segmentClass(active: boolean): string {
       ? "bg-emerald-400/15 text-emerald-200"
       : "bg-white/[0.02] text-[var(--fg-2)] hover:text-[var(--fg-0)]")
   );
+}
+
+function optionalNumberError(label: string, value: string): string | null {
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  if (Number.isFinite(Number(trimmed))) return null;
+  return `${label} must be a number.`;
 }
 
 function defaultOutputPath(input: string, format: ConvertFormat): string {
