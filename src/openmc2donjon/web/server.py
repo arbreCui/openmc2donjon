@@ -46,6 +46,20 @@ INSPECT_SCHEMA = "openmc2donjon.mgxs-inspect.v1"
 MIXTURE_SCHEMA = "openmc2donjon.mgxs-mixture.v1"
 FILES_SCHEMA = "openmc2donjon.files.v1"
 AUDIT_SCHEMA = "openmc2donjon.sph-loop.v1"
+_MOCK_REFERENCE_STD_DEV_DATASET = "openmc_volume_flux_std_dev"
+_MOCK_REFERENCE_STD_DEV_MAX_REL = 1.8e-2
+_MOCK_REFERENCE_STD_DEV_LIMIT = 5.0e-2
+_MOCK_REFERENCE_STD_DEV_WORST = (
+    "mixture=ASM_Y02_X03 group=2 mean=9.201245e-04 "
+    "std_dev=1.656224e-05 rel=1.800000e-02"
+)
+_MOCK_AUDIT_STD_DEV_PATH_MARKERS = (
+    "ref_stddev",
+    "reference_std_dev",
+    "reference-std-dev",
+    "with_reference_std_dev",
+    "with-reference-std-dev",
+)
 
 # Hard caps on the ``/api/inspect`` peek panel so a pathological HDF5
 # (hundreds of root attrs, thousands of top-level datasets) can't blow
@@ -80,6 +94,12 @@ _MOCK_TREE: dict[str, list[tuple[str, str, int | None]]] = {
         # full-core minicase, so the audit page exercises a realistic
         # convergence history rather than a perfect two-step toy loop.
         ("sph_loop_summary.json", "file", 143_282),
+        # Same loop history, but with reference-flux std_dev metadata
+        # and the corresponding production acceptance gates marked
+        # pass. This gives the audit UI a positive demo case for the
+        # newer OpenMC reference-flux uncertainty workflow without
+        # duplicating the large JSON fixture.
+        ("sph_loop_summary_ref_stddev.json", "file", 143_840),
     ],
     f"{_MOCK_HOME}/openmc-runs/u238_33g": [
         ("mgxs.h5", "file", 1_240_000),
@@ -204,7 +224,7 @@ def create_app(
         # validates the fields M6-A dereferences so an arbitrary JSON
         # object can't crash the page at render time.
         if mock_mode:
-            payload = _load_fixture("audit_sph_loop.json")
+            payload = _mock_audit_summary(path)
             _validate_audit_summary_payload(payload, HTTPException)
             return payload
         real_path = _validate_audit_path(path, HTTPException)
@@ -954,6 +974,108 @@ def _load_fixture(filename: str) -> dict[str, Any]:
         encoding="utf-8"
     )
     return json.loads(text)
+
+
+def _mock_audit_summary(raw_path: str) -> dict[str, Any]:
+    """Return a bundled audit fixture, with optional demo variants.
+
+    Mock mode intentionally uses the same 10-iteration SPH loop history
+    for every audit request. When the requested mock path contains one
+    of ``_MOCK_AUDIT_STD_DEV_PATH_MARKERS`` (for example the file
+    browser's ``sph_loop_summary_ref_stddev.json``), derive a second
+    view that carries reference-flux std_dev metadata and passing
+    uncertainty gates. That keeps the fixture physically coherent while
+    giving the UI both "missing" and "gate pass" demo states.
+    """
+
+    payload = _load_fixture("audit_sph_loop.json")
+    if not _mock_audit_path_requests_std_dev(raw_path):
+        return payload
+    return _with_mock_reference_flux_std_dev(payload)
+
+
+def _mock_audit_path_requests_std_dev(raw_path: str) -> bool:
+    lowered = raw_path.lower()
+    return any(marker in lowered for marker in _MOCK_AUDIT_STD_DEV_PATH_MARKERS)
+
+
+def _with_mock_reference_flux_std_dev(payload: dict[str, Any]) -> dict[str, Any]:
+    metadata = payload.get("artifact_metadata")
+    if isinstance(metadata, dict):
+        reference = metadata.get("reference_flux")
+        if isinstance(reference, dict):
+            _apply_reference_flux_std_dev_metadata(reference, include_shape=True)
+
+    production_audit = payload.get("production_audit")
+    if isinstance(production_audit, dict):
+        reference = production_audit.get("reference")
+        if isinstance(reference, dict):
+            _apply_reference_flux_std_dev_metadata(reference, include_shape=False)
+
+    acceptance = payload.get("acceptance")
+    if isinstance(acceptance, dict):
+        checks = acceptance.get("checks")
+        if isinstance(checks, list):
+            _upsert_acceptance_check(
+                checks,
+                {
+                    "name": "require_reference_flux_std_dev",
+                    "actual": True,
+                    "limit": True,
+                    "message": "reference flux std_dev present",
+                    "passed": True,
+                    "units": "boolean",
+                },
+            )
+            _upsert_acceptance_check(
+                checks,
+                {
+                    "name": "max_reference_flux_std_dev_rel",
+                    "actual": _MOCK_REFERENCE_STD_DEV_MAX_REL,
+                    "limit": _MOCK_REFERENCE_STD_DEV_LIMIT,
+                    "message": (
+                        "actual 1.800000e-02 <= limit 5.000000e-02 "
+                        "relative std_dev/mean"
+                    ),
+                    "passed": True,
+                    "units": "relative",
+                },
+            )
+    return payload
+
+
+def _apply_reference_flux_std_dev_metadata(
+    reference: dict[str, Any],
+    *,
+    include_shape: bool,
+) -> None:
+    source = str(reference.get("source") or "")
+    shape = reference.get("shape")
+    reference["std_dev_dataset"] = _MOCK_REFERENCE_STD_DEV_DATASET
+    reference["std_dev_source"] = _std_dev_source(source)
+    reference["std_dev_max_rel"] = _MOCK_REFERENCE_STD_DEV_MAX_REL
+    reference["std_dev_worst"] = _MOCK_REFERENCE_STD_DEV_WORST
+    if include_shape:
+        reference["std_dev_shape"] = shape if isinstance(shape, list) else [9, 2]
+
+
+def _std_dev_source(source: str) -> str:
+    if "::" not in source:
+        return f"{source}::{_MOCK_REFERENCE_STD_DEV_DATASET}" if source else ""
+    path, _dataset = source.rsplit("::", maxsplit=1)
+    return f"{path}::{_MOCK_REFERENCE_STD_DEV_DATASET}"
+
+
+def _upsert_acceptance_check(
+    checks: list[Any],
+    replacement: dict[str, Any],
+) -> None:
+    name = replacement["name"]
+    for index, item in enumerate(checks):
+        if isinstance(item, dict) and item.get("name") == name:
+            checks[index] = replacement
+            return
+    checks.append(replacement)
 
 
 @lru_cache(maxsize=1)

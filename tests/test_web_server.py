@@ -739,6 +739,7 @@ class FilesEndpointTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         names = {e["name"] for e in response.json()["entries"]}
         self.assertIn("sph_loop_summary.json", names)
+        self.assertIn("sph_loop_summary_ref_stddev.json", names)
 
 
 @unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
@@ -784,10 +785,53 @@ class AuditEndpointTests(unittest.TestCase):
         self.assertEqual(payload["completed_iterations"], 10)
         self.assertEqual(len(payload["convergence"]), 10)
         self.assertEqual(len(payload["audit_rows"]), 11)
+        self.assertIsNone(
+            payload["production_audit"]["reference"]["std_dev_dataset"],
+        )
         self.assertLess(
             payload["quality"]["final_flux_ratio_max_residual"],
             payload["quality"]["initial_flux_ratio_max_residual"],
         )
+
+    def test_mock_mode_can_return_reference_flux_std_dev_pass_fixture(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.get(
+            "/api/audit",
+            params={
+                "path": (
+                    "/mock/home/openmc-runs/full-core-sph/"
+                    "sph_loop_summary_ref_stddev.json"
+                ),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["completed_iterations"], 10)
+        reference = payload["production_audit"]["reference"]
+        self.assertEqual(reference["std_dev_dataset"], "openmc_volume_flux_std_dev")
+        self.assertEqual(
+            reference["std_dev_source"],
+            (
+                "/mock/openmc_full_core_minicase/openmc2donjon_run/"
+                "mgxs_library.h5::openmc_volume_flux_std_dev"
+            ),
+        )
+        self.assertAlmostEqual(reference["std_dev_max_rel"], 1.8e-2)
+        self.assertIn("ASM_Y02_X03", reference["std_dev_worst"])
+        artifact_reference = payload["artifact_metadata"]["reference_flux"]
+        self.assertEqual(artifact_reference["std_dev_shape"], [9, 2])
+
+        checks = {item["name"]: item for item in payload["acceptance"]["checks"]}
+        self.assertTrue(checks["require_reference_flux_std_dev"]["passed"])
+        self.assertTrue(checks["max_reference_flux_std_dev_rel"]["passed"])
+        self.assertAlmostEqual(
+            checks["max_reference_flux_std_dev_rel"]["actual"],
+            1.8e-2,
+        )
+        self.assertEqual(checks["max_reference_flux_std_dev_rel"]["limit"], 5.0e-2)
 
     def test_live_mode_reads_real_summary_from_disk(self) -> None:
         import json
