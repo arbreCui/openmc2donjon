@@ -9,6 +9,7 @@ import {
   OpenmcWorkflowPlan,
   api,
 } from "@/lib/api";
+import OpenmcWorkflowSummary from "@/components/openmc/OpenmcWorkflowSummary";
 import { useSettings } from "@/lib/settings";
 
 type PlanState =
@@ -294,6 +295,8 @@ function PlanReport({ state }: { state: PlanState }) {
           </span>
         </div>
       </section>
+
+      <OpenmcWorkflowSummary plan={plan} />
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {plan.steps.map((step, index) => (
