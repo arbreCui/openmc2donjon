@@ -34,6 +34,16 @@ class CommandDetail:
     cli: str
     web_path: str | None = None
     tags: tuple[str, ...] = ()
+    use_when: str | None = None
+    produces: str | None = None
+    next_step: str | None = None
+
+
+@dataclass(frozen=True)
+class CommandGuidance:
+    use_when: str
+    produces: str
+    next_step: str
 
 
 GROUPS: tuple[CommandGroup, ...] = (
@@ -73,6 +83,77 @@ GROUPS: tuple[CommandGroup, ...] = (
         "Run the localhost FastAPI backend used by the web interface.",
     ),
 )
+
+
+GROUP_GUIDANCE: dict[str, CommandGuidance] = {
+    "convert": CommandGuidance(
+        use_when="You already have an openmc2donjon MGXS HDF5 handoff and want DONJON input.",
+        produces="An ASCII L_MULTICOMPO or L_MACROLIB file.",
+        next_step="Preview or hand the ASCII file to DONJON; use Inspect first for suspicious HDF5 inputs.",
+    ),
+    "inspect": CommandGuidance(
+        use_when="You need to understand or validate an HDF5 handoff before conversion.",
+        produces="A metadata, mesh, mixture, and production-gate summary.",
+        next_step="Fix failed gates, then convert or compare against a reference handoff.",
+    ),
+    "openmc": CommandGuidance(
+        use_when="Your starting point is an OpenMC recipe/statepoint rather than an existing handoff HDF5.",
+        produces="An MGXS HDF5 handoff, optional equivalence sidecars, ASCII output, and run bundle.",
+        next_step="Inspect the generated HDF5 and keep the managed run directory as the production record.",
+    ),
+    "adf": CommandGuidance(
+        use_when="You want one-shot discontinuity-factor equivalence from face-flux information.",
+        produces="ADF/DF sidecar data or an ADF-augmented MGXS HDF5 handoff.",
+        next_step="Convert the augmented HDF5 or use the OpenMC planner to include ADF in the handoff.",
+    ),
+    "sph": CommandGuidance(
+        use_when="You want flux-preserving equivalence factors against a fixed OpenMC reference.",
+        produces="SPH sidecars, augmented handoffs, loop configs, and SPH-loop audit summaries.",
+        next_step=(
+            "Run the loop, inspect the audit page, and decide whether "
+            "convergence/acceptance is sufficient."
+        ),
+    ),
+    "package": CommandGuidance(
+        use_when="You are preparing results for sharing, archiving, or runtime troubleshooting.",
+        produces="A manifest-backed bundle or an environment diagnostic report.",
+        next_step="Validate the bundle before sending it to another machine or collaborator.",
+    ),
+    "web": CommandGuidance(
+        use_when="You want to use the localhost web UI instead of memorizing CLI flags.",
+        produces="A FastAPI backend serving the web endpoints.",
+        next_step="Open the Next.js frontend and use Convert, OpenMC, Inspect, Audit, or Commands.",
+    ),
+}
+
+
+COMMAND_GUIDANCE: dict[str, CommandGuidance] = {
+    "direct-convert": CommandGuidance(
+        use_when="Use this first when the HDF5 handoff already exists.",
+        produces="The DONJON ASCII object plus optional preflight output.",
+        next_step="Open the generated ASCII preview or move to DONJON consumption.",
+    ),
+    "openmc2donjon-from-openmc": CommandGuidance(
+        use_when="Use this when one managed command should export, check, convert, and bundle the handoff.",
+        produces="HDF5, ASCII, summaries, and bundle metadata in one run directory.",
+        next_step="Use the OpenMC planner to assemble the command before running it.",
+    ),
+    "openmc2donjon-export": CommandGuidance(
+        use_when="Use this for a two-step workflow where HDF5 is archived or inspected before conversion.",
+        produces="A standalone MGXS HDF5 contract file.",
+        next_step="Inspect the HDF5, optionally augment it, then run direct conversion.",
+    ),
+    "run-sph-loop": CommandGuidance(
+        use_when="Use this after the OpenMC reference handoff and DONJON loop config are ready.",
+        produces="Iteration artifacts, final ASCII, and an SPH loop summary JSON.",
+        next_step="Open the audit viewer to separate production acceptance from SPH convergence.",
+    ),
+    "serve": CommandGuidance(
+        use_when="Use this before opening the web UI locally.",
+        produces="The localhost API backend on the selected host and port.",
+        next_step="Open http://localhost:3000 and keep the backend process running.",
+    ),
+}
 
 
 DETAILS: dict[str, CommandDetail] = {
@@ -422,6 +503,7 @@ def _detail_payload(
     *,
     kind: str,
 ) -> dict[str, Any]:
+    guidance = _command_guidance(command_id, detail)
     return {
         "id": command_id,
         "kind": kind,
@@ -436,7 +518,19 @@ def _detail_payload(
         "web_path": detail.web_path,
         "cli": detail.cli,
         "tags": list(detail.tags),
+        "use_when": guidance.use_when,
+        "produces": guidance.produces,
+        "next_step": guidance.next_step,
     }
+
+
+def _command_guidance(command_id: str, detail: CommandDetail) -> CommandGuidance:
+    base = COMMAND_GUIDANCE.get(command_id) or GROUP_GUIDANCE[detail.group]
+    return CommandGuidance(
+        use_when=detail.use_when or base.use_when,
+        produces=detail.produces or base.produces,
+        next_step=detail.next_step or base.next_step,
+    )
 
 
 def _cli_specs() -> tuple[Any, ...]:

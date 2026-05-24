@@ -568,6 +568,9 @@ export interface CommandCatalogEntry {
   web_path: string | null;
   cli: string;
   tags: string[];
+  use_when: string;
+  produces: string;
+  next_step: string;
 }
 
 export interface CommandCatalog {

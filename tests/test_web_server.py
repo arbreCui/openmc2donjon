@@ -229,8 +229,27 @@ class CommandCatalogEndpointTests(unittest.TestCase):
         direct = commands["direct-convert"]
         self.assertEqual(direct["status"], "ready")
         self.assertEqual(direct["web_path"], "/convert")
+        self.assertIn("HDF5 handoff", direct["use_when"])
+        self.assertIn("DONJON ASCII", direct["produces"])
+        self.assertIn("preview", direct["next_step"].lower())
         self.assertIn("MULTICOMPO", direct["tags"])
         self.assertIn("openmc2donjon mgxs_library.h5", direct["cli"])
+
+    def test_catalog_entries_include_user_guidance(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.get("/api/commands")
+
+        self.assertEqual(response.status_code, 200)
+        for command in response.json()["commands"]:
+            with self.subTest(command=command["id"]):
+                self.assertIsInstance(command["use_when"], str)
+                self.assertIsInstance(command["produces"], str)
+                self.assertIsInstance(command["next_step"], str)
+                self.assertGreater(len(command["use_when"]), 20)
+                self.assertGreater(len(command["produces"]), 20)
+                self.assertGreater(len(command["next_step"]), 20)
 
     def test_catalog_group_counts_are_consistent(self) -> None:
         from collections import Counter

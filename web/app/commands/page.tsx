@@ -141,6 +141,10 @@ function FeaturedCommand({ command }: { command: CommandCatalogEntry }) {
           <p className="mt-1 max-w-2xl text-sm text-[var(--fg-2)]">
             {command.summary}
           </p>
+          <p className="mt-3 max-w-2xl text-sm text-[var(--fg-1)]">
+            <span className="text-[var(--fg-3)]">Use when: </span>
+            {command.use_when}
+          </p>
         </div>
         {command.web_path ? (
           <Link href={command.web_path} className="btn btn-primary shrink-0">
@@ -199,17 +203,28 @@ function CommandCard({ command }: { command: CommandCatalogEntry }) {
       <p className="min-h-[3.25rem] text-sm text-[var(--fg-2)]">
         {command.summary}
       </p>
+      <div className="mt-3 rounded-md border border-[var(--edge)] bg-black/10 px-3 py-2">
+        <div className="text-[10px] uppercase tracking-wider text-[var(--fg-3)]">
+          Use when
+        </div>
+        <p className="mt-1 text-[12px] leading-5 text-[var(--fg-1)]">
+          {command.use_when}
+        </p>
+      </div>
       <TagRow tags={command.tags} />
       <CliLine value={command.cli} compact />
       <div className="mt-3 flex items-center justify-between gap-3">
         <AliasText aliases={command.aliases} />
-        {command.web_path ? (
-          <Link href={command.web_path} className="btn btn-secondary">
-            Open
+        <div className="flex shrink-0 items-center gap-2">
+          <Link href={`/commands/${command.id}`} className="btn btn-secondary">
+            Details
           </Link>
-        ) : (
-          <span className="text-[12px] text-[var(--fg-3)]">CLI surface</span>
-        )}
+          {command.web_path ? (
+            <Link href={command.web_path} className="btn btn-primary">
+              Open
+            </Link>
+          ) : null}
+        </div>
       </div>
     </article>
   );
