@@ -25,15 +25,15 @@ export default function Nav() {
       className="sticky top-0 z-10 border-b border-[var(--edge)] bg-[rgba(10,11,15,0.7)] backdrop-blur"
       aria-label="Primary"
     >
-      <div className="mx-auto max-w-5xl px-6 py-3 flex items-center justify-between gap-6">
+      <div className="mx-auto flex max-w-5xl flex-col items-start justify-between gap-2 px-6 py-3 sm:flex-row sm:items-center sm:gap-6">
         <Link
           href="/"
-          className="text-sm font-semibold tracking-tight"
+          className="shrink-0 text-sm font-semibold tracking-tight"
           aria-label="openmc2donjon home"
         >
           <span className="grad-text">openmc2donjon</span>
         </Link>
-        <ul className="flex min-w-0 items-center gap-1 overflow-x-auto text-sm">
+        <ul className="flex w-full flex-wrap items-center gap-1 text-sm sm:w-auto sm:justify-end">
           {ITEMS.map((item) => {
             const active = pathname === item.href;
             return (
@@ -41,7 +41,7 @@ export default function Nav() {
                 <Link
                   href={item.href}
                   className={
-                    "px-3 py-1.5 rounded-md border transition " +
+                    "block whitespace-nowrap rounded-md border px-3 py-1.5 transition " +
                     (active
                       ? "border-[var(--edge-bright)] bg-white/[0.06] text-[var(--fg-0)]"
                       : "border-transparent text-[var(--fg-2)] hover:text-[var(--fg-0)] hover:bg-white/[0.04]")
