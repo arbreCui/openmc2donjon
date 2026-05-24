@@ -130,6 +130,8 @@ function CommandDetail({ command }: { command: CommandCatalogEntry }) {
 
       <CommandUsePath command={command} />
 
+      {command.id === "direct-convert" ? <DirectConvertArtifactMap /> : null}
+
       <section className="glass rounded-xl p-5">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
@@ -198,6 +200,120 @@ function CommandDetail({ command }: { command: CommandCatalogEntry }) {
       </section>
     </div>
   );
+}
+
+const DIRECT_CONVERT_ARTIFACTS = [
+  {
+    label: "Input",
+    title: "OpenMC MGXS HDF5",
+    value: "mgxs_library.h5",
+    body:
+      "The converter reads the exported multigroup cross sections, mixture/state metadata, optional ADF, and optional SPH factors.",
+    tone: "source",
+  },
+  {
+    label: "Gate",
+    title: "Preflight decision",
+    value: "--check / --production",
+    body:
+      "Dry run validates the HDF5 contract, energy mesh, physics consistency, uncertainty visibility, and output safety before writing.",
+    tone: "gate",
+  },
+  {
+    label: "Writes",
+    title: "DONJON ASCII handoff",
+    value: ".mcompo.txt / .macrolib.txt",
+    body:
+      "Convert writes L_MULTICOMPO for mapped domain-wise libraries or L_MACROLIB for direct one-state macrolib handoffs.",
+    tone: "output",
+  },
+  {
+    label: "Deliver",
+    title: "Bundle record",
+    value: "manifest.json",
+    body:
+      "The bundle command can collect the source HDF5, ASCII output, summaries, and logs into a manifest-backed handoff directory.",
+    tone: "record",
+  },
+] as const;
+
+function DirectConvertArtifactMap() {
+  return (
+    <section className="glass rounded-xl p-5">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h2 className="text-base font-semibold tracking-tight">
+            What gets handed to DONJON
+          </h2>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
+            Direct conversion is a file handoff. The OpenMC HDF5 remains the
+            source evidence; DONJON consumes the generated ASCII library. Use a
+            bundle when you need a portable production record.
+          </p>
+        </div>
+        <Link
+          href="/convert?intent=direct-convert&format=multicompo&check=1&production=1"
+          className="btn btn-secondary shrink-0"
+        >
+          Open converter
+        </Link>
+      </div>
+
+      <div className="mt-4 grid gap-2 md:grid-cols-4">
+        {DIRECT_CONVERT_ARTIFACTS.map((artifact, index) => (
+          <article
+            key={artifact.label}
+            className={
+              "rounded-lg border p-3 " + artifactCardClass(artifact.tone)
+            }
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="rounded border border-current/25 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.14em]">
+                {artifact.label}
+              </span>
+              <span className="font-mono text-[11px] text-[var(--fg-3)]">
+                {String(index + 1).padStart(2, "0")}
+              </span>
+            </div>
+            <h3 className="mt-2 text-sm font-semibold tracking-tight">
+              {artifact.title}
+            </h3>
+            <div className="mt-1 truncate font-mono text-[12px] text-[var(--fg-1)]">
+              {artifact.value}
+            </div>
+            <p className="mt-2 text-[12px] leading-5 text-[var(--fg-2)]">
+              {artifact.body}
+            </p>
+          </article>
+        ))}
+      </div>
+
+      <div className="mt-4 rounded-lg border border-cyan-300/20 bg-cyan-300/[0.045] px-3 py-2 text-sm text-cyan-100">
+        <span className="font-semibold">Consumption rule:</span>{" "}
+        <span className="text-[var(--fg-1)]">
+          DONJON receives the ASCII handoff, not the OpenMC HDF5. Use
+          L_MULTICOMPO when the downstream map needs mixture/domain indexing;
+          use L_MACROLIB when the low-order solve expects a direct one-state
+          macrolib object.
+        </span>
+      </div>
+    </section>
+  );
+}
+
+function artifactCardClass(
+  tone: (typeof DIRECT_CONVERT_ARTIFACTS)[number]["tone"],
+) {
+  if (tone === "source") {
+    return "border-cyan-300/20 bg-cyan-300/[0.05]";
+  }
+  if (tone === "gate") {
+    return "border-amber-300/20 bg-amber-300/[0.055]";
+  }
+  if (tone === "output") {
+    return "border-emerald-400/20 bg-emerald-400/[0.055]";
+  }
+  return "border-[var(--edge)] bg-white/[0.025]";
 }
 
 function CommandUsePath({ command }: { command: CommandCatalogEntry }) {
