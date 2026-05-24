@@ -43,6 +43,12 @@ record a specific test run. They are not a recommended production default.
 Choose tolerances from the low-order method, tally uncertainty, and the
 intended handoff use case.
 
+The production acceptance preset does not automatically turn these numerical
+targets into acceptance failures. Use `convergence.fail_on_nonconvergence =
+true` to make nonconvergence fail the CLI command, or set
+`acceptance.require_converged = true` / residual acceptance limits when the
+summary itself must fail on nonconvergence.
+
 ## Warning Gates
 
 | Gate | Default | Meaning |

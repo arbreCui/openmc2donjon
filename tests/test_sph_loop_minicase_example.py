@@ -104,7 +104,9 @@ class SphLoopMinicaseExampleTests(unittest.TestCase):
             self.assertTrue(plan.run_final_solve)
             self.assertTrue(plan.require_mgxs_domain_order)
             self.assertEqual(plan.normalized_acceptance["min_completed_iterations"], 2)
-            self.assertEqual(plan.normalized_acceptance["require_converged"], True)
+            self.assertNotIn("require_converged", plan.normalized_acceptance)
+            self.assertNotIn("max_sph_rel_change", plan.normalized_acceptance)
+            self.assertNotIn("max_flux_ratio_residual", plan.normalized_acceptance)
             self.assertEqual(
                 plan.normalized_acceptance["require_artifact_metadata_alignment"],
                 True,

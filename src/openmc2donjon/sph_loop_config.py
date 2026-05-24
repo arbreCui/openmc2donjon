@@ -209,7 +209,8 @@ def _physics_acceptance_defaults(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def _production_acceptance_defaults(config: dict[str, Any]) -> dict[str, Any]:
-    out = _physics_acceptance_defaults(config)
+    out = _mechanical_acceptance_defaults(config)
+    out["max_final_to_initial_flux_residual_ratio"] = 1.0
     out["require_mgxs_explicit_volumes"] = True
     out["require_mgxs_h_factor"] = True
     out["require_mgxs_energy_bounds"] = True

@@ -574,7 +574,6 @@ class SphLoopTests(unittest.TestCase):
                 {
                     "min_completed_iterations",
                     "require_final_solve",
-                    "require_converged",
                     "require_artifact_metadata_alignment",
                     "require_production_audit",
                     "require_mgxs_explicit_volumes",
@@ -585,8 +584,6 @@ class SphLoopTests(unittest.TestCase):
                     "max_mgxs_chi_sum_error",
                     "require_mgxs_adf_face_consistency",
                     "max_mgxs_transport_p1_rel",
-                    "max_sph_rel_change",
-                    "max_flux_ratio_residual",
                     "max_final_to_initial_flux_residual_ratio",
                     "max_final_clipped_fraction",
                     "max_final_clipped_count",

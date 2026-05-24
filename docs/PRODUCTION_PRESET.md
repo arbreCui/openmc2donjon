@@ -33,11 +33,15 @@ Production acceptance requires:
 
 - artifact metadata alignment between reference flux, DONJON volume flux, and
   SPH sidecars;
+- final solve completion;
 - explicit MGXS volumes and fissionable H-FACTOR data;
 - root energy bounds plus local mixture/state energy-bounds consistency;
 - scatter row-balance, CHI, ADF-face, and transport/P1 consistency;
+- final-to-initial flux residual ratio no worse than `1.0`;
 - final clipped SPH fraction/count within configured limits;
-- optional convergence and final-solve checks when enabled in the loop config.
+- convergence checks only when explicitly requested in `acceptance`
+  (`require_converged`, `max_sph_rel_change`, or
+  `max_flux_ratio_residual`).
 
 ## SPH Convergence Versus Acceptance
 
@@ -59,6 +63,25 @@ false`. When targets are enabled, `fail_on_nonconvergence = false` means the
 summary can still be written and accepted by production gates even if the
 numeric stopping target was not reached; set it to `true` when nonconvergence
 should make the CLI command fail.
+
+The production preset deliberately does not copy convergence targets into
+acceptance gates. If a case policy wants both a production handoff audit and a
+hard convergence acceptance check, set the convergence policy explicitly, for
+example:
+
+```json
+{
+  "convergence": {
+    "flux_ratio_tolerance": 1.0e-4,
+    "sph_change_tolerance": 1.0e-4,
+    "fail_on_nonconvergence": true
+  },
+  "acceptance": {
+    "preset": "production",
+    "require_converged": true
+  }
+}
+```
 
 A summary can therefore show `acceptance.passed = true` while `converged =
 false`. In that case the handoff passed the configured production gates, but

@@ -325,11 +325,27 @@ class SphLoopPlanTests(unittest.TestCase):
     def test_production_acceptance_preset_requires_explicit_mgxs_volumes(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             config = Path(tmpdir) / "loop.json"
-            _write_config(config, {"acceptance": {"preset": "production"}})
+            _write_config(
+                config,
+                {
+                    "convergence": {
+                        "sph_change_tolerance": 1.0e-4,
+                        "flux_ratio_tolerance": 2.0e-4,
+                    },
+                    "acceptance": {"preset": "production"},
+                },
+            )
 
             plan = build_sph_loop_plan(config)
 
             self.assertEqual(plan.normalized_acceptance["preset"], "production")
+            self.assertNotIn("require_converged", plan.normalized_acceptance)
+            self.assertNotIn("max_sph_rel_change", plan.normalized_acceptance)
+            self.assertNotIn("max_flux_ratio_residual", plan.normalized_acceptance)
+            self.assertEqual(
+                plan.normalized_acceptance["max_final_to_initial_flux_residual_ratio"],
+                1.0,
+            )
             self.assertTrue(
                 plan.normalized_acceptance["require_mgxs_explicit_volumes"]
             )
@@ -356,6 +372,34 @@ class SphLoopPlanTests(unittest.TestCase):
             self.assertEqual(
                 plan.normalized_acceptance["max_mgxs_transport_p1_rel"],
                 5.0e-2,
+            )
+
+    def test_production_acceptance_allows_explicit_convergence_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = Path(tmpdir) / "loop.json"
+            _write_config(
+                config,
+                {
+                    "convergence": {
+                        "sph_change_tolerance": 1.0e-4,
+                        "flux_ratio_tolerance": 2.0e-4,
+                    },
+                    "acceptance": {
+                        "preset": "production",
+                        "require_converged": True,
+                        "max_sph_rel_change": 1.0e-4,
+                        "max_flux_ratio_residual": 2.0e-4,
+                    },
+                },
+            )
+
+            plan = build_sph_loop_plan(config)
+
+            self.assertTrue(plan.normalized_acceptance["require_converged"])
+            self.assertEqual(plan.normalized_acceptance["max_sph_rel_change"], 1.0e-4)
+            self.assertEqual(
+                plan.normalized_acceptance["max_flux_ratio_residual"],
+                2.0e-4,
             )
 
 
