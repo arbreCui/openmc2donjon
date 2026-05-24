@@ -5,6 +5,7 @@ import { ApiError, SphLoopSummary, api } from "@/lib/api";
 import { useSettings } from "@/lib/settings";
 import FileBrowserModal from "@/components/inspect/FileBrowserModal";
 import AuditSummary from "@/components/audit/AuditSummary";
+import ConvergenceChart from "@/components/audit/ConvergenceChart";
 
 const FALLBACK_PLACEHOLDER = "/path/to/sph_loop_summary.json";
 
@@ -147,7 +148,12 @@ function Result({ state }: { state: State }) {
       </div>
     );
   }
-  return <AuditSummary data={state.data} path={state.path} />;
+  return (
+    <div className="space-y-5">
+      <AuditSummary data={state.data} path={state.path} />
+      <ConvergenceChart points={state.data.convergence} />
+    </div>
+  );
 }
 
 function pickBrowserStart(savedPrefix: string): string {

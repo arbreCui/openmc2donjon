@@ -1,0 +1,201 @@
+"use client";
+
+import { useMemo } from "react";
+import type { Data, Layout } from "plotly.js-dist-min";
+import { usePlotlyPlot } from "@/lib/usePlotlyPlot";
+import type { SphLoopConvergencePoint } from "@/lib/api";
+
+export interface ConvergenceChartProps {
+  points: SphLoopConvergencePoint[];
+}
+
+const COLORS = {
+  sph: "#22d3ee",
+  flux: "#10b981",
+  clipped: "#f97316",
+  converged: "#84cc16",
+  notConverged: "#f43f5e",
+} as const;
+
+export default function ConvergenceChart({ points }: ConvergenceChartProps) {
+  const sorted = useMemo(
+    () => [...points].sort((a, b) => a.iteration - b.iteration),
+    [points],
+  );
+  const traces = useMemo(() => buildTraces(sorted), [sorted]);
+  const ref = usePlotlyPlot(
+    () => {
+      if (traces.length === 0) return null;
+      return { traces, layout: buildLayout() };
+    },
+    [traces],
+  );
+
+  if (sorted.length === 0) {
+    return (
+      <section className="glass rounded-xl p-5 text-sm text-[var(--fg-3)]">
+        No convergence history is present in this SPH loop summary.
+      </section>
+    );
+  }
+
+  const final = sorted[sorted.length - 1];
+  return (
+    <section className="glass rounded-xl p-4">
+      <div className="flex items-baseline justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-sm font-semibold tracking-tight">
+            Convergence history
+          </h2>
+          <p className="mt-1 text-[12px] text-[var(--fg-3)]">
+            SPH update change and OpenMC/DONJON flux residual by iteration.
+          </p>
+        </div>
+        <div className="text-[12px] text-[var(--fg-2)] tab-num">
+          final residual{" "}
+          <span className="text-[var(--fg-0)]">
+            {formatNumber(final.flux_ratio_max_residual)}
+          </span>
+        </div>
+      </div>
+      <div ref={ref} className="mt-3 h-80 w-full" />
+      <p className="mt-2 text-[12px] text-[var(--fg-3)]">
+        Markers are green once an iteration satisfies the convergence
+        criteria; red markers are still active updates. The orange series
+        tracks the fraction of bins whose SPH update was clipped.
+      </p>
+    </section>
+  );
+}
+
+function buildTraces(points: SphLoopConvergencePoint[]): Data[] {
+  const iterations = points.map((p) => p.iteration);
+  const statusColors = points.map((p) =>
+    p.converged ? COLORS.converged : COLORS.notConverged,
+  );
+  const traces: Data[] = [];
+  const sph = nullableSeries(points, (p) => p.sph_max_rel_change);
+  const flux = nullableSeries(points, (p) => p.flux_ratio_max_residual);
+  const clipped = nullableSeries(points, (p) => p.clipped_fraction);
+
+  if (hasValues(sph)) {
+    traces.push({
+      x: iterations,
+      y: sph,
+      type: "scatter",
+      mode: "lines+markers",
+      connectgaps: false,
+      name: "SPH max rel change",
+      line: { color: COLORS.sph, width: 2 },
+      marker: { color: statusColors, size: 8, line: { color: COLORS.sph, width: 1 } },
+      hovertemplate:
+        "iteration %{x}<br>" +
+        "SPH max rel change = %{y:.4g}<br>" +
+        "%{customdata}<extra></extra>",
+      customdata: points.map((p) => statusLabel(p)),
+    });
+  }
+  if (hasValues(flux)) {
+    traces.push({
+      x: iterations,
+      y: flux,
+      type: "scatter",
+      mode: "lines+markers",
+      connectgaps: false,
+      name: "Flux residual",
+      line: { color: COLORS.flux, width: 2 },
+      marker: { color: statusColors, size: 8, line: { color: COLORS.flux, width: 1 } },
+      hovertemplate:
+        "iteration %{x}<br>" +
+        "flux residual = %{y:.4g}<br>" +
+        "%{customdata}<extra></extra>",
+      customdata: points.map((p) => worstBinLabel(p)),
+    });
+  }
+  if (hasValues(clipped)) {
+    traces.push({
+      x: iterations,
+      y: clipped,
+      type: "scatter",
+      mode: "lines+markers",
+      connectgaps: false,
+      name: "Clipped fraction",
+      line: { color: COLORS.clipped, width: 2, dash: "dot" },
+      marker: { color: COLORS.clipped, size: 6 },
+      hovertemplate:
+        "iteration %{x}<br>" +
+        "clipped fraction = %{y:.4g}<br>" +
+        "clipped bins = %{customdata}<extra></extra>",
+      customdata: points.map((p) => p.clipped_count),
+    });
+  }
+  return traces;
+}
+
+function buildLayout(): Partial<Layout> {
+  return {
+    autosize: true,
+    margin: { l: 58, r: 18, t: 14, b: 44 },
+    paper_bgcolor: "transparent",
+    plot_bgcolor: "transparent",
+    font: { color: "#c8cbd6", size: 11 },
+    hovermode: "x unified",
+    hoverlabel: {
+      bgcolor: "rgba(14,16,22,0.96)",
+      bordercolor: "rgba(255,255,255,0.16)",
+      font: { color: "#f1f2f6", size: 11 },
+    },
+    showlegend: true,
+    xaxis: {
+      title: { text: "Iteration", font: { color: "#8b90a3", size: 11 } },
+      dtick: 1,
+      gridcolor: "rgba(255,255,255,0.05)",
+      zeroline: false,
+      color: "#8b90a3",
+    },
+    yaxis: {
+      title: { text: "Residual / relative change", font: { color: "#8b90a3", size: 11 } },
+      rangemode: "tozero",
+      gridcolor: "rgba(255,255,255,0.05)",
+      zeroline: false,
+      color: "#8b90a3",
+      exponentformat: "power",
+    },
+  };
+}
+
+function nullableSeries(
+  points: SphLoopConvergencePoint[],
+  pick: (point: SphLoopConvergencePoint) => number | null,
+): (number | null)[] {
+  return points.map((point) => finiteOrNull(pick(point)));
+}
+
+function finiteOrNull(value: number | null): number | null {
+  return value != null && Number.isFinite(value) ? value : null;
+}
+
+function hasValues(values: readonly (number | null)[]): boolean {
+  return values.some((value) => value != null);
+}
+
+function statusLabel(point: SphLoopConvergencePoint): string {
+  return point.converged ? "converged" : "not converged";
+}
+
+function worstBinLabel(point: SphLoopConvergencePoint): string {
+  const [bin] = point.worst_residual_bins;
+  if (!bin) return statusLabel(point);
+  const mixture = bin.mixture ?? "unknown";
+  const group = bin.group == null ? "?" : String(bin.group);
+  const residual = formatNumber(bin.residual ?? null);
+  return `worst bin ${mixture} g${group}, residual ${residual}`;
+}
+
+function formatNumber(value: number | null): string {
+  if (value == null || !Number.isFinite(value)) return "n/a";
+  if (value === 0) return "0";
+  const abs = Math.abs(value);
+  if (abs >= 1.0e-3 && abs < 1.0e4) return value.toPrecision(4);
+  return value.toExponential(3);
+}

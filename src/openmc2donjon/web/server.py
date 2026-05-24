@@ -275,6 +275,7 @@ def _validate_audit_summary_payload(payload: dict[str, Any], http_exception: Any
         _require_type(payload, key, int, errors)
     for key in ("converged", "convergence_enabled"):
         _require_type(payload, key, bool, errors)
+    _validate_audit_convergence(payload.get("convergence"), errors)
 
     acceptance = payload.get("acceptance")
     if not isinstance(acceptance, dict):
@@ -327,6 +328,30 @@ def _validate_audit_gate(
             errors.append(f"{name}.errors must be a list of strings")
 
 
+def _validate_audit_convergence(value: Any, errors: list[str]) -> None:
+    if not isinstance(value, list):
+        errors.append("convergence must be a list")
+        return
+    for index, item in enumerate(value):
+        prefix = f"convergence[{index}]"
+        if not isinstance(item, dict):
+            errors.append(f"{prefix} must be an object")
+            continue
+        _require_type(item, "iteration", int, errors, prefix=prefix)
+        _require_type(item, "converged", bool, errors, prefix=prefix)
+        _require_type(item, "clipped_count", int, errors, prefix=prefix)
+        _require_number_or_none(item, "clipped_fraction", errors, prefix=prefix)
+        for key in (
+            "sph_max_abs_change",
+            "sph_max_rel_change",
+            "flux_ratio_max_residual",
+        ):
+            _require_number_or_none(item, key, errors, prefix=prefix)
+        for key in ("worst_residual_bins", "clipped_bins"):
+            if not isinstance(item.get(key), list):
+                errors.append(f"{prefix}.{key} must be a list")
+
+
 def _require_type(
     payload: dict[str, Any],
     key: str,
@@ -339,6 +364,23 @@ def _require_type(
     if not isinstance(value, expected) or (expected is int and isinstance(value, bool)):
         qualified = key if prefix is None else f"{prefix}.{key}"
         errors.append(f"{qualified} must be {expected.__name__}")
+
+
+def _require_number_or_none(
+    payload: dict[str, Any],
+    key: str,
+    errors: list[str],
+    *,
+    prefix: str,
+) -> None:
+    if key not in payload:
+        errors.append(f"{prefix}.{key} must be number or null")
+        return
+    value = payload[key]
+    if value is None:
+        return
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        errors.append(f"{prefix}.{key} must be number or null")
 
 
 def _read_top_level_peek(real_path: Path) -> dict[str, Any]:

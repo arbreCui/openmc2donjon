@@ -73,6 +73,30 @@ def _minimal_sph_loop_summary() -> dict[str, object]:
         "converged": True,
         "convergence_enabled": True,
         "stop_reason": "converged",
+        "convergence": [
+            {
+                "iteration": 1,
+                "sph_max_abs_change": 0.4,
+                "sph_max_rel_change": 0.4,
+                "flux_ratio_max_residual": 1.0,
+                "clipped_count": 0,
+                "clipped_fraction": 0.0,
+                "worst_residual_bins": [],
+                "clipped_bins": [],
+                "converged": False,
+            },
+            {
+                "iteration": 2,
+                "sph_max_abs_change": 0.0,
+                "sph_max_rel_change": 0.0,
+                "flux_ratio_max_residual": 0.0,
+                "clipped_count": 0,
+                "clipped_fraction": 0.0,
+                "worst_residual_bins": [],
+                "clipped_bins": [],
+                "converged": True,
+            },
+        ],
         "acceptance": {
             "enabled": True,
             "passed": True,
@@ -786,6 +810,39 @@ class AuditEndpointTests(unittest.TestCase):
         self.assertIn("invalid SPH loop summary", detail)
         self.assertIn("acceptance must be an object", detail)
         self.assertIn("production_audit must be an object", detail)
+        self.assertIn("convergence must be a list", detail)
+
+    def test_live_mode_rejects_malformed_audit_convergence(self) -> None:
+        import json
+
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            summary = _minimal_sph_loop_summary()
+            summary["convergence"] = [
+                {
+                    "iteration": 1,
+                    "sph_max_rel_change": "bad",
+                    "flux_ratio_max_residual": 1.0,
+                    "clipped_count": 0,
+                    "clipped_fraction": 0.0,
+                    "worst_residual_bins": [],
+                    "clipped_bins": [],
+                    "converged": False,
+                },
+            ]
+            summary_path = Path(tmp) / "bad_convergence.json"
+            summary_path.write_text(json.dumps(summary), encoding="utf-8")
+
+            client = TestClient(create_app(mock_mode=False))
+            response = client.get(
+                "/api/audit", params={"path": str(summary_path)},
+            )
+
+        self.assertEqual(response.status_code, 422)
+        detail = response.json()["detail"]
+        self.assertIn("convergence[0].sph_max_abs_change", detail)
+        self.assertIn("convergence[0].sph_max_rel_change", detail)
 
     def test_live_mode_path_not_found_returns_404(self) -> None:
         from openmc2donjon.web.server import create_app

@@ -197,10 +197,8 @@ export interface FileListing {
 
 /**
  * The ``run-sph-loop`` summary JSON, schema
- * ``openmc2donjon.sph-loop.v1``. M6-A only models the headline-card
- * fields; the endpoint returns the full payload and later slices
- * (convergence chart, acceptance table, audit rows) will extend this
- * interface as they consume more.
+ * ``openmc2donjon.sph-loop.v1``. The endpoint returns the full payload;
+ * the interface grows as the audit page consumes more sections.
  */
 export interface SphLoopAcceptanceCheck {
   name: string;
@@ -223,6 +221,31 @@ export interface SphLoopProductionAudit {
   checks: SphLoopAcceptanceCheck[];
 }
 
+export interface SphLoopResidualBin {
+  mixture?: string | null;
+  group?: number | null;
+  residual?: number | null;
+  signed_residual?: number | null;
+  raw_update?: number | null;
+  sph?: number | null;
+  previous_sph?: number | null;
+  reference_flux?: number | null;
+  low_order_flux?: number | null;
+  clipped?: boolean | null;
+}
+
+export interface SphLoopConvergencePoint {
+  iteration: number;
+  sph_max_abs_change: number | null;
+  sph_max_rel_change: number | null;
+  flux_ratio_max_residual: number | null;
+  clipped_count: number;
+  clipped_fraction: number;
+  worst_residual_bins: SphLoopResidualBin[];
+  clipped_bins: SphLoopResidualBin[];
+  converged: boolean;
+}
+
 export interface SphLoopSummary {
   schema: string;
   decision: string;
@@ -232,6 +255,7 @@ export interface SphLoopSummary {
   converged: boolean;
   convergence_enabled: boolean;
   stop_reason: string;
+  convergence: SphLoopConvergencePoint[];
   acceptance: SphLoopAcceptance;
   production_audit: SphLoopProductionAudit;
 }
