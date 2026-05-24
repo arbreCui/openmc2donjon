@@ -73,10 +73,11 @@ export default function ConvergenceChart({
       </div>
       <div ref={ref} className="mt-3 h-80 w-full" />
       <p className="mt-2 text-[12px] text-[var(--fg-3)]">
-        The residual axis is logarithmic; exact zeros and non-positive
-        residuals are drawn at a small display floor below the tolerance
-        region, while hover text keeps the raw value. Red/green markers
-        show whether that iteration met the convergence criteria.
+        Higher is better: the residual series are plotted as
+        -log10(residual), so 1e-6 reads as 6. Exact zeros are drawn one
+        decade beyond the tightest tolerance, while hover text keeps the
+        raw value. Red/green markers show whether that iteration met the
+        convergence criteria.
       </p>
     </section>
   );
@@ -93,8 +94,12 @@ function buildTraces(
     p.converged ? COLORS.converged : COLORS.notConverged,
   );
   const traces: Data[] = [];
-  const sph = residualSeries(points, (p) => p.sph_max_rel_change, displayFloor);
-  const flux = residualSeries(
+  const sph = convergenceDepthSeries(
+    points,
+    (p) => p.sph_max_rel_change,
+    displayFloor,
+  );
+  const flux = convergenceDepthSeries(
     points,
     (p) => p.flux_ratio_max_residual,
     displayFloor,
@@ -118,6 +123,7 @@ function buildTraces(
       hovertemplate:
         "iteration %{x}<br>" +
         "SPH max rel change = %{customdata[0]}<br>" +
+        "depth = %{y:.3g}<br>" +
         "%{customdata[1]}<extra></extra>",
       customdata: points.map((p) => [
         formatNumber(p.sph_max_rel_change),
@@ -142,6 +148,7 @@ function buildTraces(
       hovertemplate:
         "iteration %{x}<br>" +
         "flux residual = %{customdata[0]}<br>" +
+        "depth = %{y:.3g}<br>" +
         "%{customdata[1]}<extra></extra>",
       customdata: points.map((p) => [
         formatNumber(p.flux_ratio_max_residual),
@@ -151,7 +158,7 @@ function buildTraces(
   }
   addToleranceTrace(traces, iterations, sphTolerance, "SPH tolerance", COLORS.sph);
   addToleranceTrace(traces, iterations, fluxTolerance, "Flux tolerance", COLORS.flux);
-  if (hasValues(clipped)) {
+  if (hasPositiveValues(clipped) || points.some((p) => p.clipped_count > 0)) {
     traces.push({
       x: iterations,
       y: clipped,
@@ -195,14 +202,13 @@ function buildLayout(): Partial<Layout> {
     },
     yaxis: {
       title: {
-        text: "Residual / relative change",
+        text: "Convergence depth (-log10 residual)",
         font: { color: "#8b90a3", size: 11 },
       },
-      type: "log",
+      rangemode: "tozero",
       gridcolor: "rgba(255,255,255,0.05)",
       zeroline: false,
       color: "#8b90a3",
-      exponentformat: "power",
     },
     yaxis2: {
       title: {
@@ -219,20 +225,21 @@ function buildLayout(): Partial<Layout> {
   };
 }
 
-function residualSeries(
+function convergenceDepthSeries(
   points: SphLoopConvergencePoint[],
   pick: (point: SphLoopConvergencePoint) => number | null,
   displayFloor: number,
 ): (number | null)[] {
-  return points.map((point) => residualDisplayValue(pick(point), displayFloor));
+  return points.map((point) => convergenceDepth(pick(point), displayFloor));
 }
 
-function residualDisplayValue(
+function convergenceDepth(
   value: number | null,
   displayFloor: number,
 ): number | null {
   if (value == null || !Number.isFinite(value)) return null;
-  return value > 0 ? value : displayFloor;
+  const positive = value > 0 ? value : displayFloor;
+  return -Math.log10(positive);
 }
 
 function nullableSeries(
@@ -250,6 +257,10 @@ function hasValues(values: readonly (number | null)[]): boolean {
   return values.some((value) => value != null);
 }
 
+function hasPositiveValues(values: readonly (number | null)[]): boolean {
+  return values.some((value) => value != null && value > 0);
+}
+
 function addToleranceTrace(
   traces: Data[],
   iterations: number[],
@@ -260,14 +271,18 @@ function addToleranceTrace(
   if (tolerance == null || tolerance <= 0 || iterations.length === 0) return;
   const x0 = Math.min(...iterations);
   const x1 = Math.max(...iterations);
+  const depth = convergenceDepth(tolerance, tolerance);
+  if (depth == null) return;
   traces.push({
     x: [x0, x1],
-    y: [tolerance, tolerance],
+    y: [depth, depth],
     type: "scatter",
     mode: "lines",
     name,
     line: { color, width: 1, dash: "dash" },
-    hovertemplate: `${name} = ${formatNumber(tolerance)}<extra></extra>`,
+    hovertemplate:
+      `${name} = ${formatNumber(tolerance)}<br>` +
+      `depth = ${formatNumber(depth)}<extra></extra>`,
   });
 }
 
