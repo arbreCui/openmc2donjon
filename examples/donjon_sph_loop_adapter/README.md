@@ -50,6 +50,14 @@ When tolerances are set, `run-sph-loop` records per-iteration flux-ratio and
 SPH-change residuals in `sph_loop_summary.json` and stops early once both are
 below tolerance after `--min-iterations`.
 
+Those tolerances are convergence targets, not production acceptance gates. Add
+`--fail-on-nonconvergence` when a run that reaches `--iterations` without
+meeting the targets should return non-zero. If you also use
+`--acceptance-preset production`, the production gates check the handoff/audit
+quality; they do not by themselves require SPH convergence. Add
+`--acceptance-require-converged` or explicit residual acceptance limits when
+the summary itself must fail on nonconvergence.
+
 The runner stages the current ASCII macrolib under a short `/tmp` path, renders
 an `.x2m` deck under
 `$DONJON_ROOT/data/openmc2donjon/case_runs/donjon_sph_loop_adapter/`, runs

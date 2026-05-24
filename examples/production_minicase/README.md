@@ -84,6 +84,14 @@ openmc2donjon run-sph-loop \
   --force
 ```
 
+The SPH loop config can carry two independent policies. Convergence tolerances
+control early stopping and are reported in `sph_loop_summary.json`;
+`fail_on_nonconvergence` controls whether missing those targets makes the CLI
+return non-zero. The `production` acceptance preset checks the generated
+handoff/audit quality and can still pass a run that did not reach the numerical
+SPH target unless you explicitly add `acceptance.require_converged` or residual
+acceptance limits.
+
 To exercise the ADF/DF path, provide the low-order driver volume flux and
 outward net current density in an HDF5 fixture, then let the one-step workflow
 export the OpenMC surface-flux tally, canonicalize and check the low-order

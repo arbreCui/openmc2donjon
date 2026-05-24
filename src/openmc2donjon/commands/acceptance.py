@@ -12,9 +12,10 @@ def add_sph_loop_acceptance_args(parser: argparse.ArgumentParser) -> None:
         default=None,
         help=(
             "acceptance preset: 'mechanical' checks loop completion, final solve, "
-            "metadata alignment, and no final clipping; 'production'/'physics' "
-            "also require non-worsening flux residual and configured convergence "
-            "tolerances"
+            "metadata alignment, and no final clipping; 'production' adds MGXS "
+            "handoff/audit gates and a non-worsening final flux-residual gate; "
+            "'physics' also turns configured convergence tolerances into "
+            "acceptance gates"
         ),
     )
     parser.add_argument(
@@ -31,7 +32,10 @@ def add_sph_loop_acceptance_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--acceptance-require-converged",
         action="store_true",
-        help="production acceptance: require the convergence criteria to pass",
+        help=(
+            "acceptance: require the convergence criteria to pass; the "
+            "production preset does not imply this"
+        ),
     )
     parser.add_argument(
         "--acceptance-require-mgxs-explicit-volumes",
@@ -118,13 +122,19 @@ def add_sph_loop_acceptance_args(parser: argparse.ArgumentParser) -> None:
         "--acceptance-max-sph-rel-change",
         type=float,
         default=None,
-        help="production acceptance: max relative SPH change in the last update",
+        help=(
+            "acceptance: hard limit on relative SPH change in the last update; "
+            "independent of the early-stop tolerance"
+        ),
     )
     parser.add_argument(
         "--acceptance-max-flux-ratio-residual",
         type=float,
         default=None,
-        help="production acceptance: max |low_order/reference - 1| in the last update",
+        help=(
+            "acceptance: hard limit on final |low_order/reference - 1|; "
+            "independent of the early-stop tolerance"
+        ),
     )
     parser.add_argument(
         "--acceptance-max-final-to-initial-flux-residual-ratio",

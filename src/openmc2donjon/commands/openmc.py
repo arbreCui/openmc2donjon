@@ -133,10 +133,32 @@ def build_prepare_openmc_sph_loop_parser() -> argparse.ArgumentParser:
             "with --production/--require-h-factor, otherwise none)"
         ),
     )
-    parser.add_argument("--sph-change-tolerance", type=float, default=None)
-    parser.add_argument("--flux-ratio-tolerance", type=float, default=None)
-    parser.add_argument("--min-iterations", type=int, default=1)
-    parser.add_argument("--fail-on-nonconvergence", action="store_true")
+    parser.add_argument(
+        "--sph-change-tolerance",
+        type=float,
+        default=None,
+        help="optional early-stop target on max relative SPH change",
+    )
+    parser.add_argument(
+        "--flux-ratio-tolerance",
+        type=float,
+        default=None,
+        help="optional early-stop target on max |low_order/reference - 1|",
+    )
+    parser.add_argument(
+        "--min-iterations",
+        type=int,
+        default=1,
+        help="minimum SPH update cycles before convergence can stop the loop",
+    )
+    parser.add_argument(
+        "--fail-on-nonconvergence",
+        action="store_true",
+        help=(
+            "make run-sph-loop return an error if configured convergence "
+            "targets are not met; independent of the acceptance preset"
+        ),
+    )
     add_sph_loop_acceptance_args(parser)
     parser.add_argument("--case-id-prefix", default="openmc_sph_loop")
     parser.add_argument("--stage-prefix", default="odj_openmc_sph_loop")

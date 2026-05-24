@@ -11,7 +11,7 @@ import unittest
 import h5py
 import numpy as np
 
-from openmc2donjon.cli import build_parser, main as cli_main
+from openmc2donjon.cli import build_command_parser, build_parser, main as cli_main
 from openmc2donjon.energy_groups import energy_bounds_sha256
 
 
@@ -23,6 +23,23 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(cm.exception.code, 0)
         self.assertEqual(stream.getvalue().strip(), "openmc2donjon 0.1.2")
+
+    def test_sph_loop_help_separates_production_and_convergence_policy(self) -> None:
+        help_text = _parser_help(["make-donjon-sph-loop-config", "--help"])
+        normalized = " ".join(help_text.split())
+
+        self.assertIn(
+            "adds MGXS handoff/audit gates and a non-worsening "
+            "final flux-residual gate",
+            normalized,
+        )
+        self.assertIn(
+            "physics' also turns configured convergence tolerances into "
+            "acceptance gates",
+            normalized,
+        )
+        self.assertIn("production preset does not imply this", normalized)
+        self.assertIn("independent of the acceptance preset", normalized)
 
     def test_check_command_accepts_valid_hdf5(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -535,6 +552,19 @@ class CliTests(unittest.TestCase):
         uncertainty = summary["inputs"][0]["uncertainty"]
         self.assertAlmostEqual(uncertainty["production_max_rel"], 0.2)
         self.assertIn("production fail threshold", stream.getvalue())
+
+
+def _parser_help(argv: list[str]) -> str:
+    stream = io.StringIO()
+    with contextlib.redirect_stdout(stream):
+        try:
+            build_command_parser().parse_args(argv)
+        except SystemExit as exc:
+            if exc.code != 0:
+                raise AssertionError(f"help exited with {exc.code}") from exc
+        else:
+            raise AssertionError("help did not exit")
+    return stream.getvalue()
 
 
 def write_valid_mgxs(path: Path) -> None:
