@@ -140,6 +140,18 @@ function Catalog({ data }: { data: CommandCatalog }) {
   const [query, setQuery] = useState("");
   const [groupFilter, setGroupFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<CommandStatus | "all">("all");
+  const [surfaceFilter, setSurfaceFilter] = useState("all");
+  const surfaceOptions = useMemo(
+    () => [
+      ["all", "All"] as [string, string],
+      ...Array.from(
+        new Set(
+          data.commands.map((command) => commandWorkflowMapping(command).surface),
+        ),
+      ).map((surface) => [surface, surface] as [string, string]),
+    ],
+    [data.commands],
+  );
   const filteredCommands = useMemo(
     () =>
       data.commands.filter((command) =>
@@ -147,9 +159,10 @@ function Catalog({ data }: { data: CommandCatalog }) {
           query,
           group: groupFilter,
           status: statusFilter,
+          surface: surfaceFilter,
         }),
       ),
-    [data.commands, groupFilter, query, statusFilter],
+    [data.commands, groupFilter, query, statusFilter, surfaceFilter],
   );
   const featured = filteredCommands.find((command) => command.id === "direct-convert");
   const commandsByGroup = useMemo(
@@ -168,6 +181,9 @@ function Catalog({ data }: { data: CommandCatalog }) {
         onGroupFilter={setGroupFilter}
         statusFilter={statusFilter}
         onStatusFilter={setStatusFilter}
+        surfaceFilter={surfaceFilter}
+        onSurfaceFilter={setSurfaceFilter}
+        surfaceOptions={surfaceOptions}
         resultCount={filteredCommands.length}
       />
       {featured ? <FeaturedCommand command={featured} /> : null}
@@ -228,6 +244,9 @@ function CommandFilters({
   onGroupFilter,
   statusFilter,
   onStatusFilter,
+  surfaceFilter,
+  onSurfaceFilter,
+  surfaceOptions,
   resultCount,
 }: {
   data: CommandCatalog;
@@ -237,6 +256,9 @@ function CommandFilters({
   onGroupFilter: (value: string) => void;
   statusFilter: CommandStatus | "all";
   onStatusFilter: (value: CommandStatus | "all") => void;
+  surfaceFilter: string;
+  onSurfaceFilter: (value: string) => void;
+  surfaceOptions: [string, string][];
   resultCount: number;
 }) {
   return (
@@ -259,7 +281,7 @@ function CommandFilters({
         </div>
       </div>
 
-      <div className="mt-3 grid gap-3 lg:grid-cols-2">
+      <div className="mt-3 grid gap-3 lg:grid-cols-3">
         <FilterRow
           label="Workflow"
           value={groupFilter}
@@ -279,6 +301,12 @@ function CommandFilters({
             ["planned", "CLI only"],
           ]}
           onChange={(value) => onStatusFilter(value as CommandStatus | "all")}
+        />
+        <FilterRow
+          label="Web surface"
+          value={surfaceFilter}
+          options={surfaceOptions}
+          onChange={onSurfaceFilter}
         />
       </div>
     </section>
@@ -573,10 +601,19 @@ function groupCommands(commands: CommandCatalogEntry[]) {
 
 function commandMatches(
   command: CommandCatalogEntry,
-  filters: { query: string; group: string; status: CommandStatus | "all" },
+  filters: {
+    query: string;
+    group: string;
+    status: CommandStatus | "all";
+    surface: string;
+  },
 ) {
   if (filters.group !== "all" && command.group !== filters.group) return false;
   if (filters.status !== "all" && command.status !== filters.status) return false;
+  const mapping = commandWorkflowMapping(command);
+  if (filters.surface !== "all" && mapping.surface !== filters.surface) {
+    return false;
+  }
   const query = filters.query.trim().toLowerCase();
   if (!query) return true;
   const haystack = [
@@ -589,6 +626,11 @@ function commandMatches(
     command.use_when,
     command.produces,
     command.next_step,
+    mapping.surface,
+    mapping.title,
+    mapping.summary,
+    ...mapping.presets,
+    ...mapping.requiredInputs,
     ...command.tags,
     ...command.aliases,
   ]
