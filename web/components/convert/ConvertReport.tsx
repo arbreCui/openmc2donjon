@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ConvertPreflightInput, ConvertResponse } from "@/lib/api";
+import AsciiPreview from "./AsciiPreview";
 
 export type ConvertRunState =
   | { kind: "idle" }
@@ -115,6 +116,9 @@ function ConvertSummary({ data }: { data: ConvertResponse }) {
           <GateCards data={data} input={input} />
           <InputStats input={input} />
         </>
+      ) : null}
+      {data.converted && data.output_exists ? (
+        <AsciiPreview path={data.output_path} />
       ) : null}
     </div>
   );

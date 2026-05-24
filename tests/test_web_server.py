@@ -814,6 +814,60 @@ class FilesEndpointTests(unittest.TestCase):
 
 
 @unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
+class TextPreviewEndpointTests(unittest.TestCase):
+    def test_mock_mode_returns_ascii_output_preview(self) -> None:
+        from openmc2donjon.web.server import TEXT_PREVIEW_SCHEMA, create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.get(
+            "/api/text-preview",
+            params={"path": "/mock/home/openmc-runs/c5g7/handoff.mcompo.txt"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["schema"], TEXT_PREVIEW_SCHEMA)
+        self.assertEqual(payload["path"], "/mock/home/openmc-runs/c5g7/handoff.mcompo.txt")
+        self.assertIn("L_MULTICOMPO", payload["text"])
+        self.assertIn("SCAT00", payload["text"])
+        self.assertFalse(payload["truncated"])
+
+    def test_live_mode_caps_text_preview_by_lines(self) -> None:
+        from openmc2donjon.web.server import TEXT_PREVIEW_SCHEMA, create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "out.mcompo.txt"
+            path.write_text("line-1\nline-2\nline-3\n", encoding="utf-8")
+
+            client = TestClient(create_app(mock_mode=False))
+            response = client.get(
+                "/api/text-preview",
+                params={"path": str(path), "max_bytes": 64, "max_lines": 2},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["schema"], TEXT_PREVIEW_SCHEMA)
+        self.assertEqual(payload["text"], "line-1\nline-2")
+        self.assertTrue(payload["truncated"])
+        self.assertEqual(payload["truncated_by"], ["lines"])
+        self.assertEqual(payload["displayed_lines"], 2)
+
+    def test_live_mode_rejects_binary_preview(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "binary.dat"
+            path.write_bytes(b"abc\x00def")
+
+            client = TestClient(create_app(mock_mode=False))
+            response = client.get("/api/text-preview", params={"path": str(path)})
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("binary", response.json()["detail"])
+
+
+@unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
 class ConvertEndpointTests(unittest.TestCase):
     def test_mock_mode_returns_conversion_preview(self) -> None:
         from openmc2donjon.web.convert import CONVERT_SCHEMA

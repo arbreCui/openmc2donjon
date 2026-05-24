@@ -13,6 +13,8 @@ Endpoints (M1 scope):
   ``run-sph-loop`` (schema ``openmc2donjon.sph-loop.v1``). The
   response is the raw parsed JSON; the frontend chooses what to
   surface.
+- ``GET /api/text-preview?path=...`` - bounded UTF-8/ASCII preview for
+  generated text artifacts such as ``.mcompo.txt`` and ``.macrolib.txt``.
 
 The ``create_app`` factory keeps the mock flag out of module globals so
 the CLI ``serve`` command can pass it in explicitly. Mock mode returns
@@ -37,6 +39,10 @@ from ..mgxs_inspect import _report_payload, inspect_file
 from ..mgxs_physics_checks import scatter_moment_matrix
 from .commands import register_command_routes
 from .convert import register_convert_routes
+from .text_preview import (
+    TEXT_PREVIEW_SCHEMA as TEXT_PREVIEW_SCHEMA,
+    register_text_preview_routes,
+)
 
 
 logger = get_logger("web.server")
@@ -206,6 +212,8 @@ def create_app(
         if mock_mode:
             return _mock_list_dir(path, HTTPException)
         return _list_dir(path, HTTPException)
+
+    register_text_preview_routes(app, mock_mode=mock_mode)
 
     register_convert_routes(app, mock_mode=mock_mode)
 

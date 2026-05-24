@@ -467,6 +467,20 @@ export interface ConvertResponse {
   cli_command_text: string;
 }
 
+export interface TextPreview {
+  schema: string;
+  path: string;
+  file_size: number;
+  preview_bytes: number;
+  max_bytes: number;
+  displayed_lines: number;
+  decoded_lines: number;
+  max_lines: number;
+  truncated: boolean;
+  truncated_by: string[];
+  text: string;
+}
+
 export type CommandStatus = "ready" | "partial" | "planned";
 
 export interface CommandGroup {
@@ -504,6 +518,12 @@ export const api = {
   commands: () => getJson<CommandCatalog>("/api/commands"),
   convert: (request: ConvertRequest) =>
     postJson<ConvertResponse>("/api/convert", request),
+  textPreview: (path: string, maxBytes = 32768, maxLines = 220) =>
+    getJson<TextPreview>("/api/text-preview", {
+      path,
+      max_bytes: maxBytes,
+      max_lines: maxLines,
+    }),
   inspect: (path: string) =>
     getJson<HandoffInspection>("/api/inspect", { path }),
   inspectMixture: (path: string, mixture: string, moment: number = 0) =>
