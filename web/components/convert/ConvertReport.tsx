@@ -1,10 +1,9 @@
 "use client";
 
-import Link from "next/link";
-import { CopyCliButton } from "@/components/commands/CopyCliButton";
 import { ConvertPreflightInput, ConvertResponse } from "@/lib/api";
 import AsciiPreview from "./AsciiPreview";
 import HandoffPipeline from "./HandoffPipeline";
+import OutputActions from "./OutputActions";
 
 export type ConvertRunState =
   | { kind: "idle" }
@@ -121,7 +120,7 @@ function ConvertSummary({
 
         {input ? <PreflightDecisionPanel data={data} input={input} /> : null}
 
-        <PostConvertActions data={data} onConvert={onConvert} />
+        <OutputActions data={data} onConvert={onConvert} />
 
         <div className="mt-4">
           <div className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
@@ -236,52 +235,6 @@ function DecisionTile({
         {label}
       </div>
       <div className="mt-1 font-mono text-[13px]">{value}</div>
-    </div>
-  );
-}
-
-function PostConvertActions({
-  data,
-  onConvert,
-}: {
-  data: ConvertResponse;
-  onConvert?: () => void;
-}) {
-  const notice = outputNotice(data);
-  const canConvertNow = data.dry_run && data.ok && !data.output_exists && onConvert;
-  return (
-    <div className="mt-4 space-y-3">
-      <div className="flex flex-wrap gap-2">
-        <Link
-          href={`/inspect?path=${encodeURIComponent(data.input_path)}`}
-          className="btn btn-secondary"
-        >
-          Inspect input
-        </Link>
-        {canConvertNow ? (
-          <button type="button" onClick={onConvert} className="btn btn-primary">
-            Convert now
-          </button>
-        ) : null}
-        <CopyCliButton
-          value={data.output_path}
-          label="Copy output path"
-          ariaLabel="Copy output path"
-        />
-        {data.converted && data.output_exists ? (
-          <a href="#ascii-output-preview" className="btn btn-secondary">
-            Preview ASCII
-          </a>
-        ) : null}
-      </div>
-      <div
-        className={
-          "rounded-md border px-3 py-2 text-sm " + outputNoticeClass(notice.tone)
-        }
-      >
-        <span className="font-semibold">{notice.title}</span>
-        <span className="ml-2 text-[var(--fg-1)]">{notice.body}</span>
-      </div>
     </div>
   );
 }
@@ -537,52 +490,6 @@ function outputGate(data: ConvertResponse): {
     summary: "Dry run validated a writable output target without writing a file.",
     detail: "target path is clear",
   };
-}
-
-function outputNotice(data: ConvertResponse): {
-  tone: "pass" | "warn" | "fail" | "neutral";
-  title: string;
-  body: string;
-} {
-  if (data.converted) {
-    return {
-      tone: "pass",
-      title: "Output file written.",
-      body: "Review the ASCII preview below before handing the file to DONJON.",
-    };
-  }
-  if (!data.dry_run) {
-    return {
-      tone: "fail",
-      title: "No output file written.",
-      body: "Fix the failing checks or request error, then run Convert again.",
-    };
-  }
-  if (data.output_exists) {
-    return {
-      tone: "warn",
-      title: "Dry run only; target already exists.",
-      body: "Enable Overwrite output before converting if this file should be replaced.",
-    };
-  }
-  return {
-    tone: "neutral",
-    title: "Dry run only; no file written.",
-    body: "The target path is clear, so Convert will write the ASCII file there.",
-  };
-}
-
-function outputNoticeClass(tone: "pass" | "warn" | "fail" | "neutral") {
-  if (tone === "pass") {
-    return "border-emerald-400/25 bg-emerald-400/10 text-emerald-200";
-  }
-  if (tone === "warn") {
-    return "border-amber-400/25 bg-amber-400/10 text-amber-200";
-  }
-  if (tone === "fail") {
-    return "border-rose-400/25 bg-rose-400/10 text-rose-200";
-  }
-  return "border-[var(--edge)] bg-white/[0.03] text-[var(--fg-2)]";
 }
 
 function decisionTileClass(tone: "pass" | "warn" | "fail" | "accent" | "neutral") {
