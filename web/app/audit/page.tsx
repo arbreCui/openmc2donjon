@@ -9,6 +9,7 @@ import ConvergenceChart from "@/components/audit/ConvergenceChart";
 import AuditChecks from "@/components/audit/AuditChecks";
 import AuditTimeline from "@/components/audit/AuditTimeline";
 import AuditQuality from "@/components/audit/AuditQuality";
+import LoopConfiguration from "@/components/audit/LoopConfiguration";
 
 const FALLBACK_PLACEHOLDER = "/path/to/sph_loop_summary.json";
 
@@ -156,6 +157,9 @@ function Result({ state }: { state: State }) {
       <div id="audit-overview" className="scroll-mt-24">
         <AuditSummary data={state.data} path={state.path} />
       </div>
+      <div id="audit-configuration" className="scroll-mt-24">
+        <LoopConfiguration data={state.data} />
+      </div>
       <div id="audit-quality" className="scroll-mt-24">
         <AuditQuality quality={state.data.quality} />
       </div>
@@ -187,6 +191,7 @@ function Result({ state }: { state: State }) {
 function AuditSectionNav() {
   const links = [
     ["#audit-overview", "Overview"],
+    ["#audit-configuration", "Config"],
     ["#audit-quality", "Quality"],
     ["#audit-convergence", "Convergence"],
     ["#audit-gates", "Gates"],

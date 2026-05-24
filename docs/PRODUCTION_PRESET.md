@@ -39,6 +39,25 @@ Production acceptance requires:
 - final clipped SPH fraction/count within configured limits;
 - optional convergence and final-solve checks when enabled in the loop config.
 
+## SPH Convergence Versus Acceptance
+
+SPH-loop convergence targets and production acceptance gates answer different
+questions:
+
+- `convergence.flux_ratio_tolerance` and
+  `convergence.sph_change_tolerance` are numerical stopping targets for the
+  iterative loop.
+- `acceptance` checks decide whether the recorded handoff is usable as a
+  production artifact.
+- `convergence.fail_on_nonconvergence` controls whether a run that reaches the
+  iteration limit without satisfying the convergence target should fail the CLI
+  command.
+
+A summary can therefore show `acceptance.passed = true` while `converged =
+false`. In that case the handoff passed the configured production gates, but
+the SPH iteration did not reach its numerical convergence target before the
+configured stop condition.
+
 ## What This Preset Does Not Prove
 
 Passing the production preset means the handoff is internally consistent and

@@ -1,4 +1,13 @@
 import { SphLoopSummary } from "@/lib/api";
+import type { AuditTone } from "@/lib/auditStatus";
+import {
+  convergenceStatus,
+  gateStatus,
+  isPassDecision,
+  shortDecision,
+  shouldShowAcceptedUnconverged,
+  summarizeChecks,
+} from "@/lib/auditStatus";
 
 /**
  * M6-A headline card. Six stats + a path. Convergence chart and the
@@ -19,8 +28,12 @@ export default function AuditSummary({
 }) {
   const passed = isPassDecision(data.decision);
   const convergence = convergenceStatus(data);
-  const showAcceptedUnconverged =
-    data.acceptance.enabled && data.acceptance.passed && convergence.tone === "warn";
+  const acceptance = gateStatus(
+    data.acceptance.enabled,
+    data.acceptance.passed,
+    summarizeChecks(data.acceptance.checks),
+  );
+  const showAcceptedUnconverged = shouldShowAcceptedUnconverged(data);
   return (
     <div className="glass rounded-xl p-5">
       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -41,9 +54,9 @@ export default function AuditSummary({
         />
         <StatusTile
           label="Acceptance"
-          value={gateValue(data.acceptance.enabled, data.acceptance.passed)}
-          tone={gateTone(data.acceptance.enabled, data.acceptance.passed)}
-          detail={gateDetail(data.acceptance.enabled, summarizeChecks(data.acceptance.checks))}
+          value={acceptance.value}
+          tone={acceptance.tone}
+          detail={acceptance.detail}
         />
         <StatusTile
           label="Convergence"
@@ -77,23 +90,6 @@ export default function AuditSummary({
   );
 }
 
-function isPassDecision(decision: string): boolean {
-  return decision === "openmc2donjon_sph_loop_passed";
-}
-
-function shortDecision(decision: string): string {
-  return decision
-    .replace(/^openmc2donjon_sph_loop_/, "")
-    .replaceAll("_", " ");
-}
-
-function summarizeChecks(
-  checks: { passed: boolean }[],
-): { failed: number; total: number } {
-  const failed = checks.filter((c) => !c.passed).length;
-  return { failed, total: checks.length };
-}
-
 function StatusTile({
   label,
   value,
@@ -102,7 +98,7 @@ function StatusTile({
 }: {
   label: string;
   value: string;
-  tone: "pass" | "fail" | "warn" | "neutral";
+  tone: AuditTone;
   detail: string;
 }) {
   return (
@@ -118,69 +114,11 @@ function StatusTile({
   );
 }
 
-function toneClasses(tone: "pass" | "fail" | "warn" | "neutral"): string {
+function toneClasses(tone: AuditTone): string {
   if (tone === "pass") return "border-emerald-400/40 bg-emerald-400/10 text-emerald-200";
   if (tone === "fail") return "border-rose-400/40 bg-rose-400/10 text-rose-200";
   if (tone === "warn") return "border-amber-400/40 bg-amber-400/10 text-amber-200";
   return "border-[var(--edge-bright)] bg-white/5 text-[var(--fg-2)]";
-}
-
-function gateValue(enabled: boolean, passed: boolean): string {
-  if (!enabled) return "disabled";
-  return passed ? "pass" : "fail";
-}
-
-function gateTone(
-  enabled: boolean,
-  passed: boolean,
-): "pass" | "fail" | "neutral" {
-  if (!enabled) return "neutral";
-  return passed ? "pass" : "fail";
-}
-
-function gateDetail(
-  enabled: boolean,
-  counts: { failed: number; total: number },
-): string {
-  if (!enabled) return "not evaluated";
-  return `${counts.failed} / ${counts.total} failed`;
-}
-
-function convergenceStatus(data: SphLoopSummary): {
-  value: string;
-  tone: "pass" | "fail" | "warn" | "neutral";
-  detail: string;
-} {
-  if (!data.convergence_enabled) {
-    return { value: "disabled", tone: "neutral", detail: "not evaluated" };
-  }
-  if (data.converged) {
-    return {
-      value: "reached",
-      tone: "pass",
-      detail: convergenceDetail(data),
-    };
-  }
-  return {
-    value: "not reached",
-    tone: "warn",
-    detail: convergenceDetail(data),
-  };
-}
-
-function convergenceDetail(data: SphLoopSummary): string {
-  const fluxTarget =
-    data.flux_ratio_tolerance == null
-      ? null
-      : `flux target ${formatNumber(data.flux_ratio_tolerance)}`;
-  const sphTarget =
-    data.sph_change_tolerance == null
-      ? null
-      : `SPH target ${formatNumber(data.sph_change_tolerance)}`;
-  return (
-    [fluxTarget, sphTarget, data.stop_reason || null].filter(Boolean).join(" · ") ||
-    "no target recorded"
-  );
 }
 
 function Stat({
@@ -198,14 +136,6 @@ function Stat({
       <div className="mt-0.5 text-lg font-semibold break-all">{value}</div>
     </div>
   );
-}
-
-function formatNumber(value: number | null): string {
-  if (value == null || !Number.isFinite(value)) return "—";
-  if (value === 0) return "0";
-  const abs = Math.abs(value);
-  if (abs >= 1.0e-3 && abs < 1.0e4) return value.toPrecision(4);
-  return value.toExponential(3);
 }
 
 function GateStat({
