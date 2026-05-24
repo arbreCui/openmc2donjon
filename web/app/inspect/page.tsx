@@ -1,6 +1,14 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import {
+  FormEvent,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { useSearchParams } from "next/navigation";
 import {
   ApiError,
   HandoffInspection,
@@ -71,6 +79,28 @@ function carryOverPreviousFor(
 }
 
 export default function InspectPage() {
+  return (
+    <Suspense fallback={<InspectLoading />}>
+      <InspectPageContent />
+    </Suspense>
+  );
+}
+
+function InspectLoading() {
+  return (
+    <main className="min-h-[calc(100vh-3.5rem)] px-6 py-12">
+      <div className="mx-auto max-w-5xl">
+        <section className="glass rounded-xl p-5 text-sm text-[var(--fg-2)]">
+          Loading inspector…
+        </section>
+      </div>
+    </main>
+  );
+}
+
+function InspectPageContent() {
+  const searchParams = useSearchParams();
+  const queryPath = searchParams.get("path") ?? "";
   const [path, setPath] = useState("");
   const [state, setState] = useState<State>({ kind: "idle" });
   const [selectedMixture, setSelectedMixture] = useState<string | null>(null);
@@ -100,13 +130,13 @@ export default function InspectPage() {
   const canUseSavedPrefix =
     settingsHydrated && savedPrefix !== "" && !path.startsWith(savedPrefix);
 
-  const inspect = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const trimmed = path.trim();
+  const runInspect = useCallback(async (rawPath: string) => {
+    const trimmed = rawPath.trim();
     if (!trimmed) {
       setState({ kind: "error", message: "Enter a path first." });
       return;
     }
+    setPath(trimmed);
     setState({ kind: "loading" });
     setSelectedMixture(null);
     setMixtureState({ kind: "idle" });
@@ -117,7 +147,17 @@ export default function InspectPage() {
     } catch (err) {
       setState(toErrorState(err));
     }
+  }, []);
+
+  const inspect = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void runInspect(path);
   };
+
+  useEffect(() => {
+    if (!queryPath) return;
+    void runInspect(queryPath);
+  }, [queryPath, runInspect]);
 
   const handlePickMixture = useCallback((name: string) => {
     setSelectedMixture(name);

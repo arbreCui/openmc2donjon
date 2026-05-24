@@ -1,23 +1,18 @@
 "use client";
 
 import { FormEvent, useMemo, useRef, useState } from "react";
+import ConvertReport, {
+  ConvertRunState,
+} from "@/components/convert/ConvertReport";
 import FileBrowserModal from "@/components/inspect/FileBrowserModal";
 import {
   ApiError,
   ConvertFormat,
-  ConvertPreflightInput,
-  ConvertResponse,
   api,
 } from "@/lib/api";
 import { useSettings } from "@/lib/settings";
 
 const FALLBACK_INPUT = "/path/to/mgxs_library.h5";
-
-type State =
-  | { kind: "idle" }
-  | { kind: "loading"; mode: "dry-run" | "convert" }
-  | { kind: "ok"; data: ConvertResponse }
-  | { kind: "error"; message: string; status?: number };
 
 export default function ConvertPage() {
   const [inputPath, setInputPath] = useState("");
@@ -29,7 +24,7 @@ export default function ConvertPage() {
   const [overwrite, setOverwrite] = useState(false);
   const [browserOpen, setBrowserOpen] = useState(false);
   const [outputTouched, setOutputTouched] = useState(false);
-  const [state, setState] = useState<State>({ kind: "idle" });
+  const [state, setState] = useState<ConvertRunState>({ kind: "idle" });
   const convertButtonRef = useRef<HTMLButtonElement | null>(null);
   const [settings, , , settingsHydrated] = useSettings();
   const savedPrefix = settings.default_inspect_path.trim();
@@ -244,7 +239,7 @@ export default function ConvertPage() {
         />
 
         <section className="mt-6">
-          <ConvertResult state={state} />
+          <ConvertReport state={state} />
         </section>
       </div>
     </main>
@@ -270,202 +265,6 @@ function Toggle({
       />
       <span>{label}</span>
     </label>
-  );
-}
-
-function ConvertResult({ state }: { state: State }) {
-  if (state.kind === "idle") {
-    return (
-      <p className="text-sm text-[var(--fg-3)]">
-        Mock backend returns a C5G7-shape conversion preview for any path.
-      </p>
-    );
-  }
-  if (state.kind === "loading") {
-    return (
-      <p className="text-sm text-[var(--fg-2)] tab-num">
-        {state.mode === "dry-run" ? "Checking…" : "Converting…"}
-      </p>
-    );
-  }
-  if (state.kind === "error") {
-    return (
-      <div className="glass rounded-xl p-5 border-rose-500/20">
-        <div className="text-sm font-semibold text-rose-300">
-          {state.status ? `HTTP ${state.status}` : "Request failed"}
-        </div>
-        <div className="mt-1 text-sm text-[var(--fg-1)]">{state.message}</div>
-      </div>
-    );
-  }
-  return <ConvertReport data={state.data} />;
-}
-
-function ConvertReport({ data }: { data: ConvertResponse }) {
-  const input = data.preflight?.inputs[0] ?? null;
-  const status = data.ok ? "PASS" : "FAIL";
-  const tone = data.ok ? "text-emerald-300" : "text-rose-300";
-  return (
-    <div className="space-y-4">
-      <section className="glass rounded-xl p-5">
-        <div className="flex items-baseline justify-between gap-4 flex-wrap">
-          <div>
-            <div className={`text-sm font-semibold ${tone}`}>{status}</div>
-            <h2 className="mt-1 text-lg font-semibold tracking-tight">
-              {data.dry_run
-                ? "Dry run complete"
-                : data.converted
-                  ? "ASCII written"
-                  : "Conversion stopped"}
-            </h2>
-          </div>
-          <span className="rounded border border-[var(--edge)] px-2 py-1 text-[11px] uppercase tracking-wider text-[var(--fg-2)]">
-            {data.format}
-          </span>
-        </div>
-
-        <dl className="mt-4 grid gap-3 md:grid-cols-2 text-sm">
-          <Meta label="Input" value={data.input_path} mono />
-          <Meta label="Output" value={data.output_path} mono />
-          <Meta
-            label="Output size"
-            value={data.output_size == null ? "—" : formatSize(data.output_size)}
-          />
-          <Meta
-            label="Preflight"
-            value={data.preflight_ok ? "pass" : "fail"}
-          />
-        </dl>
-
-        <div className="mt-4">
-          <div className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
-            CLI equivalent
-          </div>
-          <pre className="mt-1 overflow-x-auto rounded-md border border-[var(--edge)] bg-black/20 px-3 py-2 text-[12px] text-[var(--fg-1)]">
-            {data.cli_command_text}
-          </pre>
-        </div>
-      </section>
-
-      {input ? <PreflightCard input={input} /> : null}
-    </div>
-  );
-}
-
-function PreflightCard({ input }: { input: ConvertPreflightInput }) {
-  const mesh = input.energy_mesh_id ?? "unknown";
-  const stats = [
-    ["groups", input.energy_groups],
-    ["moments", input.legendre_order == null ? null : input.legendre_order + 1],
-    ["mixtures", input.mixtures],
-    ["states", input.state_points],
-    ["fissionable", input.fissionable_mixtures],
-    ["ADF mixes", input.adf_mixtures],
-    ["SPH calcs", input.sph_calculations],
-    ["std_dev", coverage(input)],
-  ];
-  return (
-    <section className="glass rounded-xl p-5">
-      <div className="flex items-baseline justify-between gap-4 flex-wrap">
-        <h2 className="text-base font-semibold tracking-tight">
-          Input contract
-        </h2>
-        <span
-          className={
-            "rounded border px-2 py-1 text-[11px] uppercase tracking-wider " +
-            (input.ok
-              ? "border-emerald-400/30 text-emerald-300"
-              : "border-rose-400/30 text-rose-300")
-          }
-        >
-          {input.ok ? "pass" : "fail"}
-        </span>
-      </div>
-
-      <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2">
-        {stats.map(([label, value]) => (
-          <div
-            key={label}
-            className="rounded-md border border-[var(--edge)] bg-white/[0.02] px-3 py-2"
-          >
-            <div className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
-              {label}
-            </div>
-            <div className="mt-1 text-sm tab-num text-[var(--fg-0)]">
-              {value == null ? "—" : String(value)}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <dl className="mt-4 grid gap-2 md:grid-cols-2 text-sm">
-        <Meta label="Energy mesh" value={mesh} />
-        <Meta
-          label="Row balance"
-          value={formatRelative(input.scatter_row_balance?.max_rel)}
-        />
-        <Meta
-          label="Chi max error"
-          value={formatRelative(input.physics_checks?.chi_sum_max_abs_error)}
-        />
-        <Meta
-          label="Uncertainty max"
-          value={formatRelative(input.uncertainty?.max_rel)}
-        />
-      </dl>
-
-      <IssueList title="Issues" items={input.issues} tone="rose" />
-      <IssueList title="Warnings" items={input.warnings} tone="amber" />
-    </section>
-  );
-}
-
-function IssueList({
-  title,
-  items,
-  tone,
-}: {
-  title: string;
-  items: readonly string[];
-  tone: "rose" | "amber";
-}) {
-  if (items.length === 0) return null;
-  const color = tone === "rose" ? "text-rose-300" : "text-amber-300";
-  return (
-    <div className="mt-4">
-      <div className={`text-sm font-semibold ${color}`}>{title}</div>
-      <ul className="mt-1 space-y-1 text-sm text-[var(--fg-1)]">
-        {items.map((item) => (
-          <li key={item}>{item}</li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function Meta({
-  label,
-  value,
-  mono = false,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-}) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
-        {label}
-      </dt>
-      <dd
-        className={
-          "mt-0.5 truncate text-[var(--fg-1)] " + (mono ? "font-mono" : "")
-        }
-        title={value}
-      >
-        {value}
-      </dd>
-    </div>
   );
 }
 
@@ -501,31 +300,9 @@ function pickBrowserStart(path: string): string {
   return trimmed;
 }
 
-function coverage(input: ConvertPreflightInput): string | null {
-  const datasets = input.uncertainty?.datasets;
-  const expected = input.uncertainty?.expected_datasets;
-  if (datasets == null || expected == null) return null;
-  return `${datasets}/${expected}`;
-}
-
-function formatRelative(value: number | null | undefined): string {
-  if (value == null) return "—";
-  if (value === 0) return "0";
-  const abs = Math.abs(value);
-  if (abs < 1.0e-3 || abs >= 1.0e3) return value.toExponential(3);
-  return value.toPrecision(4);
-}
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  const kb = bytes / 1024;
-  if (kb < 1024) return `${kb.toFixed(1)} KB`;
-  const mb = kb / 1024;
-  if (mb < 1024) return `${mb.toFixed(1)} MB`;
-  return `${(mb / 1024).toFixed(1)} GB`;
-}
-
-function toErrorState(err: unknown): Extract<State, { kind: "error" }> {
+function toErrorState(
+  err: unknown,
+): Extract<ConvertRunState, { kind: "error" }> {
   if (err instanceof ApiError) {
     return {
       kind: "error",
