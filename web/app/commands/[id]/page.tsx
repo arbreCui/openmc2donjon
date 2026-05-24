@@ -10,6 +10,7 @@ import {
   CommandStatus,
   api,
 } from "@/lib/api";
+import { CopyCliButton } from "@/components/commands/CopyCliButton";
 
 type State =
   | { kind: "loading" }
@@ -49,7 +50,10 @@ export default function CommandDetailPage() {
   return (
     <main className="min-h-[calc(100vh-3.5rem)] px-6 py-12">
       <div className="mx-auto max-w-4xl">
-        <Link href="/commands" className="text-sm text-[var(--fg-2)] hover:text-[var(--fg-0)]">
+        <Link
+          href="/commands"
+          className="text-sm text-[var(--fg-2)] hover:text-[var(--fg-0)]"
+        >
           Back to commands
         </Link>
 
@@ -124,9 +128,12 @@ function CommandDetail({ command }: { command: CommandCatalogEntry }) {
 
       <section className="glass rounded-xl p-5">
         <h2 className="text-base font-semibold tracking-tight">CLI form</h2>
-        <pre className="mt-3 overflow-x-auto rounded-md border border-[var(--edge)] bg-black/20 px-3 py-2 text-[12px] text-[var(--fg-1)]">
-          {command.cli}
-        </pre>
+        <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-start">
+          <pre className="min-w-0 flex-1 overflow-x-auto rounded-md border border-[var(--edge)] bg-black/20 px-3 py-2 text-[12px] text-[var(--fg-1)]">
+            {command.cli}
+          </pre>
+          <CopyCliButton value={command.cli} />
+        </div>
         {command.aliases.length > 0 ? (
           <p className="mt-3 text-sm text-[var(--fg-2)]">
             Alias:{" "}

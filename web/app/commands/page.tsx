@@ -10,6 +10,7 @@ import {
   CommandStatus,
   api,
 } from "@/lib/api";
+import { CopyCliButton } from "@/components/commands/CopyCliButton";
 
 type State =
   | { kind: "loading" }
@@ -17,6 +18,33 @@ type State =
   | { kind: "error"; message: string };
 
 const STATUS_ORDER: CommandStatus[] = ["ready", "partial", "planned"];
+const WORKFLOW_STEPS = [
+  {
+    label: "OpenMC",
+    detail: "recipe / statepoint",
+    href: "/openmc",
+  },
+  {
+    label: "HDF5",
+    detail: "MGXS handoff",
+    href: "/inspect",
+  },
+  {
+    label: "Equivalence",
+    detail: "optional ADF or SPH",
+    href: "/commands",
+  },
+  {
+    label: "Convert",
+    detail: "MULTICOMPO / MACROLIB",
+    href: "/convert",
+  },
+  {
+    label: "DONJON",
+    detail: "solve / audit",
+    href: "/audit",
+  },
+];
 
 export default function CommandsPage() {
   const [state, setState] = useState<State>({ kind: "loading" });
@@ -107,11 +135,39 @@ function StatusCounts({ data }: { data: CommandCatalog }) {
 }
 
 function Catalog({ data }: { data: CommandCatalog }) {
-  const commandsByGroup = useMemo(() => groupCommands(data.commands), [data]);
-  const featured = data.commands.find((command) => command.id === "direct-convert");
+  const [query, setQuery] = useState("");
+  const [groupFilter, setGroupFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<CommandStatus | "all">("all");
+  const filteredCommands = useMemo(
+    () =>
+      data.commands.filter((command) =>
+        commandMatches(command, {
+          query,
+          group: groupFilter,
+          status: statusFilter,
+        }),
+      ),
+    [data.commands, groupFilter, query, statusFilter],
+  );
+  const featured = filteredCommands.find((command) => command.id === "direct-convert");
+  const commandsByGroup = useMemo(
+    () => groupCommands(filteredCommands.filter((command) => command.id !== featured?.id)),
+    [featured?.id, filteredCommands],
+  );
 
   return (
     <div className="space-y-6">
+      <WorkflowMap />
+      <CommandFilters
+        data={data}
+        query={query}
+        onQuery={setQuery}
+        groupFilter={groupFilter}
+        onGroupFilter={setGroupFilter}
+        statusFilter={statusFilter}
+        onStatusFilter={setStatusFilter}
+        resultCount={filteredCommands.length}
+      />
       {featured ? <FeaturedCommand command={featured} /> : null}
       {data.groups.map((group) => {
         const commands = commandsByGroup.get(group.id) ?? [];
@@ -120,7 +176,147 @@ function Catalog({ data }: { data: CommandCatalog }) {
           <CommandGroupSection key={group.id} group={group} commands={commands} />
         );
       })}
+      {filteredCommands.length === 0 ? (
+        <section className="glass rounded-lg p-5 text-sm text-[var(--fg-2)]">
+          No commands match the current filters.
+        </section>
+      ) : null}
     </div>
+  );
+}
+
+function WorkflowMap() {
+  return (
+    <section className="glass rounded-lg p-5">
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
+        <h2 className="text-base font-semibold tracking-tight">Workflow map</h2>
+        <span className="text-[12px] text-[var(--fg-3)]">
+          command families in production order
+        </span>
+      </div>
+      <div className="grid gap-2 md:grid-cols-5">
+        {WORKFLOW_STEPS.map((step, index) => (
+          <Link
+            key={step.label}
+            href={step.href}
+            className="rounded-lg border border-[var(--edge)] bg-white/[0.025] p-3 hover:border-[var(--edge-bright)]"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
+                {String(index + 1).padStart(2, "0")}
+              </span>
+              {index + 1 < WORKFLOW_STEPS.length ? (
+                <span className="text-[var(--fg-3)]">to</span>
+              ) : null}
+            </div>
+            <div className="mt-2 text-sm font-semibold">{step.label}</div>
+            <div className="mt-1 text-[12px] text-[var(--fg-2)]">{step.detail}</div>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function CommandFilters({
+  data,
+  query,
+  onQuery,
+  groupFilter,
+  onGroupFilter,
+  statusFilter,
+  onStatusFilter,
+  resultCount,
+}: {
+  data: CommandCatalog;
+  query: string;
+  onQuery: (value: string) => void;
+  groupFilter: string;
+  onGroupFilter: (value: string) => void;
+  statusFilter: CommandStatus | "all";
+  onStatusFilter: (value: CommandStatus | "all") => void;
+  resultCount: number;
+}) {
+  return (
+    <section className="glass rounded-lg p-4">
+      <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
+        <label>
+          <span className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
+            Search
+          </span>
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => onQuery(event.target.value)}
+            placeholder="command, tag, summary, CLI..."
+            className="mt-1 w-full min-w-0 rounded-md border border-[var(--edge)] bg-[rgba(255,255,255,0.03)] px-3 py-2 text-sm text-[var(--fg-0)] focus:border-[var(--accent)] focus:outline-none"
+          />
+        </label>
+        <div className="text-[12px] text-[var(--fg-3)] tab-num">
+          {resultCount} / {data.commands.length} commands
+        </div>
+      </div>
+
+      <div className="mt-3 grid gap-3 lg:grid-cols-2">
+        <FilterRow
+          label="Workflow"
+          value={groupFilter}
+          options={[
+            ["all", "All"],
+            ...data.groups.map((group) => [group.id, group.label] as [string, string]),
+          ]}
+          onChange={onGroupFilter}
+        />
+        <FilterRow
+          label="Status"
+          value={statusFilter}
+          options={[
+            ["all", "All"],
+            ["ready", "Ready"],
+            ["partial", "Partial"],
+            ["planned", "CLI only"],
+          ]}
+          onChange={(value) => onStatusFilter(value as CommandStatus | "all")}
+        />
+      </div>
+    </section>
+  );
+}
+
+function FilterRow({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: [string, string][];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <fieldset>
+      <legend className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
+        {label}
+      </legend>
+      <div className="mt-1 flex flex-wrap gap-1.5">
+        {options.map(([id, text]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => onChange(id)}
+            className={
+              "rounded-md border px-2.5 py-1 text-[12px] transition " +
+              (value === id
+                ? "border-emerald-400/40 bg-emerald-400/15 text-emerald-200"
+                : "border-[var(--edge)] bg-white/[0.02] text-[var(--fg-2)] hover:text-[var(--fg-0)]")
+            }
+          >
+            {text}
+          </button>
+        ))}
+      </div>
+    </fieldset>
   );
 }
 
@@ -153,6 +349,9 @@ function FeaturedCommand({ command }: { command: CommandCatalogEntry }) {
         ) : null}
       </div>
       <CliLine value={command.cli} />
+      <div className="mt-3">
+        <CopyCliButton value={command.cli} />
+      </div>
     </section>
   );
 }
@@ -216,6 +415,7 @@ function CommandCard({ command }: { command: CommandCatalogEntry }) {
       <div className="mt-3 flex items-center justify-between gap-3">
         <AliasText aliases={command.aliases} />
         <div className="flex shrink-0 items-center gap-2">
+          <CopyCliButton value={command.cli} compact />
           <Link href={`/commands/${command.id}`} className="btn btn-secondary">
             Details
           </Link>
@@ -300,6 +500,32 @@ function groupCommands(commands: CommandCatalogEntry[]) {
     grouped.set(command.group, existing);
   }
   return grouped;
+}
+
+function commandMatches(
+  command: CommandCatalogEntry,
+  filters: { query: string; group: string; status: CommandStatus | "all" },
+) {
+  if (filters.group !== "all" && command.group !== filters.group) return false;
+  if (filters.status !== "all" && command.status !== filters.status) return false;
+  const query = filters.query.trim().toLowerCase();
+  if (!query) return true;
+  const haystack = [
+    command.id,
+    command.name,
+    command.title,
+    command.summary,
+    command.cli,
+    command.cli_help,
+    command.use_when,
+    command.produces,
+    command.next_step,
+    ...command.tags,
+    ...command.aliases,
+  ]
+    .join(" ")
+    .toLowerCase();
+  return haystack.includes(query);
 }
 
 function statusBadgeClass(status: CommandStatus) {
