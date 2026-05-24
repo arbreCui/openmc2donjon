@@ -27,6 +27,22 @@ Energy bounds consistency uses a much tighter tolerance because the values
 are group-edge metadata, not tally estimates. A state-specific edge mismatch
 means the cross sections are not on the same group structure.
 
+## SPH Loop Convergence Targets
+
+There is no default SPH convergence tolerance. A loop only enables numerical
+early stopping when the config provides one or both of:
+
+| Target | Default | Meaning |
+| --- | ---: | --- |
+| `convergence.flux_ratio_tolerance` | disabled | Stop once `max |low-order flux / OpenMC reference flux - 1|` is at or below this target. |
+| `convergence.sph_change_tolerance` | disabled | Stop once `max |NSPH(new) / NSPH(old) - 1|` is at or below this target. |
+| `convergence.fail_on_nonconvergence` | `false` | If `true`, a loop that hits the iteration limit before satisfying enabled targets fails the CLI command after writing its summary/audit artifacts. |
+
+Strict values such as `1.0e-12` may appear in archived fixtures because they
+record a specific test run. They are not a recommended production default.
+Choose tolerances from the low-order method, tally uncertainty, and the
+intended handoff use case.
+
 ## Warning Gates
 
 | Gate | Default | Meaning |

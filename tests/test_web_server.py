@@ -75,6 +75,8 @@ def _minimal_sph_loop_summary() -> dict[str, object]:
         "stop_reason": "converged",
         "sph_change_tolerance": 1.0e-12,
         "flux_ratio_tolerance": 1.0e-12,
+        "min_iterations": 1,
+        "fail_on_nonconvergence": False,
         "convergence": [
             {
                 "iteration": 1,
@@ -762,6 +764,7 @@ class AuditEndpointTests(unittest.TestCase):
             self.assertIn(key, payload, key)
         self.assertIn("passed", payload["acceptance"])
         self.assertIn("passed", payload["production_audit"])
+        self.assertFalse(payload["fail_on_nonconvergence"])
         self.assertEqual(payload["completed_iterations"], 10)
         self.assertEqual(len(payload["convergence"]), 10)
         self.assertEqual(len(payload["audit_rows"]), 11)

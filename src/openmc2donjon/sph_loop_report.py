@@ -100,6 +100,11 @@ def print_report(report: SphLoopReport) -> None:
         )
     if report.convergence_enabled:
         print("  convergence:")
+        print(
+            "    "
+            f"fail_on_nonconvergence={report.fail_on_nonconvergence} "
+            f"min_iterations={report.min_iterations}"
+        )
         for item in report.convergence:
             print(
                 f"    iter{item.iteration}: "
@@ -179,6 +184,7 @@ def write_summary(path: Path, report: SphLoopReport) -> None:
         "sph_change_tolerance": report.sph_change_tolerance,
         "flux_ratio_tolerance": report.flux_ratio_tolerance,
         "min_iterations": report.min_iterations,
+        "fail_on_nonconvergence": report.fail_on_nonconvergence,
         "flux_map_preflight": flux_map_preflight_payload(
             report.flux_map_preflight
         ),

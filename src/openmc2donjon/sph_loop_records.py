@@ -101,6 +101,7 @@ class SphLoopReport:
     sph_change_tolerance: float | None
     flux_ratio_tolerance: float | None
     min_iterations: int
+    fail_on_nonconvergence: bool
     flux_map_preflight: SphLoopFluxMapPreflightReport
     solves: tuple[SphLoopSolveReport, ...]
     workflows: tuple[SphIterationWorkflowReport, ...]

@@ -53,6 +53,13 @@ questions:
   iteration limit without satisfying the convergence target should fail the CLI
   command.
 
+Convergence targets are opt-in. If no `convergence.*_tolerance` values are set,
+the loop runs the requested iteration count and reports `convergence_enabled =
+false`. When targets are enabled, `fail_on_nonconvergence = false` means the
+summary can still be written and accepted by production gates even if the
+numeric stopping target was not reached; set it to `true` when nonconvergence
+should make the CLI command fail.
+
 A summary can therefore show `acceptance.passed = true` while `converged =
 false`. In that case the handoff passed the configured production gates, but
 the SPH iteration did not reach its numerical convergence target before the

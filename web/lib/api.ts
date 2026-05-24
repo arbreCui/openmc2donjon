@@ -350,6 +350,8 @@ export interface SphLoopSummary {
   sph_change_tolerance: number | null;
   flux_ratio_tolerance: number | null;
   min_iterations?: number | null;
+  // Present in summaries written by current openmc2donjon; optional so the
+  // viewer can still inspect older archived summaries.
   fail_on_nonconvergence?: boolean | null;
   convergence: SphLoopConvergencePoint[];
   acceptance: SphLoopAcceptance;

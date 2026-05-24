@@ -2328,6 +2328,7 @@
   ],
   "convergence_enabled": true,
   "decision": "openmc2donjon_sph_loop_passed",
+  "fail_on_nonconvergence": false,
   "final_ascii": "/mock/full_core_sph_10iter/sph_loop/iter10_sph/corrected.macrolib.txt",
   "final_solve": {
     "flux_unknown_count": 21,

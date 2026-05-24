@@ -180,6 +180,7 @@ def _build_report(
         sph_change_tolerance=plan.sph_change_tolerance,
         flux_ratio_tolerance=plan.flux_ratio_tolerance,
         min_iterations=plan.min_iterations,
+        fail_on_nonconvergence=plan.fail_on_nonconvergence,
         flux_map_preflight=preflight,
         solves=execution.solves,
         workflows=execution.workflows,

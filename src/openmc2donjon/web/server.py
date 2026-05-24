@@ -281,6 +281,10 @@ def _validate_audit_summary_payload(payload: dict[str, Any], http_exception: Any
         _require_type(payload, key, bool, errors)
     for key in ("sph_change_tolerance", "flux_ratio_tolerance"):
         _require_number_or_none(payload, key, errors)
+    if "min_iterations" in payload:
+        _require_int_or_none(payload, "min_iterations", errors)
+    if "fail_on_nonconvergence" in payload:
+        _require_bool_or_none(payload, "fail_on_nonconvergence", errors)
     _validate_audit_convergence(payload.get("convergence"), errors)
     _validate_audit_quality(payload.get("quality"), errors)
     _validate_audit_rows(payload.get("audit_rows"), errors)

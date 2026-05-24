@@ -123,6 +123,7 @@ class SphLoopTests(unittest.TestCase):
             self.assertEqual(payload["decision"], PASS_DECISION)
             self.assertTrue(payload["acceptance_enabled"])
             self.assertTrue(payload["acceptance_passed"])
+            self.assertFalse(payload["fail_on_nonconvergence"])
             self.assertEqual(
                 payload["acceptance_decision"],
                 "openmc2donjon_sph_loop_acceptance_passed",
@@ -361,6 +362,7 @@ class SphLoopTests(unittest.TestCase):
                             "sph_change_tolerance": 1.0e-12,
                             "flux_ratio_tolerance": 1.0e-12,
                             "min_iterations": 1,
+                            "fail_on_nonconvergence": True,
                         },
                         "solver": {
                             "command": [
@@ -398,6 +400,7 @@ class SphLoopTests(unittest.TestCase):
             self.assertEqual(payload["completed_iterations"], 1)
             self.assertTrue(payload["convergence_enabled"])
             self.assertTrue(payload["converged"])
+            self.assertTrue(payload["fail_on_nonconvergence"])
             self.assertEqual(payload["stop_reason"], "converged")
             self.assertEqual(len(payload["workflows"]), 1)
             self.assertEqual(len(payload["solves"]), 2)
