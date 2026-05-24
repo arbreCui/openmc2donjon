@@ -119,6 +119,8 @@ function ConvertSummary({
           <Meta label="Preflight" value={data.preflight_ok ? "pass" : "fail"} />
         </dl>
 
+        <RunModeNotice data={data} />
+
         <ConversionSummaryStrip data={data} input={input} />
 
         {input ? <PreflightDecisionPanel data={data} input={input} /> : null}
@@ -148,6 +150,34 @@ function ConvertSummary({
           <AsciiPreview path={data.output_path} />
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function RunModeNotice({ data }: { data: ConvertResponse }) {
+  const title = data.dry_run
+    ? "Dry run did not write an ASCII file."
+    : data.converted
+      ? "Convert wrote the ASCII handoff."
+      : "Convert stopped before writing output.";
+  const body = data.dry_run
+    ? "Use this result to review preflight, production gates, equivalence metadata, and output safety before pressing Convert."
+    : data.converted
+      ? "This path is the artifact to hand to DONJON or preview in the ASCII viewer below."
+      : "Resolve the failed checks or request error, then run the converter again.";
+  return (
+    <div
+      className={
+        "mt-4 rounded-md border px-3 py-2 text-sm " +
+        (data.dry_run
+          ? "border-cyan-300/20 bg-cyan-300/[0.05] text-cyan-100"
+          : data.converted
+            ? "border-emerald-300/20 bg-emerald-300/[0.05] text-emerald-100"
+            : "border-rose-300/20 bg-rose-300/[0.05] text-rose-100")
+      }
+    >
+      <span className="font-semibold">{title}</span>
+      <span className="ml-2 text-[var(--fg-1)]">{body}</span>
     </div>
   );
 }

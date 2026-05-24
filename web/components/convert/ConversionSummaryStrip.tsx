@@ -5,7 +5,7 @@ import { ConvertPreflightInput, ConvertResponse } from "@/lib/api";
 interface SummaryItem {
   label: string;
   value: string;
-  tone: "neutral" | "pass" | "warn";
+  tone: "neutral" | "pass" | "warn" | "fail" | "accent";
 }
 
 export default function ConversionSummaryStrip({
@@ -40,13 +40,25 @@ function buildSummaryItems(
   input: ConvertPreflightInput | null,
 ): SummaryItem[] {
   return [
+    {
+      label: "run",
+      value: data.dry_run ? "dry-run" : data.converted ? "converted" : "stopped",
+      tone: data.dry_run ? "accent" : data.converted ? "pass" : "fail",
+    },
+    {
+      label: "object",
+      value: data.format === "macrolib" ? "MACROLIB" : "MULTICOMPO",
+      tone: "neutral",
+    },
     item("groups", input?.energy_groups),
+    item(
+      "moments",
+      input?.legendre_order == null ? null : input.legendre_order + 1,
+    ),
     item("mixtures", input?.mixtures),
-    item("states", input?.state_points),
-    item("fissile", input?.fissionable_mixtures),
     {
       label: "ADF",
-      value: input?.adf_mixtures == null ? "-" : String(input.adf_mixtures),
+      value: adfValue(input),
       tone: input?.adf_mixtures ? "pass" : "neutral",
     },
     {
@@ -55,14 +67,9 @@ function buildSummaryItems(
       tone: input?.sph_calculations ? "pass" : "neutral",
     },
     {
-      label: "std_dev",
-      value: uncertaintyCoverage(input),
-      tone: uncertaintyTone(input),
-    },
-    {
-      label: "output",
-      value: data.output_size == null ? (data.dry_run ? "dry-run" : "-") : formatSize(data.output_size),
-      tone: data.converted && data.output_exists ? "pass" : "neutral",
+      label: "preflight",
+      value: data.preflight ? (data.preflight_ok ? "pass" : "fail") : "skipped",
+      tone: data.preflight ? (data.preflight_ok ? "pass" : "fail") : "neutral",
     },
   ];
 }
@@ -75,34 +82,16 @@ function item(label: string, value: number | null | undefined): SummaryItem {
   };
 }
 
-function uncertaintyCoverage(input: ConvertPreflightInput | null): string {
-  const uncertainty = input?.uncertainty;
-  if (!uncertainty) return "-";
-  if (uncertainty.checked === false) return "skipped";
-  const datasets = uncertainty.datasets;
-  const expected = uncertainty.expected_datasets;
-  if (datasets == null || expected == null) return "reported";
-  return `${datasets}/${expected}`;
+function adfValue(input: ConvertPreflightInput | null): string {
+  if (input?.adf_mixtures == null) return "-";
+  const faces = input.adf_faces?.length ?? 0;
+  return faces > 0 ? `${input.adf_mixtures} / ${faces} faces` : String(input.adf_mixtures);
 }
 
-function uncertaintyTone(input: ConvertPreflightInput | null): "neutral" | "pass" | "warn" {
-  const uncertainty = input?.uncertainty;
-  if (!uncertainty || uncertainty.checked === false) return "neutral";
-  if (uncertainty.missing_datasets && uncertainty.missing_datasets > 0) return "warn";
-  return "pass";
-}
-
-function itemClass(tone: "neutral" | "pass" | "warn"): string {
+function itemClass(tone: "neutral" | "pass" | "warn" | "fail" | "accent"): string {
   if (tone === "pass") return "border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-100";
   if (tone === "warn") return "border-amber-400/25 bg-amber-400/[0.06] text-amber-100";
+  if (tone === "fail") return "border-rose-400/25 bg-rose-400/[0.06] text-rose-100";
+  if (tone === "accent") return "border-cyan-300/25 bg-cyan-300/[0.06] text-cyan-100";
   return "border-[var(--edge)] bg-white/[0.02] text-[var(--fg-1)]";
-}
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  const kb = bytes / 1024;
-  if (kb < 1024) return `${kb.toFixed(1)} KB`;
-  const mb = kb / 1024;
-  if (mb < 1024) return `${mb.toFixed(1)} MB`;
-  return `${(mb / 1024).toFixed(1)} GB`;
 }

@@ -3,6 +3,7 @@ import type {
   OpenmcEquivalenceMode,
   OpenmcWorkflowKind,
 } from "./api";
+import type { ConvertIntent } from "./convertIntent";
 
 export interface QueryParams {
   get(key: string): string | null;
@@ -22,6 +23,13 @@ export function queryFlag(
 
 export function parseConvertFormat(value: string | null): ConvertFormat {
   return value === "macrolib" ? "macrolib" : "multicompo";
+}
+
+export function parseConvertIntent(value: string | null): ConvertIntent {
+  if (value === "direct-convert" || value === "check" || value === "sph-loop") {
+    return value;
+  }
+  return "generic";
 }
 
 export function parseOpenmcWorkflow(value: string | null): OpenmcWorkflowKind {

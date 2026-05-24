@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  parseConvertIntent,
   parseConvertFormat,
   parseOpenmcEquivalence,
   parseOpenmcWorkflow,
@@ -28,6 +29,13 @@ describe("workflow query parsers", () => {
     expect(parseConvertFormat("macrolib")).toBe("macrolib");
     expect(parseConvertFormat("multicompo")).toBe("multicompo");
     expect(parseConvertFormat("bad")).toBe("multicompo");
+  });
+
+  it("parses converter intent with a generic fallback", () => {
+    expect(parseConvertIntent("direct-convert")).toBe("direct-convert");
+    expect(parseConvertIntent("check")).toBe("check");
+    expect(parseConvertIntent("sph-loop")).toBe("sph-loop");
+    expect(parseConvertIntent("bad")).toBe("generic");
   });
 
   it("parses OpenMC workflow and equivalence values with safe defaults", () => {

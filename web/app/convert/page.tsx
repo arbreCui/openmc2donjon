@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, Suspense, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { FormEvent, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import ConvertReport, {
   ConvertRunState,
@@ -18,6 +19,9 @@ import {
   buildConvertCliPreview,
   convertAdvancedPayload,
 } from "@/lib/convertCommand";
+import { C5G7_PRODUCTION_DEMO } from "@/lib/convertDemo";
+import { convertIntentCopy } from "@/lib/convertIntent";
+import type { ConvertIntentCopy } from "@/lib/convertIntent";
 import {
   defaultConvertOutputPath,
   outputPathInDirectory,
@@ -51,6 +55,7 @@ function ConvertLoading() {
 
 function ConvertPageContent() {
   const searchParams = useSearchParams();
+  const intent = convertIntentCopy(searchParams.get("intent"));
   const [inputPath, setInputPath] = useState("");
   const [outputPath, setOutputPath] = useState("");
   const [format, setFormat] = useState<ConvertFormat>(
@@ -70,6 +75,7 @@ function ConvertPageContent() {
   const [browserTarget, setBrowserTarget] = useState<BrowserTarget | null>(null);
   const [outputTouched, setOutputTouched] = useState(false);
   const [state, setState] = useState<ConvertRunState>({ kind: "idle" });
+  const [mockMode, setMockMode] = useState(false);
   const convertButtonRef = useRef<HTMLButtonElement | null>(null);
   const [settings, , , settingsHydrated] = useSettings();
   const savedPrefix = settings.default_inspect_path.trim();
@@ -98,6 +104,21 @@ function ConvertPageContent() {
     mixturesText,
   });
 
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .health()
+      .then((health) => {
+        if (!cancelled) setMockMode(health.mock_mode);
+      })
+      .catch(() => {
+        if (!cancelled) setMockMode(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   function updateInput(value: string) {
     setInputPath(value);
     if (!outputTouched) setOutputPath(defaultConvertOutputPath(value, format));
@@ -106,6 +127,23 @@ function ConvertPageContent() {
   function updateFormat(value: ConvertFormat) {
     setFormat(value);
     if (!outputTouched) setOutputPath(defaultConvertOutputPath(inputPath, value));
+  }
+
+  function applyC5g7Demo() {
+    updateInput(C5G7_PRODUCTION_DEMO.inputPath);
+    setOutputPath(C5G7_PRODUCTION_DEMO.outputPath);
+    setOutputTouched(true);
+    setFormat(C5G7_PRODUCTION_DEMO.format);
+    setCheck(C5G7_PRODUCTION_DEMO.check);
+    setProduction(C5G7_PRODUCTION_DEMO.production);
+    setRequireKnownMesh(C5G7_PRODUCTION_DEMO.requireKnownMesh);
+    setOverwrite(false);
+    setRootName("CPO");
+    setComment("C5G7 mock production demo");
+    setBurnup("");
+    setHFactorDefault("");
+    setMixturesText("");
+    setState({ kind: "idle" });
   }
 
   function applyBrowserPick(picked: string) {
@@ -187,6 +225,8 @@ function ConvertPageContent() {
           </p>
         </header>
 
+        <ConvertIntentBanner intent={intent} />
+        {mockMode ? <MockDemoCard onApply={applyC5g7Demo} /> : null}
         <ConvertGuide />
         <ConvertConcepts />
 
@@ -443,6 +483,54 @@ function ConvertPageContent() {
   );
 }
 
+function ConvertIntentBanner({ intent }: { intent: ConvertIntentCopy }) {
+  return (
+    <section className={"mb-5 rounded-xl border p-4 " + intentBannerClass(intent.tone)}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[10px] uppercase tracking-[0.14em] opacity-70">
+            {intent.eyebrow}
+          </div>
+          <h2 className="mt-1 text-base font-semibold tracking-tight">
+            {intent.title}
+          </h2>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
+            {intent.body}
+          </p>
+        </div>
+        {intent.commandHref && intent.commandLabel ? (
+          <Link href={intent.commandHref} className="btn btn-secondary shrink-0">
+            {intent.commandLabel}
+          </Link>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function MockDemoCard({ onApply }: { onApply: () => void }) {
+  return (
+    <section className="mb-5 rounded-xl border border-cyan-300/20 bg-cyan-300/[0.05] p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.14em] text-cyan-200/80">
+            Mock backend
+          </div>
+          <h2 className="mt-1 text-sm font-semibold tracking-tight text-cyan-100">
+            {C5G7_PRODUCTION_DEMO.label}
+          </h2>
+          <p className="mt-1 max-w-2xl text-sm text-[var(--fg-2)]">
+            {C5G7_PRODUCTION_DEMO.description}
+          </p>
+        </div>
+        <button type="button" onClick={onApply} className="btn btn-primary">
+          Fill demo
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function ConvertGuide() {
   return (
     <section className="mb-5 grid gap-3 lg:grid-cols-3">
@@ -563,6 +651,15 @@ function segmentClass(active: boolean): string {
       ? "bg-emerald-400/15 text-emerald-200"
       : "bg-white/[0.02] text-[var(--fg-2)] hover:text-[var(--fg-0)]")
   );
+}
+
+function intentBannerClass(tone: ConvertIntentCopy["tone"]): string {
+  if (tone === "accent") return "border-cyan-300/25 bg-cyan-300/[0.05]";
+  if (tone === "production") {
+    return "border-emerald-300/25 bg-emerald-300/[0.05]";
+  }
+  if (tone === "sph") return "border-amber-300/25 bg-amber-300/[0.05]";
+  return "border-[var(--edge)] bg-white/[0.02]";
 }
 
 function optionalNumberError(label: string, value: string): string | null {
