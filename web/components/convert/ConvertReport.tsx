@@ -2,6 +2,7 @@
 
 import { ConvertPreflightInput, ConvertResponse } from "@/lib/api";
 import AsciiPreview from "./AsciiPreview";
+import ConversionSummaryStrip from "./ConversionSummaryStrip";
 import HandoffPipeline from "./HandoffPipeline";
 import OutputActions from "./OutputActions";
 
@@ -117,6 +118,8 @@ function ConvertSummary({
           />
           <Meta label="Preflight" value={data.preflight_ok ? "pass" : "fail"} />
         </dl>
+
+        <ConversionSummaryStrip data={data} input={input} />
 
         {input ? <PreflightDecisionPanel data={data} input={input} /> : null}
 
