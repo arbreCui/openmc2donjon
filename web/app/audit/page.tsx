@@ -8,6 +8,7 @@ import AuditSummary from "@/components/audit/AuditSummary";
 import ConvergenceChart from "@/components/audit/ConvergenceChart";
 import AuditChecks from "@/components/audit/AuditChecks";
 import AuditTimeline from "@/components/audit/AuditTimeline";
+import AuditQuality from "@/components/audit/AuditQuality";
 
 const FALLBACK_PLACEHOLDER = "/path/to/sph_loop_summary.json";
 
@@ -153,6 +154,7 @@ function Result({ state }: { state: State }) {
   return (
     <div className="space-y-5">
       <AuditSummary data={state.data} path={state.path} />
+      <AuditQuality quality={state.data.quality} />
       <ConvergenceChart
         points={state.data.convergence}
         sphTolerance={state.data.sph_change_tolerance}

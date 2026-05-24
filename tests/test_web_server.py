@@ -123,6 +123,23 @@ def _minimal_sph_loop_summary() -> dict[str, object]:
                 },
             ],
         },
+        "quality": {
+            "initial_flux_ratio_max_residual": 1.0,
+            "final_flux_ratio_max_residual": 0.0,
+            "final_to_initial_flux_residual_ratio": 0.0,
+            "flux_residual_improved": True,
+            "final_clipped_count": 0,
+            "final_clipped_fraction": 0.0,
+            "maximum_clipped_count": 0,
+            "maximum_clipped_fraction": 0.0,
+            "clipping_observed": False,
+            "final_sph_minimum": 1.0,
+            "final_sph_maximum": 1.0,
+            "initial_worst_residual_bin": None,
+            "final_worst_residual_bin": None,
+            "final_worst_residual_bins": [],
+            "final_clipped_bins": [],
+        },
         "audit_rows": [],
         "solves": [],
     }
@@ -739,6 +756,7 @@ class AuditEndpointTests(unittest.TestCase):
             "acceptance",
             "production_audit",
             "convergence",
+            "quality",
             "audit_rows",
             "solves",
         ):
@@ -816,6 +834,7 @@ class AuditEndpointTests(unittest.TestCase):
         self.assertIn("acceptance must be an object", detail)
         self.assertIn("production_audit must be an object", detail)
         self.assertIn("convergence must be a list", detail)
+        self.assertIn("quality must be an object", detail)
         self.assertIn("audit_rows must be a list", detail)
         self.assertIn("solves must be a list", detail)
 
@@ -850,6 +869,32 @@ class AuditEndpointTests(unittest.TestCase):
         detail = response.json()["detail"]
         self.assertIn("convergence[0].sph_max_abs_change", detail)
         self.assertIn("convergence[0].sph_max_rel_change", detail)
+
+    def test_live_mode_rejects_malformed_audit_quality(self) -> None:
+        import json
+
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            summary = _minimal_sph_loop_summary()
+            quality = dict(summary["quality"])
+            quality["final_flux_ratio_max_residual"] = "bad"
+            quality["final_worst_residual_bin"] = {"mixture": "fuel", "group": "bad"}
+            quality["final_worst_residual_bins"] = "bad"
+            summary["quality"] = quality
+            summary_path = Path(tmp) / "bad_quality.json"
+            summary_path.write_text(json.dumps(summary), encoding="utf-8")
+
+            client = TestClient(create_app(mock_mode=False))
+            response = client.get(
+                "/api/audit", params={"path": str(summary_path)},
+            )
+
+        self.assertEqual(response.status_code, 422)
+        detail = response.json()["detail"]
+        self.assertIn("quality.final_flux_ratio_max_residual", detail)
+        self.assertIn("quality.final_worst_residual_bin.group", detail)
+        self.assertIn("quality.final_worst_residual_bins must be a list", detail)
 
     def test_live_mode_rejects_malformed_audit_rows_and_solves(self) -> None:
         import json

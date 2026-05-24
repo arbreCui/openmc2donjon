@@ -278,6 +278,7 @@ def _validate_audit_summary_payload(payload: dict[str, Any], http_exception: Any
     for key in ("sph_change_tolerance", "flux_ratio_tolerance"):
         _require_number_or_none(payload, key, errors)
     _validate_audit_convergence(payload.get("convergence"), errors)
+    _validate_audit_quality(payload.get("quality"), errors)
     _validate_audit_rows(payload.get("audit_rows"), errors)
     _validate_audit_solves(payload.get("solves"), errors)
 
@@ -354,6 +355,67 @@ def _validate_audit_convergence(value: Any, errors: list[str]) -> None:
         for key in ("worst_residual_bins", "clipped_bins"):
             if not isinstance(item.get(key), list):
                 errors.append(f"{prefix}.{key} must be a list")
+
+
+def _validate_audit_quality(value: Any, errors: list[str]) -> None:
+    if not isinstance(value, dict):
+        errors.append("quality must be an object")
+        return
+    for key in (
+        "initial_flux_ratio_max_residual",
+        "final_flux_ratio_max_residual",
+        "final_to_initial_flux_residual_ratio",
+        "final_clipped_fraction",
+        "maximum_clipped_fraction",
+        "final_sph_minimum",
+        "final_sph_maximum",
+    ):
+        _require_number_or_none(value, key, errors, prefix="quality")
+    for key in ("final_clipped_count", "maximum_clipped_count"):
+        _require_int_or_none(value, key, errors, prefix="quality")
+    for key in ("flux_residual_improved", "clipping_observed"):
+        _require_bool_or_none(value, key, errors, prefix="quality")
+    for key in ("initial_worst_residual_bin", "final_worst_residual_bin"):
+        _validate_optional_residual_bin(value.get(key), errors, prefix=f"quality.{key}")
+    for key in ("final_worst_residual_bins", "final_clipped_bins"):
+        _validate_residual_bin_list(value.get(key), errors, prefix=f"quality.{key}")
+
+
+def _validate_residual_bin_list(value: Any, errors: list[str], *, prefix: str) -> None:
+    if not isinstance(value, list):
+        errors.append(f"{prefix} must be a list")
+        return
+    for index, item in enumerate(value):
+        _validate_optional_residual_bin(item, errors, prefix=f"{prefix}[{index}]")
+
+
+def _validate_optional_residual_bin(
+    value: Any,
+    errors: list[str],
+    *,
+    prefix: str,
+) -> None:
+    if value is None:
+        return
+    if not isinstance(value, dict):
+        errors.append(f"{prefix} must be an object or null")
+        return
+    _require_string_or_none(value, "mixture", errors, prefix=prefix)
+    _require_int_or_none(value, "group", errors, prefix=prefix)
+    for key in (
+        "residual",
+        "signed_residual",
+        "raw_update",
+        "sph",
+        "previous_sph",
+        "unclipped_sph",
+        "reference_flux",
+        "low_order_flux",
+    ):
+        if key in value:
+            _require_number_or_none(value, key, errors, prefix=prefix)
+    if "clipped" in value:
+        _require_bool_or_none(value, "clipped", errors, prefix=prefix)
 
 
 def _validate_audit_rows(value: Any, errors: list[str]) -> None:

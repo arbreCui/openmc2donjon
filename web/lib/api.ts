@@ -241,6 +241,7 @@ export interface SphLoopResidualBin {
   raw_update?: number | null;
   sph?: number | null;
   previous_sph?: number | null;
+  unclipped_sph?: number | null;
   reference_flux?: number | null;
   low_order_flux?: number | null;
   clipped?: boolean | null;
@@ -319,6 +320,24 @@ export interface SphLoopWorkflow {
   normalization_factor: number | null;
 }
 
+export interface SphLoopQuality {
+  initial_flux_ratio_max_residual: number | null;
+  final_flux_ratio_max_residual: number | null;
+  final_to_initial_flux_residual_ratio: number | null;
+  flux_residual_improved: boolean | null;
+  final_clipped_count: number | null;
+  final_clipped_fraction: number | null;
+  maximum_clipped_count: number | null;
+  maximum_clipped_fraction: number | null;
+  clipping_observed: boolean | null;
+  final_sph_minimum: number | null;
+  final_sph_maximum: number | null;
+  initial_worst_residual_bin: SphLoopResidualBin | null;
+  final_worst_residual_bin: SphLoopResidualBin | null;
+  final_worst_residual_bins: SphLoopResidualBin[];
+  final_clipped_bins: SphLoopResidualBin[];
+}
+
 export interface SphLoopSummary {
   schema: string;
   decision: string;
@@ -333,6 +352,7 @@ export interface SphLoopSummary {
   convergence: SphLoopConvergencePoint[];
   acceptance: SphLoopAcceptance;
   production_audit: SphLoopProductionAudit;
+  quality: SphLoopQuality;
   audit_rows: SphLoopAuditRow[];
   solves: SphLoopSolve[];
   postprocesses?: SphLoopPostprocess[];
