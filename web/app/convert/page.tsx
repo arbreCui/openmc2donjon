@@ -19,7 +19,10 @@ import {
   buildConvertCliPreview,
   convertAdvancedPayload,
 } from "@/lib/convertCommand";
-import { C5G7_PRODUCTION_DEMO } from "@/lib/convertDemo";
+import {
+  C5G7_PRODUCTION_DEMO,
+  convertDemoWalkthrough,
+} from "@/lib/convertDemo";
 import { convertIntentCopy } from "@/lib/convertIntent";
 import type { ConvertIntentCopy } from "@/lib/convertIntent";
 import {
@@ -509,12 +512,13 @@ function ConvertIntentBanner({ intent }: { intent: ConvertIntentCopy }) {
 }
 
 function MockDemoCard({ onApply }: { onApply: () => void }) {
+  const steps = convertDemoWalkthrough(C5G7_PRODUCTION_DEMO);
   return (
     <section className="mb-5 rounded-xl border border-cyan-300/20 bg-cyan-300/[0.05] p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-[10px] uppercase tracking-[0.14em] text-cyan-200/80">
-            Mock backend
+            Mock backend walkthrough
           </div>
           <h2 className="mt-1 text-sm font-semibold tracking-tight text-cyan-100">
             {C5G7_PRODUCTION_DEMO.label}
@@ -527,13 +531,38 @@ function MockDemoCard({ onApply }: { onApply: () => void }) {
           Fill demo
         </button>
       </div>
+      <div className="mt-4 grid gap-3 lg:grid-cols-4">
+        {steps.map((step) => (
+          <div key={step.id} className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="rounded border border-cyan-200/25 bg-cyan-200/[0.08] px-1.5 py-0.5 font-mono text-[10px] text-cyan-100">
+                {step.label}
+              </span>
+              <h3 className="text-[12px] font-semibold tracking-tight text-cyan-50">
+                {step.title}
+              </h3>
+            </div>
+            <p className="mt-1 text-[12px] leading-5 text-[var(--fg-2)]">
+              {step.body}
+            </p>
+            {step.href ? (
+              <Link
+                href={step.href}
+                className="mt-1 inline-flex text-[12px] text-[var(--accent-2)] hover:underline"
+              >
+                Open
+              </Link>
+            ) : null}
+          </div>
+        ))}
+      </div>
     </section>
   );
 }
 
 function ConvertGuide() {
   return (
-    <section className="mb-5 grid gap-3 lg:grid-cols-3">
+    <section className="mb-5 grid gap-3 lg:grid-cols-4">
       <GuideCard
         step="01"
         title="Inspect the HDF5"
@@ -548,6 +577,11 @@ function ConvertGuide() {
         step="03"
         title="Write ASCII"
         body="Generate .mcompo.txt for mapped MULTICOMPO handoffs or .macrolib.txt for one-state MACROLIB input."
+      />
+      <GuideCard
+        step="04"
+        title="Review and package"
+        body="Preview the LCM ASCII blocks, then bundle the HDF5, output, summaries, and logs as the production record."
       />
     </section>
   );
