@@ -258,6 +258,67 @@ export interface SphLoopConvergencePoint {
   converged: boolean;
 }
 
+export interface SphLoopAuditRow {
+  stage: string;
+  iteration: number;
+  keff: number | null;
+  sph_minimum: number | null;
+  sph_maximum: number | null;
+  sph_max_abs_change: number | null;
+  sph_max_rel_change: number | null;
+  flux_ratio_max_residual: number | null;
+  worst_residual_mixture: string | null;
+  worst_residual_group: number | null;
+  worst_residual_raw_update: number | null;
+  worst_residual: number | null;
+  converged: boolean | null;
+  solve_result: string | null;
+  ascii_output: string | null;
+  postprocess_output: string | null;
+}
+
+export interface SphLoopSolve {
+  iteration: number;
+  command: string[];
+  cwd: string;
+  ascii_input: string;
+  result: string;
+  stdout: string;
+  stderr: string;
+  returncode: number;
+  result_bytes: number;
+  flux_vector_count: number;
+  flux_unknown_count: number;
+  keff: number | null;
+}
+
+export interface SphLoopPostprocess {
+  iteration: number;
+  command: string[];
+  cwd: string;
+  workflow_ascii: string;
+  output: string;
+  sph_sidecar: string;
+  stdout: string;
+  stderr: string;
+  returncode: number;
+  output_bytes: number;
+  block_count: number;
+}
+
+export interface SphLoopWorkflow {
+  iteration: number;
+  summary_json: string;
+  donjon_volume_flux_h5: string;
+  sph_sidecar: string;
+  augmented_h5: string;
+  ascii_output: string;
+  sph_minimum: number | null;
+  sph_maximum: number | null;
+  flux_normalization: string | null;
+  normalization_factor: number | null;
+}
+
 export interface SphLoopSummary {
   schema: string;
   decision: string;
@@ -272,6 +333,10 @@ export interface SphLoopSummary {
   convergence: SphLoopConvergencePoint[];
   acceptance: SphLoopAcceptance;
   production_audit: SphLoopProductionAudit;
+  audit_rows: SphLoopAuditRow[];
+  solves: SphLoopSolve[];
+  postprocesses?: SphLoopPostprocess[];
+  workflows?: SphLoopWorkflow[];
 }
 
 export const api = {

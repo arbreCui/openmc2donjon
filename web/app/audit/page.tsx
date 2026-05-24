@@ -7,6 +7,7 @@ import FileBrowserModal from "@/components/inspect/FileBrowserModal";
 import AuditSummary from "@/components/audit/AuditSummary";
 import ConvergenceChart from "@/components/audit/ConvergenceChart";
 import AuditChecks from "@/components/audit/AuditChecks";
+import AuditTimeline from "@/components/audit/AuditTimeline";
 
 const FALLBACK_PLACEHOLDER = "/path/to/sph_loop_summary.json";
 
@@ -160,6 +161,12 @@ function Result({ state }: { state: State }) {
       <AuditChecks
         acceptance={state.data.acceptance}
         productionAudit={state.data.production_audit}
+      />
+      <AuditTimeline
+        rows={state.data.audit_rows}
+        solves={state.data.solves}
+        postprocesses={state.data.postprocesses}
+        workflows={state.data.workflows}
       />
     </div>
   );

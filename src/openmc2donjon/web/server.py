@@ -278,6 +278,8 @@ def _validate_audit_summary_payload(payload: dict[str, Any], http_exception: Any
     for key in ("sph_change_tolerance", "flux_ratio_tolerance"):
         _require_number_or_none(payload, key, errors)
     _validate_audit_convergence(payload.get("convergence"), errors)
+    _validate_audit_rows(payload.get("audit_rows"), errors)
+    _validate_audit_solves(payload.get("solves"), errors)
 
     acceptance = payload.get("acceptance")
     if not isinstance(acceptance, dict):
@@ -354,6 +356,53 @@ def _validate_audit_convergence(value: Any, errors: list[str]) -> None:
                 errors.append(f"{prefix}.{key} must be a list")
 
 
+def _validate_audit_rows(value: Any, errors: list[str]) -> None:
+    if not isinstance(value, list):
+        errors.append("audit_rows must be a list")
+        return
+    for index, item in enumerate(value):
+        prefix = f"audit_rows[{index}]"
+        if not isinstance(item, dict):
+            errors.append(f"{prefix} must be an object")
+            continue
+        _require_type(item, "stage", str, errors, prefix=prefix)
+        _require_type(item, "iteration", int, errors, prefix=prefix)
+        for key in (
+            "keff",
+            "sph_minimum",
+            "sph_maximum",
+            "sph_max_abs_change",
+            "sph_max_rel_change",
+            "flux_ratio_max_residual",
+            "worst_residual_raw_update",
+            "worst_residual",
+        ):
+            _require_number_or_none(item, key, errors, prefix=prefix)
+        _require_string_or_none(item, "worst_residual_mixture", errors, prefix=prefix)
+        _require_int_or_none(item, "worst_residual_group", errors, prefix=prefix)
+        _require_bool_or_none(item, "converged", errors, prefix=prefix)
+        for key in ("solve_result", "ascii_output", "postprocess_output"):
+            _require_string_or_none(item, key, errors, prefix=prefix)
+
+
+def _validate_audit_solves(value: Any, errors: list[str]) -> None:
+    if not isinstance(value, list):
+        errors.append("solves must be a list")
+        return
+    for index, item in enumerate(value):
+        prefix = f"solves[{index}]"
+        if not isinstance(item, dict):
+            errors.append(f"{prefix} must be an object")
+            continue
+        _require_type(item, "iteration", int, errors, prefix=prefix)
+        _require_string_list(item, "command", errors, prefix=prefix)
+        for key in ("cwd", "ascii_input", "result", "stdout", "stderr"):
+            _require_type(item, key, str, errors, prefix=prefix)
+        for key in ("returncode", "result_bytes", "flux_vector_count", "flux_unknown_count"):
+            _require_type(item, key, int, errors, prefix=prefix)
+        _require_number_or_none(item, "keff", errors, prefix=prefix)
+
+
 def _require_type(
     payload: dict[str, Any],
     key: str,
@@ -366,6 +415,67 @@ def _require_type(
     if not isinstance(value, expected) or (expected is int and isinstance(value, bool)):
         qualified = key if prefix is None else f"{prefix}.{key}"
         errors.append(f"{qualified} must be {expected.__name__}")
+
+
+def _require_string_list(
+    payload: dict[str, Any],
+    key: str,
+    errors: list[str],
+    *,
+    prefix: str | None = None,
+) -> None:
+    qualified = key if prefix is None else f"{prefix}.{key}"
+    value = payload.get(key)
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        errors.append(f"{qualified} must be a list of strings")
+
+
+def _require_string_or_none(
+    payload: dict[str, Any],
+    key: str,
+    errors: list[str],
+    *,
+    prefix: str | None = None,
+) -> None:
+    qualified = key if prefix is None else f"{prefix}.{key}"
+    if key not in payload:
+        errors.append(f"{qualified} must be string or null")
+        return
+    value = payload[key]
+    if value is not None and not isinstance(value, str):
+        errors.append(f"{qualified} must be string or null")
+
+
+def _require_int_or_none(
+    payload: dict[str, Any],
+    key: str,
+    errors: list[str],
+    *,
+    prefix: str | None = None,
+) -> None:
+    qualified = key if prefix is None else f"{prefix}.{key}"
+    if key not in payload:
+        errors.append(f"{qualified} must be int or null")
+        return
+    value = payload[key]
+    if value is not None and (not isinstance(value, int) or isinstance(value, bool)):
+        errors.append(f"{qualified} must be int or null")
+
+
+def _require_bool_or_none(
+    payload: dict[str, Any],
+    key: str,
+    errors: list[str],
+    *,
+    prefix: str | None = None,
+) -> None:
+    qualified = key if prefix is None else f"{prefix}.{key}"
+    if key not in payload:
+        errors.append(f"{qualified} must be bool or null")
+        return
+    value = payload[key]
+    if value is not None and not isinstance(value, bool):
+        errors.append(f"{qualified} must be bool or null")
 
 
 def _require_number_or_none(

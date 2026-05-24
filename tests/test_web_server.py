@@ -123,6 +123,8 @@ def _minimal_sph_loop_summary() -> dict[str, object]:
                 },
             ],
         },
+        "audit_rows": [],
+        "solves": [],
     }
 
 
@@ -738,6 +740,7 @@ class AuditEndpointTests(unittest.TestCase):
             "production_audit",
             "convergence",
             "audit_rows",
+            "solves",
         ):
             self.assertIn(key, payload, key)
         self.assertIn("passed", payload["acceptance"])
@@ -813,6 +816,8 @@ class AuditEndpointTests(unittest.TestCase):
         self.assertIn("acceptance must be an object", detail)
         self.assertIn("production_audit must be an object", detail)
         self.assertIn("convergence must be a list", detail)
+        self.assertIn("audit_rows must be a list", detail)
+        self.assertIn("solves must be a list", detail)
 
     def test_live_mode_rejects_malformed_audit_convergence(self) -> None:
         import json
@@ -845,6 +850,62 @@ class AuditEndpointTests(unittest.TestCase):
         detail = response.json()["detail"]
         self.assertIn("convergence[0].sph_max_abs_change", detail)
         self.assertIn("convergence[0].sph_max_rel_change", detail)
+
+    def test_live_mode_rejects_malformed_audit_rows_and_solves(self) -> None:
+        import json
+
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            summary = _minimal_sph_loop_summary()
+            summary["audit_rows"] = [
+                {
+                    "stage": "iteration",
+                    "iteration": "bad",
+                    "keff": None,
+                    "sph_minimum": None,
+                    "sph_maximum": None,
+                    "sph_max_abs_change": None,
+                    "sph_max_rel_change": None,
+                    "flux_ratio_max_residual": None,
+                    "worst_residual_mixture": None,
+                    "worst_residual_group": None,
+                    "worst_residual_raw_update": None,
+                    "worst_residual": None,
+                    "converged": None,
+                    "solve_result": None,
+                    "ascii_output": None,
+                    "postprocess_output": None,
+                },
+            ]
+            summary["solves"] = [
+                {
+                    "iteration": 0,
+                    "command": "not-a-list",
+                    "cwd": "/tmp",
+                    "ascii_input": "in.macrolib.txt",
+                    "result": "low_order_flux.result",
+                    "stdout": "stdout.txt",
+                    "stderr": "stderr.txt",
+                    "returncode": 0,
+                    "result_bytes": 1,
+                    "flux_vector_count": 1,
+                    "flux_unknown_count": 1,
+                    "keff": None,
+                },
+            ]
+            summary_path = Path(tmp) / "bad_audit_timeline.json"
+            summary_path.write_text(json.dumps(summary), encoding="utf-8")
+
+            client = TestClient(create_app(mock_mode=False))
+            response = client.get(
+                "/api/audit", params={"path": str(summary_path)},
+            )
+
+        self.assertEqual(response.status_code, 422)
+        detail = response.json()["detail"]
+        self.assertIn("audit_rows[0].iteration must be int", detail)
+        self.assertIn("solves[0].command must be a list of strings", detail)
 
     def test_live_mode_path_not_found_returns_404(self) -> None:
         from openmc2donjon.web.server import create_app
