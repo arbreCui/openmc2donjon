@@ -9,7 +9,7 @@ import h5py
 import numpy as np
 
 from openmc2donjon import mgxs_input_contract as validator
-from openmc2donjon.energy_groups import energy_bounds_sha256
+from openmc2donjon.energy_groups import energy_bounds_sha256, load_energy_mesh
 
 
 class MgxsInputContractTests(unittest.TestCase):
@@ -671,6 +671,44 @@ class MgxsInputContractTests(unittest.TestCase):
             energy_bounds_sha256([1.0e-5, 1.0, 1.0e7]),
         )
 
+    def test_energy_group_identity_identifies_known_mesh(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "casmo7.h5"
+            write_known_mesh_fixture(path, mesh_id="casmo_7")
+
+            report = validator.validate_input(path)
+
+        self.assertTrue(report.ok, report.issues)
+        self.assertEqual(report.energy_mesh_id, "casmo_7")
+        self.assertEqual(report.energy_mesh_name, "CASMO-7")
+        self.assertAlmostEqual(report.energy_mesh_tolerance or 0.0, 1.0e-6)
+        self.assertFalse(
+            any("known energy mesh" in warning for warning in report.warnings)
+        )
+
+    def test_unknown_energy_mesh_can_warn_or_fail(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "unknown_mesh.h5"
+            write_single_state_fixture(path, total=[0.29, 0.38])
+
+            warning_report = validator.validate_input(
+                path,
+                warn_unknown_energy_mesh=True,
+            )
+            hard_report = validator.validate_input(
+                path,
+                require_known_energy_mesh=True,
+            )
+
+        self.assertTrue(warning_report.ok, warning_report.issues)
+        self.assertTrue(
+            any("did not match a bundled known energy mesh" in item for item in warning_report.warnings)
+        )
+        self.assertFalse(hard_report.ok)
+        self.assertTrue(
+            any("does not match a bundled known energy mesh" in item for item in hard_report.issues)
+        )
+
     def test_energy_group_identity_gate_rejects_mismatches(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "wrong_bounds.h5"
@@ -926,6 +964,35 @@ def write_single_state_fixture(
             scatter_axes=scatter_axes,
             scatter=scatter,
         )
+
+
+def write_known_mesh_fixture(path: Path, *, mesh_id: str) -> None:
+    mesh = load_energy_mesh(mesh_id)
+    bounds = mesh.boundaries_descending[::-1]
+    ngroups = mesh.n_groups
+    total = np.linspace(0.2, 0.8, ngroups)
+    absorption = np.linspace(0.02, 0.08, ngroups)
+    scatter = np.zeros((1, ngroups, ngroups))
+    scatter[0, np.arange(ngroups), np.arange(ngroups)] = total - absorption
+
+    with h5py.File(path, "w") as h5:
+        h5.attrs["energy_groups"] = ngroups
+        h5.attrs["legendre_order"] = 0
+        h5.create_dataset("energy_bounds", data=bounds)
+        mixtures = h5.create_group("mixtures")
+        fuel = mixtures.create_group("fuel")
+        fuel.attrs["fissionable"] = True
+        fuel.attrs["scatter_axes"] = "moment,from,to"
+        fuel.attrs["volume"] = 1.0
+        fuel.create_dataset("total", data=total)
+        fuel.create_dataset("absorption", data=absorption)
+        fuel.create_dataset("fission", data=np.linspace(0.01, 0.02, ngroups))
+        fuel.create_dataset("nu_fission", data=np.linspace(0.025, 0.05, ngroups))
+        chi = np.zeros(ngroups)
+        chi[0] = 1.0
+        fuel.create_dataset("chi", data=chi)
+        fuel.create_dataset("transport_total", data=total)
+        fuel.create_dataset("scatter_matrix", data=scatter)
 
 
 def write_one_state_payload(

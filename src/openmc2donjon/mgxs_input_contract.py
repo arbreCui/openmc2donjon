@@ -11,7 +11,13 @@ import h5py
 import numpy as np
 
 from .constants import MGXS_DONJON_GROUP_ORDER
-from .energy_groups import energy_bounds_sha256, load_energy_bounds_text
+from .energy_groups import (
+    MESH_ABSOLUTE_TOLERANCE,
+    MESH_RELATIVE_TOLERANCE,
+    energy_bounds_sha256,
+    identify_mesh,
+    load_energy_bounds_text,
+)
 from .hdf5_names import read_mixture_names
 from .mgxs_input_equivalence import (
     SPH_DATASETS,  # noqa: F401  (re-exported for mgxs_inspect)
@@ -82,6 +88,9 @@ def production_preflight_defaults(
     require_transport_dataset: bool,
     require_volume: bool,
     require_h_factor: bool,
+    require_known_energy_mesh: bool = False,
+    warn_unknown_energy_mesh: bool = False,
+    energy_mesh_tolerance: float = MESH_RELATIVE_TOLERANCE,
     scatter_row_balance_warn: float | None,
     scatter_row_balance_fail: float | None,
     require_energy_bounds_consistency: bool = False,
@@ -102,6 +111,9 @@ def production_preflight_defaults(
             "require_transport_dataset": require_transport_dataset,
             "require_volume": require_volume,
             "require_h_factor": require_h_factor,
+            "require_known_energy_mesh": require_known_energy_mesh,
+            "warn_unknown_energy_mesh": warn_unknown_energy_mesh,
+            "energy_mesh_tolerance": energy_mesh_tolerance,
             "scatter_row_balance_warn": scatter_row_balance_warn,
             "scatter_row_balance_fail": scatter_row_balance_fail,
             "require_energy_bounds_consistency": require_energy_bounds_consistency,
@@ -129,6 +141,9 @@ def production_preflight_defaults(
         "require_transport_dataset": True,
         "require_volume": True,
         "require_h_factor": True,
+        "require_known_energy_mesh": require_known_energy_mesh,
+        "warn_unknown_energy_mesh": True,
+        "energy_mesh_tolerance": energy_mesh_tolerance,
         "scatter_row_balance_warn": scatter_row_balance_warn,
         "scatter_row_balance_fail": scatter_row_balance_fail,
         "require_energy_bounds_consistency": True,
@@ -152,6 +167,9 @@ def main() -> int:
         require_transport_dataset=args.require_transport_dataset,
         require_volume=args.require_volume,
         require_h_factor=args.require_h_factor,
+        require_known_energy_mesh=args.require_known_energy_mesh,
+        warn_unknown_energy_mesh=args.warn_unknown_energy_mesh,
+        energy_mesh_tolerance=args.energy_mesh_tolerance,
         scatter_row_balance_warn=args.scatter_row_balance_warn,
         scatter_row_balance_fail=args.scatter_row_balance_fail,
         require_energy_bounds_consistency=args.require_energy_bounds_consistency,
@@ -190,6 +208,9 @@ def main() -> int:
                 else str(args.expected_energy_bounds)
             ),
             expected_energy_bounds_sha256=args.expected_energy_bounds_sha256,
+            require_known_energy_mesh=settings["require_known_energy_mesh"],
+            warn_unknown_energy_mesh=settings["warn_unknown_energy_mesh"],
+            energy_mesh_tolerance=settings["energy_mesh_tolerance"],
             expected_adf_faces=expected_faces,
             scatter_row_balance_warn=settings["scatter_row_balance_warn"],
             scatter_row_balance_fail=settings["scatter_row_balance_fail"],
@@ -324,6 +345,32 @@ def parse_args() -> argparse.Namespace:
         help="require the actual /energy_bounds SHA-256 digest to match this value",
     )
     parser.add_argument(
+        "--require-known-energy-mesh",
+        action="store_true",
+        help=(
+            "fail if /energy_bounds does not match a bundled known group "
+            "structure"
+        ),
+    )
+    parser.add_argument(
+        "--warn-unknown-energy-mesh",
+        action="store_true",
+        help=(
+            "warn if /energy_bounds does not match a bundled known group "
+            "structure"
+        ),
+    )
+    parser.add_argument(
+        "--energy-mesh-tolerance",
+        type=float,
+        default=MESH_RELATIVE_TOLERANCE,
+        metavar="RTOL",
+        help=(
+            "relative tolerance for bundled energy-mesh identification "
+            f"(default: {MESH_RELATIVE_TOLERANCE:g})"
+        ),
+    )
+    parser.add_argument(
         "--scatter-row-balance-warn",
         type=float,
         default=None,
@@ -447,6 +494,9 @@ def validate_input(
     expected_energy_bounds: np.ndarray | list[float] | None = None,
     expected_energy_bounds_label: str | None = None,
     expected_energy_bounds_sha256: str | None = None,
+    require_known_energy_mesh: bool = False,
+    warn_unknown_energy_mesh: bool = False,
+    energy_mesh_tolerance: float = MESH_RELATIVE_TOLERANCE,
     expected_adf_faces: list[str] | None = None,
     scatter_row_balance_warn: float | None = None,
     scatter_row_balance_fail: float | None = None,
@@ -485,6 +535,9 @@ def validate_input(
                 expected_energy_bounds=expected_energy_bounds,
                 expected_energy_bounds_label=expected_energy_bounds_label,
                 expected_energy_bounds_sha256=expected_energy_bounds_sha256,
+                require_known_energy_mesh=require_known_energy_mesh,
+                warn_unknown_energy_mesh=warn_unknown_energy_mesh,
+                energy_mesh_tolerance=energy_mesh_tolerance,
                 expected_adf_faces=expected_adf_faces,
                 scatter_row_balance_warn=scatter_row_balance_warn,
                 scatter_row_balance_fail=scatter_row_balance_fail,
@@ -516,6 +569,9 @@ def validate_open_h5(
     expected_energy_bounds: np.ndarray | list[float] | None,
     expected_energy_bounds_label: str | None,
     expected_energy_bounds_sha256: str | None,
+    require_known_energy_mesh: bool,
+    warn_unknown_energy_mesh: bool,
+    energy_mesh_tolerance: float,
     expected_adf_faces: list[str] | None,
     scatter_row_balance_warn: float | None,
     scatter_row_balance_fail: float | None,
@@ -557,6 +613,9 @@ def validate_open_h5(
         expected_bounds=expected_energy_bounds,
         expected_bounds_label=expected_energy_bounds_label,
         expected_bounds_sha256=expected_energy_bounds_sha256,
+        require_known_mesh=require_known_energy_mesh,
+        warn_unknown_mesh=warn_unknown_energy_mesh,
+        mesh_tolerance=energy_mesh_tolerance,
     )
     validate_domain_mode(h5, report, require_domain_mode=require_domain_mode)
 
@@ -983,6 +1042,9 @@ def validate_energy_identity(
     expected_bounds: np.ndarray | list[float] | None,
     expected_bounds_label: str | None,
     expected_bounds_sha256: str | None,
+    require_known_mesh: bool,
+    warn_unknown_mesh: bool,
+    mesh_tolerance: float,
 ) -> None:
     structure = (
         attr_text(h5.attrs["energy_group_structure"])
@@ -1030,13 +1092,44 @@ def validate_energy_identity(
                 f"/energy_bounds shape does not match {label}: "
                 f"{energy.shape} != {expected.shape}"
             )
-            return
-        if not np.allclose(energy, expected, rtol=1.0e-10, atol=0.0):
+        elif not np.allclose(energy, expected, rtol=1.0e-10, atol=0.0):
             index = int(np.argmax(np.abs(energy - expected)))
             report.fail(
                 f"/energy_bounds differ from {label}: index {index} "
                 f"actual={energy[index]:.12e} expected={expected[index]:.12e}"
             )
+
+    report.energy_mesh_tolerance = float(mesh_tolerance)
+    if not _mesh_identification_candidate(energy):
+        return
+    mesh = identify_mesh(
+        energy,
+        rtol=float(mesh_tolerance),
+        atol=MESH_ABSOLUTE_TOLERANCE,
+    )
+    if mesh is not None:
+        report.energy_mesh_id = mesh.mesh_id
+        report.energy_mesh_name = mesh.name
+        return
+
+    message = (
+        "/energy_bounds did not match a bundled known energy mesh "
+        f"within rtol={float(mesh_tolerance):g}"
+    )
+    if require_known_mesh:
+        report.fail(message.replace("did not match", "does not match"))
+    elif warn_unknown_mesh:
+        report.warn(message)
+
+
+def _mesh_identification_candidate(energy: np.ndarray) -> bool:
+    return (
+        energy.ndim == 1
+        and energy.size >= 2
+        and np.all(np.isfinite(energy))
+        and np.all(energy > 0.0)
+        and np.all(np.diff(energy) > 0.0)
+    )
 
 
 def burnup_axis_from_hdf5(h5: h5py.File, report: InputReport) -> np.ndarray | None:
@@ -1450,6 +1543,9 @@ def run_preflight(
     expected_energy_group_structure: str | None = None,
     expected_energy_bounds: str | Path | np.ndarray | list[float] | None = None,
     expected_energy_bounds_sha256: str | None = None,
+    require_known_energy_mesh: bool = False,
+    warn_unknown_energy_mesh: bool = False,
+    energy_mesh_tolerance: float = MESH_RELATIVE_TOLERANCE,
     scatter_row_balance_warn: float | None = None,
     scatter_row_balance_fail: float | None = None,
     require_energy_bounds_consistency: bool = False,
@@ -1480,6 +1576,9 @@ def run_preflight(
         require_transport_dataset=require_transport_dataset,
         require_volume=require_volume,
         require_h_factor=require_h_factor,
+        require_known_energy_mesh=require_known_energy_mesh,
+        warn_unknown_energy_mesh=warn_unknown_energy_mesh,
+        energy_mesh_tolerance=energy_mesh_tolerance,
         scatter_row_balance_warn=scatter_row_balance_warn,
         scatter_row_balance_fail=scatter_row_balance_fail,
         require_energy_bounds_consistency=require_energy_bounds_consistency,
@@ -1506,6 +1605,9 @@ def run_preflight(
             expected_energy_bounds=expected_bounds,
             expected_energy_bounds_label=expected_bounds_label,
             expected_energy_bounds_sha256=expected_energy_bounds_sha256,
+            require_known_energy_mesh=settings["require_known_energy_mesh"],
+            warn_unknown_energy_mesh=settings["warn_unknown_energy_mesh"],
+            energy_mesh_tolerance=settings["energy_mesh_tolerance"],
             expected_adf_faces=expected_faces,
             scatter_row_balance_warn=settings["scatter_row_balance_warn"],
             scatter_row_balance_fail=settings["scatter_row_balance_fail"],

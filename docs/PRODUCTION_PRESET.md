@@ -16,6 +16,7 @@ files that will be consumed as physics inputs, not for early format debugging.
 | Explicit `transport_total` | hard fail | Make the diffusion/SPN transport correction explicit. |
 | Fissionable H-FACTOR | hard fail | Keep power normalization data visible. |
 | Local energy bounds consistency | hard fail | Prevent state or mixture group-structure drift. |
+| Known energy mesh | warning by default; optional hard fail | Identify standard group structures and flag custom/unknown bounds in the audit trail. |
 | Scatter row balance | hard fail | Catch wrong scatter orientation or inconsistent reactions. |
 | CHI normalization | hard fail | Ensure fission spectra are usable probability vectors. |
 | ADF face consistency | hard fail when ADF exists | Prevent mixed face naming across calculations. |
@@ -36,6 +37,9 @@ Production acceptance requires:
 - final solve completion;
 - explicit MGXS volumes and fissionable H-FACTOR data;
 - root energy bounds plus local mixture/state energy-bounds consistency;
+- known-mesh identification for root energy bounds, with
+  `acceptance.require_known_mesh = true` available when a case policy forbids
+  custom group structures;
 - scatter row-balance, CHI, ADF-face, and transport/P1 consistency;
 - optional full MGXS `*_std_dev` coverage when
   `acceptance.require_mgxs_std_dev_coverage = true`;

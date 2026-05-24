@@ -7,6 +7,7 @@ from pathlib import Path
 
 from . import __version__
 from ._logging import add_cli_logging_arguments
+from .energy_groups import MESH_RELATIVE_TOLERANCE
 from .multicompo import DEFAULT_ROOT_NAME
 from .openmc_surface_flux import DEFAULT_TALLY_NAME as DEFAULT_SURFACE_FLUX_TALLY_NAME
 
@@ -419,6 +420,23 @@ def build_parser() -> argparse.ArgumentParser:
         "--expected-energy-bounds-sha256",
         default=None,
         help="with --check, require this /energy_bounds SHA-256 digest",
+    )
+    parser.add_argument(
+        "--require-known-energy-mesh",
+        action="store_true",
+        help="with --check, fail if /energy_bounds is not a bundled known mesh",
+    )
+    parser.add_argument(
+        "--warn-unknown-energy-mesh",
+        action="store_true",
+        help="with --check, warn if /energy_bounds is not a bundled known mesh",
+    )
+    parser.add_argument(
+        "--energy-mesh-tolerance",
+        type=float,
+        default=MESH_RELATIVE_TOLERANCE,
+        metavar="RTOL",
+        help="with --check, relative tolerance for known energy-mesh matching",
     )
     parser.add_argument(
         "--scatter-row-balance-warn",

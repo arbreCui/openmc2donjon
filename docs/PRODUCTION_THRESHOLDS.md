@@ -57,7 +57,7 @@ summary itself must fail on nonconvergence.
 | Gate | Default | Meaning |
 | --- | ---: | --- |
 | NU ratio | `[2.0, 3.5]` | Warn if `nu_fission / fission` falls outside this interval for fissionable bins with `fission > 1.0e-30`. |
-| Unknown energy mesh | warning by default | Warn when `/energy_bounds` does not match a bundled known mesh, unless the caller explicitly requires a known mesh. |
+| Unknown energy mesh | production warning by default | Warn when `/energy_bounds` does not match a bundled known mesh in production preflight/SPH audit, unless the caller explicitly requires a known mesh. |
 | Missing uncertainty datasets | warning by default | Warn when `*_std_dev` datasets are absent or incomplete, unless the caller promotes coverage to a hard gate. |
 
 NU ratio is warning-only because valid values depend on isotope mix, burnup,

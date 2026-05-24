@@ -10,6 +10,7 @@ from typing import Any
 
 from . import __version__
 from .bundle import ArtifactSpec, bundle_artifacts
+from .energy_groups import MESH_RELATIVE_TOLERANCE
 from .macrolib import convert_mgxs_hdf5_to_macrolib
 from .mgxs_input_contract import run_preflight
 from .multicompo import DEFAULT_ROOT_NAME, convert_mgxs_hdf5
@@ -59,6 +60,9 @@ def prepare_openmc_sph_loop_handoff(
     expected_energy_group_structure: str | None = None,
     expected_energy_bounds: str | Path | None = None,
     expected_energy_bounds_sha256: str | None = None,
+    require_known_energy_mesh: bool = False,
+    warn_unknown_energy_mesh: bool = False,
+    energy_mesh_tolerance: float = MESH_RELATIVE_TOLERANCE,
     scatter_row_balance_warn: float | None = None,
     scatter_row_balance_fail: float | None = None,
     uncertainty_warn: float | None = 0.05,
@@ -179,6 +183,9 @@ def prepare_openmc_sph_loop_handoff(
             None if expected_energy_bounds is None else Path(expected_energy_bounds)
         ),
         expected_energy_bounds_sha256=expected_energy_bounds_sha256,
+        require_known_energy_mesh=require_known_energy_mesh,
+        warn_unknown_energy_mesh=warn_unknown_energy_mesh,
+        energy_mesh_tolerance=energy_mesh_tolerance,
         scatter_row_balance_warn=scatter_row_balance_warn,
         scatter_row_balance_fail=scatter_row_balance_fail,
         uncertainty_warn=uncertainty_warn,
@@ -560,6 +567,9 @@ def _run_optional_preflight(
     expected_energy_group_structure: str | None,
     expected_energy_bounds: Path | None,
     expected_energy_bounds_sha256: str | None,
+    require_known_energy_mesh: bool,
+    warn_unknown_energy_mesh: bool,
+    energy_mesh_tolerance: float,
     scatter_row_balance_warn: float | None,
     scatter_row_balance_fail: float | None,
     uncertainty_warn: float | None,
@@ -582,6 +592,9 @@ def _run_optional_preflight(
         expected_energy_group_structure=expected_energy_group_structure,
         expected_energy_bounds=expected_energy_bounds,
         expected_energy_bounds_sha256=expected_energy_bounds_sha256,
+        require_known_energy_mesh=require_known_energy_mesh,
+        warn_unknown_energy_mesh=warn_unknown_energy_mesh,
+        energy_mesh_tolerance=energy_mesh_tolerance,
         scatter_row_balance_warn=scatter_row_balance_warn,
         scatter_row_balance_fail=scatter_row_balance_fail,
         uncertainty_warn=uncertainty_warn,

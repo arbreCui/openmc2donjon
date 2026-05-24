@@ -20,6 +20,9 @@ class InputReport:
     legendre_order: int | None = None
     energy_group_structure: str | None = None
     energy_bounds_sha256: str | None = None
+    energy_mesh_id: str | None = None
+    energy_mesh_name: str | None = None
+    energy_mesh_tolerance: float | None = None
     energy_bounds_local_count: int = 0
     domain_mode: str | None = None
     mixtures: int = 0
@@ -131,7 +134,12 @@ def print_report(report: InputReport) -> None:
         if report.energy_bounds_sha256 is None
         else report.energy_bounds_sha256[:12]
     )
-    print(f"        energy_group_structure={structure} bounds_sha256={digest}")
+    mesh = report.energy_mesh_id or "unknown"
+    print(
+        "        "
+        f"energy_group_structure={structure} bounds_sha256={digest} "
+        f"mesh={mesh}"
+    )
     print(f"        domain_mode={report.domain_mode or 'unspecified'}")
     print(
         "        mixtures="
@@ -223,6 +231,9 @@ def _report_payload(report: InputReport) -> dict[str, object]:
         "legendre_order": report.legendre_order,
         "energy_group_structure": report.energy_group_structure,
         "energy_bounds_sha256": report.energy_bounds_sha256,
+        "energy_mesh_id": report.energy_mesh_id,
+        "energy_mesh_name": report.energy_mesh_name,
+        "energy_mesh_tolerance": report.energy_mesh_tolerance,
         "energy_bounds_local_count": report.energy_bounds_local_count,
         "domain_mode": report.domain_mode,
         "mixtures": report.mixtures,

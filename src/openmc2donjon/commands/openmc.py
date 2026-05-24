@@ -13,6 +13,7 @@ from .base import (
     exit_with_command_error,
     parser_from_args,
 )
+from ..energy_groups import MESH_RELATIVE_TOLERANCE
 from ..multicompo import DEFAULT_ROOT_NAME
 from ..openmc_sph_loop_handoff import prepare_openmc_sph_loop_handoff
 from ..sph_iteration import FLUX_NORMALIZATIONS
@@ -79,6 +80,13 @@ def build_prepare_openmc_sph_loop_parser() -> argparse.ArgumentParser:
     parser.add_argument("--expected-energy-group-structure", default=None)
     parser.add_argument("--expected-energy-bounds", type=Path, default=None)
     parser.add_argument("--expected-energy-bounds-sha256", default=None)
+    parser.add_argument("--require-known-energy-mesh", action="store_true")
+    parser.add_argument("--warn-unknown-energy-mesh", action="store_true")
+    parser.add_argument(
+        "--energy-mesh-tolerance",
+        type=float,
+        default=MESH_RELATIVE_TOLERANCE,
+    )
     parser.add_argument("--scatter-row-balance-warn", type=float, default=None)
     parser.add_argument("--scatter-row-balance-fail", type=float, default=None)
     parser.add_argument("--uncertainty-warn", type=float, default=0.05)
@@ -226,6 +234,9 @@ def prepare_openmc_sph_loop_handler(args: argparse.Namespace) -> int:
             expected_energy_group_structure=args.expected_energy_group_structure,
             expected_energy_bounds=args.expected_energy_bounds,
             expected_energy_bounds_sha256=args.expected_energy_bounds_sha256,
+            require_known_energy_mesh=args.require_known_energy_mesh,
+            warn_unknown_energy_mesh=args.warn_unknown_energy_mesh,
+            energy_mesh_tolerance=args.energy_mesh_tolerance,
             scatter_row_balance_warn=args.scatter_row_balance_warn,
             scatter_row_balance_fail=args.scatter_row_balance_fail,
             uncertainty_warn=None if args.no_uncertainty_check else args.uncertainty_warn,

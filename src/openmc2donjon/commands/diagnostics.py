@@ -13,6 +13,7 @@ from .base import (
 )
 from ..bundle import ArtifactSpec, bundle_artifacts, parse_extra_artifact, validate_bundle
 from ..doctor import run_doctor
+from ..energy_groups import MESH_RELATIVE_TOLERANCE
 from ..mgxs_diff import diff_hdf5_files
 from ..mgxs_input_contract import run_preflight
 from ..mgxs_inspect import inspect_files
@@ -158,6 +159,23 @@ def build_check_parser() -> argparse.ArgumentParser:
         "--expected-energy-bounds-sha256",
         default=None,
         help="require this /energy_bounds SHA-256 digest",
+    )
+    parser.add_argument(
+        "--require-known-energy-mesh",
+        action="store_true",
+        help="fail if /energy_bounds is not a bundled known energy mesh",
+    )
+    parser.add_argument(
+        "--warn-unknown-energy-mesh",
+        action="store_true",
+        help="warn if /energy_bounds is not a bundled known energy mesh",
+    )
+    parser.add_argument(
+        "--energy-mesh-tolerance",
+        type=float,
+        default=MESH_RELATIVE_TOLERANCE,
+        metavar="RTOL",
+        help="relative tolerance for bundled energy-mesh matching",
     )
     parser.add_argument(
         "--scatter-row-balance-warn",
@@ -505,6 +523,9 @@ def check_handler(args: argparse.Namespace) -> int:
         expected_energy_group_structure=args.expected_energy_group_structure,
         expected_energy_bounds=args.expected_energy_bounds,
         expected_energy_bounds_sha256=args.expected_energy_bounds_sha256,
+        require_known_energy_mesh=args.require_known_energy_mesh,
+        warn_unknown_energy_mesh=args.warn_unknown_energy_mesh,
+        energy_mesh_tolerance=args.energy_mesh_tolerance,
         scatter_row_balance_warn=args.scatter_row_balance_warn,
         scatter_row_balance_fail=args.scatter_row_balance_fail,
         require_energy_bounds_consistency=args.require_energy_bounds_consistency,

@@ -37,6 +37,7 @@ from .from_openmc_sph import (
     sph_managed_paths,
     validate_sph_config,
 )
+from .energy_groups import MESH_RELATIVE_TOLERANCE
 from .from_openmc_summary import FROM_OPENMC_SUMMARY_SCHEMA
 from .macrolib import convert_mgxs_hdf5_to_macrolib
 from .mgxs_input_contract import production_preflight_defaults, run_preflight
@@ -266,6 +267,21 @@ def _print_dry_run_checks(args: argparse.Namespace) -> None:
             require_transport_dataset=args.require_transport_dataset,
             require_volume=args.require_volume,
             require_h_factor=args.require_h_factor,
+            require_known_energy_mesh=getattr(
+                args,
+                "require_known_energy_mesh",
+                False,
+            ),
+            warn_unknown_energy_mesh=getattr(
+                args,
+                "warn_unknown_energy_mesh",
+                False,
+            ),
+            energy_mesh_tolerance=getattr(
+                args,
+                "energy_mesh_tolerance",
+                MESH_RELATIVE_TOLERANCE,
+            ),
             scatter_row_balance_warn=args.scatter_row_balance_warn,
             scatter_row_balance_fail=args.scatter_row_balance_fail,
             require_energy_bounds_consistency=getattr(
@@ -320,6 +336,18 @@ def _print_dry_run_checks(args: argparse.Namespace) -> None:
         print(
             "    expected_energy_bounds_sha256: "
             f"{_render_optional_value(args.expected_energy_bounds_sha256)}"
+        )
+        print(
+            "    require_known_energy_mesh: "
+            f"{_yes_no(settings['require_known_energy_mesh'])}"
+        )
+        print(
+            "    warn_unknown_energy_mesh: "
+            f"{_yes_no(settings['warn_unknown_energy_mesh'])}"
+        )
+        print(
+            "    energy_mesh_tolerance: "
+            f"{_render_optional_value(settings['energy_mesh_tolerance'])}"
         )
         print(f"    require_adf: {_yes_no(args.require_adf)}")
         print(f"    require_sph: {_yes_no(args.require_sph)}")
@@ -499,6 +527,9 @@ def _run_pipeline_preflight(
         expected_energy_group_structure=args.expected_energy_group_structure,
         expected_energy_bounds=args.expected_energy_bounds,
         expected_energy_bounds_sha256=args.expected_energy_bounds_sha256,
+        require_known_energy_mesh=args.require_known_energy_mesh,
+        warn_unknown_energy_mesh=args.warn_unknown_energy_mesh,
+        energy_mesh_tolerance=args.energy_mesh_tolerance,
         scatter_row_balance_warn=args.scatter_row_balance_warn,
         scatter_row_balance_fail=args.scatter_row_balance_fail,
         require_energy_bounds_consistency=args.require_energy_bounds_consistency,
