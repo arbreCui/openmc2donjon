@@ -49,24 +49,29 @@ const WORKFLOW_STEPS = [
 ];
 const SPH_LOOP_STEPS = [
   {
-    label: "Run loop",
-    detail: "DONJON solve -> low-order flux",
+    label: "OpenMC reference",
+    detail: "fixed MGXS + reference flux target",
+    href: "/openmc?intent=sph-loop&workflow=one-step&production=1",
+  },
+  {
+    label: "DONJON solve",
+    detail: "low-order flux with current NSPH",
     href: "/commands/run-sph-loop",
   },
   {
+    label: "Compare",
+    detail: "low-order flux vs OpenMC target",
+    href: "/audit",
+  },
+  {
     label: "Update NSPH",
-    detail: "recompute equivalence factors",
+    detail: "new factors from flux mismatch",
     href: "/commands/prepare-openmc-sph-loop",
   },
   {
     label: "Reconvert",
-    detail: "write updated handoff",
+    detail: "write handoff and repeat",
     href: "/convert?intent=direct-convert&format=multicompo&check=1&production=1",
-  },
-  {
-    label: "Audit",
-    detail: "acceptance and convergence",
-    href: "/audit",
   },
 ];
 
@@ -261,12 +266,13 @@ function WorkflowMap() {
               iterative branch
             </div>
             <h3 className="mt-1 text-sm font-semibold tracking-tight">
-              SPH loop feedback
+              SPH loop with fixed OpenMC reference
             </h3>
             <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--fg-2)]">
-              DONJON low-order flux can feed back into NSPH factors; the
-              converter writes a new handoff and the loop repeats until the
-              configured stop condition or production acceptance is reached.
+              OpenMC is not rerun inside each iteration; it supplies the frozen
+              MGXS and reference flux target. DONJON solves the current
+              low-order problem, the flux mismatch updates NSPH, and the
+              converter writes a new handoff before the next solve.
             </p>
           </div>
           <Link
@@ -276,7 +282,7 @@ function WorkflowMap() {
             SPH loop command
           </Link>
         </div>
-        <div className="mt-3 grid gap-2 md:grid-cols-4">
+        <div className="mt-3 grid gap-2 md:grid-cols-5">
           {SPH_LOOP_STEPS.map((step, index) => (
             <Link
               key={step.label}
@@ -288,7 +294,11 @@ function WorkflowMap() {
                   loop {index + 1}
                 </span>
                 <span className="text-[var(--fg-3)]">
-                  {index + 1 < SPH_LOOP_STEPS.length ? "then" : "review"}
+                  {index === 0
+                    ? "fixed"
+                    : index + 1 < SPH_LOOP_STEPS.length
+                      ? "then"
+                      : "repeat"}
                 </span>
               </div>
               <div className="mt-2 text-sm font-semibold">{step.label}</div>
