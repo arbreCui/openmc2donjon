@@ -11,6 +11,8 @@ import {
   api,
 } from "@/lib/api";
 import { CopyCliButton } from "@/components/commands/CopyCliButton";
+import type { CommandWorkflowMapping } from "@/lib/commandWorkflowMapping";
+import { commandWorkflowMapping } from "@/lib/commandWorkflowMapping";
 
 type State =
   | { kind: "loading" }
@@ -321,6 +323,7 @@ function FilterRow({
 }
 
 function FeaturedCommand({ command }: { command: CommandCatalogEntry }) {
+  const mapping = commandWorkflowMapping(command);
   return (
     <section className="glass rounded-lg p-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -348,6 +351,7 @@ function FeaturedCommand({ command }: { command: CommandCatalogEntry }) {
           </Link>
         ) : null}
       </div>
+      <WorkflowMappingHint mapping={mapping} />
       <CliLine value={command.cli} />
       <div className="mt-3">
         <CopyCliButton value={command.cli} />
@@ -386,6 +390,7 @@ function CommandGroupSection({
 }
 
 function CommandCard({ command }: { command: CommandCatalogEntry }) {
+  const mapping = commandWorkflowMapping(command);
   return (
     <article className="rounded-lg border border-[var(--edge)] bg-white/[0.025] p-4">
       <div className="mb-3 flex items-start justify-between gap-3">
@@ -410,6 +415,7 @@ function CommandCard({ command }: { command: CommandCatalogEntry }) {
           {command.use_when}
         </p>
       </div>
+      <WorkflowMappingHint mapping={mapping} compact />
       <TagRow tags={command.tags} />
       <CliLine value={command.cli} compact />
       <div className="mt-3 flex items-center justify-between gap-3">
@@ -427,6 +433,69 @@ function CommandCard({ command }: { command: CommandCatalogEntry }) {
         </div>
       </div>
     </article>
+  );
+}
+
+function WorkflowMappingHint({
+  mapping,
+  compact = false,
+}: {
+  mapping: CommandWorkflowMapping;
+  compact?: boolean;
+}) {
+  const visiblePresets = compact ? mapping.presets.slice(0, 2) : mapping.presets;
+  const hiddenCount = mapping.presets.length - visiblePresets.length;
+  return (
+    <div
+      className={
+        "mt-3 rounded-md border bg-black/10 " +
+        (compact ? "px-3 py-2" : "px-4 py-3") +
+        " " +
+        (mapping.available
+          ? "border-emerald-400/20"
+          : "border-[var(--edge)]")
+      }
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="text-[10px] uppercase tracking-wider text-[var(--fg-3)]">
+          Web workflow
+        </div>
+        <span
+          className={
+            "rounded border px-2 py-0.5 text-[10px] uppercase tracking-wider " +
+            (mapping.available
+              ? "border-emerald-400/30 text-emerald-300"
+              : "border-[var(--edge-bright)] text-[var(--fg-3)]")
+          }
+        >
+          {mapping.surface}
+        </span>
+      </div>
+      <p
+        className={
+          "mt-1 leading-5 " +
+          (compact ? "text-[12px]" : "text-sm") +
+          " text-[var(--fg-2)]"
+        }
+      >
+        {compact ? mapping.title : mapping.summary}
+      </p>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {visiblePresets.map((preset) => (
+          <span
+            key={preset}
+            className="rounded border border-[var(--edge)] bg-white/[0.03] px-2 py-0.5 text-[11px] text-[var(--fg-1)]"
+          >
+            {preset}
+          </span>
+        ))}
+        {hiddenCount > 0 ? (
+          <span className="rounded border border-[var(--edge)] bg-white/[0.02] px-2 py-0.5 text-[11px] text-[var(--fg-3)]">
+            +{hiddenCount} more
+          </span>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
