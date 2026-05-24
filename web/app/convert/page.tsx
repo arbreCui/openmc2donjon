@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useMemo, useRef, useState } from "react";
+import { FormEvent, Suspense, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import ConvertReport, {
   ConvertRunState,
 } from "@/components/convert/ConvertReport";
@@ -23,16 +24,42 @@ import {
   pickConvertBrowserStart,
 } from "@/lib/convertPaths";
 import { useSettings } from "@/lib/settings";
+import { parseConvertFormat, queryFlag } from "@/lib/workflowQuery";
 
 const FALLBACK_INPUT = "/path/to/mgxs_library.h5";
 type BrowserTarget = "input" | "output-directory";
 
 export default function ConvertPage() {
+  return (
+    <Suspense fallback={<ConvertLoading />}>
+      <ConvertPageContent />
+    </Suspense>
+  );
+}
+
+function ConvertLoading() {
+  return (
+    <main className="min-h-[calc(100vh-3.5rem)] px-6 py-12">
+      <div className="mx-auto max-w-5xl">
+        <section className="glass rounded-xl p-5 text-sm text-[var(--fg-2)]">
+          Loading converter…
+        </section>
+      </div>
+    </main>
+  );
+}
+
+function ConvertPageContent() {
+  const searchParams = useSearchParams();
   const [inputPath, setInputPath] = useState("");
   const [outputPath, setOutputPath] = useState("");
-  const [format, setFormat] = useState<ConvertFormat>("multicompo");
-  const [check, setCheck] = useState(true);
-  const [production, setProduction] = useState(false);
+  const [format, setFormat] = useState<ConvertFormat>(
+    parseConvertFormat(searchParams.get("format")),
+  );
+  const [check, setCheck] = useState(queryFlag(searchParams, "check", true));
+  const [production, setProduction] = useState(
+    queryFlag(searchParams, "production", false),
+  );
   const [requireKnownMesh, setRequireKnownMesh] = useState(false);
   const [overwrite, setOverwrite] = useState(false);
   const [rootName, setRootName] = useState("CPO");

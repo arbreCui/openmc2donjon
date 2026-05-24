@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useId, useMemo, useRef, useState } from "react";
+import { FormEvent, Suspense, useId, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   ApiError,
   ConvertFormat,
@@ -15,6 +16,12 @@ import OpenmcCommandList from "@/components/openmc/OpenmcCommandList";
 import OpenmcWorkflowChoices from "@/components/openmc/OpenmcWorkflowChoices";
 import OpenmcWorkflowSummary from "@/components/openmc/OpenmcWorkflowSummary";
 import { useSettings } from "@/lib/settings";
+import {
+  parseConvertFormat,
+  parseOpenmcEquivalence,
+  parseOpenmcWorkflow,
+  queryFlag,
+} from "@/lib/workflowQuery";
 
 type PlanState =
   | { kind: "idle" }
@@ -43,9 +50,36 @@ interface BrowserConfig {
 const FALLBACK_RUN_DIR = "/path/to/openmc2donjon-run";
 
 export default function OpenmcPage() {
-  const [workflow, setWorkflow] = useState<OpenmcWorkflowKind>("one-step");
-  const [equivalence, setEquivalence] = useState<OpenmcEquivalenceMode>("direct");
-  const [format, setFormat] = useState<ConvertFormat>("multicompo");
+  return (
+    <Suspense fallback={<OpenmcLoading />}>
+      <OpenmcPageContent />
+    </Suspense>
+  );
+}
+
+function OpenmcLoading() {
+  return (
+    <main className="min-h-[calc(100vh-3.5rem)] px-6 py-12">
+      <div className="mx-auto max-w-5xl">
+        <section className="glass rounded-xl p-5 text-sm text-[var(--fg-2)]">
+          Loading OpenMC planner…
+        </section>
+      </div>
+    </main>
+  );
+}
+
+function OpenmcPageContent() {
+  const searchParams = useSearchParams();
+  const [workflow, setWorkflow] = useState<OpenmcWorkflowKind>(
+    parseOpenmcWorkflow(searchParams.get("workflow")),
+  );
+  const [equivalence, setEquivalence] = useState<OpenmcEquivalenceMode>(
+    parseOpenmcEquivalence(searchParams.get("equivalence")),
+  );
+  const [format, setFormat] = useState<ConvertFormat>(
+    parseConvertFormat(searchParams.get("format")),
+  );
   const [recipePath, setRecipePath] = useState("");
   const [statepointPath, setStatepointPath] = useState("");
   const [runDir, setRunDir] = useState("");
@@ -55,7 +89,9 @@ export default function OpenmcPage() {
   const [sphSource, setSphSource] = useState("");
   const [loadStatepoint, setLoadStatepoint] = useState(true);
   const [check, setCheck] = useState(true);
-  const [production, setProduction] = useState(false);
+  const [production, setProduction] = useState(
+    queryFlag(searchParams, "production", false),
+  );
   const [requireKnownMesh, setRequireKnownMesh] = useState(false);
   const [strictDryRun, setStrictDryRun] = useState(false);
   const [hFactorText, setHFactorText] = useState("");

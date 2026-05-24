@@ -228,12 +228,40 @@ class CommandCatalogEndpointTests(unittest.TestCase):
         commands = {command["id"]: command for command in response.json()["commands"]}
         direct = commands["direct-convert"]
         self.assertEqual(direct["status"], "ready")
-        self.assertEqual(direct["web_path"], "/convert")
+        self.assertEqual(
+            direct["web_path"],
+            "/convert?intent=direct-convert&format=multicompo&check=1",
+        )
         self.assertIn("HDF5 handoff", direct["use_when"])
         self.assertIn("DONJON ASCII", direct["produces"])
         self.assertIn("preview", direct["next_step"].lower())
         self.assertIn("MULTICOMPO", direct["tags"])
         self.assertIn("openmc2donjon mgxs_library.h5", direct["cli"])
+
+    def test_catalog_web_paths_deep_link_to_matching_workflow_surfaces(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.get("/api/commands")
+
+        self.assertEqual(response.status_code, 200)
+        commands = {command["id"]: command for command in response.json()["commands"]}
+        self.assertEqual(
+            commands["check"]["web_path"],
+            "/convert?intent=check&format=multicompo&check=1&production=1",
+        )
+        self.assertEqual(
+            commands["openmc2donjon-export"]["web_path"],
+            "/openmc?intent=export&workflow=two-step",
+        )
+        self.assertEqual(
+            commands["openmc2donjon-from-openmc"]["web_path"],
+            "/openmc?intent=from-openmc&workflow=one-step",
+        )
+        self.assertEqual(
+            commands["prepare-openmc-sph-loop"]["web_path"],
+            "/openmc?intent=sph-loop&workflow=one-step&production=1",
+        )
 
     def test_catalog_entries_include_user_guidance(self) -> None:
         from openmc2donjon.web.server import create_app
