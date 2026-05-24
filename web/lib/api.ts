@@ -255,6 +255,8 @@ export interface SphLoopSummary {
   converged: boolean;
   convergence_enabled: boolean;
   stop_reason: string;
+  sph_change_tolerance: number | null;
+  flux_ratio_tolerance: number | null;
   convergence: SphLoopConvergencePoint[];
   acceptance: SphLoopAcceptance;
   production_audit: SphLoopProductionAudit;

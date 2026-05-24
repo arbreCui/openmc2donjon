@@ -151,7 +151,11 @@ function Result({ state }: { state: State }) {
   return (
     <div className="space-y-5">
       <AuditSummary data={state.data} path={state.path} />
-      <ConvergenceChart points={state.data.convergence} />
+      <ConvergenceChart
+        points={state.data.convergence}
+        sphTolerance={state.data.sph_change_tolerance}
+        fluxTolerance={state.data.flux_ratio_tolerance}
+      />
     </div>
   );
 }

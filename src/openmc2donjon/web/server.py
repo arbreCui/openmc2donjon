@@ -275,6 +275,8 @@ def _validate_audit_summary_payload(payload: dict[str, Any], http_exception: Any
         _require_type(payload, key, int, errors)
     for key in ("converged", "convergence_enabled"):
         _require_type(payload, key, bool, errors)
+    for key in ("sph_change_tolerance", "flux_ratio_tolerance"):
+        _require_number_or_none(payload, key, errors)
     _validate_audit_convergence(payload.get("convergence"), errors)
 
     acceptance = payload.get("acceptance")
@@ -371,16 +373,17 @@ def _require_number_or_none(
     key: str,
     errors: list[str],
     *,
-    prefix: str,
+    prefix: str | None = None,
 ) -> None:
+    qualified = key if prefix is None else f"{prefix}.{key}"
     if key not in payload:
-        errors.append(f"{prefix}.{key} must be number or null")
+        errors.append(f"{qualified} must be number or null")
         return
     value = payload[key]
     if value is None:
         return
     if not isinstance(value, (int, float)) or isinstance(value, bool):
-        errors.append(f"{prefix}.{key} must be number or null")
+        errors.append(f"{qualified} must be number or null")
 
 
 def _read_top_level_peek(real_path: Path) -> dict[str, Any]:

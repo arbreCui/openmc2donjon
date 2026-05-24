@@ -73,6 +73,8 @@ def _minimal_sph_loop_summary() -> dict[str, object]:
         "converged": True,
         "convergence_enabled": True,
         "stop_reason": "converged",
+        "sph_change_tolerance": 1.0e-12,
+        "flux_ratio_tolerance": 1.0e-12,
         "convergence": [
             {
                 "iteration": 1,
