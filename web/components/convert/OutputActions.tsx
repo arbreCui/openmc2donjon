@@ -16,13 +16,15 @@ export default function OutputActions({
   const canConvertNow = data.dry_run && data.ok && !data.output_exists && onConvert;
   const pathLabel =
     data.converted && data.output_exists ? "Copy DONJON path" : "Copy target path";
+  const actions = handoffActions(data, onConvert);
   return (
     <section className="mt-4 rounded-lg border border-[var(--edge)] bg-black/15 p-3">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold tracking-tight">Next actions</h3>
+          <h3 className="text-sm font-semibold tracking-tight">Continue the handoff</h3>
           <p className="mt-1 text-[12px] text-[var(--fg-3)]">
-            Move from conversion result to input QA, command reference, or DONJON handoff.
+            The normal post-conversion path is inspect evidence, preview ASCII,
+            bundle the artifact, then hand the command record to the next workflow.
           </p>
         </div>
         <span className="rounded border border-[var(--edge)] px-2 py-1 font-mono text-[11px] uppercase tracking-wider text-[var(--fg-2)]">
@@ -30,31 +32,18 @@ export default function OutputActions({
         </span>
       </div>
 
+      <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+        {actions.map((action) => (
+          <ActionCard key={action.id} action={action} />
+        ))}
+      </div>
+
       <div className="mt-3 flex flex-wrap gap-2">
-        <Link
-          href={`/inspect?path=${encodeURIComponent(data.input_path)}`}
-          className="btn btn-secondary"
-        >
-          Inspect input
-        </Link>
         {canConvertNow ? (
           <button type="button" onClick={onConvert} className="btn btn-primary">
             Convert now
           </button>
         ) : null}
-        {data.converted && data.output_exists ? (
-          <a href="#ascii-output-preview" className="btn btn-secondary">
-            Preview ASCII
-          </a>
-        ) : null}
-        {data.converted && data.output_exists ? (
-          <Link href={convertBundleHref(data)} className="btn btn-secondary">
-            Bundle handoff
-          </Link>
-        ) : null}
-        <Link href="/commands/direct-convert" className="btn btn-secondary">
-          Command guide
-        </Link>
         <CopyCliButton
           value={data.output_path}
           label={pathLabel}
@@ -77,6 +66,112 @@ export default function OutputActions({
       </div>
     </section>
   );
+}
+
+interface HandoffAction {
+  id: string;
+  label: string;
+  title: string;
+  body: string;
+  href?: string;
+  disabled?: boolean;
+  status: "ready" | "reference" | "blocked";
+}
+
+function handoffActions(
+  data: ConvertResponse,
+  onConvert?: () => void,
+): HandoffAction[] {
+  const outputReady = data.converted && data.output_exists;
+  const canConvertNow = data.dry_run && data.ok && !data.output_exists && onConvert;
+  return [
+    {
+      id: "inspect",
+      label: "Evidence",
+      title: "Inspect input HDF5",
+      body: "Open mixture roster, energy mesh identity, ADF/SPH metadata, and production warnings.",
+      href: `/inspect?path=${encodeURIComponent(data.input_path)}`,
+      status: "reference",
+    },
+    {
+      id: "preview",
+      label: "ASCII",
+      title: outputReady ? "Preview ASCII blocks" : "Preview waits for output",
+      body: outputReady
+        ? "Jump to the LCM ASCII signature, visible block tree, and first lines."
+        : canConvertNow
+          ? "Dry run passed. Convert writes the ASCII file before preview is available."
+          : "The output file was not confirmed, so the preview cannot be opened yet.",
+      href: outputReady ? "#ascii-output-preview" : undefined,
+      disabled: !outputReady,
+      status: outputReady ? "ready" : "blocked",
+    },
+    {
+      id: "bundle",
+      label: "Bundle",
+      title: outputReady ? "Bundle handoff" : "Bundle after convert",
+      body: outputReady
+        ? "Open the bundle builder with MGXS and ASCII paths already filled."
+        : "Package the input, ASCII output, summaries, and logs after conversion succeeds.",
+      href: outputReady ? convertBundleHref(data) : undefined,
+      disabled: !outputReady,
+      status: outputReady ? "ready" : "blocked",
+    },
+    {
+      id: "guide",
+      label: "Command",
+      title: "Open command guide",
+      body: "Review when to use direct conversion, what it writes, and where it sits in the workflow map.",
+      href: "/commands/direct-convert",
+      status: "reference",
+    },
+  ];
+}
+
+function ActionCard({ action }: { action: HandoffAction }) {
+  return (
+    <article className={"rounded-md border p-3 " + actionCardClass(action.status)}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="rounded border border-current/25 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.14em]">
+          {action.label}
+        </span>
+        {action.disabled || !action.href ? (
+          <span className="text-[11px] text-[var(--fg-3)]">waiting</span>
+        ) : (
+          <ActionLink href={action.href} />
+        )}
+      </div>
+      <h4 className="mt-2 text-sm font-semibold tracking-tight">{action.title}</h4>
+      <p className="mt-1 text-[12px] leading-5 text-[var(--fg-2)]">
+        {action.body}
+      </p>
+    </article>
+  );
+}
+
+function ActionLink({ href }: { href: string }) {
+  if (href.startsWith("#")) {
+    return (
+      <a href={href} className="text-[11px] text-[var(--accent-2)] hover:underline">
+        jump
+      </a>
+    );
+  }
+  return (
+    <Link href={href} className="text-[11px] text-[var(--accent-2)] hover:underline">
+      open
+    </Link>
+  );
+}
+
+function actionCardClass(status: HandoffAction["status"]): string {
+  if (status === "ready") {
+    return "border-emerald-400/20 bg-emerald-400/[0.05] text-emerald-100";
+  }
+  if (status === "blocked") {
+    return "border-amber-400/25 bg-amber-400/[0.06] text-amber-100";
+  }
+  return "border-cyan-300/20 bg-cyan-300/[0.045] text-cyan-100";
 }
 
 function outputNotice(data: ConvertResponse): {
