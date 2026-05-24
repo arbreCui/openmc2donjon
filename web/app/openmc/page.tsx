@@ -11,6 +11,7 @@ import {
 } from "@/lib/api";
 import OpenmcArtifactList from "@/components/openmc/OpenmcArtifactList";
 import OpenmcCommandList from "@/components/openmc/OpenmcCommandList";
+import OpenmcWorkflowChoices from "@/components/openmc/OpenmcWorkflowChoices";
 import OpenmcWorkflowSummary from "@/components/openmc/OpenmcWorkflowSummary";
 import { useSettings } from "@/lib/settings";
 
@@ -103,6 +104,8 @@ export default function OpenmcPage() {
             managed artifact paths.
           </p>
         </header>
+
+        <OpenmcWorkflowChoices />
 
         <form className="glass rounded-xl p-4 space-y-4" onSubmit={plan}>
           <div className="grid gap-3 lg:grid-cols-2">
