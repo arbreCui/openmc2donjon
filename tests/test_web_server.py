@@ -116,6 +116,10 @@ def _minimal_sph_loop_summary() -> dict[str, object]:
         "production_audit": {
             "passed": True,
             "errors": [],
+            "flux_map": {
+                "mgxs_std_dev_datasets": 2,
+                "mgxs_std_dev_expected_datasets": 4,
+            },
             "checks": [
                 {
                     "name": "require_production_audit",
@@ -764,6 +768,18 @@ class AuditEndpointTests(unittest.TestCase):
             self.assertIn(key, payload, key)
         self.assertIn("passed", payload["acceptance"])
         self.assertIn("passed", payload["production_audit"])
+        self.assertEqual(
+            payload["production_audit"]["flux_map"]["mgxs_std_dev_datasets"],
+            0,
+        )
+        self.assertEqual(
+            payload["production_audit"]["flux_map"]["mgxs_std_dev_expected_datasets"],
+            72,
+        )
+        self.assertEqual(
+            payload["flux_map_preflight"]["mgxs_std_dev_expected_datasets"],
+            72,
+        )
         self.assertFalse(payload["fail_on_nonconvergence"])
         self.assertEqual(payload["completed_iterations"], 10)
         self.assertEqual(len(payload["convergence"]), 10)

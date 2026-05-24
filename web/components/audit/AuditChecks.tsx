@@ -4,6 +4,8 @@ import type {
   SphLoopAcceptanceCheck,
   SphLoopProductionAudit,
 } from "@/lib/api";
+import type { StdDevCoverageSummary } from "@/lib/stdDevCoverage";
+import { summarizeStdDevCoverage } from "@/lib/stdDevCoverage";
 
 export interface AuditChecksProps {
   acceptance: SphLoopAcceptance;
@@ -65,6 +67,7 @@ function ProductionAuditCard({
 }) {
   const counts = summarizeChecks(productionAudit.checks);
   const metrics = productionMetrics(productionAudit);
+  const stdDevCoverage = summarizeStdDevCoverage(productionAudit.flux_map);
   return (
     <section className="glass rounded-xl p-4 min-w-0">
       <Header
@@ -97,6 +100,7 @@ function ProductionAuditCard({
           </div>
         ))}
       </dl>
+      <StdDevCoverageCard coverage={stdDevCoverage} />
       <div className="mt-4 text-[12px] text-[var(--fg-3)] tab-num">
         {counts.failed} failed / {counts.total} total audit checks
       </div>
@@ -106,6 +110,66 @@ function ProductionAuditCard({
         compact
       />
     </section>
+  );
+}
+
+function StdDevCoverageCard({
+  coverage,
+}: {
+  coverage: StdDevCoverageSummary;
+}) {
+  return (
+    <div
+      className={
+        "mt-4 rounded-lg border p-3 " +
+        (coverage.tone === "pass"
+          ? "border-emerald-400/25 bg-emerald-400/5"
+          : coverage.tone === "warn"
+            ? "border-amber-400/25 bg-amber-400/5"
+            : "border-[var(--edge)] bg-white/[0.02]")
+      }
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[12px] font-semibold text-[var(--fg-1)]">
+            MGXS std_dev coverage
+          </div>
+          <div className="mt-1 text-[12px] leading-relaxed text-[var(--fg-3)]">
+            {coverage.detail}
+          </div>
+        </div>
+        <span
+          className={
+            "shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-semibold tab-num " +
+            (coverage.tone === "pass"
+              ? "border-emerald-400/35 bg-emerald-400/10 text-emerald-200"
+              : coverage.tone === "warn"
+                ? "border-amber-400/35 bg-amber-400/10 text-amber-200"
+                : "border-[var(--edge-bright)] bg-white/5 text-[var(--fg-2)]")
+          }
+        >
+          {coverage.badge}
+        </span>
+      </div>
+      <dl className="mt-3 grid grid-cols-2 gap-3 text-[12px]">
+        <div>
+          <dt className="uppercase tracking-wider text-[var(--fg-3)]">
+            Datasets
+          </dt>
+          <dd className="mt-0.5 tab-num text-[var(--fg-0)]">
+            {coverage.countLabel}
+          </dd>
+        </div>
+        <div>
+          <dt className="uppercase tracking-wider text-[var(--fg-3)]">
+            Coverage
+          </dt>
+          <dd className="mt-0.5 tab-num text-[var(--fg-0)]">
+            {coverage.percentLabel}
+          </dd>
+        </div>
+      </dl>
+    </div>
   );
 }
 
@@ -236,6 +300,7 @@ function productionMetrics(productionAudit: SphLoopProductionAudit) {
   const flux = productionAudit.flux_map ?? {};
   const reference = productionAudit.reference ?? {};
   const artifactCounts = productionAudit.artifact_counts ?? {};
+  const stdDevCoverage = summarizeStdDevCoverage(flux);
   return [
     {
       label: "Reference groups",
@@ -268,6 +333,10 @@ function productionMetrics(productionAudit: SphLoopProductionAudit) {
     {
       label: "NU warnings",
       value: formatJsonValue(flux.mgxs_nu_ratio_warning_count),
+    },
+    {
+      label: "MGXS std_dev",
+      value: stdDevCoverage.countLabel,
     },
   ];
 }
