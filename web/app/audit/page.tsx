@@ -56,9 +56,8 @@ export default function AuditPage() {
             Read the JSON summary produced by{" "}
             <code className="font-mono">openmc2donjon run-sph-loop</code>{" "}
             (schema <code className="font-mono">openmc2donjon.sph-loop.v1</code>)
-            and show the headline result: decision, iteration count,
-            acceptance gate, and production audit. Detailed convergence
-            and per-iteration tables land in later slices.
+            and show the decision, quality diagnostics, convergence history,
+            production gates, and per-iteration execution trace.
           </p>
         </header>
 
@@ -153,24 +152,63 @@ function Result({ state }: { state: State }) {
   }
   return (
     <div className="space-y-5">
-      <AuditSummary data={state.data} path={state.path} />
-      <AuditQuality quality={state.data.quality} />
-      <ConvergenceChart
-        points={state.data.convergence}
-        sphTolerance={state.data.sph_change_tolerance}
-        fluxTolerance={state.data.flux_ratio_tolerance}
-      />
-      <AuditChecks
-        acceptance={state.data.acceptance}
-        productionAudit={state.data.production_audit}
-      />
-      <AuditTimeline
-        rows={state.data.audit_rows}
-        solves={state.data.solves}
-        postprocesses={state.data.postprocesses}
-        workflows={state.data.workflows}
-      />
+      <AuditSectionNav />
+      <div id="audit-overview" className="scroll-mt-24">
+        <AuditSummary data={state.data} path={state.path} />
+      </div>
+      <div id="audit-quality" className="scroll-mt-24">
+        <AuditQuality quality={state.data.quality} />
+      </div>
+      <div id="audit-convergence" className="scroll-mt-24">
+        <ConvergenceChart
+          points={state.data.convergence}
+          sphTolerance={state.data.sph_change_tolerance}
+          fluxTolerance={state.data.flux_ratio_tolerance}
+        />
+      </div>
+      <div id="audit-gates" className="scroll-mt-24">
+        <AuditChecks
+          acceptance={state.data.acceptance}
+          productionAudit={state.data.production_audit}
+        />
+      </div>
+      <div id="audit-timeline" className="scroll-mt-24">
+        <AuditTimeline
+          rows={state.data.audit_rows}
+          solves={state.data.solves}
+          postprocesses={state.data.postprocesses}
+          workflows={state.data.workflows}
+        />
+      </div>
     </div>
+  );
+}
+
+function AuditSectionNav() {
+  const links = [
+    ["#audit-overview", "Overview"],
+    ["#audit-quality", "Quality"],
+    ["#audit-convergence", "Convergence"],
+    ["#audit-gates", "Gates"],
+    ["#audit-timeline", "Timeline"],
+  ] as const;
+  return (
+    <nav
+      aria-label="Audit sections"
+      className="sticky top-16 z-[5] -mx-1 overflow-x-auto py-1"
+    >
+      <div className="inline-flex min-w-full gap-2 rounded-lg border border-[var(--edge)] bg-[rgba(10,11,15,0.78)] p-1 backdrop-blur">
+        {links.map(([href, label]) => (
+          <a
+            key={href}
+            href={href}
+            className="rounded-md px-3 py-1.5 text-[12px] font-medium text-[var(--fg-2)] transition hover:bg-white/5 hover:text-[var(--fg-0)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]"
+          >
+            {label}
+          </a>
+        ))}
+      </div>
+    </nav>
   );
 }
 
