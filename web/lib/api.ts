@@ -203,8 +203,8 @@ export interface FileListing {
 export interface SphLoopAcceptanceCheck {
   name: string;
   passed: boolean;
-  actual: number | string | boolean | null;
-  limit: number | string | boolean | null;
+  actual?: number | string | boolean | null;
+  limit?: number | string | boolean | null;
   units?: string | null;
   message?: string | null;
 }
@@ -212,13 +212,25 @@ export interface SphLoopAcceptanceCheck {
 export interface SphLoopAcceptance {
   enabled: boolean;
   passed: boolean;
+  decision?: string | null;
+  fail_on_violation?: boolean | null;
   checks: SphLoopAcceptanceCheck[];
 }
+
+export type JsonScalar = string | number | boolean | null;
+export type JsonValue =
+  | JsonScalar
+  | JsonValue[]
+  | { [key: string]: JsonValue };
 
 export interface SphLoopProductionAudit {
   passed: boolean;
   errors: string[];
   checks: SphLoopAcceptanceCheck[];
+  artifact_counts?: Record<string, number> | null;
+  flux_map?: Record<string, JsonValue> | null;
+  openmc_xs_policy?: string | null;
+  reference?: Record<string, JsonValue> | null;
 }
 
 export interface SphLoopResidualBin {

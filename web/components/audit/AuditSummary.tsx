@@ -1,9 +1,9 @@
 import { SphLoopSummary } from "@/lib/api";
 
 /**
- * M6-A headline card. Six stats + a path. Convergence chart,
- * per-iteration audit rows table, and the detailed acceptance /
- * production-audit lists are deliberately deferred to later slices.
+ * M6-A headline card. Six stats + a path. Convergence chart and the
+ * detailed acceptance / production-audit lists live in sibling
+ * components so this card stays a quick top-line read.
  *
  * The decision string is the canonical authority here - acceptance
  * and production_audit are inputs to it, but the loop has the final
@@ -58,19 +58,6 @@ export default function AuditSummary({
         />
         <Stat label="Version" value={data.package_version} />
       </dl>
-
-      {data.production_audit.errors.length > 0 ? (
-        <div className="mt-5 text-[13px]">
-          <div className="text-rose-300 font-semibold mb-1">
-            Production audit errors ({data.production_audit.errors.length})
-          </div>
-          <ul className="list-disc pl-5 space-y-0.5 text-[var(--fg-1)]">
-            {data.production_audit.errors.map((err, index) => (
-              <li key={index}>{err}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
     </div>
   );
 }

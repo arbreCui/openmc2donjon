@@ -6,6 +6,7 @@ import { useSettings } from "@/lib/settings";
 import FileBrowserModal from "@/components/inspect/FileBrowserModal";
 import AuditSummary from "@/components/audit/AuditSummary";
 import ConvergenceChart from "@/components/audit/ConvergenceChart";
+import AuditChecks from "@/components/audit/AuditChecks";
 
 const FALLBACK_PLACEHOLDER = "/path/to/sph_loop_summary.json";
 
@@ -155,6 +156,10 @@ function Result({ state }: { state: State }) {
         points={state.data.convergence}
         sphTolerance={state.data.sph_change_tolerance}
         fluxTolerance={state.data.flux_ratio_tolerance}
+      />
+      <AuditChecks
+        acceptance={state.data.acceptance}
+        productionAudit={state.data.production_audit}
       />
     </div>
   );
