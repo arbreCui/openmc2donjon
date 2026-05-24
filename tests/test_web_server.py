@@ -186,6 +186,70 @@ class HealthEndpointTests(unittest.TestCase):
 
 
 @unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
+class CommandCatalogEndpointTests(unittest.TestCase):
+    def test_catalog_endpoint_returns_all_cli_commands_plus_direct_convert(self) -> None:
+        from openmc2donjon.commands import adf, diagnostics, openmc, sph, web
+        from openmc2donjon.web.commands import COMMANDS_SCHEMA
+        from openmc2donjon.web.server import create_app
+
+        expected_cli_names = {
+            spec.name
+            for spec in (
+                *openmc.command_specs(),
+                *adf.command_specs(),
+                *sph.command_specs(),
+                *diagnostics.command_specs(),
+                *web.command_specs(),
+            )
+        }
+
+        client = TestClient(create_app(mock_mode=False))
+        response = client.get("/api/commands")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["schema"], COMMANDS_SCHEMA)
+        command_ids = {command["id"] for command in payload["commands"]}
+        self.assertIn("direct-convert", command_ids)
+        self.assertIn("openmc2donjon-export", command_ids)
+        self.assertIn("openmc2donjon-from-openmc", command_ids)
+        self.assertTrue(
+            expected_cli_names <= command_ids,
+            f"missing command ids: {sorted(expected_cli_names - command_ids)}",
+        )
+
+    def test_catalog_marks_direct_converter_as_ready_web_workflow(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.get("/api/commands")
+
+        self.assertEqual(response.status_code, 200)
+        commands = {command["id"]: command for command in response.json()["commands"]}
+        direct = commands["direct-convert"]
+        self.assertEqual(direct["status"], "ready")
+        self.assertEqual(direct["web_path"], "/convert")
+        self.assertIn("MULTICOMPO", direct["tags"])
+        self.assertIn("openmc2donjon mgxs_library.h5", direct["cli"])
+
+    def test_catalog_group_counts_are_consistent(self) -> None:
+        from collections import Counter
+
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=False))
+        response = client.get("/api/commands")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        counts = Counter(command["group"] for command in payload["commands"])
+        groups = {group["id"]: group for group in payload["groups"]}
+        self.assertEqual(set(counts), set(groups))
+        for group_id, count in counts.items():
+            self.assertEqual(groups[group_id]["command_count"], count)
+
+
+@unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
 class CorsBehaviourTests(unittest.TestCase):
     def test_default_origin_is_allowed_without_configuration(self) -> None:
         from openmc2donjon.web.server import create_app

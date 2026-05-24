@@ -10,6 +10,7 @@ type Item = {
 
 const ITEMS: Item[] = [
   { href: "/", label: "Home" },
+  { href: "/commands", label: "Commands" },
   { href: "/convert", label: "Convert" },
   { href: "/inspect", label: "Inspect" },
   { href: "/audit", label: "Audit" },
@@ -32,7 +33,7 @@ export default function Nav() {
         >
           <span className="grad-text">openmc2donjon</span>
         </Link>
-        <ul className="flex items-center gap-1 text-sm">
+        <ul className="flex min-w-0 items-center gap-1 overflow-x-auto text-sm">
           {ITEMS.map((item) => {
             const active = pathname === item.href;
             return (

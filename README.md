@@ -257,8 +257,9 @@ and builds the `web/` Next.js project.
 ## Web UI (preview)
 
 A localhost-only Next.js + FastAPI web UI lives in [`web/`](web/), wired to
-the same Python package as the CLI. It includes the direct converter workflow
-(`Convert`), HDF5 inspection (`Inspect`), and SPH-loop audit viewing (`Audit`).
+the same Python package as the CLI. It includes a command workspace
+(`Commands`), the direct converter workflow (`Convert`), HDF5 inspection
+(`Inspect`), and SPH-loop audit viewing (`Audit`).
 
 ```sh
 python -m pip install -e ".[web]"

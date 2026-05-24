@@ -3,6 +3,8 @@
 Endpoints (M1 scope):
 
 - ``GET /api/health`` - backend liveness + mock flag + package version.
+- ``GET /api/commands`` - web/CLI command catalog used by the command
+  workspace page.
 - ``GET /api/inspect?path=...`` - file-level summary of an MGXS HDF5
   handoff, plus standard energy-mesh ID match when present.
 - ``GET /api/inspect/mixture?path=...&mixture=...&moment=0`` - per-mixture
@@ -33,6 +35,7 @@ from .._logging import get_logger
 from ..energy_groups import identify_mesh
 from ..mgxs_inspect import _report_payload, inspect_file
 from ..mgxs_physics_checks import scatter_moment_matrix
+from .commands import register_command_routes
 from .convert import register_convert_routes
 
 
@@ -170,6 +173,8 @@ def create_app(
             "mock_mode": mock_mode,
             "version": __version__,
         }
+
+    register_command_routes(app)
 
     @app.get("/api/inspect")
     def api_inspect(path: str = Query(..., min_length=1)) -> dict[str, Any]:

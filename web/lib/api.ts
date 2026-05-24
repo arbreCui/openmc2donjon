@@ -467,8 +467,41 @@ export interface ConvertResponse {
   cli_command_text: string;
 }
 
+export type CommandStatus = "ready" | "partial" | "planned";
+
+export interface CommandGroup {
+  id: string;
+  label: string;
+  summary: string;
+  command_count: number;
+}
+
+export interface CommandCatalogEntry {
+  id: string;
+  kind: "default" | "entrypoint" | "subcommand";
+  name: string;
+  aliases: string[];
+  group: string;
+  title: string;
+  summary: string;
+  cli_help: string;
+  status: CommandStatus;
+  status_label: string;
+  web_path: string | null;
+  cli: string;
+  tags: string[];
+}
+
+export interface CommandCatalog {
+  schema: string;
+  groups: CommandGroup[];
+  commands: CommandCatalogEntry[];
+  status_counts: Record<string, number>;
+}
+
 export const api = {
   health: () => getJson<HealthResponse>("/api/health"),
+  commands: () => getJson<CommandCatalog>("/api/commands"),
   convert: (request: ConvertRequest) =>
     postJson<ConvertResponse>("/api/convert", request),
   inspect: (path: string) =>
