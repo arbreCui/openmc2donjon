@@ -4,6 +4,7 @@ import {
   PRODUCTION_MINICASE_COMMAND,
   PRODUCTION_MINICASE_DEMO,
   PRODUCTION_MINICASE_RUN_ROOT,
+  convertDemoBundleHref,
   convertDemoHref,
   convertDemoInspectHref,
   convertDemoWalkthrough,
@@ -48,7 +49,10 @@ describe("convert demo presets", () => {
       "/inspect?path=%2Fmock%2Fhome%2Fopenmc-runs%2Fc5g7%2Fhandoff.h5",
     );
     expect(convertDemoHref(C5G7_PRODUCTION_DEMO)).toBe(
-      "/convert?intent=direct-convert&format=multicompo&check=1&production=1",
+      "/convert?intent=direct-convert&input=%2Fmock%2Fhome%2Fopenmc-runs%2Fc5g7%2Fhandoff.h5&output=%2Fmock%2Fhome%2Fopenmc-runs%2Fc5g7%2Fout.mcompo.txt&format=multicompo&check=1&production=1&require_known_mesh=0&comment=C5G7+production+demo+web+walkthrough",
+    );
+    expect(convertDemoBundleHref(C5G7_PRODUCTION_DEMO)).toBe(
+      "/builder?command=bundle&output_dir=%2Fmock%2Fhome%2Fopenmc-runs%2Fc5g7%2Fbundle&mgxs=%2Fmock%2Fhome%2Fopenmc-runs%2Fc5g7%2Fhandoff.h5&mcompo=%2Fmock%2Fhome%2Fopenmc-runs%2Fc5g7%2Fout.mcompo.txt",
     );
   });
 
@@ -62,6 +66,6 @@ describe("convert demo presets", () => {
     ]);
     expect(steps[0].href).toContain("/inspect?");
     expect(steps[2].href).toContain("/convert?");
-    expect(steps[3].href).toBe("/builder?command=bundle");
+    expect(steps[3].href).toContain("/builder?command=bundle");
   });
 });

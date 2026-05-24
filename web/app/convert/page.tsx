@@ -62,24 +62,39 @@ function ConvertLoading() {
 function ConvertPageContent() {
   const searchParams = useSearchParams();
   const intent = convertIntentCopy(searchParams.get("intent"));
-  const [inputPath, setInputPath] = useState("");
-  const [outputPath, setOutputPath] = useState("");
-  const [format, setFormat] = useState<ConvertFormat>(
-    parseConvertFormat(searchParams.get("format")),
+  const queryInput = searchParams.get("input");
+  const queryOutput = searchParams.get("output");
+  const queryFormat = parseConvertFormat(searchParams.get("format"));
+  const queryCheck = queryFlag(searchParams, "check", true);
+  const queryProduction = queryFlag(searchParams, "production", false);
+  const queryRequireKnownMesh = queryFlag(
+    searchParams,
+    "require_known_mesh",
+    false,
   );
-  const [check, setCheck] = useState(queryFlag(searchParams, "check", true));
-  const [production, setProduction] = useState(
-    queryFlag(searchParams, "production", false),
-  );
-  const [requireKnownMesh, setRequireKnownMesh] = useState(false);
+  const queryComment = searchParams.get("comment");
+  const queryHasPrefill =
+    queryInput !== null ||
+    queryOutput !== null ||
+    searchParams.get("format") !== null ||
+    searchParams.get("check") !== null ||
+    searchParams.get("production") !== null ||
+    searchParams.get("require_known_mesh") !== null ||
+    queryComment !== null;
+  const [inputPath, setInputPath] = useState(queryInput ?? "");
+  const [outputPath, setOutputPath] = useState(queryOutput ?? "");
+  const [format, setFormat] = useState<ConvertFormat>(queryFormat);
+  const [check, setCheck] = useState(queryCheck);
+  const [production, setProduction] = useState(queryProduction);
+  const [requireKnownMesh, setRequireKnownMesh] = useState(queryRequireKnownMesh);
   const [overwrite, setOverwrite] = useState(false);
   const [rootName, setRootName] = useState("CPO");
-  const [comment, setComment] = useState("");
+  const [comment, setComment] = useState(queryComment ?? "");
   const [burnup, setBurnup] = useState("");
   const [hFactorDefault, setHFactorDefault] = useState("");
   const [mixturesText, setMixturesText] = useState("");
   const [browserTarget, setBrowserTarget] = useState<BrowserTarget | null>(null);
-  const [outputTouched, setOutputTouched] = useState(false);
+  const [outputTouched, setOutputTouched] = useState(queryOutput !== null);
   const [state, setState] = useState<ConvertRunState>({ kind: "idle" });
   const [mockMode, setMockMode] = useState(false);
   const convertButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -130,6 +145,37 @@ function ConvertPageContent() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!queryHasPrefill) return;
+    setFormat(queryFormat);
+    setCheck(queryCheck);
+    setProduction(queryProduction);
+    setRequireKnownMesh(queryRequireKnownMesh);
+    if (queryInput !== null) {
+      setInputPath(queryInput);
+    }
+    if (queryOutput !== null) {
+      setOutputPath(queryOutput);
+      setOutputTouched(true);
+    } else if (queryInput !== null) {
+      setOutputPath(defaultConvertOutputPath(queryInput, queryFormat));
+      setOutputTouched(false);
+    }
+    if (queryComment !== null) {
+      setComment(queryComment);
+    }
+    setState({ kind: "idle" });
+  }, [
+    queryCheck,
+    queryComment,
+    queryFormat,
+    queryHasPrefill,
+    queryInput,
+    queryOutput,
+    queryProduction,
+    queryRequireKnownMesh,
+  ]);
 
   function updateInput(value: string) {
     setInputPath(value);

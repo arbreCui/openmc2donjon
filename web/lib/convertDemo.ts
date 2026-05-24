@@ -61,15 +61,40 @@ export function isProductionMinicasePath(path: string): boolean {
 export function convertDemoHref(preset: ConvertDemoPreset): string {
   const params = new URLSearchParams({
     intent: "direct-convert",
+    input: preset.inputPath,
+    output: preset.outputPath,
     format: preset.format,
     check: preset.check ? "1" : "0",
     production: preset.production ? "1" : "0",
+    require_known_mesh: preset.requireKnownMesh ? "1" : "0",
+    comment: `${preset.label} web walkthrough`,
   });
   return `/convert?${params.toString()}`;
 }
 
 export function convertDemoInspectHref(preset: ConvertDemoPreset): string {
   return `/inspect?path=${encodeURIComponent(preset.inputPath)}`;
+}
+
+export function convertDemoBundleHref(preset: ConvertDemoPreset): string {
+  const params = new URLSearchParams({
+    command: "bundle",
+    output_dir: `${parentDir(preset.outputPath)}/bundle`,
+    mgxs: preset.inputPath,
+  });
+  if (preset.format === "macrolib") {
+    params.set("macrolib", preset.outputPath);
+  } else {
+    params.set("mcompo", preset.outputPath);
+  }
+  return `/builder?${params.toString()}`;
+}
+
+function parentDir(path: string): string {
+  const trimmed = path.trim();
+  const index = trimmed.lastIndexOf("/");
+  if (index <= 0) return ".";
+  return trimmed.slice(0, index);
 }
 
 export function convertDemoWalkthrough(
@@ -101,7 +126,7 @@ export function convertDemoWalkthrough(
       label: "04",
       title: "Review and package",
       body: "Preview the LCM ASCII blocks, then bundle the input, output, and summaries.",
-      href: "/builder?command=bundle",
+      href: convertDemoBundleHref(preset),
     },
   ] as const;
 }
