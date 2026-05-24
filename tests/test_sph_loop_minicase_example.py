@@ -81,7 +81,7 @@ class SphLoopMinicaseExampleTests(unittest.TestCase):
             with h5py.File(case_dir / "expected_sph.h5", "r") as h5:
                 np.testing.assert_allclose(
                     h5["expected_sph"][:],
-                    np.full((2, 2), np.sqrt(2.0)),
+                    np.full((2, 2), np.sqrt(0.5)),
                 )
 
             payload = json.loads(config.read_text(encoding="utf-8"))

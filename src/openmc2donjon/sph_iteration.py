@@ -120,7 +120,11 @@ def create_sph_update_table(
     ``"none"``, the low-order flux is first scaled to the reference flux's
     global normalization:
 
-    ``next_sph = previous_sph * (reference_flux / normalized_low_order_flux) ** damping``.
+    ``next_sph = previous_sph * (normalized_low_order_flux / reference_flux) ** damping``.
+
+    DONJON's ``DSPH``/``MAC`` path treats ``NSPH`` as a divisor on the
+    macroscopic data.  A low-order flux that is too high must therefore produce
+    an SPH factor below unity so the corrected cross sections increase.
 
     If no previous SPH source is supplied, unity factors are used.
     """
@@ -169,7 +173,7 @@ def create_sph_update_table(
         flux_normalization=flux_normalization,
     )
     resolved_flux_normalization = str(normalization["flux_normalization"])
-    raw_update = reference.values / normalized_low_order
+    raw_update = normalized_low_order / reference.values
     unclipped = previous.values * np.power(raw_update, float(damping))
     updated = unclipped.copy()
     clipped_mask = np.zeros_like(updated, dtype=bool)
@@ -335,7 +339,7 @@ def write_summary(path: Path, report: SphUpdateTableReport) -> None:
         "source_label": report.source_label,
         "formula": (
             "next_sph = previous_sph * "
-            "(reference_flux / normalized_low_order_flux) ** damping"
+            "(normalized_low_order_flux / reference_flux) ** damping"
         ),
     }
     Path(path).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")

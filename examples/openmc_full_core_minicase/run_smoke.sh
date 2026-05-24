@@ -355,21 +355,21 @@ if quality["final_flux_ratio_max_residual"] > 1.0e-8:
 
 final_sph = Path(summary["final_sph_sidecar"])
 with h5py.File(final_sph, "r") as h5:
-    np.testing.assert_allclose(h5["sph"][:], np.full((9, 2), 2.0))
+    np.testing.assert_allclose(h5["sph"][:], np.full((9, 2), 0.5))
     assert h5.attrs["sph_kind"] == "full-core-assembly-sph-loop-iter2"
 
 expected_path = fixture_dir / "expected_sph.h5"
 with h5py.File(expected_path, "r") as h5:
-    np.testing.assert_allclose(h5["expected_sph"][:], np.full((9, 2), 2.0))
+    np.testing.assert_allclose(h5["expected_sph"][:], np.full((9, 2), 0.5))
 
 macrolib = read_macrolib_ascii(Path(summary["final_ascii"]))
 if macrolib.ngroups != 2 or macrolib.nmixtures != 9:
     raise SystemExit("SPH MACROLIB dimensions changed")
 if macrolib.sph is None:
     raise SystemExit("SPH MACROLIB is missing SPH data")
-np.testing.assert_allclose(macrolib.sph, np.full((9, 2), 2.0))
+np.testing.assert_allclose(macrolib.sph, np.full((9, 2), 0.5))
 
-print("full-core SPH loop readback OK: mixtures=9 groups=2 final_sph=2")
+print("full-core SPH loop readback OK: mixtures=9 groups=2 final_sph=0.5")
 PY
 
 echo

@@ -13,7 +13,7 @@ import numpy as np
 from openmc2donjon.hdf5_names import read_mixture_names
 
 
-EXPECTED_SPH_VALUE = 2.0
+EXPECTED_SPH_VALUE = 0.5
 ASCII_ROUNDTRIP_TOLERANCE = 1.0e-8
 
 

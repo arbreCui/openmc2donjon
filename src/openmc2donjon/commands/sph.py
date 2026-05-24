@@ -586,7 +586,7 @@ def build_make_donjon_sph_loop_config_parser() -> argparse.ArgumentParser:
         "--flux-ratio-tolerance",
         type=float,
         default=None,
-        help="optional early-stop tolerance on max |reference/low_order - 1|",
+        help="optional early-stop tolerance on max |low_order/reference - 1|",
     )
     parser.add_argument(
         "--min-iterations",

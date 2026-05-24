@@ -34,7 +34,7 @@ class DonjonSphLoopAdapterExampleTests(unittest.TestCase):
                 np.testing.assert_array_equal(h5["scalar_flux_ids"][:], [2, 4])
 
             with h5py.File(out / "reference_expected.h5", "r") as h5:
-                np.testing.assert_allclose(h5["expected_sph"][:], np.full((2, 2), np.sqrt(2.0)))
+                np.testing.assert_allclose(h5["expected_sph"][:], np.full((2, 2), np.sqrt(0.5)))
 
     def test_make_config_writes_generic_run_sph_loop_contract(self) -> None:
         root = _repo_root()

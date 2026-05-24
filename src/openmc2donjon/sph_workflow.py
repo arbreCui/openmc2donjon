@@ -236,7 +236,7 @@ def write_summary(path: Path, report: SphIterationWorkflowReport) -> None:
         "sph_maximum": report.sph_maximum,
         "formula": (
             "next_sph = previous_sph * "
-            "(reference_flux / normalized_donjon_low_order_flux) ** damping"
+            "(normalized_donjon_low_order_flux / reference_flux) ** damping"
         ),
         "openmc_xs_policy": "fixed base MGXS; only SPH sidecar changes between iterations",
     }

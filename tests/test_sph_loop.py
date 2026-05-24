@@ -62,8 +62,8 @@ class SphLoopTests(unittest.TestCase):
                             "max_flux_ratio_residual": 1.0,
                             "require_reference_flux_std_dev": True,
                             "max_reference_flux_std_dev_rel": 0.02,
-                            "sph_minimum_floor": 1.9,
-                            "sph_maximum_ceiling": 2.1,
+                            "sph_minimum_floor": 0.49,
+                            "sph_maximum_ceiling": 0.51,
                             "max_keff_step_pcm": 200.0,
                             "max_final_keff_delta_pcm": 200.0,
                             "fail_on_violation": True,
@@ -227,9 +227,9 @@ class SphLoopTests(unittest.TestCase):
             )
             self.assertEqual(
                 payload["quality"]["initial_flux_ratio_max_residual"],
-                1.0,
+                0.5,
             )
-            self.assertEqual(payload["quality"]["final_flux_ratio_max_residual"], 1.0)
+            self.assertEqual(payload["quality"]["final_flux_ratio_max_residual"], 0.5)
             self.assertEqual(
                 payload["quality"]["final_to_initial_flux_residual_ratio"],
                 1.0,
@@ -261,7 +261,7 @@ class SphLoopTests(unittest.TestCase):
             self.assertAlmostEqual(payload["audit_rows"][0]["keff"], 1.0)
             self.assertIn("worst_residual_mixture", payload["audit_rows"][0])
             self.assertIsNotNone(payload["audit_rows"][0]["worst_residual_group"])
-            self.assertAlmostEqual(payload["audit_rows"][1]["sph_maximum"], 2.0)
+            self.assertAlmostEqual(payload["audit_rows"][1]["sph_maximum"], 0.5)
             self.assertLessEqual(
                 _acceptance_actual(payload, "max_final_keff_delta_pcm"),
                 200.0,
@@ -322,7 +322,7 @@ class SphLoopTests(unittest.TestCase):
             self.assertTrue((bundle_dir / labels["sph-loop-audit-csv"]["bundled_path"]).exists())
 
             final_sph = root / "loop_run/iter02_sph/next_sph.sidecar.h5"
-            expected = np.asarray([[2.0, 2.0], [2.0, 2.0]])
+            expected = np.asarray([[0.5, 0.5], [0.5, 0.5]])
             with h5py.File(final_sph, "r") as h5:
                 np.testing.assert_allclose(h5["sph"][:], expected)
                 self.assertEqual(h5.attrs["sph_kind"], "sph-loop-iter2")

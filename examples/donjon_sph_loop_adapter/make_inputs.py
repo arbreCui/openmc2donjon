@@ -13,7 +13,7 @@ ENERGY_BOUNDS = np.array([1.0e-5, 1.0, 1.0e7], dtype=float)
 MIXTURE_NAMES = ("ASM_LEFT", "ASM_RIGHT")
 SCALAR_FLUX_IDS = np.array([2, 4], dtype=int)
 REFERENCE_FLUX = np.array([[80.0, 800.0], [120.0, 600.0]], dtype=float)
-EXPECTED_SPH = np.full((2, 2), np.sqrt(2.0), dtype=float)
+EXPECTED_SPH = np.full((2, 2), np.sqrt(0.5), dtype=float)
 
 
 def main(argv: list[str] | None = None) -> int:

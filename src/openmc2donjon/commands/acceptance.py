@@ -124,7 +124,7 @@ def add_sph_loop_acceptance_args(parser: argparse.ArgumentParser) -> None:
         "--acceptance-max-flux-ratio-residual",
         type=float,
         default=None,
-        help="production acceptance: max |reference/low_order - 1| in the last update",
+        help="production acceptance: max |low_order/reference - 1| in the last update",
     )
     parser.add_argument(
         "--acceptance-max-final-to-initial-flux-residual-ratio",

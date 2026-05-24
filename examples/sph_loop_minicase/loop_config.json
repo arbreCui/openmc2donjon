@@ -6,8 +6,8 @@
     "min_completed_iterations": 2,
     "require_converged": true,
     "require_final_solve": true,
-    "sph_maximum_ceiling": 2.0,
-    "sph_minimum_floor": 1.0
+    "sph_maximum_ceiling": 1.0,
+    "sph_minimum_floor": 0.5
   },
   "clip_max": 2.0,
   "clip_min": 0.5,

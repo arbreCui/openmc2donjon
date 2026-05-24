@@ -62,8 +62,8 @@ class SphWorkflowTests(unittest.TestCase):
 
             expected_sph = np.asarray(
                 [
-                    [2.0, 2.0],
-                    [np.sqrt(2.0), np.sqrt(2.0)],
+                    [0.5, 0.5],
+                    [np.sqrt(0.5), np.sqrt(0.5)],
                 ]
             )
             with h5py.File(output_dir / "donjon_volume_flux.h5", "r") as h5:

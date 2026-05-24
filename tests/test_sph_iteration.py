@@ -86,8 +86,8 @@ class SphIterationTests(unittest.TestCase):
 
             expected = np.array(
                 [
-                    [1.0 * np.sqrt(1.21), 1.1 * np.sqrt(0.81)],
-                    [0.9 * np.sqrt(0.64), 1.0 * np.sqrt(1.44)],
+                    [1.0 * np.sqrt(1.0 / 1.21), 1.1 * np.sqrt(1.0 / 0.81)],
+                    [0.9 * np.sqrt(1.0 / 0.64), 1.0 * np.sqrt(1.0 / 1.44)],
                 ]
             )
             with h5py.File(sidecar, "r") as h5:
@@ -97,7 +97,7 @@ class SphIterationTests(unittest.TestCase):
             self.assertEqual(
                 payload["formula"],
                 "next_sph = previous_sph * "
-                "(reference_flux / normalized_low_order_flux) ** damping",
+                "(normalized_low_order_flux / reference_flux) ** damping",
             )
             self.assertEqual(payload["flux_normalization"], "none")
             self.assertEqual(payload["normalization_factor"], 1.0)
@@ -107,9 +107,9 @@ class SphIterationTests(unittest.TestCase):
             self.assertEqual(payload["diagnostic_bin_limit"], 10)
             worst = payload["worst_residual_bins"][0]
             self.assertEqual(worst["mixture"], "moderator")
-            self.assertEqual(worst["group"], 2)
-            self.assertAlmostEqual(worst["raw_update"], 1.44)
-            self.assertAlmostEqual(worst["residual"], 0.44)
+            self.assertEqual(worst["group"], 1)
+            self.assertAlmostEqual(worst["raw_update"], 1.0 / 0.64)
+            self.assertAlmostEqual(worst["residual"], 1.0 / 0.64 - 1.0)
 
     def test_power_normalization_scales_low_order_flux_with_h_factor(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -149,7 +149,7 @@ class SphIterationTests(unittest.TestCase):
             )
 
             factor = (10.0 * 10.0 + 20.0 * 100.0 + 30.0 + 40.0) / (10.0 + 100.0 + 1.0 + 1.0)
-            expected = np.asarray([[10.0 / factor, 20.0 / factor], [30.0 / factor, 40.0 / factor]])
+            expected = np.asarray([[factor / 10.0, factor / 20.0], [factor / 30.0, factor / 40.0]])
             self.assertAlmostEqual(report.normalization_factor, factor)
             self.assertEqual(report.flux_normalization, "power")
             rows = table.read_text(encoding="utf-8").strip().splitlines()[1:]
@@ -225,8 +225,8 @@ class SphIterationTests(unittest.TestCase):
             factor = (10.0 * 10.0 + 20.0 * 100.0) / (10.0 + 100.0)
             expected = np.asarray(
                 [
-                    [10.0 / factor, 20.0 / factor],
-                    [30.0 / factor, 40.0 / factor],
+                    [factor / 10.0, factor / 20.0],
+                    [factor / 30.0, factor / 40.0],
                 ]
             )
             self.assertAlmostEqual(report.normalization_factor, factor)
@@ -427,7 +427,7 @@ class SphIterationTests(unittest.TestCase):
                 0,
             )
 
-            expected = np.asarray([[4.0, 5.0], [2.0, 3.0]])
+            expected = np.asarray([[0.25, 0.2], [0.5, 1.0 / 3.0]])
             with h5py.File(sidecar, "r") as h5:
                 np.testing.assert_allclose(h5["sph"][:], expected)
 
@@ -442,14 +442,14 @@ class SphIterationTests(unittest.TestCase):
             write_mgxs(mgxs)
             reference_flux.write_text(
                 "mixture,group,flux\n"
-                "fuel,1,3.0\nfuel,2,1.0\n"
-                "moderator,1,1.0\nmoderator,2,2.0\n",
+                "fuel,1,1.0\nfuel,2,1.0\n"
+                "moderator,1,1.0\nmoderator,2,1.0\n",
                 encoding="utf-8",
             )
             low_order_flux.write_text(
                 "mixture,group,flux\n"
-                "fuel,1,1.0\nfuel,2,1.0\n"
-                "moderator,1,1.0\nmoderator,2,1.0\n",
+                "fuel,1,3.0\nfuel,2,1.0\n"
+                "moderator,1,1.0\nmoderator,2,2.0\n",
                 encoding="utf-8",
             )
 
@@ -518,10 +518,10 @@ class SphIterationTests(unittest.TestCase):
 
             rows = table.read_text(encoding="utf-8").strip().splitlines()
             self.assertEqual(rows[0], "mixture,group,sph")
-            self.assertIn("fuel,1,2.2", rows)
-            self.assertIn("fuel,2,3.6", rows)
-            self.assertIn("moderator,1,3.6", rows)
-            self.assertIn("moderator,2,5", rows)
+            self.assertIn("fuel,1,0.55", rows)
+            self.assertIn("fuel,2,0.4", rows)
+            self.assertIn("moderator,1,0.225", rows)
+            self.assertIn("moderator,2,0.2", rows)
 
     def test_rejects_hdf5_flux_without_required_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
