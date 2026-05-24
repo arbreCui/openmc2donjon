@@ -13,7 +13,9 @@ Monte Carlo tallies are exact.
 | CHI normalization | `1.0e-6` absolute | Max `abs(sum(chi) - 1)` for fissionable calculations. |
 | Transport/P1 consistency | `5.0e-2` relative | Max residual between explicit `transport_total` and `total - sum(P1 scatter out)`. |
 | Local energy bounds | exact shape + `rtol=1.0e-10` | Any local mixture/state `energy_bounds` must match root `/energy_bounds`. |
-| Statistical uncertainty coverage | off by default; exact coverage when required | If `--require-std-dev-coverage` or `acceptance.require_mgxs_std_dev_coverage` is set, every eligible mean MGXS dataset must have a matching `*_std_dev` dataset. |
+| MGXS uncertainty coverage | off by default; exact coverage when required | If `--require-std-dev-coverage` or `acceptance.require_mgxs_std_dev_coverage` is set, every eligible mean MGXS dataset must have a matching `*_std_dev` dataset. |
+| Reference-flux uncertainty coverage | off by default; exact coverage when required | If `acceptance.require_reference_flux_std_dev` is set, the OpenMC reference flux used by the SPH loop must have a matching `<dataset>_std_dev` dataset. |
+| Reference-flux uncertainty ceiling | off by default; caller-defined relative limit | If `acceptance.max_reference_flux_std_dev_rel` is set, max `std_dev / |mean|` for the OpenMC reference flux must not exceed that value. |
 
 Scatter row balance and transport/P1 use `5.0e-2` because these checks are
 meant to catch wrong axes, transposed scatter matrices, and mismatched
@@ -63,10 +65,17 @@ and spectrum. The range is still useful for catching swapped datasets or
 accidental unit/normalization errors.
 
 Uncertainty coverage is not required by the production preset because older
-fixtures and external MGXS HDF5 files may not carry OpenMC tally standard
+fixtures and external HDF5 files may not carry OpenMC tally standard
 deviations. Production workflows that rely on Monte Carlo statistics should
-turn it into a hard gate with `--require-std-dev-coverage` for MGXS preflight
-or `acceptance.require_mgxs_std_dev_coverage = true` for SPH-loop acceptance.
+turn it into hard gates explicitly:
+
+- `--require-std-dev-coverage` for MGXS preflight;
+- `acceptance.require_mgxs_std_dev_coverage = true` for SPH-loop MGXS
+  coverage;
+- `acceptance.require_reference_flux_std_dev = true` for the SPH OpenMC
+  reference flux;
+- `acceptance.max_reference_flux_std_dev_rel = <limit>` when the reference flux
+  also needs a relative uncertainty ceiling.
 
 ## Override Policy
 

@@ -377,6 +377,70 @@ Optional recipe hooks:
 Optional hooks may declare only the arguments they need. Supported argument names
 are `library`, `recipe_path`, `statepoint_path`, `output_path`, and `summary`.
 
+## OpenMC Reference Flux for SPH Loops
+
+The fixed-OpenMC SPH workflow needs an OpenMC volume-flux matrix with shape
+`(mixture, group)` and the same mixture order/group order as the MGXS handoff.
+A recipe can add that matrix in `postprocess_hdf5`:
+
+```python
+def postprocess_hdf5(output_path, summary):
+    import h5py
+
+    names = [domain.name for domain in summary.domains]
+    with h5py.File(output_path, "a") as h5:
+        flux = h5.create_dataset("openmc_volume_flux", data=openmc_flux)
+        flux.attrs["mixture_names"] = names
+        flux.attrs["group_order"] = "mgxs_donjon"
+
+        std_dev = h5.create_dataset(
+            "openmc_volume_flux_std_dev",
+            data=openmc_flux_std_dev,
+        )
+        std_dev.attrs["mixture_names"] = names
+        std_dev.attrs["group_order"] = "mgxs_donjon"
+        std_dev.attrs["std_dev_of"] = "openmc_volume_flux"
+```
+
+`prepare-openmc-sph-loop` can scaffold the SPH loop directly from this payload.
+When the sibling `openmc_volume_flux_std_dev` dataset is present, it is copied
+into `reference_flux.h5` and recorded in the loop summary/audit metadata. Enable
+the strict production checks when the case policy requires both MGXS and
+reference-flux uncertainty to be present:
+
+```sh
+openmc2donjon prepare-openmc-sph-loop \
+  --recipe export_recipe.py \
+  --statepoint statepoint.120.h5 \
+  --run-dir runs/case1_sph \
+  --solve-template solve_lflux_dump.x2m.in \
+  --scalar-flux-map ASM_Y01_X01=2,ASM_Y01_X02=4 \
+  --production \
+  --require-std-dev-coverage \
+  --acceptance-require-mgxs-std-dev-coverage \
+  --acceptance-require-reference-flux-std-dev \
+  --acceptance-max-reference-flux-std-dev-rel 0.01
+```
+
+These are two different uncertainty paths. MGXS `*_std_dev` datasets audit the
+cross sections exported to DONJON; `openmc_volume_flux_std_dev` audits the
+fixed OpenMC reference flux used to compute SPH factors.
+
+If the OpenMC reference flux is produced outside the recipe, pass it explicitly:
+
+```sh
+openmc2donjon prepare-openmc-sph-loop \
+  --recipe export_recipe.py \
+  --statepoint statepoint.120.h5 \
+  --run-dir runs/case1_sph \
+  --solve-template solve_lflux_dump.x2m.in \
+  --reference-flux external_reference_flux.h5::openmc_volume_flux \
+  --scalar-flux-map ASM_Y01_X01=2,ASM_Y01_X02=4
+```
+
+When `external_reference_flux.h5` also contains
+`/openmc_volume_flux_std_dev`, the scaffold copies and audits it the same way.
+
 ## Existing Lower-Level API
 
 If a script already has a loaded OpenMC `mgxs.Library` object, it can call the

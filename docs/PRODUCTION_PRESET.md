@@ -21,7 +21,7 @@ files that will be consumed as physics inputs, not for early format debugging.
 | ADF face consistency | hard fail when ADF exists | Prevent mixed face naming across calculations. |
 | Transport/P1 consistency | hard fail when both are present | Catch inconsistent explicit and derived transport data. |
 | NU ratio | warning | Flag suspicious `nu_fission / fission` values without rejecting valid fuel variations. |
-| Statistical uncertainty coverage | warning by default; optional hard fail | Keep OpenMC tally noise visible in the audit trail. |
+| MGXS statistical uncertainty coverage | warning by default; optional hard fail | Keep OpenMC MGXS tally noise visible in the audit trail. |
 
 ## SPH Loop Acceptance
 
@@ -39,6 +39,10 @@ Production acceptance requires:
 - scatter row-balance, CHI, ADF-face, and transport/P1 consistency;
 - optional full MGXS `*_std_dev` coverage when
   `acceptance.require_mgxs_std_dev_coverage = true`;
+- optional OpenMC reference-flux standard-deviation coverage when
+  `acceptance.require_reference_flux_std_dev = true`;
+- optional reference-flux uncertainty ceiling when
+  `acceptance.max_reference_flux_std_dev_rel` is set;
 - final-to-initial flux residual ratio no worse than `1.0`;
 - final clipped SPH fraction/count within configured limits;
 - convergence checks only when explicitly requested in `acceptance`
@@ -90,11 +94,19 @@ false`. In that case the handoff passed the configured production gates, but
 the SPH iteration did not reach its numerical convergence target before the
 configured stop condition.
 
-Statistical uncertainty coverage has the same opt-in shape. Production
-preflight reports missing `*_std_dev` coverage as audit information by default;
-use `--require-std-dev-coverage` or
-`acceptance.require_mgxs_std_dev_coverage = true` when the workflow policy
-requires OpenMC tally uncertainty to be present for every eligible MGXS field.
+Statistical uncertainty coverage has the same opt-in shape, with two separate
+inputs:
+
+- MGXS `*_std_dev` datasets describe uncertainty on the exported cross-section
+  means. Production preflight reports missing coverage as audit information by
+  default; use `--require-std-dev-coverage` or
+  `acceptance.require_mgxs_std_dev_coverage = true` when the workflow policy
+  requires OpenMC tally uncertainty to be present for every eligible MGXS field.
+- The SPH OpenMC reference flux may carry a sibling
+  `openmc_volume_flux_std_dev` (or `<reference_dataset>_std_dev`) dataset. Use
+  `acceptance.require_reference_flux_std_dev = true` when the SPH audit must
+  prove that the fixed OpenMC reference flux has uncertainty data, and use
+  `acceptance.max_reference_flux_std_dev_rel` to cap `std_dev / |mean|`.
 
 ## What This Preset Does Not Prove
 

@@ -197,6 +197,54 @@ The same policy is available in SPH-loop acceptance as
 fission placeholders in non-fissionable mixtures are excluded from the
 expected coverage count.
 
+## Optional OpenMC Reference-Flux Uncertainty
+
+The SPH loop compares low-order DONJON fluxes against a fixed OpenMC reference
+flux. When that reference flux is stored in an HDF5 dataset, it may also carry
+a sibling standard-deviation dataset:
+
+```text
+/openmc_volume_flux
+/openmc_volume_flux_std_dev
+```
+
+For case-specific names, the same convention applies:
+
+```text
+/my_reference_flux
+/my_reference_flux_std_dev
+```
+
+The standard-deviation dataset must have the same shape as the mean reference
+flux, finite non-negative values, and the same mixture/group ordering. The
+recommended attributes mirror the mean dataset:
+
+```text
+attrs:
+  mixture_names = [...]
+  group_order = "mgxs_donjon"
+  std_dev_of = "openmc_volume_flux"
+```
+
+`prepare-openmc-sph-loop` detects `<reference_dataset>_std_dev` when the
+reference flux source is HDF5, validates it, and writes matching aliases
+(`openmc_volume_flux_std_dev`, `reference_flux_std_dev`, and
+`volume_flux_std_dev`) into the scaffolded `reference_flux.h5`. SPH-loop
+acceptance can then enforce:
+
+```json
+{
+  "acceptance": {
+    "require_reference_flux_std_dev": true,
+    "max_reference_flux_std_dev_rel": 0.01
+  }
+}
+```
+
+This gate is separate from MGXS `*_std_dev` coverage: MGXS uncertainty belongs
+to cross-section means, while reference-flux uncertainty belongs to the fixed
+OpenMC flux target used by the SPH update.
+
 ## Optional SPH Payload
 
 SPH equivalence factors are stored as one positive vector per mixture:
