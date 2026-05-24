@@ -53,6 +53,13 @@ def _write_fake_hdf5(path: Path) -> None:
             mix.attrs["fissionable"] = bool(name == "M1_UO2")
             mix.create_dataset("total", data=np.full(ngroups, 0.5 * index))
             mix.create_dataset("absorption", data=np.full(ngroups, 0.05 * index))
+            fission = np.full(ngroups, 0.01 * index)
+            chi = np.zeros(ngroups, dtype=float)
+            chi[0] = 1.0
+            mix.create_dataset("fission", data=fission)
+            mix.create_dataset("nu_fission", data=2.5 * fission)
+            mix.create_dataset("chi", data=chi)
+            mix.create_dataset("transport_total", data=np.full(ngroups, 0.5 * index))
             scatter = np.zeros((1, ngroups, ngroups), dtype=float)
             # Strictly down-scattering diagonal + single off-diagonal.
             for g in range(ngroups):
@@ -740,6 +747,122 @@ class FilesEndpointTests(unittest.TestCase):
         names = {e["name"] for e in response.json()["entries"]}
         self.assertIn("sph_loop_summary.json", names)
         self.assertIn("sph_loop_summary_ref_stddev.json", names)
+
+
+@unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
+class ConvertEndpointTests(unittest.TestCase):
+    def test_mock_mode_returns_conversion_preview(self) -> None:
+        from openmc2donjon.web.convert import CONVERT_SCHEMA
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.post(
+            "/api/convert",
+            json={
+                "input_path": "/mock/home/openmc-runs/c5g7/handoff.h5",
+                "format": "multicompo",
+                "dry_run": True,
+                "overwrite": False,
+                "check": True,
+                "production": False,
+                "warn_unknown_energy_mesh": True,
+                "require_known_energy_mesh": False,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["schema"], CONVERT_SCHEMA)
+        self.assertTrue(payload["ok"])
+        self.assertTrue(payload["dry_run"])
+        self.assertFalse(payload["converted"])
+        self.assertEqual(payload["format"], "multicompo")
+        self.assertIn("--format multicompo", payload["cli_command_text"])
+        self.assertEqual(payload["preflight"]["inputs"][0]["energy_mesh_id"], "casmo_7")
+
+    def test_live_mode_dry_run_runs_preflight_without_writing(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            input_path = Path(tmp) / "handoff.h5"
+            output_path = Path(tmp) / "handoff.mcompo.txt"
+            _write_fake_hdf5(input_path)
+
+            client = TestClient(create_app(mock_mode=False))
+            response = client.post(
+                "/api/convert",
+                json={
+                    "input_path": str(input_path),
+                    "output_path": str(output_path),
+                    "format": "multicompo",
+                    "dry_run": True,
+                    "overwrite": False,
+                    # The fake HDF5 intentionally has a non-zero row-balance
+                    # residual; this dry-run still proves the endpoint
+                    # validates and returns a structured preflight summary.
+                    "check": True,
+                    "production": False,
+                    "warn_unknown_energy_mesh": True,
+                    "require_known_energy_mesh": False,
+                },
+            )
+
+            self.assertEqual(response.status_code, 200)
+            payload = response.json()
+            self.assertFalse(output_path.exists())
+            self.assertTrue(payload["dry_run"])
+            self.assertFalse(payload["converted"])
+            self.assertEqual(payload["output_path"], str(output_path.resolve()))
+            self.assertEqual(payload["preflight"]["inputs"][0]["mixtures"], 2)
+
+    def test_live_mode_converts_and_refuses_accidental_overwrite(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            input_path = Path(tmp) / "handoff.h5"
+            output_path = Path(tmp) / "handoff.mcompo.txt"
+            _write_fake_hdf5(input_path)
+
+            client = TestClient(create_app(mock_mode=False))
+            response = client.post(
+                "/api/convert",
+                json={
+                    "input_path": str(input_path),
+                    "output_path": str(output_path),
+                    "format": "multicompo",
+                    "dry_run": False,
+                    "overwrite": False,
+                    "check": False,
+                    "production": False,
+                    "warn_unknown_energy_mesh": False,
+                    "require_known_energy_mesh": False,
+                },
+            )
+
+            self.assertEqual(response.status_code, 200)
+            payload = response.json()
+            self.assertTrue(payload["ok"])
+            self.assertTrue(payload["converted"])
+            self.assertTrue(output_path.exists())
+            self.assertGreater(output_path.stat().st_size, 0)
+            self.assertEqual(payload["output_size"], output_path.stat().st_size)
+
+            conflict = client.post(
+                "/api/convert",
+                json={
+                    "input_path": str(input_path),
+                    "output_path": str(output_path),
+                    "format": "multicompo",
+                    "dry_run": False,
+                    "overwrite": False,
+                    "check": False,
+                    "production": False,
+                    "warn_unknown_energy_mesh": False,
+                    "require_known_energy_mesh": False,
+                },
+            )
+            self.assertEqual(conflict.status_code, 409)
+            self.assertIn("already exists", conflict.json()["detail"])
 
 
 @unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")

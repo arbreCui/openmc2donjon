@@ -33,6 +33,7 @@ from .._logging import get_logger
 from ..energy_groups import identify_mesh
 from ..mgxs_inspect import _report_payload, inspect_file
 from ..mgxs_physics_checks import scatter_moment_matrix
+from .convert import register_convert_routes
 
 
 logger = get_logger("web.server")
@@ -200,6 +201,8 @@ def create_app(
         if mock_mode:
             return _mock_list_dir(path, HTTPException)
         return _list_dir(path, HTTPException)
+
+    register_convert_routes(app, mock_mode=mock_mode)
 
     @app.get("/api/inspect/mixture")
     def api_inspect_mixture(

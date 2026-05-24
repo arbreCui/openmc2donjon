@@ -3,8 +3,9 @@
 Next.js front-end for the openmc2donjon web UI. Talks to the FastAPI
 backend started by `openmc2donjon serve`.
 
-This is the **M0 scaffold**: only a home page that confirms the backend
-is reachable. Real CLI command pages land in later milestones.
+Current pages cover the direct converter workflow, HDF5 inspection, and
+SPH-loop audit viewing. Additional command families are added as focused
+workflow pages rather than as a generic shell wrapper.
 
 ## Local development
 
@@ -63,7 +64,10 @@ web/
   app/                Next.js App Router pages
     layout.tsx        Root layout + primary nav
     page.tsx          Home (reads /api/health)
+    convert/page.tsx  /convert (direct HDF5 -> ASCII converter workflow)
     inspect/page.tsx  /inspect (path input + summary + mixture table)
+    audit/page.tsx    /audit (SPH loop summary viewer)
+    settings/page.tsx /settings (local browser preferences)
     globals.css       Design tokens, glass utility, grad-text, button primitives
   components/
     Nav.tsx           Top sticky nav

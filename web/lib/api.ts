@@ -155,6 +155,31 @@ async function getJson<T>(
   return (await response.json()) as T;
 }
 
+async function postJson<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`${baseUrl()}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    let detail: string | undefined;
+    try {
+      const payload = (await response.json()) as { detail?: string };
+      detail = payload.detail;
+    } catch {
+      detail = undefined;
+    }
+    throw new ApiError(
+      detail ??
+        `POST ${path} failed: ${response.status} ${response.statusText}`,
+      response.status,
+      detail,
+    );
+  }
+  return (await response.json()) as T;
+}
+
 export interface CrossSections {
   total: number[] | null;
   absorption: number[] | null;
@@ -363,8 +388,89 @@ export interface SphLoopSummary {
   workflows?: SphLoopWorkflow[];
 }
 
+export type ConvertFormat = "multicompo" | "macrolib";
+
+export interface ConvertRequest {
+  input_path: string;
+  output_path?: string | null;
+  format: ConvertFormat;
+  dry_run: boolean;
+  overwrite: boolean;
+  check: boolean;
+  production: boolean;
+  warn_unknown_energy_mesh: boolean;
+  require_known_energy_mesh: boolean;
+  root_name?: string;
+  comment?: string | null;
+  burnup?: number | null;
+  h_factor_default?: number | null;
+  mixtures?: string[] | null;
+}
+
+export interface ConvertPreflightInput {
+  path: string;
+  ok: boolean;
+  energy_groups: number | null;
+  legendre_order: number | null;
+  energy_mesh_id?: string | null;
+  energy_mesh_name?: string | null;
+  mixtures?: number | null;
+  calculations?: number | null;
+  state_points?: number | null;
+  fissionable_mixtures?: number | null;
+  adf_mixtures?: number | null;
+  adf_faces?: string[];
+  sph_calculations?: number | null;
+  scatter_row_balance?: {
+    checked?: boolean;
+    max_abs?: number | null;
+    max_rel?: number | null;
+    worst?: string | null;
+  };
+  physics_checks?: {
+    chi_checked?: number | null;
+    chi_sum_max_abs_error?: number | null;
+    nu_ratio_warning_count?: number | null;
+    transport_p1_checked?: number | null;
+  };
+  uncertainty?: {
+    checked?: boolean;
+    expected_datasets?: number | null;
+    datasets?: number | null;
+    missing_datasets?: number | null;
+    max_rel?: number | null;
+  };
+  issues: string[];
+  warnings: string[];
+}
+
+export interface ConvertPreflightSummary {
+  schema: string;
+  decision: string;
+  output_issue: string | null;
+  inputs: ConvertPreflightInput[];
+}
+
+export interface ConvertResponse {
+  schema: string;
+  ok: boolean;
+  dry_run: boolean;
+  converted: boolean;
+  format: ConvertFormat;
+  input_path: string;
+  output_path: string;
+  output_exists: boolean;
+  output_size: number | null;
+  preflight_ok: boolean;
+  preflight: ConvertPreflightSummary | null;
+  cli_command: string[];
+  cli_command_text: string;
+}
+
 export const api = {
   health: () => getJson<HealthResponse>("/api/health"),
+  convert: (request: ConvertRequest) =>
+    postJson<ConvertResponse>("/api/convert", request),
   inspect: (path: string) =>
     getJson<HandoffInspection>("/api/inspect", { path }),
   inspectMixture: (path: string, mixture: string, moment: number = 0) =>
