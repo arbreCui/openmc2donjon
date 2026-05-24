@@ -719,21 +719,20 @@ class FilesEndpointTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["path"], "/mock/home")
 
-    def test_mock_mode_lists_sph_loop_summary_next_to_handoff(self) -> None:
+    def test_mock_mode_lists_full_core_sph_loop_summary(self) -> None:
         # The audit page picks ``sph_loop_summary.json`` through the
         # same file browser used by ``inspect``; the mock tree exposes
-        # it as a sibling of the handoff so users hit a realistic
-        # layout in mock mode.
+        # a dedicated full-core SPH run so users hit a realistic
+        # long-iteration audit layout in mock mode.
         from openmc2donjon.web.server import create_app
 
         client = TestClient(create_app(mock_mode=True))
         response = client.get(
-            "/api/files", params={"path": "/mock/home/openmc-runs/c5g7"},
+            "/api/files", params={"path": "/mock/home/openmc-runs/full-core-sph"},
         )
         self.assertEqual(response.status_code, 200)
         names = {e["name"] for e in response.json()["entries"]}
         self.assertIn("sph_loop_summary.json", names)
-        self.assertIn("handoff.h5", names)
 
 
 @unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
@@ -763,6 +762,13 @@ class AuditEndpointTests(unittest.TestCase):
             self.assertIn(key, payload, key)
         self.assertIn("passed", payload["acceptance"])
         self.assertIn("passed", payload["production_audit"])
+        self.assertEqual(payload["completed_iterations"], 10)
+        self.assertEqual(len(payload["convergence"]), 10)
+        self.assertEqual(len(payload["audit_rows"]), 11)
+        self.assertLess(
+            payload["quality"]["final_flux_ratio_max_residual"],
+            payload["quality"]["initial_flux_ratio_max_residual"],
+        )
 
     def test_live_mode_reads_real_summary_from_disk(self) -> None:
         import json

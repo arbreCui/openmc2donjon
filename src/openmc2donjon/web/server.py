@@ -66,16 +66,20 @@ _MOCK_TREE: dict[str, list[tuple[str, str, int | None]]] = {
     ],
     f"{_MOCK_HOME}/openmc-runs": [
         ("c5g7", "dir", None),
+        ("full-core-sph", "dir", None),
         ("u238_33g", "dir", None),
     ],
     f"{_MOCK_HOME}/openmc-runs/c5g7": [
         ("handoff.h5", "file", 832_000),
         ("handoff_aug.h5", "file", 856_000),
-        # ``sph_loop_summary.json`` is what ``/api/audit`` consumes;
-        # putting it next to the handoff mirrors what users see after
-        # ``run-sph-loop`` finishes.
-        ("sph_loop_summary.json", "file", 34_353),
         ("README.md", "file", 1_024),
+    ],
+    f"{_MOCK_HOME}/openmc-runs/full-core-sph": [
+        # ``sph_loop_summary.json`` is what ``/api/audit`` consumes;
+        # the fixture is a sanitized real 10-iteration DONJON-backed
+        # full-core minicase, so the audit page exercises a realistic
+        # convergence history rather than a perfect two-step toy loop.
+        ("sph_loop_summary.json", "file", 143_282),
     ],
     f"{_MOCK_HOME}/openmc-runs/u238_33g": [
         ("mgxs.h5", "file", 1_240_000),
