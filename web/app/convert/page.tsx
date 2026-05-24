@@ -17,9 +17,15 @@ import {
   buildConvertCliPreview,
   convertAdvancedPayload,
 } from "@/lib/convertCommand";
+import {
+  defaultConvertOutputPath,
+  outputPathInDirectory,
+  pickConvertBrowserStart,
+} from "@/lib/convertPaths";
 import { useSettings } from "@/lib/settings";
 
 const FALLBACK_INPUT = "/path/to/mgxs_library.h5";
+type BrowserTarget = "input" | "output-directory";
 
 export default function ConvertPage() {
   const [inputPath, setInputPath] = useState("");
@@ -34,7 +40,7 @@ export default function ConvertPage() {
   const [burnup, setBurnup] = useState("");
   const [hFactorDefault, setHFactorDefault] = useState("");
   const [mixturesText, setMixturesText] = useState("");
-  const [browserOpen, setBrowserOpen] = useState(false);
+  const [browserTarget, setBrowserTarget] = useState<BrowserTarget | null>(null);
   const [outputTouched, setOutputTouched] = useState(false);
   const [state, setState] = useState<ConvertRunState>({ kind: "idle" });
   const convertButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -42,7 +48,7 @@ export default function ConvertPage() {
   const savedPrefix = settings.default_inspect_path.trim();
   const inputPlaceholder = savedPrefix || FALLBACK_INPUT;
   const derivedOutput = useMemo(
-    () => defaultOutputPath(inputPath, format),
+    () => defaultConvertOutputPath(inputPath, format),
     [inputPath, format],
   );
   const displayedOutput = outputTouched ? outputPath : derivedOutput;
@@ -67,12 +73,30 @@ export default function ConvertPage() {
 
   function updateInput(value: string) {
     setInputPath(value);
-    if (!outputTouched) setOutputPath(defaultOutputPath(value, format));
+    if (!outputTouched) setOutputPath(defaultConvertOutputPath(value, format));
   }
 
   function updateFormat(value: ConvertFormat) {
     setFormat(value);
-    if (!outputTouched) setOutputPath(defaultOutputPath(inputPath, value));
+    if (!outputTouched) setOutputPath(defaultConvertOutputPath(inputPath, value));
+  }
+
+  function applyBrowserPick(picked: string) {
+    if (browserTarget === "input") {
+      updateInput(picked);
+    } else if (browserTarget === "output-directory") {
+      setOutputTouched(true);
+      setOutputPath(
+        outputPathInDirectory({
+          directory: picked,
+          currentOutput: displayedOutput,
+          inputPath,
+          format,
+        }),
+      );
+    }
+    setBrowserTarget(null);
+    convertButtonRef.current?.focus();
   }
 
   function submitDryRun(event: FormEvent<HTMLFormElement>) {
@@ -160,7 +184,7 @@ export default function ConvertPage() {
             </label>
             <button
               type="button"
-              onClick={() => setBrowserOpen(true)}
+              onClick={() => setBrowserTarget("input")}
               className="btn btn-secondary self-end"
             >
               Browse…
@@ -178,7 +202,7 @@ export default function ConvertPage() {
             </button>
           ) : null}
 
-          <div className="grid gap-3 lg:grid-cols-[220px_1fr]">
+          <div className="grid gap-3 lg:grid-cols-[220px_1fr_auto]">
             <fieldset>
               <legend className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
                 Output object
@@ -216,7 +240,17 @@ export default function ConvertPage() {
                 spellCheck={false}
                 autoComplete="off"
               />
+              <span className="mt-1 block text-[12px] text-[var(--fg-3)]">
+                Choose a directory with Browse, then edit the filename if needed.
+              </span>
             </label>
+            <button
+              type="button"
+              onClick={() => setBrowserTarget("output-directory")}
+              className="btn btn-secondary self-end"
+            >
+              Browse dir…
+            </button>
           </div>
 
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -355,18 +389,23 @@ export default function ConvertPage() {
         </form>
 
         <FileBrowserModal
-          open={browserOpen}
-          initialPath={pickBrowserStart(inputPath.trim() || savedPrefix)}
-          extensions={["h5", "hdf5"]}
-          fileTypeLabel="HDF5"
-          chipLabel="H5"
-          recentScope="hdf5"
-          onClose={() => setBrowserOpen(false)}
-          onSelect={(picked) => {
-            updateInput(picked);
-            setBrowserOpen(false);
-            convertButtonRef.current?.focus();
-          }}
+          open={browserTarget != null}
+          initialPath={
+            browserTarget === "output-directory"
+              ? pickConvertBrowserStart(displayedOutput || savedPrefix)
+              : pickConvertBrowserStart(inputPath.trim() || savedPrefix)
+          }
+          extensions={browserTarget === "output-directory" ? [] : ["h5", "hdf5"]}
+          fileTypeLabel={
+            browserTarget === "output-directory" ? "output directory" : "HDF5"
+          }
+          chipLabel={browserTarget === "output-directory" ? "DIR" : "H5"}
+          recentScope={
+            browserTarget === "output-directory" ? "convert-output-dir" : "hdf5"
+          }
+          selectMode={browserTarget === "output-directory" ? "directory" : "file"}
+          onClose={() => setBrowserTarget(null)}
+          onSelect={applyBrowserPick}
         />
 
         <section className="mt-6">
@@ -504,29 +543,6 @@ function optionalNumberError(label: string, value: string): string | null {
   if (trimmed === "") return null;
   if (Number.isFinite(Number(trimmed))) return null;
   return `${label} must be a number.`;
-}
-
-function defaultOutputPath(input: string, format: ConvertFormat): string {
-  const trimmed = input.trim();
-  const extension = format === "macrolib" ? ".macrolib.txt" : ".mcompo.txt";
-  if (!trimmed) return `out${extension}`;
-  const slash = trimmed.lastIndexOf("/");
-  const dirname = slash >= 0 ? trimmed.slice(0, slash + 1) : "";
-  const basename = slash >= 0 ? trimmed.slice(slash + 1) : trimmed;
-  const dot = basename.lastIndexOf(".");
-  const stem = dot > 0 ? basename.slice(0, dot) : basename;
-  return `${dirname}${stem}${extension}`;
-}
-
-function pickBrowserStart(path: string): string {
-  const trimmed = path.trim();
-  if (!trimmed) return "~";
-  const lastSlash = trimmed.lastIndexOf("/");
-  if (lastSlash >= 0 && lastSlash < trimmed.length - 1) {
-    const tail = trimmed.slice(lastSlash + 1);
-    if (tail.includes(".")) return trimmed.slice(0, lastSlash + 1);
-  }
-  return trimmed;
 }
 
 function toErrorState(
