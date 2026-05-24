@@ -11,6 +11,7 @@ import {
   api,
 } from "@/lib/api";
 import { CopyCliButton } from "@/components/commands/CopyCliButton";
+import { commandWorkflowMapping } from "@/lib/commandWorkflowMapping";
 
 type State =
   | { kind: "loading" }
@@ -90,6 +91,7 @@ export default function CommandDetailPage() {
 }
 
 function CommandDetail({ command }: { command: CommandCatalogEntry }) {
+  const mapping = commandWorkflowMapping(command);
   return (
     <div className="mt-6 space-y-4">
       <section className="glass rounded-xl p-5">
@@ -127,6 +129,41 @@ function CommandDetail({ command }: { command: CommandCatalogEntry }) {
       </section>
 
       <section className="glass rounded-xl p-5">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-base font-semibold tracking-tight">
+                Web workflow mapping
+              </h2>
+              <span
+                className={
+                  "rounded border px-2 py-0.5 text-[10px] uppercase tracking-wider " +
+                  (mapping.available
+                    ? "border-emerald-400/30 text-emerald-300"
+                    : "border-[var(--edge-bright)] text-[var(--fg-3)]")
+                }
+              >
+                {mapping.surface}
+              </span>
+            </div>
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[var(--fg-2)]">
+              {mapping.summary}
+            </p>
+          </div>
+          {mapping.href ? (
+            <Link href={mapping.href} className="btn btn-primary shrink-0">
+              Open configured workflow
+            </Link>
+          ) : null}
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <MappingList title="Preselected in web" items={mapping.presets} />
+          <MappingList title="You still provide" items={mapping.requiredInputs} />
+        </div>
+      </section>
+
+      <section className="glass rounded-xl p-5">
         <h2 className="text-base font-semibold tracking-tight">CLI form</h2>
         <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-start">
           <pre className="min-w-0 flex-1 overflow-x-auto rounded-md border border-[var(--edge)] bg-black/20 px-3 py-2 text-[12px] text-[var(--fg-1)]">
@@ -157,6 +194,26 @@ function CommandDetail({ command }: { command: CommandCatalogEntry }) {
           ))}
         </div>
       </section>
+    </div>
+  );
+}
+
+function MappingList({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div className="rounded-lg border border-[var(--edge)] bg-black/15 p-3">
+      <div className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
+        {title}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {items.map((item) => (
+          <span
+            key={item}
+            className="rounded border border-[var(--edge)] bg-white/[0.03] px-2 py-1 text-[12px] text-[var(--fg-1)]"
+          >
+            {item}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
