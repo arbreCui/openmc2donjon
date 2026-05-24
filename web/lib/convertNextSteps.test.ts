@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  convertBundleHref,
   convertNextSteps,
   convertObjectDescription,
   convertObjectLabel,
@@ -31,6 +32,28 @@ describe("convert next steps", () => {
     expect(convertObjectLabel("macrolib")).toBe("L_MACROLIB");
     expect(convertObjectDescription("multicompo")).toContain("Mapped");
     expect(convertObjectDescription("macrolib")).toContain("one-state");
+  });
+
+  it("builds bundle builder deep links with handoff paths prefilled", () => {
+    expect(
+      convertBundleHref(
+        response({
+          dry_run: false,
+          converted: true,
+          output_exists: true,
+        }),
+      ),
+    ).toBe(
+      "/builder?command=bundle&output_dir=%2Fruns%2Fcase%2Fbundle&mgxs=%2Fruns%2Fcase%2Fmgxs_library.h5&mcompo=%2Fruns%2Fcase%2Fout.mcompo.txt",
+    );
+    expect(
+      convertBundleHref(
+        response({
+          format: "macrolib",
+          output_path: "/runs/case/out.macrolib.txt",
+        }),
+      ),
+    ).toContain("macrolib=%2Fruns%2Fcase%2Fout.macrolib.txt");
   });
 
   it("keeps dry-run next steps focused on writing and source review", () => {
@@ -69,6 +92,8 @@ describe("convert next steps", () => {
     expect(steps[0].href).toBe("#ascii-output-preview");
     expect(steps[1].title).toContain("L_MULTICOMPO");
     expect(steps[2].href).toContain("/builder?command=bundle");
+    expect(steps[2].href).toContain("mgxs=");
+    expect(steps[2].href).toContain("mcompo=");
     expect(steps[3].title).toContain("SPH/ADF");
   });
 

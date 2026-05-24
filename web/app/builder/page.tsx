@@ -14,10 +14,10 @@ import {
 import {
   BuilderField,
   BuilderValues,
+  builderValuesFromQuery,
   buildCommandCli,
   commandBuilderSpec,
   commandBuilderStage,
-  defaultBuilderValues,
 } from "@/lib/commandBuilder";
 import { useSettings } from "@/lib/settings";
 
@@ -52,7 +52,7 @@ function CommandBuilderPageContent() {
   const spec = commandBuilderSpec(commandId);
   const [catalogState, setCatalogState] = useState<CatalogState>({ kind: "loading" });
   const [values, setValues] = useState<BuilderValues>(() =>
-    spec ? defaultBuilderValues(spec) : {},
+    spec ? builderValuesFromQuery(spec, searchParams) : {},
   );
   const [browserField, setBrowserField] = useState<BuilderField | null>(null);
   const [settings, , , settingsHydrated] = useSettings();
@@ -78,9 +78,9 @@ function CommandBuilderPageContent() {
   }, [refreshCatalog]);
 
   useEffect(() => {
-    setValues(spec ? defaultBuilderValues(spec) : {});
+    setValues(spec ? builderValuesFromQuery(spec, searchParams) : {});
     setBrowserField(null);
-  }, [spec]);
+  }, [searchParams, spec]);
 
   const command = useMemo(
     () =>

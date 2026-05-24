@@ -3,9 +3,11 @@ import {
   C5G7_PRODUCTION_DEMO,
   PRODUCTION_MINICASE_COMMAND,
   PRODUCTION_MINICASE_DEMO,
+  PRODUCTION_MINICASE_RUN_ROOT,
   convertDemoHref,
   convertDemoInspectHref,
   convertDemoWalkthrough,
+  isProductionMinicasePath,
 } from "./convertDemo";
 
 describe("convert demo presets", () => {
@@ -32,6 +34,13 @@ describe("convert demo presets", () => {
       "/private/tmp/openmc2donjon_production_minicase_smoke/openmc2donjon_run/web_repeat.mcompo.txt",
     );
     expect(PRODUCTION_MINICASE_DEMO.production).toBe(true);
+  });
+
+  it("detects paths inside the production minicase run root", () => {
+    expect(isProductionMinicasePath(`${PRODUCTION_MINICASE_RUN_ROOT}/x.h5`)).toBe(
+      true,
+    );
+    expect(isProductionMinicasePath("/tmp/other/x.h5")).toBe(false);
   });
 
   it("builds stable deep links for the converter walkthrough", () => {

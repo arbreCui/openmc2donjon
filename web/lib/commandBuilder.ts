@@ -40,6 +40,10 @@ export interface CommandBuilderStage {
 
 export type BuilderValues = Record<string, string | boolean>;
 
+export interface BuilderQueryParams {
+  get(name: string): string | null;
+}
+
 const FACES = "FD_XMIN,FD_XMAX,FD_YMIN,FD_YMAX";
 
 const FORMAT_OPTIONS = [
@@ -441,6 +445,24 @@ export function defaultBuilderValues(spec: CommandBuilderSpec): BuilderValues {
       field.kind === "toggle" ? Boolean(field.defaultValue) : String(field.defaultValue ?? "");
   }
   return values;
+}
+
+export function builderValuesFromQuery(
+  spec: CommandBuilderSpec,
+  query: BuilderQueryParams,
+): BuilderValues {
+  const values = defaultBuilderValues(spec);
+  for (const field of spec.fields) {
+    const raw = query.get(field.name);
+    if (raw == null) continue;
+    values[field.name] = field.kind === "toggle" ? parseQueryBool(raw) : raw;
+  }
+  return values;
+}
+
+function parseQueryBool(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return ["1", "true", "yes", "on"].includes(normalized);
 }
 
 export function buildCommandCli(spec: CommandBuilderSpec, values: BuilderValues): string {

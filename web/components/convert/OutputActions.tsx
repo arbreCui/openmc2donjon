@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { CopyCliButton } from "@/components/commands/CopyCliButton";
 import { ConvertResponse } from "@/lib/api";
+import { convertBundleHref } from "@/lib/convertNextSteps";
 
 export default function OutputActions({
   data,
@@ -45,6 +46,11 @@ export default function OutputActions({
           <a href="#ascii-output-preview" className="btn btn-secondary">
             Preview ASCII
           </a>
+        ) : null}
+        {data.converted && data.output_exists ? (
+          <Link href={convertBundleHref(data)} className="btn btn-secondary">
+            Bundle handoff
+          </Link>
         ) : null}
         <Link href="/commands/direct-convert" className="btn btn-secondary">
           Command guide

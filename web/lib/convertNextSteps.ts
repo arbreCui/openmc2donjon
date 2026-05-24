@@ -20,6 +20,27 @@ export function convertObjectDescription(format: ConvertResponse["format"]): str
   return "Mapped multicompo handoff for domain-wise mixtures and equivalence metadata.";
 }
 
+export function convertBundleHref(data: ConvertResponse): string {
+  const params = new URLSearchParams({
+    command: "bundle",
+    output_dir: siblingBundleDir(data.output_path),
+    mgxs: data.input_path,
+  });
+  if (data.format === "macrolib") {
+    params.set("macrolib", data.output_path);
+  } else {
+    params.set("mcompo", data.output_path);
+  }
+  return `/builder?${params.toString()}`;
+}
+
+function siblingBundleDir(outputPath: string): string {
+  const trimmed = outputPath.trim();
+  const index = trimmed.lastIndexOf("/");
+  if (index <= 0) return "bundle";
+  return `${trimmed.slice(0, index)}/bundle`;
+}
+
 export function convertNextSteps(
   data: ConvertResponse,
   input: ConvertPreflightInput | null,
@@ -102,7 +123,7 @@ export function convertNextSteps(
       title: "Package the production record",
       body:
         "Use the bundle builder to collect the input HDF5, ASCII output, summaries, and logs into a manifest-backed handoff.",
-      href: `/builder?command=bundle&input=${encodeURIComponent(data.input_path)}`,
+      href: convertBundleHref(data),
       status: "reference",
     },
     {

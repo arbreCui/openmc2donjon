@@ -24,6 +24,7 @@ import {
   PRODUCTION_MINICASE_COMMAND,
   PRODUCTION_MINICASE_DEMO,
   convertDemoWalkthrough,
+  isProductionMinicasePath,
 } from "@/lib/convertDemo";
 import { convertIntentCopy } from "@/lib/convertIntent";
 import type { ConvertIntentCopy } from "@/lib/convertIntent";
@@ -108,6 +109,12 @@ function ConvertPageContent() {
     hFactorDefault,
     mixturesText,
   });
+  const showMinicaseMissingHint =
+    !mockMode &&
+    state.kind === "error" &&
+    state.status === 404 &&
+    (isProductionMinicasePath(inputPath) ||
+      isProductionMinicasePath(displayedOutput));
 
   useEffect(() => {
     let cancelled = false;
@@ -503,6 +510,9 @@ function ConvertPageContent() {
 
         <section className="mt-6">
           <ConvertReport state={state} onConvert={() => void run("convert")} />
+          {showMinicaseMissingHint ? (
+            <ProductionMinicaseMissingHint onApply={applyProductionMinicaseDemo} />
+          ) : null}
         </section>
       </div>
     </main>
@@ -651,6 +661,38 @@ function LiveMinicaseCard({ onApply }: { onApply: () => void }) {
             ) : null}
           </div>
         ))}
+      </div>
+    </section>
+  );
+}
+
+function ProductionMinicaseMissingHint({ onApply }: { onApply: () => void }) {
+  return (
+    <section className="mt-4 rounded-xl border border-amber-300/25 bg-amber-300/[0.06] p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-amber-200">
+            Production minicase artifacts were not found.
+          </div>
+          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
+            Run the smoke command from the repository root first; it writes the
+            managed MGXS and MULTICOMPO paths used by the live walkthrough.
+          </p>
+        </div>
+        <button type="button" onClick={onApply} className="btn btn-secondary">
+          Refill paths
+        </button>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <CopyCliButton
+          value={PRODUCTION_MINICASE_COMMAND}
+          compact
+          label="Copy smoke command"
+          copiedLabel="Copied"
+        />
+        <code className="rounded border border-[var(--edge)] bg-black/20 px-2 py-1 font-mono text-[12px] text-[var(--fg-1)]">
+          {PRODUCTION_MINICASE_COMMAND}
+        </code>
       </div>
     </section>
   );

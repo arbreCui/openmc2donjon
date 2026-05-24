@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  builderValuesFromQuery,
   buildCommandCli,
   commandBuilderStage,
   commandBuilderSpec,
@@ -48,6 +49,29 @@ describe("commandBuilder", () => {
       "openmc2donjon serve --host 0.0.0.0 --port 8015 --mock " +
         "--cors-origin http://localhost:3000 --cors-origin http://127.0.0.1:3000 " +
         "--log-level DEBUG",
+    );
+  });
+
+  it("prefills builder values from matching query parameters", () => {
+    const spec = commandBuilderSpec("bundle");
+    expect(spec).not.toBeNull();
+    const values = builderValuesFromQuery(
+      spec!,
+      new URLSearchParams({
+        mgxs: "/runs/case/mgxs_library.h5",
+        mcompo: "/runs/case/out.mcompo.txt",
+        output_dir: "/runs/case/bundle",
+        force: "1",
+        ignored: "nope",
+      }),
+    );
+
+    expect(values.mgxs).toBe("/runs/case/mgxs_library.h5");
+    expect(values.mcompo).toBe("/runs/case/out.mcompo.txt");
+    expect(values.output_dir).toBe("/runs/case/bundle");
+    expect(values.force).toBe(true);
+    expect(buildCommandCli(spec!, values)).toContain(
+      "--mgxs /runs/case/mgxs_library.h5 --mcompo /runs/case/out.mcompo.txt",
     );
   });
 

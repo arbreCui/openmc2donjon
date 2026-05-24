@@ -51,6 +51,13 @@ export const PRODUCTION_MINICASE_DEMO: ConvertDemoPreset = {
 export const PRODUCTION_MINICASE_COMMAND =
   "bash scripts/run_production_minicase_smoke.sh";
 
+export const PRODUCTION_MINICASE_RUN_ROOT =
+  "/private/tmp/openmc2donjon_production_minicase_smoke";
+
+export function isProductionMinicasePath(path: string): boolean {
+  return path.trim().startsWith(PRODUCTION_MINICASE_RUN_ROOT);
+}
+
 export function convertDemoHref(preset: ConvertDemoPreset): string {
   const params = new URLSearchParams({
     intent: "direct-convert",
