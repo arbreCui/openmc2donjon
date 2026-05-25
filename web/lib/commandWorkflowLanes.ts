@@ -13,6 +13,14 @@ export interface WorkflowLane {
   steps: WorkflowStep[];
 }
 
+export interface WorkflowOccurrence {
+  lane: WorkflowLane;
+  step: WorkflowStep;
+  stepIndex: number;
+  previousStep: WorkflowStep | null;
+  nextStep: WorkflowStep | null;
+}
+
 export const COMMAND_WORKFLOW_LANES: readonly WorkflowLane[] = [
   {
     id: "direct",
@@ -135,4 +143,21 @@ export function workflowLaneCommandIds(): string[] {
   return COMMAND_WORKFLOW_LANES.flatMap((lane) =>
     lane.steps.flatMap((step) => step.commandIds),
   );
+}
+
+export function commandWorkflowOccurrences(commandId: string): WorkflowOccurrence[] {
+  const occurrences: WorkflowOccurrence[] = [];
+  for (const lane of COMMAND_WORKFLOW_LANES) {
+    lane.steps.forEach((step, index) => {
+      if (!step.commandIds.includes(commandId)) return;
+      occurrences.push({
+        lane,
+        step,
+        stepIndex: index,
+        previousStep: lane.steps[index - 1] ?? null,
+        nextStep: lane.steps[index + 1] ?? null,
+      });
+    });
+  }
+  return occurrences;
 }

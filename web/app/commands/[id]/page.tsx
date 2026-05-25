@@ -12,6 +12,10 @@ import {
 } from "@/lib/api";
 import { CopyCliButton } from "@/components/commands/CopyCliButton";
 import { commandWorkflowMapping } from "@/lib/commandWorkflowMapping";
+import {
+  WorkflowOccurrence,
+  commandWorkflowOccurrences,
+} from "@/lib/commandWorkflowLanes";
 
 type State =
   | { kind: "loading" }
@@ -129,6 +133,8 @@ function CommandDetail({ command }: { command: CommandCatalogEntry }) {
       </section>
 
       <CommandUsePath command={command} />
+
+      <CommandWorkflowPosition command={command} />
 
       {command.id === "direct-convert" ? <DirectConvertArtifactMap /> : null}
 
@@ -315,6 +321,124 @@ function DirectConvertArtifactMap() {
         </span>
       </div>
     </section>
+  );
+}
+
+function CommandWorkflowPosition({ command }: { command: CommandCatalogEntry }) {
+  const occurrences = commandWorkflowOccurrences(command.id);
+  if (occurrences.length === 0) {
+    return (
+      <section className="glass rounded-xl p-5">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h2 className="text-base font-semibold tracking-tight">
+              Workflow position
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[var(--fg-2)]">
+              This command is documented in the catalog but is not part of the
+              main production workflow map yet. Use the command guide and CLI
+              form as the source of truth.
+            </p>
+          </div>
+          <Link href="/commands" className="btn btn-secondary shrink-0">
+            Open workflow map
+          </Link>
+        </div>
+      </section>
+    );
+  }
+  return (
+    <section className="glass rounded-xl p-5">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h2 className="text-base font-semibold tracking-tight">
+            Workflow position
+          </h2>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
+            Where this command sits in the production map. Some commands appear
+            in more than one lane because the same artifact can be useful in
+            direct conversion, equivalence, or SPH feedback workflows.
+          </p>
+        </div>
+        <Link href="/commands" className="btn btn-secondary shrink-0">
+          Open workflow map
+        </Link>
+      </div>
+      <div className="mt-4 grid gap-3">
+        {occurrences.map((occurrence) => (
+          <WorkflowOccurrenceCard
+            key={`${occurrence.lane.id}-${occurrence.step.id}`}
+            occurrence={occurrence}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function WorkflowOccurrenceCard({
+  occurrence,
+}: {
+  occurrence: WorkflowOccurrence;
+}) {
+  return (
+    <article className="rounded-lg border border-[var(--edge)] bg-white/[0.025] p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+            {occurrence.lane.title}
+          </div>
+          <h3 className="mt-1 text-sm font-semibold tracking-tight">
+            {String(occurrence.stepIndex + 1).padStart(2, "0")} ·{" "}
+            {occurrence.step.title}
+          </h3>
+          <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--fg-2)]">
+            {occurrence.step.body}
+          </p>
+        </div>
+        <Link href={occurrence.step.href} className="btn btn-secondary shrink-0">
+          Open stage
+        </Link>
+      </div>
+      <div className="mt-3 grid gap-2 md:grid-cols-2">
+        <NeighborStep label="Before" step={occurrence.previousStep} />
+        <NeighborStep label="After" step={occurrence.nextStep} />
+      </div>
+    </article>
+  );
+}
+
+function NeighborStep({
+  label,
+  step,
+}: {
+  label: "Before" | "After";
+  step: WorkflowOccurrence["previousStep"];
+}) {
+  return (
+    <div className="rounded-md border border-[var(--edge)] bg-black/10 p-3">
+      <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+        {label}
+      </div>
+      {step ? (
+        <>
+          <Link
+            href={step.href}
+            className="mt-1 block text-[12px] font-semibold tracking-tight text-[var(--fg-1)] hover:text-emerald-200"
+          >
+            {step.title}
+          </Link>
+          <p className="mt-1 text-[12px] leading-5 text-[var(--fg-3)]">
+            {step.body}
+          </p>
+        </>
+      ) : (
+        <p className="mt-1 text-[12px] leading-5 text-[var(--fg-3)]">
+          This command is at the {label === "Before" ? "start" : "end"} of this
+          lane.
+        </p>
+      )}
+    </div>
   );
 }
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   COMMAND_WORKFLOW_LANES,
+  commandWorkflowOccurrences,
   workflowLaneCommandIds,
 } from "./commandWorkflowLanes";
 
@@ -30,5 +31,21 @@ describe("commandWorkflowLanes", () => {
     expect(firstStep.body).toContain("does not rerun OpenMC");
     expect(firstStep.commandIds).toContain("prepare-openmc-sph-loop");
     expect(firstStep.commandIds).toContain("make-sph-loop-scaffold");
+  });
+
+  it("finds all workflow positions for commands reused across lanes", () => {
+    const occurrences = commandWorkflowOccurrences("direct-convert");
+
+    expect(occurrences.map((item) => item.lane.id)).toEqual([
+      "direct",
+      "equivalence",
+    ]);
+    expect(occurrences[0].step.title).toBe("Write ASCII");
+    expect(occurrences[0].previousStep?.title).toBe("Inspect and preflight");
+    expect(occurrences[0].nextStep?.title).toBe("Bundle and share");
+  });
+
+  it("returns an empty list for commands outside the visual workflow lanes", () => {
+    expect(commandWorkflowOccurrences("serve")).toEqual([]);
   });
 });
