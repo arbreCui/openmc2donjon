@@ -45,7 +45,9 @@ import {
 } from "@/lib/convertPaths";
 import {
   convertBundleBuilderHrefFromPaths,
+  convertWorkflowStageSummary,
   convertWalkthroughStatuses,
+  type ConvertWorkflowStageStatus,
   type ConvertWalkthroughRun,
   type ConvertWalkthroughStatus,
 } from "@/lib/convertWalkthrough";
@@ -1165,10 +1167,16 @@ function ConvertPrimer({
 }) {
   const trimmedInput = inputPath.trim();
   const trimmedOutput = outputPath.trim();
+  const run = convertWalkthroughRunFromState(state);
   const statuses = convertWalkthroughStatuses({
     hasInput: trimmedInput.length > 0,
     hasOutput: trimmedOutput.length > 0,
-    run: convertWalkthroughRunFromState(state),
+    run,
+  });
+  const stageSummary = convertWorkflowStageSummary({
+    hasInput: trimmedInput.length > 0,
+    hasOutput: trimmedOutput.length > 0,
+    run,
   });
   const object = format === "macrolib" ? "L_MACROLIB" : "L_MULTICOMPO";
   const inspectHref = trimmedInput
@@ -1243,6 +1251,45 @@ function ConvertPrimer({
           Command notes
         </Link>
       </div>
+      <div
+        className={
+          "mt-4 rounded-lg border px-3 py-3 " +
+          stageSummaryClass(stageSummary.tone)
+        }
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase tracking-[0.14em] opacity-70">
+              Current stage
+            </div>
+            <h3 className="mt-1 text-sm font-semibold tracking-tight">
+              {stageSummary.title}
+            </h3>
+            <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--fg-1)]">
+              {stageSummary.body}
+            </p>
+          </div>
+          <ol className="flex min-w-0 flex-wrap items-center gap-1.5">
+            {stageSummary.stages.map((stage, index) => (
+              <li key={stage.id} className="flex items-center gap-1.5">
+                {index > 0 ? (
+                  <span className="text-[var(--fg-3)]" aria-hidden="true">
+                    →
+                  </span>
+                ) : null}
+                <span
+                  className={
+                    "rounded-full border px-2 py-1 text-[11px] font-medium " +
+                    stagePillClass(stage.status)
+                  }
+                >
+                  {stage.label}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </div>
       <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
         {items.map((item) => (
           <article
@@ -1282,6 +1329,37 @@ function ConvertPrimer({
       </div>
     </section>
   );
+}
+
+function stageSummaryClass(
+  tone: "ready" | "current" | "running" | "blocked",
+): string {
+  if (tone === "ready") {
+    return "border-emerald-300/20 bg-emerald-300/[0.045] text-emerald-100";
+  }
+  if (tone === "running") {
+    return "border-cyan-300/25 bg-cyan-300/[0.07] text-cyan-100";
+  }
+  if (tone === "blocked") {
+    return "border-rose-300/25 bg-rose-300/[0.055] text-rose-100";
+  }
+  return "border-amber-300/20 bg-amber-300/[0.045] text-amber-100";
+}
+
+function stagePillClass(status: ConvertWorkflowStageStatus): string {
+  if (status === "complete") {
+    return "border-emerald-300/25 bg-emerald-300/[0.08] text-emerald-100";
+  }
+  if (status === "running") {
+    return "border-cyan-300/25 bg-cyan-300/[0.12] text-cyan-100";
+  }
+  if (status === "current") {
+    return "border-amber-300/30 bg-amber-300/[0.12] text-amber-100";
+  }
+  if (status === "blocked") {
+    return "border-rose-300/25 bg-rose-300/[0.08] text-rose-100";
+  }
+  return "border-[var(--edge)] bg-black/10 text-[var(--fg-2)]";
 }
 
 function convertWalkthroughRunFromState(state: ConvertRunState): ConvertWalkthroughRun {
