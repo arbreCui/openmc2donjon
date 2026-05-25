@@ -14,6 +14,7 @@ import { useSearchParams } from "next/navigation";
 import ConvertReport, {
   ConvertRunState,
 } from "@/components/convert/ConvertReport";
+import ConvertShowcase from "@/components/convert/ConvertShowcase";
 import { CopyCliButton } from "@/components/commands/CopyCliButton";
 import MixturePicker from "@/components/convert/MixturePicker";
 import FileBrowserModal from "@/components/inspect/FileBrowserModal";
@@ -150,6 +151,7 @@ function ConvertPageContent() {
     state.status === 404 &&
     (isProductionMinicasePath(inputPath) ||
       isProductionMinicasePath(displayedOutput));
+  const preflightInput = state.kind === "ok" ? state.data.preflight?.inputs[0] ?? null : null;
 
   useEffect(() => {
     let cancelled = false;
@@ -331,6 +333,14 @@ function ConvertPageContent() {
           inputPath={inputPath}
           outputPath={displayedOutput}
           format={format}
+        />
+        <ConvertShowcase
+          format={format}
+          check={check}
+          production={production}
+          requireKnownMesh={requireKnownMesh}
+          outputPath={displayedOutput}
+          input={preflightInput}
         />
 
         <form
