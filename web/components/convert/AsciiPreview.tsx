@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ApiError, TextPreview, api } from "@/lib/api";
+import { ApiError, TextPreview, api, type ConvertFormat, type ConvertPreflightInput } from "@/lib/api";
 import {
   analyzeDonjonAsciiPreview,
+  expectedArtifactBlockCoverage,
+  type ExpectedBlockCoverage,
   type LcmBlockPreview,
 } from "@/lib/asciiPreview";
 
@@ -13,7 +15,15 @@ type PreviewState =
   | { kind: "ok"; data: TextPreview }
   | { kind: "error"; message: string; status?: number };
 
-export default function AsciiPreview({ path }: { path: string }) {
+export default function AsciiPreview({
+  path,
+  format,
+  input,
+}: {
+  path: string;
+  format?: ConvertFormat;
+  input?: ConvertPreflightInput | null;
+}) {
   const [state, setState] = useState<PreviewState>({ kind: "idle" });
 
   useEffect(() => {
@@ -49,13 +59,21 @@ export default function AsciiPreview({ path }: { path: string }) {
       </div>
 
       <div className="mt-3">
-        <PreviewBody state={state} />
+        <PreviewBody state={state} format={format} input={input ?? null} />
       </div>
     </section>
   );
 }
 
-function PreviewBody({ state }: { state: PreviewState }) {
+function PreviewBody({
+  state,
+  format,
+  input,
+}: {
+  state: PreviewState;
+  format?: ConvertFormat;
+  input: ConvertPreflightInput | null;
+}) {
   if (state.kind === "idle" || state.kind === "loading") {
     return (
       <div className="rounded-md border border-[var(--edge)] bg-black/20 px-3 py-3 text-sm text-[var(--fg-2)]">
@@ -75,6 +93,9 @@ function PreviewBody({ state }: { state: PreviewState }) {
   }
   const { data } = state;
   const analysis = analyzeDonjonAsciiPreview(data.text);
+  const expectedCoverage = format
+    ? expectedArtifactBlockCoverage(data.text, format, input)
+    : [];
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-[var(--fg-2)] tab-num">
@@ -136,6 +157,9 @@ function PreviewBody({ state }: { state: PreviewState }) {
           </div>
         </div>
       </div>
+      {expectedCoverage.length > 0 ? (
+        <ExpectedCoveragePanel coverage={expectedCoverage} />
+      ) : null}
       {analysis.blockTree.length > 0 ? (
         <LcmBlockTree
           blocks={analysis.blockTree}
@@ -145,6 +169,55 @@ function PreviewBody({ state }: { state: PreviewState }) {
       <pre className="max-h-[34rem] overflow-auto rounded-md border border-[var(--edge)] bg-black/25 px-3 py-3 font-mono text-[12px] leading-5 text-[var(--fg-1)]">
         {data.text || "(empty file)"}
       </pre>
+    </div>
+  );
+}
+
+function ExpectedCoveragePanel({
+  coverage,
+}: {
+  coverage: ExpectedBlockCoverage[];
+}) {
+  return (
+    <div className="rounded-md border border-[var(--edge)] bg-black/15 p-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+            Anatomy visible in preview
+          </div>
+          <p className="mt-1 text-[12px] text-[var(--fg-3)]">
+            Cross-checks the expected LCM blocks against this bounded slice.
+            Grey means not visible here, not necessarily absent from the file.
+          </p>
+        </div>
+        <span className="rounded border border-[var(--edge)] px-2 py-1 text-[11px] text-[var(--fg-2)] tab-num">
+          {coverage.reduce((sum, section) => sum + section.presentCount, 0)} /{" "}
+          {coverage.reduce((sum, section) => sum + section.totalCount, 0)} visible
+        </span>
+      </div>
+
+      <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+        {coverage.map((section) => (
+          <article
+            key={section.id}
+            className="rounded border border-[var(--edge)] bg-white/[0.02] px-3 py-2"
+          >
+            <div className="flex items-baseline justify-between gap-2">
+              <h4 className="text-[12px] font-semibold tracking-tight text-[var(--fg-1)]">
+                {section.title}
+              </h4>
+              <span className="font-mono text-[11px] text-[var(--fg-3)]">
+                {section.presentCount}/{section.totalCount}
+              </span>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {section.hits.map((hit) => (
+                <BlockChip key={hit.id} label={hit.label} present={hit.present} />
+              ))}
+            </div>
+          </article>
+        ))}
+      </div>
     </div>
   );
 }

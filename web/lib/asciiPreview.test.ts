@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { analyzeDonjonAsciiPreview } from "./asciiPreview";
+import {
+  analyzeDonjonAsciiPreview,
+  expectedArtifactBlockCoverage,
+} from "./asciiPreview";
 
 describe("DONJON ASCII preview analysis", () => {
   it("recognizes MULTICOMPO signatures and key blocks", () => {
@@ -77,5 +80,80 @@ CALCULATIONS
       "CALCULATIONS",
     ]);
     expect(analysis.blockTree.some((block) => block.count < 0)).toBe(false);
+  });
+
+  it("cross-checks expected MULTICOMPO anatomy blocks visible in the preview", () => {
+    const coverage = expectedArtifactBlockCoverage(
+      `
+SIGNATURE
+L_MULTICOMPO
+GLOBAL
+STATE-VECTOR
+MIXTURES
+CALCULATIONS
+TREE
+ISOTOPESLIST
+NTOT0
+STRD
+SCAT00
+L_LIBRARY
+ENERGY
+ADF
+NSPH
+`,
+      "multicompo",
+      {
+        path: "/x.h5",
+        ok: true,
+        energy_groups: 7,
+        legendre_order: 0,
+        issues: [],
+        warnings: [],
+        adf_faces: ["left"],
+        adf_mixtures: 1,
+        sph_calculations: 1,
+      },
+    );
+    expect(coverage.map((section) => [section.id, section.presentCount])).toEqual([
+      ["header", 3],
+      ["map", 3],
+      ["xs", 4],
+      ["equivalence", 4],
+    ]);
+  });
+
+  it("does not require absent optional equivalence blocks in preview coverage", () => {
+    const coverage = expectedArtifactBlockCoverage(
+      `
+SIGNATURE
+L_MACROLIB
+STATE-VECTOR
+ENERGY
+VOLUME
+GROUP
+FLUX-INTG
+NTOT0
+DIFF
+SIGS00
+SCAT00
+NJJS00
+IJJS00
+`,
+      "macrolib",
+      {
+        path: "/x.h5",
+        ok: true,
+        energy_groups: 7,
+        legendre_order: 0,
+        issues: [],
+        warnings: [],
+        adf_faces: [],
+        adf_mixtures: 0,
+        sph_calculations: 0,
+      },
+    );
+    const equivalence = coverage.find((section) => section.id === "equivalence");
+    expect(equivalence?.hits.map((hit) => hit.label)).toEqual(["H-FACTOR"]);
+    expect(equivalence?.presentCount).toBe(0);
   });
 });

@@ -1,9 +1,20 @@
+import type { ConvertFormat, ConvertPreflightInput } from "./api";
+import { convertArtifactAnatomy } from "./convertArtifactAnatomy";
+
 export type DonjonAsciiFormat = "MULTICOMPO" | "MACROLIB" | "unknown";
 
 export interface BlockHit {
   id: string;
   label: string;
   present: boolean;
+}
+
+export interface ExpectedBlockCoverage {
+  id: string;
+  title: string;
+  presentCount: number;
+  totalCount: number;
+  hits: BlockHit[];
 }
 
 export interface LcmBlockPreview {
@@ -30,12 +41,7 @@ const MAX_BLOCK_TREE_ITEMS = 18;
 const BLOCK_HEADER_RE = /^\s*->\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+<-/;
 
 export function analyzeDonjonAsciiPreview(text: string): AsciiPreviewAnalysis {
-  const lineSet = new Set(
-    text
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean),
-  );
+  const lineSet = normalizedLineSet(text);
   const signature = signatureFromText(text);
   const format = formatFromSignature(signature);
   const allBlocks = parseLcmBlocks(text);
@@ -69,6 +75,48 @@ export function analyzeDonjonAsciiPreview(text: string): AsciiPreviewAnalysis {
     blockTreeTruncated: allBlocks.length > blockTree.length,
     notes: analysisNotes({ signature, likelyDonjonAscii, blockHits }),
   };
+}
+
+export function expectedArtifactBlockCoverage(
+  text: string,
+  format: ConvertFormat,
+  input: ConvertPreflightInput | null,
+): ExpectedBlockCoverage[] {
+  const lineSet = normalizedLineSet(text);
+  return convertArtifactAnatomy(format, input).sections.map((section) => {
+    const hits = expectedBlocksForCoverage(section.blocks, input).map((block) =>
+      blockHit(block, block, expectedBlockIsVisible(block, lineSet)),
+    );
+    return {
+      id: section.id,
+      title: section.title,
+      presentCount: hits.filter((hit) => hit.present).length,
+      totalCount: hits.length,
+      hits,
+    };
+  });
+}
+
+function expectedBlocksForCoverage(
+  blocks: readonly string[],
+  input: ConvertPreflightInput | null,
+): string[] {
+  const adfExpected = input == null || (input.adf_faces?.length ?? 0) > 0;
+  const sphExpected = input == null || (input.sph_calculations ?? 0) > 0;
+  return blocks.filter((block) => {
+    if (block === "ADF/HADF") return adfExpected;
+    if (block === "NSPH") return sphExpected;
+    return true;
+  });
+}
+
+function expectedBlockIsVisible(block: string, lineSet: ReadonlySet<string>): boolean {
+  if (block === "ADF/HADF") return lineSet.has("ADF") || lineSet.has("HADF");
+  if (block.endsWith("xx")) {
+    const prefix = block.slice(0, -2);
+    return [...lineSet].some((line) => new RegExp(`^${prefix}\\d+$`).test(line));
+  }
+  return lineSet.has(block);
 }
 
 function parseLcmBlocks(text: string): LcmBlockPreview[] {
@@ -110,6 +158,15 @@ function formatFromSignature(signature: string | null): DonjonAsciiFormat {
 
 function blockHit(id: string, label: string, present: boolean): BlockHit {
   return { id, label, present };
+}
+
+function normalizedLineSet(text: string): Set<string> {
+  return new Set(
+    text
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean),
+  );
 }
 
 function analysisNotes({

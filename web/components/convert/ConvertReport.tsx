@@ -159,7 +159,7 @@ function ConvertSummary({
       ) : null}
       {data.converted && data.output_exists ? (
         <div id="ascii-output-preview">
-          <AsciiPreview path={data.output_path} />
+          <AsciiPreview path={data.output_path} format={data.format} input={input} />
         </div>
       ) : null}
     </div>
