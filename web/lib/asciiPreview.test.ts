@@ -37,6 +37,15 @@ ENERGY
       type: 1,
       count: 40,
     });
+    expect(analysis.keyBlocks.map((block) => [block.id, block.status])).toEqual([
+      ["signature", "present"],
+      ["state-vector", "present"],
+      ["energy", "present"],
+      ["total-xs", "present"],
+      ["scatter", "present"],
+      ["adf", "optional"],
+      ["sph", "optional"],
+    ]);
     expect(analysis.notes).toHaveLength(0);
   });
 
@@ -59,8 +68,36 @@ ENERGY
     const analysis = analyzeDonjonAsciiPreview("NTOT0\nNUSIGF\n");
     expect(analysis.signature).toBeNull();
     expect(analysis.likelyDonjonAscii).toBe(false);
+    expect(analysis.keyBlocks.find((block) => block.id === "signature")).toMatchObject({
+      status: "missing",
+    });
+    expect(analysis.keyBlocks.find((block) => block.id === "scatter")).toMatchObject({
+      status: "missing",
+    });
     expect(analysis.notes.join(" ")).toContain("No L_MULTICOMPO");
     expect(analysis.notes.join(" ")).toContain("sparse-scatter");
+  });
+
+  it("summarizes optional equivalence blocks and partial scattering", () => {
+    const analysis = analyzeDonjonAsciiPreview(`
+SIGNATURE
+L_MULTICOMPO
+STATE-VECTOR
+ENERGY
+NTOT0
+SCAT00
+ADF
+NSPH
+`);
+    expect(analysis.keyBlocks.find((block) => block.id === "scatter")).toMatchObject({
+      status: "partial",
+    });
+    expect(analysis.keyBlocks.find((block) => block.id === "adf")).toMatchObject({
+      status: "present",
+    });
+    expect(analysis.keyBlocks.find((block) => block.id === "sph")).toMatchObject({
+      status: "present",
+    });
   });
 
   it("ignores LCM control markers while building the block tree", () => {

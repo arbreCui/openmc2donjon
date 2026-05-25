@@ -9,6 +9,15 @@ export interface BlockHit {
   present: boolean;
 }
 
+export type KeyBlockStatus = "present" | "partial" | "missing" | "optional";
+
+export interface KeyBlockSummary {
+  id: string;
+  label: string;
+  status: KeyBlockStatus;
+  detail: string;
+}
+
 export interface ExpectedBlockCoverage {
   id: string;
   title: string;
@@ -29,6 +38,7 @@ export interface AsciiPreviewAnalysis {
   format: DonjonAsciiFormat;
   signature: string | null;
   likelyDonjonAscii: boolean;
+  keyBlocks: KeyBlockSummary[];
   blockHits: BlockHit[];
   blockTree: LcmBlockPreview[];
   blockTreeTruncated: boolean;
@@ -46,6 +56,7 @@ export function analyzeDonjonAsciiPreview(text: string): AsciiPreviewAnalysis {
   const format = formatFromSignature(signature);
   const allBlocks = parseLcmBlocks(text);
   const blockTree = allBlocks.slice(0, MAX_BLOCK_TREE_ITEMS);
+  const keyBlocks = keyBlockSummary({ lineSet, signature, format });
   const blockHits = [
     blockHit("signature", "SIGNATURE", lineSet.has("SIGNATURE")),
     blockHit("state", "STATE-VECTOR", lineSet.has("STATE-VECTOR")),
@@ -70,11 +81,105 @@ export function analyzeDonjonAsciiPreview(text: string): AsciiPreviewAnalysis {
     format,
     signature,
     likelyDonjonAscii,
+    keyBlocks,
     blockHits,
     blockTree,
     blockTreeTruncated: allBlocks.length > blockTree.length,
     notes: analysisNotes({ signature, likelyDonjonAscii, blockHits }),
   };
+}
+
+function keyBlockSummary({
+  lineSet,
+  signature,
+  format,
+}: {
+  lineSet: ReadonlySet<string>;
+  signature: string | null;
+  format: DonjonAsciiFormat;
+}): KeyBlockSummary[] {
+  const scatBlocks = matchingLines(lineSet, /^SCAT\d+$/);
+  const njjsBlocks = matchingLines(lineSet, /^NJJS\d+$/);
+  const ijjsBlocks = matchingLines(lineSet, /^IJJS\d+$/);
+  const scatterTripletVisible =
+    scatBlocks.length > 0 && njjsBlocks.length > 0 && ijjsBlocks.length > 0;
+  const scatterPartiallyVisible =
+    scatBlocks.length > 0 || njjsBlocks.length > 0 || ijjsBlocks.length > 0;
+  const adfBlocks = ["ADF", "HADF"].filter((name) => lineSet.has(name));
+  const hasSph = lineSet.has("NSPH");
+
+  return [
+    {
+      id: "signature",
+      label: "Signature",
+      status:
+        signature === MULTICOMPO_SIGNATURE || signature === MACROLIB_SIGNATURE
+          ? "present"
+          : "missing",
+      detail:
+        signature === MULTICOMPO_SIGNATURE || signature === MACROLIB_SIGNATURE
+          ? `${signature} (${format})`
+          : "Top-level L_MULTICOMPO / L_MACROLIB was not visible.",
+    },
+    {
+      id: "state-vector",
+      label: "State vector",
+      status: lineSet.has("STATE-VECTOR") ? "present" : "missing",
+      detail: lineSet.has("STATE-VECTOR")
+        ? "Library dimensions and DONJON metadata are visible."
+        : "STATE-VECTOR was not visible in this preview slice.",
+    },
+    {
+      id: "energy",
+      label: "Energy grid",
+      status: lineSet.has("ENERGY") ? "present" : "missing",
+      detail: lineSet.has("ENERGY")
+        ? "ENERGY boundaries are visible for group interpretation."
+        : "ENERGY was not visible in this preview slice.",
+    },
+    {
+      id: "total-xs",
+      label: "Total XS",
+      status: lineSet.has("NTOT0") ? "present" : "missing",
+      detail: lineSet.has("NTOT0")
+        ? "NTOT0 total macroscopic cross section is visible."
+        : "NTOT0 was not visible in this preview slice.",
+    },
+    {
+      id: "scatter",
+      label: "Scattering",
+      status: scatterTripletVisible
+        ? "present"
+        : scatterPartiallyVisible
+          ? "partial"
+          : "missing",
+      detail: scatterTripletVisible
+        ? `Sparse triplet visible: ${summarizeBlockNames([
+            ...njjsBlocks,
+            ...ijjsBlocks,
+            ...scatBlocks,
+          ])}.`
+        : scatterPartiallyVisible
+          ? "Only part of NJJSxx / IJJSxx / SCATxx is visible."
+          : "Sparse scattering triplet was not visible.",
+    },
+    {
+      id: "adf",
+      label: "ADF / DF",
+      status: adfBlocks.length > 0 ? "present" : "optional",
+      detail: adfBlocks.length > 0
+        ? `${adfBlocks.join(" + ")} equivalence factor block visible.`
+        : "No ADF/HADF block visible; this may be a direct or SPH-only handoff.",
+    },
+    {
+      id: "sph",
+      label: "SPH",
+      status: hasSph ? "present" : "optional",
+      detail: hasSph
+        ? "NSPH equivalence factors are visible."
+        : "No NSPH block visible; this may be direct or ADF-only.",
+    },
+  ];
 }
 
 export function expectedArtifactBlockCoverage(
@@ -117,6 +222,16 @@ function expectedBlockIsVisible(block: string, lineSet: ReadonlySet<string>): bo
     return [...lineSet].some((line) => new RegExp(`^${prefix}\\d+$`).test(line));
   }
   return lineSet.has(block);
+}
+
+function matchingLines(lineSet: ReadonlySet<string>, pattern: RegExp): string[] {
+  return [...lineSet].filter((line) => pattern.test(line)).sort();
+}
+
+function summarizeBlockNames(names: readonly string[]): string {
+  const unique = [...new Set(names)].sort();
+  if (unique.length <= 4) return unique.join(", ");
+  return `${unique.slice(0, 4).join(", ")} + ${unique.length - 4} more`;
 }
 
 function parseLcmBlocks(text: string): LcmBlockPreview[] {
