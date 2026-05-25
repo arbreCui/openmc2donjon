@@ -6,8 +6,8 @@ import { ConvertPreflightInput, ConvertResponse } from "@/lib/api";
 import {
   convertBundleHref,
   convertNextSteps,
-  convertObjectLabel,
 } from "@/lib/convertNextSteps";
+import { convertDecision } from "@/lib/convertDecision";
 import AsciiPreview from "./AsciiPreview";
 import ArtifactAnatomyCard from "./ArtifactAnatomyCard";
 import ConversionSummaryStrip from "./ConversionSummaryStrip";
@@ -130,7 +130,7 @@ function ConvertSummary({
 
         <RunModeNotice data={data} />
 
-        <PrimaryOutcomeActions data={data} onConvert={onConvert} />
+        <PrimaryOutcomeActions data={data} input={input} onConvert={onConvert} />
 
         <div className="mt-4">
           <div className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
@@ -203,28 +203,19 @@ function RunDetails({
 
 function PrimaryOutcomeActions({
   data,
+  input,
   onConvert,
 }: {
   data: ConvertResponse;
+  input: ConvertPreflightInput | null;
   onConvert?: () => void;
 }) {
-  const objectLabel = convertObjectLabel(data.format);
+  const decision = convertDecision(data, input);
   const converted = data.converted && data.output_exists;
   const readyToConvert = data.ok && data.dry_run;
   const stopped = !data.ok || (!data.dry_run && !converted);
-  const tone = converted ? "ready" : readyToConvert ? "pending" : "blocked";
-  const title = converted
-    ? "ASCII handoff ready"
-    : readyToConvert
-      ? "Ready to convert"
-      : "Action needed before handoff";
-  const body = converted
-    ? `${objectLabel} was written and confirmed at the output path. Preview it, copy the command record, or bundle the handoff.`
-    : readyToConvert
-      ? "Dry run passed without writing a file. Convert now when the output path and validation summary look right."
-      : "Resolve the failed request or validation result, then rerun dry run before writing an ASCII handoff.";
   return (
-    <section className={"mt-4 rounded-lg border p-4 " + primaryOutcomeClass(tone)}>
+    <section className={"mt-4 rounded-lg border p-4 " + primaryOutcomeClass(decision.tone)}>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="text-[10px] uppercase tracking-[0.14em] opacity-75">
@@ -234,15 +225,26 @@ function PrimaryOutcomeActions({
                 ? "no-write checkpoint"
                 : "converter result"}
           </div>
-          <h3 className="mt-1 text-base font-semibold tracking-tight">{title}</h3>
+          <h3 className="mt-1 text-base font-semibold tracking-tight">
+            {decision.title}
+          </h3>
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-1)]">
-            {body}
+            {decision.body}
           </p>
         </div>
         <span className="rounded border border-current/25 px-2 py-1 font-mono text-[11px] uppercase tracking-wider">
-          {converted ? objectLabel : readyToConvert ? "dry run pass" : "blocked"}
+          {decision.badge}
         </span>
       </div>
+
+      <ul className="mt-3 grid gap-1.5 text-[12px] leading-5 text-[var(--fg-1)] md:grid-cols-2">
+        {decision.reasons.map((reason) => (
+          <li key={reason} className="flex gap-2">
+            <span className="mt-[0.45rem] h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-60" />
+            <span>{reason}</span>
+          </li>
+        ))}
+      </ul>
 
       <div className="mt-4 flex flex-wrap gap-2">
         {readyToConvert && onConvert ? (
