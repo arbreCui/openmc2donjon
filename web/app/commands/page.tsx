@@ -13,7 +13,12 @@ import {
 import { CopyCliButton } from "@/components/commands/CopyCliButton";
 import TaskLauncher from "@/components/TaskLauncher";
 import { CommandCoverage, commandCoverage } from "@/lib/commandCoverage";
-import { commandGoals, type CommandGoal } from "@/lib/commandGoals";
+import {
+  commandGoalCommandIds,
+  commandGoals,
+  type CommandGoal,
+  type CommandGoalId,
+} from "@/lib/commandGoals";
 import type { CommandWorkflowMapping } from "@/lib/commandWorkflowMapping";
 import { commandWorkflowMapping } from "@/lib/commandWorkflowMapping";
 import { COMMAND_WORKFLOW_LANES } from "@/lib/commandWorkflowLanes";
@@ -125,6 +130,16 @@ function Catalog({ data }: { data: CommandCatalog }) {
   const [groupFilter, setGroupFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<CommandStatus | "all">("all");
   const [surfaceFilter, setSurfaceFilter] = useState("all");
+  const [activeGoalId, setActiveGoalId] = useState<CommandGoalId | "all">("all");
+  const handleGoalFilterChange = useCallback((value: CommandGoalId | "all") => {
+    setActiveGoalId(value);
+    if (value !== "all") {
+      setQuery("");
+      setGroupFilter("all");
+      setStatusFilter("all");
+      setSurfaceFilter("all");
+    }
+  }, []);
   const surfaceOptions = useMemo(
     () => [
       ["all", "All"] as [string, string],
@@ -138,6 +153,14 @@ function Catalog({ data }: { data: CommandCatalog }) {
   );
   const coverage = useMemo(() => commandCoverage(data), [data]);
   const goals = useMemo(() => commandGoals(data.commands), [data.commands]);
+  const activeGoal = useMemo(
+    () => goals.find((goal) => goal.id === activeGoalId) ?? null,
+    [activeGoalId, goals],
+  );
+  const activeGoalCommandIds = useMemo(() => {
+    if (activeGoalId === "all") return null;
+    return new Set(commandGoalCommandIds(activeGoalId));
+  }, [activeGoalId]);
   const filteredCommands = useMemo(
     () =>
       data.commands.filter((command) =>
@@ -146,9 +169,17 @@ function Catalog({ data }: { data: CommandCatalog }) {
           group: groupFilter,
           status: statusFilter,
           surface: surfaceFilter,
+          goalCommandIds: activeGoalCommandIds,
         }),
       ),
-    [data.commands, groupFilter, query, statusFilter, surfaceFilter],
+    [
+      activeGoalCommandIds,
+      data.commands,
+      groupFilter,
+      query,
+      statusFilter,
+      surfaceFilter,
+    ],
   );
   const featured = filteredCommands.find((command) => command.id === "direct-convert");
   const commandsByGroup = useMemo(
@@ -158,11 +189,17 @@ function Catalog({ data }: { data: CommandCatalog }) {
 
   return (
     <div className="space-y-6">
-      <GoalCommandGuide goals={goals} />
+      <GoalCommandGuide
+        goals={goals}
+        activeGoalId={activeGoalId}
+        onGoalFilterChange={handleGoalFilterChange}
+      />
       <WorkflowMap commands={data.commands} />
       <CoverageDashboard coverage={coverage} />
       <CommandFilters
         data={data}
+        activeGoal={activeGoal}
+        onClearGoal={() => handleGoalFilterChange("all")}
         query={query}
         onQuery={setQuery}
         groupFilter={groupFilter}
@@ -191,7 +228,15 @@ function Catalog({ data }: { data: CommandCatalog }) {
   );
 }
 
-function GoalCommandGuide({ goals }: { goals: CommandGoal[] }) {
+function GoalCommandGuide({
+  goals,
+  activeGoalId,
+  onGoalFilterChange,
+}: {
+  goals: CommandGoal[];
+  activeGoalId: CommandGoalId | "all";
+  onGoalFilterChange: (value: CommandGoalId | "all") => void;
+}) {
   return (
     <section className="glass rounded-lg p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
@@ -209,45 +254,63 @@ function GoalCommandGuide({ goals }: { goals: CommandGoal[] }) {
         </span>
       </div>
       <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {goals.map((goal) => (
-          <article
-            key={goal.id}
-            className="rounded-lg border border-[var(--edge)] bg-white/[0.025] p-4"
-          >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
-                  {goal.eyebrow}
+        {goals.map((goal) => {
+          const isActive = activeGoalId === goal.id;
+          return (
+            <article
+              key={goal.id}
+              className={
+                "rounded-lg border p-4 transition " +
+                (isActive
+                  ? "border-emerald-400/35 bg-emerald-400/[0.07]"
+                  : "border-[var(--edge)] bg-white/[0.025]")
+              }
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+                    {goal.eyebrow}
+                  </div>
+                  <h3 className="mt-2 text-sm font-semibold tracking-tight">
+                    {goal.title}
+                  </h3>
                 </div>
-                <h3 className="mt-2 text-sm font-semibold tracking-tight">
-                  {goal.title}
-                </h3>
+                <GoalStatusPill goal={goal} />
               </div>
-              <GoalStatusPill goal={goal} />
-            </div>
-            <p className="mt-2 min-h-[3.75rem] text-[12px] leading-5 text-[var(--fg-2)]">
-              {goal.body}
-            </p>
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {goal.commands.slice(0, 6).map((command) => (
-                <CommandChip key={`${goal.id}-${command.id}`} command={command} />
-              ))}
-              {goal.commands.length > 6 ? (
-                <span className="rounded border border-[var(--edge)] bg-white/[0.02] px-2 py-0.5 text-[10px] text-[var(--fg-3)]">
-                  +{goal.commands.length - 6} more
+              <p className="mt-2 min-h-[3.75rem] text-[12px] leading-5 text-[var(--fg-2)]">
+                {goal.body}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {goal.commands.slice(0, 6).map((command) => (
+                  <CommandChip key={`${goal.id}-${command.id}`} command={command} />
+                ))}
+                {goal.commands.length > 6 ? (
+                  <span className="rounded border border-[var(--edge)] bg-white/[0.02] px-2 py-0.5 text-[10px] text-[var(--fg-3)]">
+                    +{goal.commands.length - 6} more
+                  </span>
+                ) : null}
+              </div>
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onGoalFilterChange(isActive ? "all" : goal.id)}
+                    className="btn btn-secondary"
+                    aria-pressed={isActive}
+                  >
+                    {isActive ? "Clear filter" : "Show commands"}
+                  </button>
+                  <Link href={goal.href} className="btn btn-primary">
+                    {goal.cta}
+                  </Link>
+                </div>
+                <span className="text-[11px] text-[var(--fg-3)] tab-num">
+                  {goal.commands.length}/{goal.commandIds.length} commands listed
                 </span>
-              ) : null}
-            </div>
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-              <Link href={goal.href} className="btn btn-primary">
-                {goal.cta}
-              </Link>
-              <span className="text-[11px] text-[var(--fg-3)] tab-num">
-                {goal.commands.length}/{goal.commandIds.length} commands listed
-              </span>
-            </div>
-          </article>
-        ))}
+              </div>
+            </article>
+          );
+        })}
       </div>
     </section>
   );
@@ -533,6 +596,8 @@ function CommandChip({ command }: { command: CommandCatalogEntry }) {
 
 function CommandFilters({
   data,
+  activeGoal,
+  onClearGoal,
   query,
   onQuery,
   groupFilter,
@@ -545,6 +610,8 @@ function CommandFilters({
   resultCount,
 }: {
   data: CommandCatalog;
+  activeGoal: CommandGoal | null;
+  onClearGoal: () => void;
   query: string;
   onQuery: (value: string) => void;
   groupFilter: string;
@@ -558,6 +625,25 @@ function CommandFilters({
 }) {
   return (
     <section className="glass rounded-lg p-4">
+      {activeGoal ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-emerald-400/25 bg-emerald-400/[0.06] px-3 py-2">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.14em] text-emerald-200">
+              Filtering by user goal
+            </div>
+            <div className="mt-0.5 text-sm text-[var(--fg-1)]">
+              {activeGoal.title}{" "}
+              <span className="text-[12px] text-[var(--fg-3)] tab-num">
+                ({activeGoal.commands.length}/{activeGoal.commandIds.length} catalog
+                commands)
+              </span>
+            </div>
+          </div>
+          <button type="button" onClick={onClearGoal} className="btn btn-secondary">
+            Show all commands
+          </button>
+        </div>
+      ) : null}
       <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
         <label>
           <span className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
@@ -901,8 +987,12 @@ function commandMatches(
     group: string;
     status: CommandStatus | "all";
     surface: string;
+    goalCommandIds: ReadonlySet<string> | null;
   },
 ) {
+  if (filters.goalCommandIds != null && !filters.goalCommandIds.has(command.id)) {
+    return false;
+  }
   if (filters.group !== "all" && command.group !== filters.group) return false;
   if (filters.status !== "all" && command.status !== filters.status) return false;
   const mapping = commandWorkflowMapping(command);

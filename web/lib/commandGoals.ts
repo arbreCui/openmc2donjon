@@ -129,3 +129,7 @@ export function commandGoals(commands: readonly CommandCatalogEntry[]): CommandG
 export function commandGoalsForCommand(commandId: string): CommandGoalDefinition[] {
   return COMMAND_GOALS.filter((goal) => goal.commandIds.includes(commandId));
 }
+
+export function commandGoalCommandIds(goalId: CommandGoalId): readonly string[] {
+  return COMMAND_GOALS.find((goal) => goal.id === goalId)?.commandIds ?? [];
+}

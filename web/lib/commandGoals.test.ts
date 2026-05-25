@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { CommandCatalogEntry } from "./api";
-import { commandGoals, commandGoalsForCommand } from "./commandGoals";
+import {
+  commandGoalCommandIds,
+  commandGoals,
+  commandGoalsForCommand,
+} from "./commandGoals";
 
 describe("commandGoals", () => {
   it("groups commands by user goal with status counts", () => {
@@ -45,6 +49,15 @@ describe("commandGoals", () => {
       "package",
     ]);
     expect(commandGoalsForCommand("missing")).toEqual([]);
+  });
+
+  it("returns the command ids for a selected user goal", () => {
+    expect(commandGoalCommandIds("direct-convert")).toEqual([
+      "direct-convert",
+      "check",
+      "inspect",
+      "bundle",
+    ]);
   });
 });
 
