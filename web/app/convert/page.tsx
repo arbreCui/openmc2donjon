@@ -37,6 +37,9 @@ import {
   convertDemoRequest,
   convertDemoWalkthrough,
   isProductionMinicasePath,
+  productionMinicaseAvailability,
+  type ConvertDemoArtifactRole,
+  type ProductionMinicaseAvailabilityTone,
 } from "@/lib/convertDemo";
 import { convertIntentCopy } from "@/lib/convertIntent";
 import type { ConvertIntentCopy } from "@/lib/convertIntent";
@@ -973,49 +976,101 @@ function LiveMinicaseCard({ onApply }: { onApply: () => void }) {
     };
   }, [refreshToken]);
 
-  const missingCount = PRODUCTION_MINICASE_ARTIFACTS.filter((artifact) => {
-    const state = statuses[artifact.id];
-    return (
-      state?.kind === "ok" &&
-      (!state.status.exists || state.status.kind === "missing")
-    );
-  }).length;
   const loadingCount = PRODUCTION_MINICASE_ARTIFACTS.filter(
     (artifact) => statuses[artifact.id]?.kind === "loading",
   ).length;
   const errorCount = PRODUCTION_MINICASE_ARTIFACTS.filter(
     (artifact) => statuses[artifact.id]?.kind === "error",
   ).length;
-  const statusMessage = artifactStatusSummary({
+  const starterMissingCount = countMissingMinicaseArtifacts(statuses, "starter");
+  const downstreamMissingCount = countMissingMinicaseArtifacts(
+    statuses,
+    "downstream",
+  );
+  const availability = productionMinicaseAvailability({
     loadingCount,
     errorCount,
-    missingCount,
+    starterMissingCount,
+    downstreamMissingCount,
   });
+  const mgxsArtifact = PRODUCTION_MINICASE_ARTIFACTS.find(
+    (artifact) => artifact.id === "mgxs",
+  );
+  const bundleArtifact = PRODUCTION_MINICASE_ARTIFACTS.find(
+    (artifact) => artifact.id === "bundle",
+  );
 
   return (
-    <section className="mb-5 rounded-xl border border-emerald-300/20 bg-emerald-300/[0.05] p-4">
+    <section
+      className={
+        "mb-5 rounded-xl border p-4 " +
+        liveMinicaseCardClass(availability.tone)
+      }
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-[10px] uppercase tracking-[0.14em] text-emerald-200/80">
-            Live production minicase
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <LiveMinicaseToneBadge tone={availability.tone} />
+            <span className="text-[10px] uppercase tracking-[0.14em] text-emerald-200/80">
+              Live production minicase
+            </span>
           </div>
           <h2 className="mt-1 text-sm font-semibold tracking-tight text-emerald-100">
-            {PRODUCTION_MINICASE_DEMO.label}
+            {availability.title}
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-[var(--fg-2)]">
+            {availability.body}
+          </p>
+          <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[var(--fg-3)]">
             {PRODUCTION_MINICASE_DEMO.description}
           </p>
         </div>
-        <button type="button" onClick={onApply} className="btn btn-primary">
-          Use generated paths
-        </button>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {availability.canUsePaths ? (
+            <>
+              <button
+                type="button"
+                onClick={onApply}
+                className="btn btn-primary"
+              >
+                Use generated paths
+              </button>
+              {mgxsArtifact?.href ? (
+                <Link href={mgxsArtifact.href} className="btn btn-secondary">
+                  Inspect MGXS
+                </Link>
+              ) : null}
+              {bundleArtifact?.href ? (
+                <Link href={bundleArtifact.href} className="btn btn-secondary">
+                  Bundle
+                </Link>
+              ) : null}
+            </>
+          ) : (
+            <CopyCliButton
+              value={PRODUCTION_MINICASE_COMMAND}
+              compact
+              label="Copy smoke command"
+              copiedLabel="Copied"
+            />
+          )}
+          <button
+            type="button"
+            onClick={() => setRefreshToken((value) => value + 1)}
+            className="btn btn-secondary"
+          >
+            Refresh
+          </button>
+        </div>
       </div>
 
       <div className="mt-4 rounded-lg border border-[var(--edge)] bg-black/15 p-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-[12px] font-semibold tracking-tight text-emerald-100">
-              Generate the real handoff first
+              {availability.canUsePaths
+                ? "Regenerate the real handoff when needed"
+                : "Generate the real handoff first"}
             </div>
             <p className="mt-1 text-[12px] leading-5 text-[var(--fg-2)]">
               This smoke builds a tiny OpenMC case, exports MGXS, runs production
@@ -1041,9 +1096,14 @@ function LiveMinicaseCard({ onApply }: { onApply: () => void }) {
             className="min-w-0 rounded-lg border border-[var(--edge)] bg-black/10 p-3"
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="rounded border border-emerald-200/25 bg-emerald-200/[0.08] px-1.5 py-0.5 text-[10px] uppercase tracking-[0.14em] text-emerald-100">
-                {artifact.label}
-              </span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="rounded border border-emerald-200/25 bg-emerald-200/[0.08] px-1.5 py-0.5 text-[10px] uppercase tracking-[0.14em] text-emerald-100">
+                  {artifact.label}
+                </span>
+                <span className="rounded border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+                  {artifactRoleLabel(artifact.role)}
+                </span>
+              </div>
               {artifact.href ? (
                 <Link
                   href={artifact.href}
@@ -1082,7 +1142,7 @@ function LiveMinicaseCard({ onApply }: { onApply: () => void }) {
       </div>
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--edge)] bg-black/10 px-3 py-2 text-[12px] text-[var(--fg-2)]">
-        <span>{statusMessage}</span>
+        <span>{availability.statusMessage}</span>
         <button
           type="button"
           onClick={() => setRefreshToken((value) => value + 1)}
@@ -1130,28 +1190,64 @@ function loadingArtifactStatuses(): ArtifactStatusMap {
   );
 }
 
-function artifactStatusSummary({
-  loadingCount,
-  errorCount,
-  missingCount,
-}: {
-  loadingCount: number;
-  errorCount: number;
-  missingCount: number;
-}): string {
-  if (loadingCount > 0) {
-    return "Checking artifact status on the localhost filesystem…";
-  }
-  if (errorCount > 0) {
-    return `${errorCount} status check${errorCount === 1 ? "" : "s"} failed.`;
-  }
-  if (missingCount > 0) {
+function countMissingMinicaseArtifacts(
+  statuses: ArtifactStatusMap,
+  role: ConvertDemoArtifactRole,
+): number {
+  return PRODUCTION_MINICASE_ARTIFACTS.filter((artifact) => {
+    if (artifact.role !== role) return false;
+    const state = statuses[artifact.id];
     return (
-      `${missingCount} artifact${missingCount === 1 ? "" : "s"} missing — ` +
-      "run the smoke command before inspecting or bundling."
+      state?.kind === "ok" &&
+      (!state.status.exists || state.status.kind === "missing")
     );
+  }).length;
+}
+
+function artifactRoleLabel(role: ConvertDemoArtifactRole): string {
+  return role === "starter" ? "starter" : "after convert";
+}
+
+function liveMinicaseCardClass(tone: ProductionMinicaseAvailabilityTone): string {
+  if (tone === "ready") {
+    return "border-emerald-300/20 bg-emerald-300/[0.05]";
   }
-  return "Artifact status is ready for the current localhost filesystem.";
+  if (tone === "missing") {
+    return "border-amber-300/25 bg-amber-300/[0.06]";
+  }
+  if (tone === "error") {
+    return "border-rose-300/25 bg-rose-300/[0.06]";
+  }
+  return "border-white/10 bg-white/[0.03]";
+}
+
+function LiveMinicaseToneBadge({
+  tone,
+}: {
+  tone: ProductionMinicaseAvailabilityTone;
+}) {
+  const label = {
+    loading: "checking",
+    ready: "ready",
+    missing: "missing",
+    error: "attention",
+  }[tone];
+  const className = {
+    loading: "border-white/10 bg-white/[0.04] text-[var(--fg-2)]",
+    ready: "border-emerald-300/25 bg-emerald-300/[0.08] text-emerald-200",
+    missing: "border-amber-300/25 bg-amber-300/[0.08] text-amber-200",
+    error: "border-rose-300/25 bg-rose-300/[0.08] text-rose-200",
+  }[tone];
+  return (
+    <span
+      className={
+        "inline-flex rounded border px-1.5 py-0.5 text-[10px] uppercase tracking-[0.14em] " +
+        className
+      }
+    >
+      {label}
+    </span>
+  );
 }
 
 function ArtifactStatusBadge({
@@ -1216,7 +1312,9 @@ function ProductionMinicaseMissingHint({ onApply }: { onApply: () => void }) {
           </div>
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
             Run the smoke command from the repository root first; it writes the
-            managed MGXS and MULTICOMPO paths used by the live walkthrough.
+            managed MGXS path used by the live walkthrough. The repeat ASCII
+            and bundle paths are created later by the web convert and bundle
+            steps.
           </p>
         </div>
         <button type="button" onClick={onApply} className="btn btn-secondary">

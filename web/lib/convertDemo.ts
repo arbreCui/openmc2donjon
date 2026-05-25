@@ -24,9 +24,33 @@ export interface ConvertDemoArtifact {
   id: string;
   label: string;
   title: string;
+  role: ConvertDemoArtifactRole;
   path: string;
   body: string;
   href?: string;
+}
+
+export type ConvertDemoArtifactRole = "starter" | "downstream";
+
+export type ProductionMinicaseAvailabilityTone =
+  | "loading"
+  | "ready"
+  | "missing"
+  | "error";
+
+export interface ProductionMinicaseArtifactCounts {
+  loadingCount: number;
+  errorCount: number;
+  starterMissingCount: number;
+  downstreamMissingCount: number;
+}
+
+export interface ProductionMinicaseAvailability {
+  tone: ProductionMinicaseAvailabilityTone;
+  title: string;
+  body: string;
+  statusMessage: string;
+  canUsePaths: boolean;
 }
 
 export const C5G7_PRODUCTION_DEMO: ConvertDemoPreset = {
@@ -68,6 +92,7 @@ export const PRODUCTION_MINICASE_ARTIFACTS: readonly ConvertDemoArtifact[] = [
     id: "run-root",
     label: "Run root",
     title: "Managed smoke directory",
+    role: "starter",
     path: PRODUCTION_MINICASE_RUN_ROOT,
     body: "The smoke recreates this directory; remove it or rerun the script when you need a fresh handoff.",
   },
@@ -75,6 +100,7 @@ export const PRODUCTION_MINICASE_ARTIFACTS: readonly ConvertDemoArtifact[] = [
     id: "mgxs",
     label: "MGXS",
     title: "OpenMC HDF5 handoff",
+    role: "starter",
     path: PRODUCTION_MINICASE_DEMO.inputPath,
     body: "The converter reads this file. Inspect it first to confirm mesh, mixtures, std_dev, and H-FACTOR visibility.",
     href: convertDemoInspectHref(PRODUCTION_MINICASE_DEMO),
@@ -83,6 +109,7 @@ export const PRODUCTION_MINICASE_ARTIFACTS: readonly ConvertDemoArtifact[] = [
     id: "ascii",
     label: "ASCII",
     title: "Web repeat output",
+    role: "downstream",
     path: PRODUCTION_MINICASE_DEMO.outputPath,
     body: "The web demo writes a repeat MULTICOMPO file here so the original smoke output stays comparable.",
     href: convertDemoHref(PRODUCTION_MINICASE_DEMO),
@@ -91,6 +118,7 @@ export const PRODUCTION_MINICASE_ARTIFACTS: readonly ConvertDemoArtifact[] = [
     id: "bundle",
     label: "Bundle",
     title: "Portable delivery record",
+    role: "downstream",
     path: `${parentDir(PRODUCTION_MINICASE_DEMO.outputPath)}/bundle`,
     body: "The bundle builder is prefilled from these paths after the ASCII file exists.",
     href: convertDemoBundleHref(PRODUCTION_MINICASE_DEMO),
@@ -99,6 +127,71 @@ export const PRODUCTION_MINICASE_ARTIFACTS: readonly ConvertDemoArtifact[] = [
 
 export function isProductionMinicasePath(path: string): boolean {
   return path.trim().startsWith(PRODUCTION_MINICASE_RUN_ROOT);
+}
+
+export function productionMinicaseAvailability({
+  loadingCount,
+  errorCount,
+  starterMissingCount,
+  downstreamMissingCount,
+}: ProductionMinicaseArtifactCounts): ProductionMinicaseAvailability {
+  if (loadingCount > 0) {
+    return {
+      tone: "loading",
+      title: "Checking live minicase files",
+      body:
+        "The web UI is checking whether the local smoke run has already " +
+        "generated the MGXS handoff.",
+      statusMessage: "Checking starter and downstream artifact status on this machine.",
+      canUsePaths: false,
+    };
+  }
+  if (errorCount > 0) {
+    return {
+      tone: "error",
+      title: "Status check failed",
+      body:
+        "At least one localhost filesystem status check failed. Refresh the " +
+        "status or rerun the smoke before using these paths.",
+      statusMessage: `${errorCount} status check${errorCount === 1 ? "" : "s"} failed.`,
+      canUsePaths: false,
+    };
+  }
+  if (starterMissingCount > 0) {
+    return {
+      tone: "missing",
+      title: "Generate minicase first",
+      body:
+        "The smoke-generated run directory or MGXS HDF5 is missing. Run the " +
+        "smoke command from the repository root, then refresh this card.",
+      statusMessage: `${starterMissingCount} starter artifact${
+        starterMissingCount === 1 ? "" : "s"
+      } missing — run the smoke command before using the live paths.`,
+      canUsePaths: false,
+    };
+  }
+  if (downstreamMissingCount > 0) {
+    return {
+      tone: "ready",
+      title: "Ready for web repeat",
+      body:
+        "The real MGXS handoff is present. Dry-run and convert from this page; " +
+        "ASCII preview and bundle artifacts appear after those web actions.",
+      statusMessage: `${downstreamMissingCount} downstream artifact${
+        downstreamMissingCount === 1 ? "" : "s"
+      } not written yet — this is expected before convert and bundle.`,
+      canUsePaths: true,
+    };
+  }
+  return {
+    tone: "ready",
+    title: "Full minicase artifacts ready",
+    body:
+      "The smoke handoff, repeat ASCII output, and bundle directory are all " +
+      "visible on this machine.",
+    statusMessage: "Starter and downstream artifacts are ready for the current localhost filesystem.",
+    canUsePaths: true,
+  };
 }
 
 export function convertDemoHref(preset: ConvertDemoPreset): string {

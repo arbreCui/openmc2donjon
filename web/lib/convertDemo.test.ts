@@ -12,6 +12,7 @@ import {
   convertDemoRequest,
   convertDemoWalkthrough,
   isProductionMinicasePath,
+  productionMinicaseAvailability,
 } from "./convertDemo";
 
 describe("convert demo presets", () => {
@@ -46,6 +47,12 @@ describe("convert demo presets", () => {
       "mgxs",
       "ascii",
       "bundle",
+    ]);
+    expect(PRODUCTION_MINICASE_ARTIFACTS.map((artifact) => artifact.role)).toEqual([
+      "starter",
+      "starter",
+      "downstream",
+      "downstream",
     ]);
     expect(PRODUCTION_MINICASE_ARTIFACTS[0].path).toBe(PRODUCTION_MINICASE_RUN_ROOT);
     expect(PRODUCTION_MINICASE_ARTIFACTS[1].href).toContain("/inspect?");
@@ -125,5 +132,63 @@ describe("convert demo presets", () => {
     expect(steps[0].href).toContain("/inspect?");
     expect(steps[2].href).toContain("/convert?");
     expect(steps[3].href).toContain("/builder?command=bundle");
+  });
+
+  it("describes live minicase availability while status checks are pending", () => {
+    expect(
+      productionMinicaseAvailability({
+        loadingCount: 1,
+        errorCount: 0,
+        starterMissingCount: 0,
+        downstreamMissingCount: 0,
+      }),
+    ).toMatchObject({
+      tone: "loading",
+      canUsePaths: false,
+      title: "Checking live minicase files",
+    });
+  });
+
+  it("blocks the live minicase when starter artifacts are missing", () => {
+    expect(
+      productionMinicaseAvailability({
+        loadingCount: 0,
+        errorCount: 0,
+        starterMissingCount: 1,
+        downstreamMissingCount: 2,
+      }),
+    ).toMatchObject({
+      tone: "missing",
+      canUsePaths: false,
+      title: "Generate minicase first",
+    });
+  });
+
+  it("allows the live minicase when only downstream artifacts are missing", () => {
+    const availability = productionMinicaseAvailability({
+      loadingCount: 0,
+      errorCount: 0,
+      starterMissingCount: 0,
+      downstreamMissingCount: 2,
+    });
+
+    expect(availability.tone).toBe("ready");
+    expect(availability.canUsePaths).toBe(true);
+    expect(availability.statusMessage).toContain("expected before convert");
+  });
+
+  it("treats status-check errors as not ready to use", () => {
+    expect(
+      productionMinicaseAvailability({
+        loadingCount: 0,
+        errorCount: 2,
+        starterMissingCount: 0,
+        downstreamMissingCount: 0,
+      }),
+    ).toMatchObject({
+      tone: "error",
+      canUsePaths: false,
+      title: "Status check failed",
+    });
   });
 });
