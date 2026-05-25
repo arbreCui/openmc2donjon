@@ -7,6 +7,10 @@ export interface ConvertDecision {
   title: string;
   body: string;
   reasons: string[];
+  nextAction: {
+    label: string;
+    body: string;
+  };
 }
 
 export function convertDecision(
@@ -28,6 +32,11 @@ export function convertDecision(
           : `Output size: ${data.output_size} bytes.`,
         "Preview the ASCII blocks or package the handoff for delivery.",
       ],
+      nextAction: {
+        label: "Review or deliver",
+        body:
+          "The ASCII file now exists. Preview the LCM blocks, bundle the handoff, or copy the CLI command for reproducibility.",
+      },
     };
   }
 
@@ -39,6 +48,11 @@ export function convertDecision(
       body:
         "Dry run passed without writing a file. Convert now when the output path and validation summary look right.",
       reasons: dryRunPassReasons(data, input),
+      nextAction: {
+        label: "Next action",
+        body:
+          "No ASCII file was written. Press Convert now to create the DONJON-facing handoff at the target path.",
+      },
     };
   }
 
@@ -49,6 +63,11 @@ export function convertDecision(
     body:
       "Resolve the failed request or validation result, then rerun dry run before writing an ASCII handoff.",
     reasons: blockedReasons(data, input),
+    nextAction: {
+      label: "Before writing",
+      body:
+        "Fix the failed checks, rerun dry run, and only convert after the validation result is acceptable.",
+    },
   };
 }
 

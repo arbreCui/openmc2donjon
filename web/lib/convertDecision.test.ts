@@ -16,6 +16,9 @@ describe("convertDecision", () => {
     expect(decision.reasons).toContain(
       "Dry run did not create or replace an ASCII file.",
     );
+    expect(decision.nextAction.label).toBe("Next action");
+    expect(decision.nextAction.body).toContain("No ASCII file was written");
+    expect(decision.nextAction.body).toContain("Convert now");
   });
 
   it("surfaces warnings without blocking a passing dry run", () => {
@@ -37,6 +40,7 @@ describe("convertDecision", () => {
     expect(decision.reasons).toContain(
       "2 issues: missing total dataset (+1 more).",
     );
+    expect(decision.nextAction.body).toContain("rerun dry run");
   });
 
   it("reports a confirmed ASCII artifact after conversion", () => {
@@ -47,6 +51,7 @@ describe("convertDecision", () => {
     expect(decision.tone).toBe("ready");
     expect(decision.badge).toBe("L_MULTICOMPO");
     expect(decision.reasons).toContain("Output size: 1234 bytes.");
+    expect(decision.nextAction.body).toContain("Preview the LCM blocks");
   });
 });
 

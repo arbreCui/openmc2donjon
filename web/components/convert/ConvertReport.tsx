@@ -254,6 +254,20 @@ function PrimaryOutcomeActions({
         ))}
       </ul>
 
+      <div
+        className={
+          "mt-4 rounded-md border px-3 py-2 " +
+          primaryNextActionClass(decision.tone)
+        }
+      >
+        <div className="text-[10px] uppercase tracking-[0.14em] opacity-70">
+          {decision.nextAction.label}
+        </div>
+        <p className="mt-1 text-[12px] leading-5 text-[var(--fg-1)]">
+          {decision.nextAction.body}
+        </p>
+      </div>
+
       <div className="mt-4 flex flex-wrap gap-2">
         {readyToConvert && onConvert ? (
           <button type="button" onClick={onConvert} className="btn btn-primary">
@@ -315,6 +329,16 @@ function primaryOutcomeClass(tone: "ready" | "pending" | "blocked"): string {
     return "border-cyan-300/25 bg-cyan-300/[0.055] text-cyan-100";
   }
   return "border-rose-300/25 bg-rose-300/[0.055] text-rose-100";
+}
+
+function primaryNextActionClass(tone: "ready" | "pending" | "blocked"): string {
+  if (tone === "ready") {
+    return "border-emerald-300/20 bg-emerald-300/[0.045]";
+  }
+  if (tone === "pending") {
+    return "border-cyan-300/25 bg-cyan-300/[0.075]";
+  }
+  return "border-rose-300/20 bg-rose-300/[0.045]";
 }
 
 function NextStepsPanel({
