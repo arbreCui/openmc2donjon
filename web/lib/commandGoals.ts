@@ -15,6 +15,7 @@ export interface CommandGoalDefinition {
   body: string;
   href: string;
   cta: string;
+  actionHint: string;
   commandIds: readonly string[];
 }
 
@@ -35,6 +36,8 @@ export const COMMAND_GOALS: readonly CommandGoalDefinition[] = [
       "Start here when the high-fidelity OpenMC run still needs to produce the spatially resolved MGXS input.",
     href: "/openmc?workflow=two-step&production=1",
     cta: "Open OpenMC planner",
+    actionHint:
+      "Use the planner first if the MGXS HDF5 handoff does not exist yet.",
     commandIds: [
       "openmc2donjon-export",
       "openmc2donjon-from-openmc",
@@ -49,6 +52,8 @@ export const COMMAND_GOALS: readonly CommandGoalDefinition[] = [
       "Dry-run production gates, write L_MULTICOMPO or L_MACROLIB, preview the ASCII blocks, then bundle the handoff.",
     href: "/convert?intent=direct-convert&format=multicompo&check=1&production=1",
     cta: "Open converter",
+    actionHint:
+      "Start with a production dry-run, then write the ASCII handoff once gates pass.",
     commandIds: ["direct-convert", "check", "inspect", "bundle"],
   },
   {
@@ -59,6 +64,8 @@ export const COMMAND_GOALS: readonly CommandGoalDefinition[] = [
       "Use this when you want to look at mixtures, energy mesh, scatter, preflight issues, or semantic diffs before writing output.",
     href: "/inspect",
     cta: "Open inspector",
+    actionHint:
+      "Open the inspector first; use check or diff when you need CLI evidence.",
     commandIds: ["inspect", "check", "diff", "doctor"],
   },
   {
@@ -69,6 +76,8 @@ export const COMMAND_GOALS: readonly CommandGoalDefinition[] = [
       "Prepare face-flux or low-order inputs, build ADF/SPH sidecars, inject them into HDF5, then return to the converter.",
     href: "/equivalence?kind=adf-sidecar",
     cta: "Open equivalence builders",
+    actionHint:
+      "Build the sidecar command, run it in the CLI, then return to conversion.",
     commandIds: [
       "export-surface-flux",
       "check-face-flux",
@@ -87,6 +96,8 @@ export const COMMAND_GOALS: readonly CommandGoalDefinition[] = [
       "Freeze OpenMC as the reference, iterate DONJON flux feedback into NSPH, then review convergence and production acceptance.",
     href: "/audit",
     cta: "Open SPH audit",
+    actionHint:
+      "Use the audit viewer to review a completed loop; loop execution remains a CLI production workflow.",
     commandIds: [
       "prepare-openmc-sph-loop",
       "make-sph-loop-scaffold",
@@ -105,6 +116,8 @@ export const COMMAND_GOALS: readonly CommandGoalDefinition[] = [
       "Collect source HDF5, ASCII output, summaries, logs, and manifest checks before sharing with DONJON users.",
     href: "/builder?command=bundle",
     cta: "Open bundle builder",
+    actionHint:
+      "Bundle only after the HDF5, ASCII output, summaries, and logs are in place.",
     commandIds: ["bundle", "validate-bundle", "doctor"],
   },
 ] as const;

@@ -626,7 +626,7 @@ function CommandFilters({
   return (
     <section className="glass rounded-lg p-4">
       {activeGoal ? (
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-emerald-400/25 bg-emerald-400/[0.06] px-3 py-2">
+        <div className="mb-4 grid gap-3 rounded-md border border-emerald-400/25 bg-emerald-400/[0.06] px-3 py-3 lg:grid-cols-[1fr_auto] lg:items-center">
           <div>
             <div className="text-[10px] uppercase tracking-[0.14em] text-emerald-200">
               Filtering by user goal
@@ -638,10 +638,19 @@ function CommandFilters({
                 commands)
               </span>
             </div>
+            <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--fg-2)]">
+              <span className="text-[var(--fg-3)]">Recommended next action: </span>
+              {activeGoal.actionHint}
+            </p>
           </div>
-          <button type="button" onClick={onClearGoal} className="btn btn-secondary">
-            Show all commands
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href={activeGoal.href} className="btn btn-primary">
+              {activeGoal.cta}
+            </Link>
+            <button type="button" onClick={onClearGoal} className="btn btn-secondary">
+              Show all commands
+            </button>
+          </div>
         </div>
       ) : null}
       <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">

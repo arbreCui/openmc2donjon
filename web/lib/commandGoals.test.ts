@@ -37,6 +37,7 @@ describe("commandGoals", () => {
 
     const sph = goals.find((goal) => goal.id === "sph-loop");
     expect(sph?.body).toContain("Freeze OpenMC");
+    expect(sph?.actionHint).toContain("completed loop");
     expect(sph?.commands.map((command) => command.id)).toEqual([
       "prepare-openmc-sph-loop",
       "run-sph-loop",
