@@ -133,30 +133,17 @@ function ConvertSummary({
             label="Output size"
             value={data.output_size == null ? "—" : formatSize(data.output_size)}
           />
-          <Meta label="Validation" value={data.preflight_ok ? "pass" : "fail"} />
+          <Meta label="Validation" value={validationLabel(data)} />
         </dl>
 
-        <RunModeNotice data={data} />
-
         <PrimaryOutcomeActions data={data} input={input} onConvert={onConvert} />
-
-        <div className="mt-4">
-          <div className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
-            CLI equivalent
-          </div>
-          <pre className="mt-1 overflow-x-auto rounded-md border border-[var(--edge)] bg-black/20 px-3 py-2 text-[12px] text-[var(--fg-1)]">
-            {data.cli_command_text}
-          </pre>
-        </div>
-
-        <RunDetails data={data} input={input} onConvert={onConvert} />
       </section>
 
-      <HandoffPipeline data={data} input={input} />
+      {input ? <ValidationSummaryPanel data={data} input={input} /> : null}
 
-      {input ? (
-        <ValidationEvidenceDetails data={data} input={input} />
-      ) : null}
+      <OutputActions data={data} onConvert={onConvert} />
+
+      <RunDetails data={data} input={input} onConvert={onConvert} />
       {data.converted && data.output_exists ? (
         <div id="ascii-output-preview">
           <AsciiPreview path={data.output_path} format={data.format} input={input} />
@@ -197,15 +184,165 @@ function RunDetails({
         </div>
       </summary>
       <div className="mt-4 space-y-4">
+        <CliEquivalentBlock command={data.cli_command_text} />
+        <HandoffPipeline data={data} input={input} />
         <ConversionSummaryStrip data={data} input={input} />
         <ArtifactAnatomyCard data={data} input={input} />
         {input ? <ProductionEvidenceStrip input={input} /> : null}
         {input ? <PreflightDecisionPanel data={data} input={input} /> : null}
+        {input ? <CheckCards data={data} input={input} /> : null}
+        {input ? <InputStats input={input} /> : null}
         <DeliveryChecklist data={data} input={input} onConvert={onConvert} />
-        <OutputActions data={data} onConvert={onConvert} />
         <NextStepsPanel data={data} input={input} />
       </div>
     </details>
+  );
+}
+
+function ValidationSummaryPanel({
+  data,
+  input,
+}: {
+  data: ConvertResponse;
+  input: ConvertPreflightInput;
+}) {
+  const items = buildValidationSummaryItems(data, input);
+  const production = data.cli_command.includes("--production");
+  return (
+    <section className="glass rounded-xl p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold tracking-tight">
+            Validation summary
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
+            A user-facing snapshot of whether this HDF5 handoff is ready to
+            write. Technical gate evidence is kept in the details section.
+          </p>
+        </div>
+        <span className="rounded border border-[var(--edge)] px-2 py-1 text-[11px] uppercase tracking-wider text-[var(--fg-2)]">
+          {production ? "production preset" : "standard checks"}
+        </span>
+      </div>
+      <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-6">
+        {items.map((item) => (
+          <ValidationTile key={item.label} item={item} />
+        ))}
+      </div>
+      <ValidationIssuePreview input={input} />
+    </section>
+  );
+}
+
+interface ValidationSummaryItem {
+  label: string;
+  value: string;
+  detail: string;
+  tone: "pass" | "warn" | "fail" | "accent" | "neutral";
+}
+
+function ValidationTile({ item }: { item: ValidationSummaryItem }) {
+  return (
+    <article className={"rounded-md border px-3 py-2 " + decisionTileClass(item.tone)}>
+      <div className="text-[10px] uppercase tracking-[0.14em] opacity-70">
+        {item.label}
+      </div>
+      <div className="mt-1 truncate font-mono text-[13px]" title={item.value}>
+        {item.value}
+      </div>
+      <p className="mt-1 text-[11px] leading-4 text-[var(--fg-2)]">
+        {item.detail}
+      </p>
+    </article>
+  );
+}
+
+function ValidationIssuePreview({ input }: { input: ConvertPreflightInput }) {
+  const issue = input.issues[0] ?? null;
+  const warning = input.warnings[0] ?? null;
+  if (!issue && !warning) return null;
+  return (
+    <div className="mt-4 grid gap-2 md:grid-cols-2">
+      {issue ? (
+        <div className="rounded-md border border-rose-300/20 bg-rose-300/[0.055] px-3 py-2 text-sm text-rose-100">
+          <span className="font-semibold">First issue:</span>{" "}
+          <span className="text-[var(--fg-1)]">{issue}</span>
+        </div>
+      ) : null}
+      {warning ? (
+        <div className="rounded-md border border-amber-300/20 bg-amber-300/[0.055] px-3 py-2 text-sm text-amber-100">
+          <span className="font-semibold">First warning:</span>{" "}
+          <span className="text-[var(--fg-1)]">{warning}</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function buildValidationSummaryItems(
+  data: ConvertResponse,
+  input: ConvertPreflightInput,
+): ValidationSummaryItem[] {
+  const moments = input.legendre_order == null ? "?" : String(input.legendre_order + 1);
+  const uncertainty = compactUncertainty(input);
+  return [
+    {
+      label: "Result",
+      value: validationLabel(data),
+      detail: data.preflight ? humanDecision(data.preflight.decision) : "no preflight payload",
+      tone: data.preflight_ok && input.ok ? "pass" : "fail",
+    },
+    {
+      label: "Issues",
+      value: String(input.issues.length),
+      detail: input.issues.length === 0 ? "No blocking input issues." : "Resolve before writing.",
+      tone: input.issues.length === 0 ? "pass" : "fail",
+    },
+    {
+      label: "Warnings",
+      value: String(input.warnings.length),
+      detail: input.warnings.length === 0 ? "No audit warnings." : "Review before delivery.",
+      tone: input.warnings.length === 0 ? "pass" : "warn",
+    },
+    {
+      label: "Mesh",
+      value: input.energy_mesh_name ?? input.energy_mesh_id ?? "custom",
+      detail: input.energy_mesh_id ? "Known group structure." : "Custom or unidentified mesh.",
+      tone: input.energy_mesh_id ? "pass" : "warn",
+    },
+    {
+      label: "Shape",
+      value: `${input.mixtures ?? "?"} mixes / ${input.energy_groups ?? "?"}g`,
+      detail: `${moments} Legendre moment(s), ${input.state_points ?? "?"} state point(s).`,
+      tone: "neutral",
+    },
+    {
+      label: "Equivalence",
+      value: compactEquivalence(input),
+      detail: uncertainty,
+      tone: input.adf_mixtures || input.sph_calculations ? "accent" : "neutral",
+    },
+  ];
+}
+
+function CliEquivalentBlock({ command }: { command: string }) {
+  return (
+    <section className="rounded-lg border border-[var(--edge)] bg-black/15 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold tracking-tight">
+            CLI equivalent
+          </h3>
+          <p className="mt-1 text-[12px] text-[var(--fg-3)]">
+            Same converter request as a reproducible terminal command.
+          </p>
+        </div>
+        <CopyCliButton value={command} label="Copy CLI" ariaLabel="Copy CLI command" />
+      </div>
+      <pre className="mt-3 overflow-x-auto rounded-md border border-[var(--edge)] bg-black/20 px-3 py-2 text-[12px] text-[var(--fg-1)]">
+        {command}
+      </pre>
+    </section>
   );
 }
 
@@ -481,34 +618,6 @@ function ProductionEvidenceStrip({ input }: { input: ConvertPreflightInput }) {
   );
 }
 
-function RunModeNotice({ data }: { data: ConvertResponse }) {
-  const title = data.dry_run
-    ? "Dry run did not write an ASCII file."
-    : data.converted
-      ? "Convert wrote the ASCII handoff."
-      : "Convert stopped before writing output.";
-  const body = data.dry_run
-    ? "Use this result to review validation, equivalence metadata, and output safety before pressing Convert."
-    : data.converted
-      ? "This path is the artifact to hand to DONJON or preview in the ASCII viewer below."
-      : "Resolve the failed checks or request error, then run the converter again.";
-  return (
-    <div
-      className={
-        "mt-4 rounded-md border px-3 py-2 text-sm " +
-        (data.dry_run
-          ? "border-cyan-300/20 bg-cyan-300/[0.05] text-cyan-100"
-          : data.converted
-            ? "border-emerald-300/20 bg-emerald-300/[0.05] text-emerald-100"
-            : "border-rose-300/20 bg-rose-300/[0.05] text-rose-100")
-      }
-    >
-      <span className="font-semibold">{title}</span>
-      <span className="ml-2 text-[var(--fg-1)]">{body}</span>
-    </div>
-  );
-}
-
 function ConvertActionProgress({
   state,
   draftInputPath,
@@ -656,47 +765,6 @@ function DecisionTile({
       </div>
       <div className="mt-1 font-mono text-[13px]">{value}</div>
     </div>
-  );
-}
-
-function ValidationEvidenceDetails({
-  data,
-  input,
-}: {
-  data: ConvertResponse;
-  input: ConvertPreflightInput;
-}) {
-  const open = !data.ok || !input.ok || input.issues.length > 0;
-  const production = data.cli_command.includes("--production");
-  const warningText =
-    input.warnings.length === 0 ? "no warnings" : `${input.warnings.length} warning(s)`;
-  return (
-    <details
-      open={open}
-      className="glass rounded-xl p-5 [&_summary::-webkit-details-marker]:hidden"
-    >
-      <summary className="cursor-pointer list-none">
-        <div className="flex flex-wrap items-baseline justify-between gap-4">
-          <div>
-            <h2 className="text-base font-semibold tracking-tight">
-              Detailed validation evidence
-            </h2>
-            <p className="mt-1 max-w-2xl text-sm text-[var(--fg-2)]">
-              Reviewer details for QA and troubleshooting. The main result above
-              is enough for normal convert decisions.
-            </p>
-          </div>
-          <span className="rounded border border-[var(--edge)] px-2 py-1 text-[11px] uppercase tracking-wider text-[var(--fg-2)]">
-            {production ? "production checks" : "basic checks"} · {warningText}
-          </span>
-        </div>
-      </summary>
-
-      <div className="mt-4 space-y-4">
-        <CheckCards data={data} input={input} />
-        <InputStats input={input} />
-      </div>
-    </details>
   );
 }
 
@@ -1002,9 +1070,33 @@ function preflightMode(data: ConvertResponse): string {
   return "none";
 }
 
+function validationLabel(data: ConvertResponse): string {
+  if (!data.preflight) return "skipped";
+  return data.preflight_ok ? "pass" : "fail";
+}
+
 function humanDecision(value: string | null | undefined): string {
   if (!value) return "not reported";
   return value.replaceAll("_", " ");
+}
+
+function compactEquivalence(input: ConvertPreflightInput): string {
+  const parts: string[] = [];
+  if (input.adf_mixtures) {
+    const faces = input.adf_faces?.length ?? 0;
+    parts.push(faces > 0 ? `ADF ${input.adf_mixtures}/${faces}f` : `ADF ${input.adf_mixtures}`);
+  }
+  if (input.sph_calculations) {
+    parts.push(`SPH ${input.sph_calculations}`);
+  }
+  return parts.length === 0 ? "none" : parts.join(" + ");
+}
+
+function compactUncertainty(input: ConvertPreflightInput): string {
+  const maxRel = input.uncertainty?.max_rel;
+  if (maxRel != null) return `std_dev max ${formatRelative(maxRel)}`;
+  const reported = coverage(input);
+  return reported == null ? "std_dev not reported" : `std_dev ${reported}`;
 }
 
 function coverage(input: ConvertPreflightInput): string | null {
