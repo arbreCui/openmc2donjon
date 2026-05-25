@@ -135,6 +135,10 @@ function CommandDetail({ command }: { command: CommandCatalogEntry }) {
 
       <CommandUsePath command={command} />
 
+      {isDirectConverterCommand(command.id) ? (
+        <ConverterCommandBridge command={command} />
+      ) : null}
+
       <CommandGoalContext command={command} />
 
       <CommandWorkflowPosition command={command} />
@@ -291,6 +295,75 @@ const DIRECT_CONVERT_ARTIFACTS = [
     tone: "record",
   },
 ] as const;
+
+function isDirectConverterCommand(commandId: string): boolean {
+  return commandId === "direct-convert" || commandId === "check";
+}
+
+function ConverterCommandBridge({ command }: { command: CommandCatalogEntry }) {
+  const isCheck = command.id === "check";
+  const cards = [
+    {
+      label: "Input",
+      title: "MGXS HDF5 handoff",
+      body:
+        "The same source file is used by Inspect, Check, Dry run, and Convert.",
+    },
+    {
+      label: isCheck ? "No-write" : "Write",
+      title: isCheck ? "Preflight only" : "Direct ASCII output",
+      body: isCheck
+        ? "This command records whether the HDF5 can pass production gates; it does not create ASCII."
+        : "This command writes the DONJON-facing L_MULTICOMPO or L_MACROLIB text file.",
+    },
+    {
+      label: "Return",
+      title: "Back to /convert",
+      body:
+        "The web route keeps the same path fields and then exposes Preview ASCII and Bundle once output exists.",
+    },
+  ] as const;
+  return (
+    <section className="glass rounded-xl p-5">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h2 className="text-base font-semibold tracking-tight">
+            Converter web bridge
+          </h2>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
+            This command is part of the same direct-converter route. The page
+            keeps the command detail readable, but sends the user back to
+            <span className="font-mono text-[var(--fg-1)]"> /convert </span>
+            for the actual handoff flow.
+          </p>
+        </div>
+        {command.web_path ? (
+          <Link href={command.web_path} className="btn btn-primary shrink-0">
+            Open converter route
+          </Link>
+        ) : null}
+      </div>
+      <div className="mt-4 grid gap-2 md:grid-cols-3">
+        {cards.map((card) => (
+          <article
+            key={card.label}
+            className="rounded-lg border border-cyan-300/20 bg-cyan-300/[0.045] p-3"
+          >
+            <span className="rounded border border-current/25 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.14em] text-cyan-100">
+              {card.label}
+            </span>
+            <h3 className="mt-2 text-sm font-semibold tracking-tight">
+              {card.title}
+            </h3>
+            <p className="mt-1 text-[12px] leading-5 text-[var(--fg-2)]">
+              {card.body}
+            </p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 function DirectConvertArtifactMap() {
   return (

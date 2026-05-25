@@ -130,10 +130,26 @@ GROUP_GUIDANCE: dict[str, CommandGuidance] = {
 COMMAND_GUIDANCE: dict[str, CommandGuidance] = {
     "direct-convert": CommandGuidance(
         use_when="Use this first when the HDF5 handoff already exists.",
-        produces="The DONJON ASCII object plus optional preflight output.",
+        produces=(
+            "A DONJON ASCII L_MULTICOMPO or L_MACROLIB object, plus the "
+            "preflight decision when checks are enabled."
+        ),
         next_step=(
             "Preview the generated ASCII, then open the prefilled bundle "
             "builder before moving to DONJON consumption."
+        ),
+    ),
+    "check": CommandGuidance(
+        use_when=(
+            "Use this before converting a new or changed MGXS HDF5 handoff."
+        ),
+        produces=(
+            "A production preflight decision only; it does not write the "
+            "DONJON ASCII handoff."
+        ),
+        next_step=(
+            "If the decision is accepted, return to Convert with the same "
+            "paths and write the ASCII output; otherwise fix the HDF5 input."
         ),
     ),
     "openmc2donjon-from-openmc": CommandGuidance(

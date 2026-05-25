@@ -238,6 +238,11 @@ class CommandCatalogEndpointTests(unittest.TestCase):
         self.assertIn("MULTICOMPO", direct["tags"])
         self.assertIn("openmc2donjon mgxs_library.h5", direct["cli"])
 
+        check = commands["check"]
+        self.assertIn("before converting", check["use_when"])
+        self.assertIn("does not write", check["produces"])
+        self.assertIn("write the ASCII output", check["next_step"])
+
     def test_catalog_web_paths_deep_link_to_matching_workflow_surfaces(self) -> None:
         from openmc2donjon.web.server import create_app
 
