@@ -578,7 +578,13 @@ function ConvertPageContent() {
         />
 
         <section className="mt-6">
-          <ConvertReport state={state} onConvert={() => void run("convert")} />
+          <ConvertReport
+            state={state}
+            onConvert={() => void run("convert")}
+            draftInputPath={inputPath}
+            draftOutputPath={displayedOutput}
+            format={format}
+          />
           {showMinicaseMissingHint ? (
             <ProductionMinicaseMissingHint onApply={applyProductionMinicaseDemo} />
           ) : null}
