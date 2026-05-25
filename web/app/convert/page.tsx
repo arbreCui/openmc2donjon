@@ -15,7 +15,6 @@ import ConvertReport, {
   ConvertRunState,
 } from "@/components/convert/ConvertReport";
 import { CopyCliButton } from "@/components/commands/CopyCliButton";
-import ConvertConcepts from "@/components/convert/ConvertConcepts";
 import MixturePicker from "@/components/convert/MixturePicker";
 import FileBrowserModal from "@/components/inspect/FileBrowserModal";
 import {
@@ -321,8 +320,7 @@ function ConvertPageContent() {
         ) : (
           <LiveMinicaseCard onApply={applyProductionMinicaseDemo} />
         )}
-        <ConvertGuide />
-        <ConvertConcepts />
+        <ConvertPrimer />
 
         <form
           className="glass rounded-xl p-4 space-y-4"
@@ -1092,52 +1090,65 @@ function ProductionMinicaseMissingHint({ onApply }: { onApply: () => void }) {
   );
 }
 
-function ConvertGuide() {
+function ConvertPrimer() {
+  const items = [
+    {
+      label: "Input",
+      title: "OpenMC MGXS HDF5",
+      body: "Pick the homogenized handoff produced by OpenMC.",
+    },
+    {
+      label: "Dry run",
+      title: "No-write validation",
+      body: "Check the contract, output target, mesh, and production readiness.",
+    },
+    {
+      label: "Convert",
+      title: "DONJON ASCII",
+      body: "Write .mcompo.txt or .macrolib.txt for downstream deterministic use.",
+    },
+  ] as const;
   return (
-    <section className="mb-5 grid gap-3 lg:grid-cols-4">
-      <GuideCard
-        step="01"
-        title="Inspect the HDF5"
-        body="Check the group structure, mixture roster, and optional equivalence data before selecting what to export."
-      />
-      <GuideCard
-        step="02"
-        title="Dry run first"
-        body="Run preflight without writing output; production checks catch common MGXS contract and physics issues."
-      />
-      <GuideCard
-        step="03"
-        title="Write ASCII"
-        body="Generate .mcompo.txt for mapped MULTICOMPO handoffs or .macrolib.txt for one-state MACROLIB input."
-      />
-      <GuideCard
-        step="04"
-        title="Review and package"
-        body="Preview the LCM ASCII blocks, then bundle the HDF5, output, summaries, and logs as the production record."
-      />
-    </section>
-  );
-}
-
-function GuideCard({
-  step,
-  title,
-  body,
-}: {
-  step: string;
-  title: string;
-  body: string;
-}) {
-  return (
-    <article className="rounded-lg border border-[var(--edge)] bg-white/[0.02] px-4 py-3">
-      <div className="flex items-center gap-2">
-        <span className="rounded border border-emerald-300/20 bg-emerald-300/[0.08] px-1.5 py-0.5 font-mono text-[10px] text-emerald-200">
-          {step}
-        </span>
-        <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
+    <section className="mb-5 rounded-xl border border-[var(--edge)] bg-black/15 p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold tracking-tight">
+            Direct converter path
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
+            This page turns an existing OpenMC MGXS handoff into a DONJON-facing
+            ASCII library. Dry run is the readable no-write checkpoint; Convert
+            creates the file.
+          </p>
+        </div>
+        <Link href="/commands/direct-convert" className="btn btn-secondary">
+          Command notes
+        </Link>
       </div>
-      <p className="mt-2 text-sm leading-relaxed text-[var(--fg-2)]">{body}</p>
-    </article>
+      <div className="mt-4 grid gap-2 md:grid-cols-3">
+        {items.map((item, index) => (
+          <article
+            key={item.label}
+            className="rounded-lg border border-[var(--edge)] bg-white/[0.02] px-3 py-2"
+          >
+            <div className="flex items-center gap-2">
+              <span className="rounded border border-emerald-300/20 bg-emerald-300/[0.08] px-1.5 py-0.5 font-mono text-[10px] text-emerald-200">
+                {String(index + 1).padStart(2, "0")}
+              </span>
+              <span className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+                {item.label}
+              </span>
+            </div>
+            <h3 className="mt-2 text-sm font-semibold tracking-tight">
+              {item.title}
+            </h3>
+            <p className="mt-1 text-[12px] leading-5 text-[var(--fg-2)]">
+              {item.body}
+            </p>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 

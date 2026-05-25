@@ -125,19 +125,7 @@ function ConvertSummary({
 
         <RunModeNotice data={data} />
 
-        <ConversionSummaryStrip data={data} input={input} />
-
-        <ArtifactAnatomyCard data={data} input={input} />
-
-        {input ? <ProductionEvidenceStrip input={input} /> : null}
-
-        {input ? <PreflightDecisionPanel data={data} input={input} /> : null}
-
-        <DeliveryChecklist data={data} input={input} onConvert={onConvert} />
-
         <OutputActions data={data} onConvert={onConvert} />
-
-        <NextStepsPanel data={data} input={input} />
 
         <div className="mt-4">
           <div className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
@@ -147,6 +135,8 @@ function ConvertSummary({
             {data.cli_command_text}
           </pre>
         </div>
+
+        <RunDetails data={data} input={input} onConvert={onConvert} />
       </section>
 
       <HandoffPipeline data={data} input={input} />
@@ -160,6 +150,48 @@ function ConvertSummary({
         </div>
       ) : null}
     </div>
+  );
+}
+
+function RunDetails({
+  data,
+  input,
+  onConvert,
+}: {
+  data: ConvertResponse;
+  input: ConvertPreflightInput | null;
+  onConvert?: () => void;
+}) {
+  return (
+    <details
+      open={!data.ok}
+      className="mt-4 rounded-lg border border-[var(--edge)] bg-black/10 p-3 [&_summary::-webkit-details-marker]:hidden"
+    >
+      <summary className="cursor-pointer list-none">
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold tracking-tight">
+              Run details and delivery checklist
+            </h3>
+            <p className="mt-1 text-[12px] leading-5 text-[var(--fg-3)]">
+              Open this when you need the block anatomy, production evidence, or
+              delivery checklist behind the main handoff action.
+            </p>
+          </div>
+          <span className="rounded border border-[var(--edge)] px-2 py-1 text-[11px] uppercase tracking-wider text-[var(--fg-2)]">
+            {data.ok ? "optional details" : "review required"}
+          </span>
+        </div>
+      </summary>
+      <div className="mt-4 space-y-4">
+        <ConversionSummaryStrip data={data} input={input} />
+        <ArtifactAnatomyCard data={data} input={input} />
+        {input ? <ProductionEvidenceStrip input={input} /> : null}
+        {input ? <PreflightDecisionPanel data={data} input={input} /> : null}
+        <DeliveryChecklist data={data} input={input} onConvert={onConvert} />
+        <NextStepsPanel data={data} input={input} />
+      </div>
+    </details>
   );
 }
 
