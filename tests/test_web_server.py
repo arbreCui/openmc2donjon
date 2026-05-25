@@ -230,7 +230,7 @@ class CommandCatalogEndpointTests(unittest.TestCase):
         self.assertEqual(direct["status"], "ready")
         self.assertEqual(
             direct["web_path"],
-            "/convert?intent=direct-convert&format=multicompo&check=1",
+            "/convert?intent=direct-convert&format=multicompo&check=1&production=1",
         )
         self.assertIn("HDF5 handoff", direct["use_when"])
         self.assertIn("DONJON ASCII", direct["produces"])

@@ -251,12 +251,20 @@ function DirectConvertArtifactMap() {
             bundle when you need a portable production record.
           </p>
         </div>
-        <Link
-          href="/convert?intent=direct-convert&format=multicompo&check=1&production=1"
-          className="btn btn-secondary shrink-0"
-        >
-          Open converter
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/convert?intent=direct-convert&format=multicompo&check=1&production=1"
+            className="btn btn-secondary shrink-0"
+          >
+            Open converter
+          </Link>
+          <Link
+            href="/builder?command=bundle"
+            className="btn btn-secondary shrink-0"
+          >
+            Open bundle builder
+          </Link>
+        </div>
       </div>
 
       <div className="mt-4 grid gap-2 md:grid-cols-4">
@@ -295,6 +303,15 @@ function DirectConvertArtifactMap() {
           L_MULTICOMPO when the downstream map needs mixture/domain indexing;
           use L_MACROLIB when the low-order solve expects a direct one-state
           macrolib object.
+        </span>
+      </div>
+
+      <div className="mt-3 rounded-lg border border-emerald-300/20 bg-emerald-300/[0.045] px-3 py-2 text-sm text-emerald-100">
+        <span className="font-semibold">Web loop:</span>{" "}
+        <span className="text-[var(--fg-1)]">
+          Open converter writes or dry-runs the ASCII handoff. After a successful
+          convert, the result panel opens a prefilled bundle builder so the MGXS
+          source, ASCII output, and bundle directory stay linked.
         </span>
       </div>
     </section>

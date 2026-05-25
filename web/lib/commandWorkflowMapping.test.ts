@@ -8,7 +8,7 @@ describe("commandWorkflowMapping", () => {
       command({
         id: "direct-convert",
         group: "convert",
-        web_path: "/convert?intent=direct-convert&format=multicompo&check=1",
+        web_path: "/convert?intent=direct-convert&format=multicompo&check=1&production=1",
       }),
     );
 
@@ -16,7 +16,7 @@ describe("commandWorkflowMapping", () => {
     expect(mapping.surface).toBe("Convert page");
     expect(mapping.presets).toContain("Output object: MULTICOMPO");
     expect(mapping.presets).toContain("Preflight: on");
-    expect(mapping.presets).toContain("Production checks: off");
+    expect(mapping.presets).toContain("Production checks: on");
     expect(mapping.requiredInputs).toContain("Input MGXS HDF5 path");
   });
 

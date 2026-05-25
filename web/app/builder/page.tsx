@@ -19,6 +19,7 @@ import {
   commandBuilderSpec,
   commandBuilderStage,
 } from "@/lib/commandBuilder";
+import { bundlePrefillStatus } from "@/lib/builderPrefill";
 import { useSettings } from "@/lib/settings";
 
 type CatalogState =
@@ -173,6 +174,10 @@ function CommandBuilderPageContent() {
 
             {stage ? <WorkflowHint stage={stage} /> : null}
 
+            {spec.id === "bundle" ? (
+              <BundlePrefillPanel status={bundlePrefillStatus(values)} />
+            ) : null}
+
             {canUseSavedPrefix ? (
               <button
                 type="button"
@@ -260,6 +265,52 @@ function WorkflowHint({
         </div>
       </div>
     </div>
+  );
+}
+
+function BundlePrefillPanel({
+  status,
+}: {
+  status: ReturnType<typeof bundlePrefillStatus>;
+}) {
+  return (
+    <section
+      className={
+        "mt-4 rounded-lg border p-3 " +
+        (status.prefilled
+          ? "border-emerald-300/20 bg-emerald-300/[0.05]"
+          : "border-cyan-300/20 bg-cyan-300/[0.045]")
+      }
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+            delivery bundle
+          </div>
+          <h3 className="mt-1 text-sm font-semibold tracking-tight">
+            {status.title}
+          </h3>
+          <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--fg-2)]">
+            {status.body}
+          </p>
+        </div>
+        <Link href="/commands/direct-convert" className="btn btn-secondary">
+          Direct convert notes
+        </Link>
+      </div>
+      {status.chips.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {status.chips.map((chip) => (
+            <span
+              key={chip}
+              className="rounded border border-current/20 bg-black/15 px-2 py-0.5 text-[11px] text-[var(--fg-1)]"
+            >
+              {chip}
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </section>
   );
 }
 

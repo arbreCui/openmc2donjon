@@ -131,7 +131,10 @@ COMMAND_GUIDANCE: dict[str, CommandGuidance] = {
     "direct-convert": CommandGuidance(
         use_when="Use this first when the HDF5 handoff already exists.",
         produces="The DONJON ASCII object plus optional preflight output.",
-        next_step="Open the generated ASCII preview or move to DONJON consumption.",
+        next_step=(
+            "Preview the generated ASCII, then open the prefilled bundle "
+            "builder before moving to DONJON consumption."
+        ),
     ),
     "openmc2donjon-from-openmc": CommandGuidance(
         use_when="Use this when one managed command should export, check, convert, and bundle the handoff.",
@@ -166,7 +169,7 @@ DETAILS: dict[str, CommandDetail] = {
         ),
         status="ready",
         status_label="Web form ready",
-        web_path="/convert?intent=direct-convert&format=multicompo&check=1",
+        web_path="/convert?intent=direct-convert&format=multicompo&check=1&production=1",
         cli=(
             "openmc2donjon mgxs_library.h5 --format multicompo "
             "-o out.mcompo.txt --check"
