@@ -20,6 +20,9 @@ describe("bundlePrefillStatus", () => {
     expect(status.validateHref).toBe(
       "/builder?command=validate-bundle&manifest=%2Fruns%2Fcase%2Fbundle%2Fmanifest.json",
     );
+    expect(status.donjonHref).toBe(
+      "/donjon?ascii=%2Fruns%2Fcase%2Fout.mcompo.txt&format=multicompo&manifest=%2Fruns%2Fcase%2Fbundle%2Fmanifest.json",
+    );
   });
 
   it("recognizes partial bundle prefill", () => {
@@ -32,6 +35,7 @@ describe("bundlePrefillStatus", () => {
     expect(status.title).toBe("Bundle builder has prefilled fields");
     expect(status.chips).toEqual(["bundle directory", "check summary"]);
     expect(status.manifestPath).toBe("/runs/case/bundle/manifest.json");
+    expect(status.donjonHref).toBeUndefined();
   });
 
   it("keeps empty bundle builders in explanatory mode", () => {
@@ -42,5 +46,6 @@ describe("bundlePrefillStatus", () => {
     expect(status.chips).toEqual([]);
     expect(status.manifestPath).toBeUndefined();
     expect(status.validateHref).toBeUndefined();
+    expect(status.donjonHref).toBeUndefined();
   });
 });

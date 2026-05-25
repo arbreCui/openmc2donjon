@@ -17,6 +17,7 @@ import {
 } from "@/lib/convertDeliveryChecklist";
 import {
   convertBundleHref,
+  convertDonjonGuideHref,
   convertBundleManifestPath,
   convertBundleOutputDir,
   convertValidateBundleHref,
@@ -203,6 +204,9 @@ function DeliveryCommandPanel({
             </Link>
             <Link href={convertValidateBundleHref(data)} className="btn btn-secondary">
               Prepare validation command
+            </Link>
+            <Link href={convertDonjonGuideHref(data)} className="btn btn-secondary">
+              Open DONJON guide
             </Link>
           </div>
           <BundleManifestProbe manifestPath={manifestPath} enabled={outputReady} />

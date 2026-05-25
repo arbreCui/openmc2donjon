@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   convertBundleManifestPath,
   convertBundleHref,
+  convertDonjonGuideHref,
   convertNextSteps,
   convertObjectDescription,
   convertObjectLabel,
@@ -53,6 +54,9 @@ describe("convert next steps", () => {
     expect(convertValidateBundleHref(converted)).toBe(
       "/builder?command=validate-bundle&manifest=%2Fruns%2Fcase%2Fbundle%2Fmanifest.json",
     );
+    expect(convertDonjonGuideHref(converted)).toBe(
+      "/donjon?ascii=%2Fruns%2Fcase%2Fout.mcompo.txt&format=multicompo&manifest=%2Fruns%2Fcase%2Fbundle%2Fmanifest.json",
+    );
     expect(
       convertBundleHref(
         response({
@@ -98,6 +102,7 @@ describe("convert next steps", () => {
     ]);
     expect(steps[0].href).toBe("#ascii-output-preview");
     expect(steps[1].title).toContain("L_MULTICOMPO");
+    expect(steps[1].href).toContain("/donjon?");
     expect(steps[2].href).toContain("/builder?command=bundle");
     expect(steps[2].href).toContain("mgxs=");
     expect(steps[2].href).toContain("mcompo=");

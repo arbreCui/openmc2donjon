@@ -1,4 +1,5 @@
 import type { BuilderValues } from "./commandBuilder";
+import { donjonGuideHref } from "./donjonGuide";
 
 export interface BundlePrefillStatus {
   prefilled: boolean;
@@ -7,6 +8,7 @@ export interface BundlePrefillStatus {
   chips: string[];
   manifestPath?: string;
   validateHref?: string;
+  donjonHref?: string;
 }
 
 const ARTIFACT_FIELDS = [
@@ -29,6 +31,7 @@ export function bundlePrefillStatus(values: BuilderValues): BundlePrefillStatus 
   const hasAscii = hasValue(values.mcompo) || hasValue(values.macrolib);
   const fromConverter = hasValue(values.mgxs) && hasAscii;
   const manifestPath = bundleManifestPath(values.output_dir);
+  const donjonHref = bundleDonjonGuideHref(values, manifestPath);
   if (fromConverter) {
     return {
       prefilled: true,
@@ -38,6 +41,7 @@ export function bundlePrefillStatus(values: BuilderValues): BundlePrefillStatus 
       chips: [...(hasOutputDir ? ["bundle directory"] : []), ...chips],
       manifestPath,
       validateHref: manifestPath ? validateBundleBuilderHref(manifestPath) : undefined,
+      donjonHref,
     };
   }
   if (hasOutputDir || chips.length > 0) {
@@ -49,6 +53,7 @@ export function bundlePrefillStatus(values: BuilderValues): BundlePrefillStatus 
       chips: [...(hasOutputDir ? ["bundle directory"] : []), ...chips],
       manifestPath,
       validateHref: manifestPath ? validateBundleBuilderHref(manifestPath) : undefined,
+      donjonHref,
     };
   }
   return {
@@ -77,4 +82,23 @@ function validateBundleBuilderHref(manifestPath: string): string {
     manifest: manifestPath,
   });
   return `/builder?${params.toString()}`;
+}
+
+function bundleDonjonGuideHref(
+  values: BuilderValues,
+  manifestPath: string | undefined,
+): string | undefined {
+  const macrolib = stringValue(values.macrolib);
+  const mcompo = stringValue(values.mcompo);
+  const asciiPath = macrolib ?? mcompo;
+  if (!asciiPath) return undefined;
+  return donjonGuideHref({
+    asciiPath,
+    format: macrolib ? "macrolib" : "multicompo",
+    manifestPath,
+  });
+}
+
+function stringValue(value: string | boolean | undefined): string | undefined {
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
 }

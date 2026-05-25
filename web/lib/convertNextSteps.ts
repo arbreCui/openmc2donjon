@@ -1,4 +1,5 @@
 import type { ConvertPreflightInput, ConvertResponse } from "./api";
+import { donjonGuideHref } from "./donjonGuide";
 
 export interface ConvertNextStep {
   id: string;
@@ -40,6 +41,14 @@ export function convertValidateBundleHref(data: ConvertResponse): string {
     manifest: convertBundleManifestPath(data),
   });
   return `/builder?${params.toString()}`;
+}
+
+export function convertDonjonGuideHref(data: ConvertResponse): string {
+  return donjonGuideHref({
+    asciiPath: data.output_path,
+    format: data.format,
+    manifestPath: convertBundleManifestPath(data),
+  });
 }
 
 export function convertBundleManifestPath(data: ConvertResponse): string {
@@ -137,6 +146,7 @@ export function convertNextSteps(
       label: objectLabel,
       title: `Use ${objectLabel} in DONJON`,
       body: `${objectDescription} Output path: ${data.output_path}`,
+      href: convertDonjonGuideHref(data),
       status: "ready",
     },
     {

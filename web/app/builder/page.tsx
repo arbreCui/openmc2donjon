@@ -350,6 +350,11 @@ function BundlePrefillPanel({
               Prepare validation
             </Link>
           ) : null}
+          {status.donjonHref ? (
+            <Link href={status.donjonHref} className="btn btn-secondary">
+              Open DONJON guide
+            </Link>
+          ) : null}
           <Link href="/commands/direct-convert" className="btn btn-secondary">
             Direct convert notes
           </Link>
