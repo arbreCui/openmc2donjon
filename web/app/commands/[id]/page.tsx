@@ -16,6 +16,7 @@ import {
   WorkflowOccurrence,
   commandWorkflowOccurrences,
 } from "@/lib/commandWorkflowLanes";
+import { commandGoalsForCommand } from "@/lib/commandGoals";
 
 type State =
   | { kind: "loading" }
@@ -134,6 +135,8 @@ function CommandDetail({ command }: { command: CommandCatalogEntry }) {
 
       <CommandUsePath command={command} />
 
+      <CommandGoalContext command={command} />
+
       <CommandWorkflowPosition command={command} />
 
       {command.id === "direct-convert" ? <DirectConvertArtifactMap /> : null}
@@ -205,6 +208,52 @@ function CommandDetail({ command }: { command: CommandCatalogEntry }) {
         </div>
       </section>
     </div>
+  );
+}
+
+function CommandGoalContext({ command }: { command: CommandCatalogEntry }) {
+  const goals = commandGoalsForCommand(command.id);
+  if (goals.length === 0) {
+    return null;
+  }
+  return (
+    <section className="glass rounded-xl p-5">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h2 className="text-base font-semibold tracking-tight">
+            User goals that use this command
+          </h2>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
+            Commands are lower-level tools; most users should start from the
+            goal card that matches their artifact or physics workflow.
+          </p>
+        </div>
+        <Link href="/commands" className="btn btn-secondary shrink-0">
+          Back to goal cards
+        </Link>
+      </div>
+      <div className="mt-4 grid gap-2 md:grid-cols-2">
+        {goals.map((goal) => (
+          <article
+            key={goal.id}
+            className="rounded-lg border border-[var(--edge)] bg-white/[0.025] p-4"
+          >
+            <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+              {goal.eyebrow}
+            </div>
+            <h3 className="mt-2 text-sm font-semibold tracking-tight">
+              {goal.title}
+            </h3>
+            <p className="mt-2 text-[12px] leading-5 text-[var(--fg-2)]">
+              {goal.body}
+            </p>
+            <Link href={goal.href} className="btn btn-secondary mt-4">
+              {goal.cta}
+            </Link>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 
