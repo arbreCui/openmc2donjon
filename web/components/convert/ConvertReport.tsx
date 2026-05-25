@@ -1,8 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { CopyCliButton } from "@/components/commands/CopyCliButton";
 import { ConvertPreflightInput, ConvertResponse } from "@/lib/api";
-import { convertNextSteps } from "@/lib/convertNextSteps";
+import {
+  convertBundleHref,
+  convertNextSteps,
+  convertObjectLabel,
+} from "@/lib/convertNextSteps";
 import AsciiPreview from "./AsciiPreview";
 import ArtifactAnatomyCard from "./ArtifactAnatomyCard";
 import ConversionSummaryStrip from "./ConversionSummaryStrip";
@@ -125,7 +130,7 @@ function ConvertSummary({
 
         <RunModeNotice data={data} />
 
-        <OutputActions data={data} onConvert={onConvert} />
+        <PrimaryOutcomeActions data={data} onConvert={onConvert} />
 
         <div className="mt-4">
           <div className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
@@ -189,10 +194,117 @@ function RunDetails({
         {input ? <ProductionEvidenceStrip input={input} /> : null}
         {input ? <PreflightDecisionPanel data={data} input={input} /> : null}
         <DeliveryChecklist data={data} input={input} onConvert={onConvert} />
+        <OutputActions data={data} onConvert={onConvert} />
         <NextStepsPanel data={data} input={input} />
       </div>
     </details>
   );
+}
+
+function PrimaryOutcomeActions({
+  data,
+  onConvert,
+}: {
+  data: ConvertResponse;
+  onConvert?: () => void;
+}) {
+  const objectLabel = convertObjectLabel(data.format);
+  const converted = data.converted && data.output_exists;
+  const readyToConvert = data.ok && data.dry_run;
+  const stopped = !data.ok || (!data.dry_run && !converted);
+  const tone = converted ? "ready" : readyToConvert ? "pending" : "blocked";
+  const title = converted
+    ? "ASCII handoff ready"
+    : readyToConvert
+      ? "Ready to convert"
+      : "Action needed before handoff";
+  const body = converted
+    ? `${objectLabel} was written and confirmed at the output path. Preview it, copy the command record, or bundle the handoff.`
+    : readyToConvert
+      ? "Dry run passed without writing a file. Convert now when the output path and validation summary look right."
+      : "Resolve the failed request or validation result, then rerun dry run before writing an ASCII handoff.";
+  return (
+    <section className={"mt-4 rounded-lg border p-4 " + primaryOutcomeClass(tone)}>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="text-[10px] uppercase tracking-[0.14em] opacity-75">
+            {converted
+              ? "handoff artifact"
+              : readyToConvert
+                ? "no-write checkpoint"
+                : "converter result"}
+          </div>
+          <h3 className="mt-1 text-base font-semibold tracking-tight">{title}</h3>
+          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-1)]">
+            {body}
+          </p>
+        </div>
+        <span className="rounded border border-current/25 px-2 py-1 font-mono text-[11px] uppercase tracking-wider">
+          {converted ? objectLabel : readyToConvert ? "dry run pass" : "blocked"}
+        </span>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {readyToConvert && onConvert ? (
+          <button type="button" onClick={onConvert} className="btn btn-primary">
+            Convert now
+          </button>
+        ) : null}
+        {converted ? (
+          <a href="#ascii-output-preview" className="btn btn-primary">
+            Preview ASCII
+          </a>
+        ) : null}
+        <CopyCliButton
+          value={data.cli_command_text}
+          label="Copy CLI"
+          ariaLabel="Copy CLI command"
+        />
+        {converted ? (
+          <Link href={convertBundleHref(data)} className="btn btn-secondary">
+            Bundle
+          </Link>
+        ) : null}
+        {stopped ? (
+          <Link
+            href={`/inspect?path=${encodeURIComponent(data.input_path)}`}
+            className="btn btn-secondary"
+          >
+            Inspect HDF5
+          </Link>
+        ) : null}
+      </div>
+
+      <div className="mt-3 grid gap-2 text-[12px] md:grid-cols-2">
+        <OutcomePath label="input" value={data.input_path} />
+        <OutcomePath
+          label={converted ? "DONJON ASCII" : "target"}
+          value={data.output_path}
+        />
+      </div>
+    </section>
+  );
+}
+
+function OutcomePath({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-md border border-current/10 bg-black/15 px-3 py-2">
+      <div className="text-[10px] uppercase tracking-[0.14em] opacity-65">
+        {label}
+      </div>
+      <div className="mt-1 truncate font-mono text-[12px]">{value}</div>
+    </div>
+  );
+}
+
+function primaryOutcomeClass(tone: "ready" | "pending" | "blocked"): string {
+  if (tone === "ready") {
+    return "border-emerald-300/25 bg-emerald-300/[0.06] text-emerald-100";
+  }
+  if (tone === "pending") {
+    return "border-cyan-300/25 bg-cyan-300/[0.055] text-cyan-100";
+  }
+  return "border-rose-300/25 bg-rose-300/[0.055] text-rose-100";
 }
 
 function NextStepsPanel({
