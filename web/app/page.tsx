@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import TaskLauncher from "@/components/TaskLauncher";
 import { ApiError, HealthResponse, api } from "@/lib/api";
+import { TASK_ENTRYPOINTS } from "@/lib/taskEntrypoints";
 
 type Status =
   | { kind: "idle" }
@@ -34,38 +36,46 @@ export default function Home() {
 
   return (
     <main className="min-h-screen px-6 py-16">
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto max-w-6xl">
         <header className="mb-10">
           <h1 className="text-4xl font-bold tracking-tight">
             <span className="grad-text">openmc2donjon</span>
           </h1>
-          <p className="mt-2 text-sm text-[var(--fg-2)]">
-            Web interface for the OpenMC{" "}
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
+            Local workflow cockpit for OpenMC{" "}
             <span className="font-mono">→</span> DRAGON/DONJON handoff
-            pipeline. M0 scaffold: the home page just confirms the FastAPI
-            backend is reachable.
+            production: export MGXS, inspect the HDF5 contract, convert to
+            ASCII, apply ADF/SPH sidecars, and review SPH loop audits.
           </p>
         </header>
 
-        <section className="glass rounded-xl p-6">
-          <div className="flex items-baseline justify-between gap-4 flex-wrap">
-            <h2 className="text-base font-semibold tracking-tight">
-              Backend status
-            </h2>
-            <button
-              type="button"
-              onClick={refresh}
-              className="btn btn-secondary tab-num"
-              aria-label="Refresh backend health"
-            >
-              Refresh
-            </button>
-          </div>
+        <div className="grid gap-5 xl:grid-cols-[1fr_320px]">
+          <TaskLauncher
+            title="What are you doing now?"
+            summary="Pick the entry that matches the artifact you already have. Each path stays local and keeps the equivalent CLI visible."
+            entries={TASK_ENTRYPOINTS}
+          />
 
-          <div className="mt-4 text-sm tab-num">
-            <StatusView status={status} />
-          </div>
-        </section>
+          <section className="glass rounded-xl p-5">
+            <div className="flex flex-wrap items-baseline justify-between gap-4">
+              <h2 className="text-base font-semibold tracking-tight">
+                Backend status
+              </h2>
+              <button
+                type="button"
+                onClick={refresh}
+                className="btn btn-secondary tab-num"
+                aria-label="Refresh backend health"
+              >
+                Refresh
+              </button>
+            </div>
+
+            <div className="mt-4 text-sm tab-num">
+              <StatusView status={status} />
+            </div>
+          </section>
+        </div>
 
         <p className="mt-8 text-[12px] text-[var(--fg-3)]">
           Set <code className="font-mono">NEXT_PUBLIC_API_BASE_URL</code> in{" "}

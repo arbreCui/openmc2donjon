@@ -11,10 +11,12 @@ import {
   api,
 } from "@/lib/api";
 import { CopyCliButton } from "@/components/commands/CopyCliButton";
+import TaskLauncher from "@/components/TaskLauncher";
 import { CommandCoverage, commandCoverage } from "@/lib/commandCoverage";
 import type { CommandWorkflowMapping } from "@/lib/commandWorkflowMapping";
 import { commandWorkflowMapping } from "@/lib/commandWorkflowMapping";
 import { COMMAND_WORKFLOW_LANES } from "@/lib/commandWorkflowLanes";
+import { TASK_ENTRYPOINTS } from "@/lib/taskEntrypoints";
 
 type State =
   | { kind: "loading" }
@@ -66,6 +68,13 @@ export default function CommandsPage() {
             </button>
           )}
         </header>
+
+        <TaskLauncher
+          title="Start from the user task"
+          summary="Use these shortcuts when you know your current artifact. The full command catalog remains below for lower-level tools."
+          entries={TASK_ENTRYPOINTS}
+          className="mb-6"
+        />
 
         {state.kind === "loading" ? (
           <section className="glass rounded-lg p-5 text-sm text-[var(--fg-2)]">
