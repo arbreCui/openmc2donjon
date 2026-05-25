@@ -19,6 +19,7 @@ import {
   fileStatusTone,
   type FileStatusState,
 } from "@/lib/fileStatus";
+import AsciiReadinessPanel from "./AsciiReadinessPanel";
 import RunSummaryCard from "./RunSummaryCard";
 
 export default function OutputActions({
@@ -76,6 +77,8 @@ export default function OutputActions({
           Refresh file status
         </button>
       </div>
+
+      <AsciiReadinessPanel data={data} outputStatus={statuses.output} />
 
       <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
         {actions.map((action) => (
