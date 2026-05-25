@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import HomeDemoShortcuts from "@/components/HomeDemoShortcuts";
 import TaskLauncher from "@/components/TaskLauncher";
 import { ApiError, HealthResponse, api } from "@/lib/api";
+import { HOME_DEMO_SHORTCUTS } from "@/lib/demoShortcuts";
 import { TASK_ENTRYPOINTS } from "@/lib/taskEntrypoints";
 
 type Status =
@@ -50,11 +52,18 @@ export default function Home() {
         </header>
 
         <div className="grid gap-5 xl:grid-cols-[1fr_320px]">
-          <TaskLauncher
-            title="What are you doing now?"
-            summary="Pick the entry that matches the artifact you already have. Each path stays local and keeps the equivalent CLI visible."
-            entries={TASK_ENTRYPOINTS}
-          />
+          <div className="space-y-5">
+            <TaskLauncher
+              title="What are you doing now?"
+              summary="Pick the entry that matches the artifact you already have. Each path stays local and keeps the equivalent CLI visible."
+              entries={TASK_ENTRYPOINTS}
+            />
+
+            <HomeDemoShortcuts
+              state={demoBackendState(status)}
+              shortcuts={HOME_DEMO_SHORTCUTS}
+            />
+          </div>
 
           <section className="glass rounded-xl p-5">
             <div className="flex flex-wrap items-baseline justify-between gap-4">
@@ -86,6 +95,16 @@ export default function Home() {
       </div>
     </main>
   );
+}
+
+function demoBackendState(status: Status) {
+  if (status.kind === "idle" || status.kind === "loading") {
+    return { kind: "checking" } as const;
+  }
+  if (status.kind === "error") {
+    return { kind: "unavailable" } as const;
+  }
+  return { kind: "ready", mockMode: status.data.mock_mode } as const;
 }
 
 function StatusView({ status }: { status: Status }) {

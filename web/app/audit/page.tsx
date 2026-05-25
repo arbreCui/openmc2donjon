@@ -1,6 +1,14 @@
 "use client";
 
-import { FormEvent, useRef, useState } from "react";
+import {
+  FormEvent,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { useSearchParams } from "next/navigation";
 import { ApiError, SphLoopSummary, api } from "@/lib/api";
 import { useSettings } from "@/lib/settings";
 import FileBrowserModal from "@/components/inspect/FileBrowserModal";
@@ -20,6 +28,28 @@ type State =
   | { kind: "error"; message: string; status?: number };
 
 export default function AuditPage() {
+  return (
+    <Suspense fallback={<AuditLoading />}>
+      <AuditPageContent />
+    </Suspense>
+  );
+}
+
+function AuditLoading() {
+  return (
+    <main className="min-h-[calc(100vh-3.5rem)] px-6 py-12">
+      <div className="mx-auto max-w-5xl">
+        <section className="glass rounded-xl p-5 text-sm text-[var(--fg-2)]">
+          Loading audit viewer…
+        </section>
+      </div>
+    </main>
+  );
+}
+
+function AuditPageContent() {
+  const searchParams = useSearchParams();
+  const queryPath = searchParams.get("path") ?? "";
   const [path, setPath] = useState("");
   const [state, setState] = useState<State>({ kind: "idle" });
   const [browserOpen, setBrowserOpen] = useState(false);
@@ -30,13 +60,13 @@ export default function AuditPage() {
   const canUseSavedPrefix =
     settingsHydrated && savedPrefix !== "" && !path.startsWith(savedPrefix);
 
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const trimmed = path.trim();
+  const runAudit = useCallback(async (rawPath: string) => {
+    const trimmed = rawPath.trim();
     if (!trimmed) {
       setState({ kind: "error", message: "Enter a path first." });
       return;
     }
+    setPath(trimmed);
     setState({ kind: "loading" });
     try {
       const data = await api.audit(trimmed);
@@ -44,7 +74,17 @@ export default function AuditPage() {
     } catch (err) {
       setState(toErrorState(err));
     }
+  }, []);
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void runAudit(path);
   };
+
+  useEffect(() => {
+    if (!queryPath) return;
+    void runAudit(queryPath);
+  }, [queryPath, runAudit]);
 
   return (
     <main className="min-h-[calc(100vh-3.5rem)] px-6 py-12">
