@@ -14,6 +14,7 @@ import { CopyCliButton } from "@/components/commands/CopyCliButton";
 import { CommandCoverage, commandCoverage } from "@/lib/commandCoverage";
 import type { CommandWorkflowMapping } from "@/lib/commandWorkflowMapping";
 import { commandWorkflowMapping } from "@/lib/commandWorkflowMapping";
+import { COMMAND_WORKFLOW_LANES } from "@/lib/commandWorkflowLanes";
 
 type State =
   | { kind: "loading" }
@@ -21,61 +22,6 @@ type State =
   | { kind: "error"; message: string };
 
 const STATUS_ORDER: CommandStatus[] = ["ready", "partial", "planned"];
-const WORKFLOW_STEPS = [
-  {
-    label: "OpenMC",
-    detail: "recipe / statepoint",
-    href: "/openmc",
-  },
-  {
-    label: "HDF5",
-    detail: "MGXS handoff",
-    href: "/inspect",
-  },
-  {
-    label: "Equivalence",
-    detail: "optional ADF or SPH",
-    href: "/commands",
-  },
-  {
-    label: "Convert",
-    detail: "MULTICOMPO / MACROLIB",
-    href: "/convert",
-  },
-  {
-    label: "DONJON",
-    detail: "solve / audit",
-    href: "/audit",
-  },
-];
-const SPH_LOOP_STEPS = [
-  {
-    label: "OpenMC reference",
-    detail: "fixed MGXS + reference flux target",
-    href: "/openmc?intent=sph-loop&workflow=one-step&production=1",
-  },
-  {
-    label: "DONJON solve",
-    detail: "low-order flux with current NSPH",
-    href: "/commands/run-sph-loop",
-  },
-  {
-    label: "Compare",
-    detail: "low-order flux vs OpenMC target",
-    href: "/audit",
-  },
-  {
-    label: "Update NSPH",
-    detail: "new factors from flux mismatch",
-    href: "/commands/prepare-openmc-sph-loop",
-  },
-  {
-    label: "Reconvert",
-    detail: "write handoff and repeat",
-    href: "/convert?intent=direct-convert&format=multicompo&check=1&production=1",
-  },
-];
-
 export default function CommandsPage() {
   const [state, setState] = useState<State>({ kind: "loading" });
 
@@ -201,7 +147,7 @@ function Catalog({ data }: { data: CommandCatalog }) {
 
   return (
     <div className="space-y-6">
-      <WorkflowMap />
+      <WorkflowMap commands={data.commands} />
       <CoverageDashboard coverage={coverage} />
       <CommandFilters
         data={data}
@@ -376,86 +322,125 @@ function CoverageTile({
   );
 }
 
-function WorkflowMap() {
+function WorkflowMap({ commands }: { commands: CommandCatalogEntry[] }) {
+  const commandById = new Map(commands.map((command) => [command.id, command]));
   return (
     <section className="glass rounded-lg p-5">
-      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
-        <h2 className="text-base font-semibold tracking-tight">Workflow map</h2>
-        <span className="text-[12px] text-[var(--fg-3)]">
-          direct path plus SPH feedback loop
+      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold tracking-tight">Workflow map</h2>
+          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
+            Three production paths share the same converter core. Pick the lane
+            that matches your physics treatment, then open the command chips or
+            the stage card directly.
+          </p>
+        </div>
+        <span className="rounded border border-cyan-300/20 bg-cyan-300/[0.06] px-2 py-1 text-[11px] text-cyan-100">
+          direct / equivalence / SPH loop
         </span>
       </div>
-      <div className="grid gap-2 md:grid-cols-5">
-        {WORKFLOW_STEPS.map((step, index) => (
-          <Link
-            key={step.label}
-            href={step.href}
-            className="rounded-lg border border-[var(--edge)] bg-white/[0.025] p-3 hover:border-[var(--edge-bright)]"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
-                {String(index + 1).padStart(2, "0")}
-              </span>
-              {index + 1 < WORKFLOW_STEPS.length ? (
-                <span className="text-[var(--fg-3)]">to</span>
-              ) : null}
-            </div>
-            <div className="mt-2 text-sm font-semibold">{step.label}</div>
-            <div className="mt-1 text-[12px] text-[var(--fg-2)]">{step.detail}</div>
-          </Link>
+      <div className="space-y-3">
+        {COMMAND_WORKFLOW_LANES.map((lane) => (
+          <WorkflowLaneRow key={lane.id} lane={lane} commandById={commandById} />
         ))}
       </div>
-      <div className="mt-3 rounded-lg border border-cyan-300/20 bg-cyan-300/[0.04] p-3">
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-          <div>
-            <div className="text-[10px] uppercase tracking-wider text-cyan-300">
-              iterative branch
-            </div>
-            <h3 className="mt-1 text-sm font-semibold tracking-tight">
-              SPH loop with fixed OpenMC reference
-            </h3>
-            <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--fg-2)]">
-              OpenMC is not rerun inside each iteration; it supplies the frozen
-              MGXS and reference flux target. DONJON solves the current
-              low-order problem, the flux mismatch updates NSPH, and the
-              converter writes a new handoff before the next solve.
-            </p>
-          </div>
-          <Link
-            href="/commands/run-sph-loop"
-            className="btn btn-secondary shrink-0"
-          >
-            SPH loop command
-          </Link>
+      <p className="mt-3 text-[12px] leading-5 text-[var(--fg-3)]">
+        In the SPH lane, OpenMC is the frozen high-fidelity reference. DONJON is
+        the iterative low-order solve, and openmc2donjon updates the handoff
+        between solves.
+      </p>
+    </section>
+  );
+}
+
+function WorkflowLaneRow({
+  lane,
+  commandById,
+}: {
+  lane: (typeof COMMAND_WORKFLOW_LANES)[number];
+  commandById: Map<string, CommandCatalogEntry>;
+}) {
+  return (
+    <article className="rounded-lg border border-[var(--edge)] bg-black/10 p-3">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold tracking-tight">{lane.title}</h3>
+          <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--fg-2)]">
+            {lane.summary}
+          </p>
         </div>
-        <div className="mt-3 grid gap-2 md:grid-cols-5">
-          {SPH_LOOP_STEPS.map((step, index) => (
-            <Link
-              key={step.label}
-              href={step.href}
-              className="rounded-md border border-cyan-300/15 bg-black/10 p-3 hover:border-cyan-300/40"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] uppercase tracking-wider text-cyan-300/80">
-                  loop {index + 1}
-                </span>
-                <span className="text-[var(--fg-3)]">
-                  {index === 0
-                    ? "fixed"
-                    : index + 1 < SPH_LOOP_STEPS.length
-                      ? "then"
-                      : "repeat"}
-                </span>
-              </div>
-              <div className="mt-2 text-sm font-semibold">{step.label}</div>
-              <div className="mt-1 text-[12px] text-[var(--fg-2)]">
-                {step.detail}
-              </div>
-            </Link>
+        <span className="rounded border border-[var(--edge)] bg-white/[0.03] px-2 py-1 text-[11px] text-[var(--fg-2)] tab-num">
+          {lane.steps.length} stages
+        </span>
+      </div>
+      <div className="grid gap-2 lg:grid-cols-4 xl:grid-cols-5">
+        {lane.steps.map((step, index) => (
+          <WorkflowStepCard
+            key={step.id}
+            step={step}
+            index={index}
+            commandById={commandById}
+            isLast={index === lane.steps.length - 1}
+          />
+        ))}
+      </div>
+    </article>
+  );
+}
+
+function WorkflowStepCard({
+  step,
+  index,
+  commandById,
+  isLast,
+}: {
+  step: (typeof COMMAND_WORKFLOW_LANES)[number]["steps"][number];
+  index: number;
+  commandById: Map<string, CommandCatalogEntry>;
+  isLast: boolean;
+}) {
+  const commands = step.commandIds
+    .map((id) => commandById.get(id))
+    .filter((command): command is CommandCatalogEntry => command != null);
+  return (
+    <div className="rounded-md border border-[var(--edge)] bg-white/[0.025] p-3">
+      <Link href={step.href} className="block hover:text-emerald-200">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
+            {String(index + 1).padStart(2, "0")}
+          </span>
+          <span className="text-[11px] text-[var(--fg-3)]">
+            {isLast ? "done" : "then"}
+          </span>
+        </div>
+        <div className="mt-2 text-sm font-semibold tracking-tight">{step.title}</div>
+        <p className="mt-1 min-h-[3rem] text-[12px] leading-5 text-[var(--fg-2)]">
+          {step.body}
+        </p>
+      </Link>
+      {commands.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {commands.map((command) => (
+            <CommandChip key={`${step.id}-${command.id}`} command={command} />
           ))}
         </div>
-      </div>
-    </section>
+      ) : null}
+    </div>
+  );
+}
+
+function CommandChip({ command }: { command: CommandCatalogEntry }) {
+  return (
+    <Link
+      href={`/commands/${command.id}`}
+      title={command.title}
+      className={
+        "max-w-full break-all rounded border px-2 py-0.5 font-mono text-[10px] transition " +
+        commandChipClass(command.status)
+      }
+    >
+      {command.name}
+    </Link>
   );
 }
 
@@ -870,6 +855,16 @@ function statusBadgeClass(status: CommandStatus) {
     return "border-cyan-300/30 bg-cyan-300/10 text-cyan-200";
   }
   return "border-[var(--edge-bright)] bg-white/[0.04] text-[var(--fg-2)]";
+}
+
+function commandChipClass(status: CommandStatus) {
+  if (status === "ready") {
+    return "border-emerald-400/25 bg-emerald-400/[0.08] text-emerald-200 hover:border-emerald-300/50";
+  }
+  if (status === "partial") {
+    return "border-cyan-300/25 bg-cyan-300/[0.08] text-cyan-200 hover:border-cyan-200/50";
+  }
+  return "border-[var(--edge)] bg-white/[0.03] text-[var(--fg-2)] hover:border-[var(--edge-bright)]";
 }
 
 function statusTextClass(status: CommandStatus) {

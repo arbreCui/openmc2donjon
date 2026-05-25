@@ -1,0 +1,34 @@
+import { describe, expect, it } from "vitest";
+import {
+  COMMAND_WORKFLOW_LANES,
+  workflowLaneCommandIds,
+} from "./commandWorkflowLanes";
+
+describe("commandWorkflowLanes", () => {
+  it("shows the three production lanes", () => {
+    expect(COMMAND_WORKFLOW_LANES.map((lane) => lane.id)).toEqual([
+      "direct",
+      "equivalence",
+      "sph-loop",
+    ]);
+  });
+
+  it("keeps direct conversion connected to delivery", () => {
+    const ids = workflowLaneCommandIds();
+
+    expect(ids).toContain("direct-convert");
+    expect(ids).toContain("bundle");
+    expect(ids).toContain("validate-bundle");
+  });
+
+  it("makes the SPH loop explicit about the frozen OpenMC reference", () => {
+    const sphLane = COMMAND_WORKFLOW_LANES.find((lane) => lane.id === "sph-loop");
+    expect(sphLane).toBeDefined();
+    const firstStep = sphLane!.steps[0];
+
+    expect(firstStep.title).toContain("OpenMC");
+    expect(firstStep.body).toContain("does not rerun OpenMC");
+    expect(firstStep.commandIds).toContain("prepare-openmc-sph-loop");
+    expect(firstStep.commandIds).toContain("make-sph-loop-scaffold");
+  });
+});
