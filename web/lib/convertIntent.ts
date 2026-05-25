@@ -16,7 +16,7 @@ const COPIES: Record<ConvertIntent, ConvertIntentCopy> = {
     eyebrow: "Command workflow",
     title: "Direct conversion",
     body:
-      "Convert an existing OpenMC MGXS HDF5 handoff into DONJON ASCII. Start with Dry run, then write the artifact once the gates look right.",
+      "Convert an existing OpenMC MGXS HDF5 handoff into DONJON ASCII. Start with Dry run, then write the artifact once the checks look right.",
     commandHref: "/commands/direct-convert",
     commandLabel: "direct-convert",
     tone: "accent",
@@ -26,7 +26,7 @@ const COPIES: Record<ConvertIntent, ConvertIntentCopy> = {
     eyebrow: "Production QA",
     title: "Production preflight",
     body:
-      "Use the converter page as a no-write production gate runner. Dry run checks the HDF5 contract, mesh identity, physics balances, equivalence layout, and output target.",
+      "Use the converter page as a no-write production check. Dry run checks the HDF5 contract, mesh identity, physics balances, equivalence layout, and output target.",
     commandHref: "/commands/check",
     commandLabel: "check",
     tone: "production",

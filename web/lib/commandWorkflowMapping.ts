@@ -37,11 +37,11 @@ export function commandWorkflowMapping(
       surface: "Convert page",
       title: "Direct converter workflow",
       summary:
-        "Opens the converter page with the matching output object and gate mode already selected.",
+        "Opens the converter page with the matching output object and check mode already selected.",
       presets: [
         `Output object: ${format === "macrolib" ? "MACROLIB" : "MULTICOMPO"}`,
         `Preflight: ${check ? "on" : "off"}`,
-        `Production gates: ${production ? "on" : "off"}`,
+        `Production checks: ${production ? "on" : "off"}`,
       ],
       requiredInputs: [
         "Input MGXS HDF5 path",
@@ -65,7 +65,7 @@ export function commandWorkflowMapping(
       presets: [
         `Workflow: ${workflow === "two-step" ? "two-step export then convert" : "one-step export + convert"}`,
         `Equivalence: ${equivalenceLabel(equivalence)}`,
-        `Production gates: ${production ? "on" : "off"}`,
+        `Production checks: ${production ? "on" : "off"}`,
       ],
       requiredInputs: [
         "Recipe Python path",
@@ -95,7 +95,7 @@ export function commandWorkflowMapping(
       surface: "Audit page",
       title: "SPH loop audit viewer",
       summary:
-        "Opens the SPH-loop audit page for convergence, acceptance, production gates, and iteration traces.",
+        "Opens the SPH-loop audit page for convergence, acceptance, production checks, and iteration traces.",
       presets: ["Viewer mode: SPH loop summary"],
       requiredInputs: ["SPH loop summary JSON path"],
     };

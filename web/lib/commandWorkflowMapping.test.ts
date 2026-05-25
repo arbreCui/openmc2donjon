@@ -16,7 +16,7 @@ describe("commandWorkflowMapping", () => {
     expect(mapping.surface).toBe("Convert page");
     expect(mapping.presets).toContain("Output object: MULTICOMPO");
     expect(mapping.presets).toContain("Preflight: on");
-    expect(mapping.presets).toContain("Production gates: off");
+    expect(mapping.presets).toContain("Production checks: off");
     expect(mapping.requiredInputs).toContain("Input MGXS HDF5 path");
   });
 
@@ -30,7 +30,7 @@ describe("commandWorkflowMapping", () => {
     );
 
     expect(mapping.surface).toBe("Convert page");
-    expect(mapping.presets).toContain("Production gates: on");
+    expect(mapping.presets).toContain("Production checks: on");
   });
 
   it("describes OpenMC planner deep links", () => {

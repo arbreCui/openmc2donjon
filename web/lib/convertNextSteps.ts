@@ -79,7 +79,7 @@ export function convertNextSteps(
       {
         id: "write",
         label: "Write",
-        title: "Run Convert when the gates look right",
+        title: "Run Convert when the checks look right",
         body:
           "Dry-run did not write a file. Press Convert to create the ASCII handoff at the selected output path.",
         status: "ready",

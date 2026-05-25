@@ -65,25 +65,25 @@ function gatesItem(
   if (!data.preflight) {
     return {
       id: "gates",
-      label: "Gates",
-      title: "Production gates not run",
+      label: "Checks",
+      title: "Production checks not run",
       body:
-        "Enable Preflight and Production gates to record the contract and physics acceptance decision.",
+        "Enable Preflight and Production checks to record the contract and physics acceptance decision.",
       status: data.ok ? "skipped" : "pending",
     };
   }
   const warnings = input?.warnings.length ?? 0;
   return {
     id: "gates",
-    label: "Gates",
+    label: "Checks",
     title: data.preflight_ok
       ? warnings > 0
-        ? "Preflight passed with warnings"
-        : "Preflight passed"
-      : "Preflight failed",
+        ? "Validation passed with warnings"
+        : "Validation passed"
+      : "Validation failed",
     body: data.preflight_ok
       ? `${data.preflight.decision}; ${warnings} warning(s) recorded for audit review.`
-      : "Resolve failed preflight or production checks before writing or packaging.",
+      : "Resolve failed validation or production checks before writing or packaging.",
     status: data.preflight_ok ? "done" : "blocked",
   };
 }

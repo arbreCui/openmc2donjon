@@ -8,10 +8,10 @@ const CONCEPTS = [
       "MULTICOMPO preserves mapped mixtures for DONJON material assignments. MACROLIB is the smaller one-state handoff when no composition map is needed.",
   },
   {
-    title: "Gate mode",
+    title: "Check mode",
     focus: "Preflight vs Production",
     body:
-      "Preflight checks the HDF5 contract and output path. Production gates add stricter physics checks for handoff readiness.",
+      "Preflight checks the HDF5 contract and output path. Production adds stricter physics checks for handoff readiness.",
   },
   {
     title: "Run mode",

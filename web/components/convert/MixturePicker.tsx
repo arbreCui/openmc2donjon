@@ -218,7 +218,7 @@ function InspectionMiniSummary({ data }: { data: HandoffInspection }) {
       </div>
 
       <p className="mt-2 text-[11px] leading-relaxed text-[var(--fg-3)]">
-        Uncertainty and std_dev gates are checked by dry-run / production
+        Uncertainty and std_dev checks are run by dry-run / production
         acceptance; this card shows the quick HDF5 inspection payload.
       </p>
 

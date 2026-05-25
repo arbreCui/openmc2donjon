@@ -409,12 +409,12 @@ function ConvertPageContent() {
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <Toggle
               label="Preflight"
-              description="Validate the HDF5 contract and quick physics gates before writing."
+              description="Validate the HDF5 contract and quick physics checks before writing."
               checked={check}
               onChange={setCheck}
             />
             <Toggle
-              label="Production gates"
+              label="Production checks"
               description="Use the stricter acceptance preset for production handoffs."
               checked={production}
               onChange={setProduction}
@@ -964,7 +964,7 @@ function ConvertGuide() {
       <GuideCard
         step="02"
         title="Dry run first"
-        body="Run preflight without writing output; production gates catch common MGXS contract and physics issues."
+        body="Run preflight without writing output; production checks catch common MGXS contract and physics issues."
       />
       <GuideCard
         step="03"

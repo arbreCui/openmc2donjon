@@ -21,7 +21,7 @@ type GateStatus = "pass" | "warn" | "fail" | "skipped";
 
 const STEPS = [
   { id: "select", label: "Select HDF5" },
-  { id: "preflight", label: "Preflight" },
+  { id: "preflight", label: "Validate" },
   { id: "convert", label: "Convert" },
   { id: "review", label: "Review" },
 ] as const;
@@ -56,7 +56,7 @@ function ResultBody({
         </h2>
         <p className="mt-2 max-w-2xl text-sm text-[var(--fg-2)]">
           Start with a dry run to validate the HDF5 contract, energy mesh,
-          production gates, and output path without writing an ASCII file.
+          production checks, and output path without writing an ASCII file.
         </p>
       </section>
     );
@@ -65,8 +65,8 @@ function ResultBody({
     return (
       <section className="glass rounded-xl p-5 text-sm text-[var(--fg-2)] tab-num">
         {state.mode === "dry-run"
-          ? "Running preflight and output checks…"
-          : "Running preflight and writing ASCII output…"}
+          ? "Validating input and output target…"
+          : "Validating input and writing ASCII output…"}
       </section>
     );
   }
@@ -120,7 +120,7 @@ function ConvertSummary({
             label="Output size"
             value={data.output_size == null ? "—" : formatSize(data.output_size)}
           />
-          <Meta label="Preflight" value={data.preflight_ok ? "pass" : "fail"} />
+          <Meta label="Validation" value={data.preflight_ok ? "pass" : "fail"} />
         </dl>
 
         <RunModeNotice data={data} />
@@ -152,10 +152,7 @@ function ConvertSummary({
       <HandoffPipeline data={data} input={input} />
 
       {input ? (
-        <>
-          <GateCards data={data} input={input} />
-          <InputStats input={input} />
-        </>
+        <ValidationEvidenceDetails data={data} input={input} />
       ) : null}
       {data.converted && data.output_exists ? (
         <div id="ascii-output-preview">
@@ -313,7 +310,7 @@ function RunModeNotice({ data }: { data: ConvertResponse }) {
       ? "Convert wrote the ASCII handoff."
       : "Convert stopped before writing output.";
   const body = data.dry_run
-    ? "Use this result to review preflight, production gates, equivalence metadata, and output safety before pressing Convert."
+    ? "Use this result to review validation, equivalence metadata, and output safety before pressing Convert."
     : data.converted
       ? "This path is the artifact to hand to DONJON or preview in the ASCII viewer below."
       : "Resolve the failed checks or request error, then run the converter again.";
@@ -424,7 +421,48 @@ function DecisionTile({
   );
 }
 
-function GateCards({
+function ValidationEvidenceDetails({
+  data,
+  input,
+}: {
+  data: ConvertResponse;
+  input: ConvertPreflightInput;
+}) {
+  const open = !data.ok || !input.ok || input.issues.length > 0;
+  const production = data.cli_command.includes("--production");
+  const warningText =
+    input.warnings.length === 0 ? "no warnings" : `${input.warnings.length} warning(s)`;
+  return (
+    <details
+      open={open}
+      className="glass rounded-xl p-5 [&_summary::-webkit-details-marker]:hidden"
+    >
+      <summary className="cursor-pointer list-none">
+        <div className="flex flex-wrap items-baseline justify-between gap-4">
+          <div>
+            <h2 className="text-base font-semibold tracking-tight">
+              Detailed validation evidence
+            </h2>
+            <p className="mt-1 max-w-2xl text-sm text-[var(--fg-2)]">
+              Reviewer details for QA and troubleshooting. The main result above
+              is enough for normal convert decisions.
+            </p>
+          </div>
+          <span className="rounded border border-[var(--edge)] px-2 py-1 text-[11px] uppercase tracking-wider text-[var(--fg-2)]">
+            {production ? "production checks" : "basic checks"} · {warningText}
+          </span>
+        </div>
+      </summary>
+
+      <div className="mt-4 space-y-4">
+        <CheckCards data={data} input={input} />
+        <InputStats input={input} />
+      </div>
+    </details>
+  );
+}
+
+function CheckCards({
   data,
   input,
 }: {
@@ -438,11 +476,11 @@ function GateCards({
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold tracking-tight">
-            {production ? "Production gates" : "Preflight gates"}
+            {production ? "Production checks" : "Basic checks"}
           </h2>
           <p className="mt-1 text-sm text-[var(--fg-2)]">
             {production
-              ? "Strict acceptance checks for a production DONJON handoff."
+              ? "Strict checks for a production DONJON handoff."
               : "Basic contract and output checks before writing ASCII."}
           </p>
         </div>

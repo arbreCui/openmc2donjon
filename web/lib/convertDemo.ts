@@ -33,7 +33,7 @@ export const C5G7_PRODUCTION_DEMO: ConvertDemoPreset = {
   id: "c5g7-production",
   label: "C5G7 production demo",
   description:
-    "Walk through a realistic direct conversion: inspect the OpenMC MGXS HDF5, dry-run production gates, write MULTICOMPO ASCII, then review the handoff artifact.",
+    "Walk through a realistic direct conversion: inspect the OpenMC MGXS HDF5, dry-run production checks, write MULTICOMPO ASCII, then review the handoff artifact.",
   inputPath: "/mock/home/openmc-runs/c5g7/handoff.h5",
   outputPath: "/mock/home/openmc-runs/c5g7/out.mcompo.txt",
   format: "multicompo",
@@ -154,7 +154,7 @@ export function convertDemoWalkthrough(
     {
       id: "dry-run",
       label: "02",
-      title: "Dry-run gates",
+      title: "Validate without writing",
       body: "Run the converter in no-write mode with production checks enabled.",
     },
     {
