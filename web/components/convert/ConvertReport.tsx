@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ConvertPreflightInput, ConvertResponse } from "@/lib/api";
 import { convertNextSteps } from "@/lib/convertNextSteps";
 import AsciiPreview from "./AsciiPreview";
+import ArtifactAnatomyCard from "./ArtifactAnatomyCard";
 import ConversionSummaryStrip from "./ConversionSummaryStrip";
 import DeliveryChecklist from "./DeliveryChecklist";
 import HandoffPipeline from "./HandoffPipeline";
@@ -125,6 +126,8 @@ function ConvertSummary({
         <RunModeNotice data={data} />
 
         <ConversionSummaryStrip data={data} input={input} />
+
+        <ArtifactAnatomyCard data={data} input={input} />
 
         {input ? <ProductionEvidenceStrip input={input} /> : null}
 
