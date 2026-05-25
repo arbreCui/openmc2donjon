@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  convertBundleManifestPath,
   convertBundleHref,
   convertNextSteps,
   convertObjectDescription,
   convertObjectLabel,
+  convertValidateBundleHref,
 } from "./convertNextSteps";
 import type { ConvertPreflightInput, ConvertResponse } from "./api";
 
@@ -35,16 +37,21 @@ describe("convert next steps", () => {
   });
 
   it("builds bundle builder deep links with handoff paths prefilled", () => {
+    const converted = response({
+      dry_run: false,
+      converted: true,
+      output_exists: true,
+    });
     expect(
-      convertBundleHref(
-        response({
-          dry_run: false,
-          converted: true,
-          output_exists: true,
-        }),
-      ),
+      convertBundleHref(converted),
     ).toBe(
       "/builder?command=bundle&output_dir=%2Fruns%2Fcase%2Fbundle&mgxs=%2Fruns%2Fcase%2Fmgxs_library.h5&mcompo=%2Fruns%2Fcase%2Fout.mcompo.txt",
+    );
+    expect(convertBundleManifestPath(converted)).toBe(
+      "/runs/case/bundle/manifest.json",
+    );
+    expect(convertValidateBundleHref(converted)).toBe(
+      "/builder?command=validate-bundle&manifest=%2Fruns%2Fcase%2Fbundle%2Fmanifest.json",
     );
     expect(
       convertBundleHref(

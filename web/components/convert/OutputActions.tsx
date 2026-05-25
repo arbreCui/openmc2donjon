@@ -15,7 +15,12 @@ import {
   convertDeliveryChecklist,
   type ConvertDeliveryItem,
 } from "@/lib/convertDeliveryChecklist";
-import { convertBundleHref } from "@/lib/convertNextSteps";
+import {
+  convertBundleHref,
+  convertBundleManifestPath,
+  convertBundleOutputDir,
+  convertValidateBundleHref,
+} from "@/lib/convertNextSteps";
 import {
   fileStatusIsDirectory,
   fileStatusIsFile,
@@ -88,6 +93,7 @@ export default function OutputActions({
       <DeliveryPathStrip items={deliveryItems} onConvert={onConvert} />
 
       <AsciiReadinessPanel data={data} outputStatus={statuses.output} />
+      <DeliveryCommandPanel data={data} statuses={statuses} onConvert={onConvert} />
 
       <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
         {actions.map((action) => (
@@ -124,6 +130,100 @@ export default function OutputActions({
 
       <RunSummaryCard data={data} input={input} statuses={statuses} />
     </section>
+  );
+}
+
+function DeliveryCommandPanel({
+  data,
+  statuses,
+  onConvert,
+}: {
+  data: ConvertResponse;
+  statuses: ConvertArtifactStatusMap;
+  onConvert?: () => void;
+}) {
+  const outputKnownMissing =
+    statuses.output.kind === "ok" && !fileStatusIsFile(statuses.output);
+  const outputReady = data.converted && data.output_exists && !outputKnownMissing;
+  const canConvertNow = data.dry_run && data.ok && !data.output_exists && onConvert;
+  const bundleDir = convertBundleOutputDir(data);
+  const manifestPath = convertBundleManifestPath(data);
+  const bundleDirReady = fileStatusIsDirectory(statuses.bundle);
+  return (
+    <section
+      className={
+        "mt-3 rounded-lg border p-3 " +
+        (outputReady
+          ? "border-emerald-300/20 bg-emerald-300/[0.055] text-emerald-100"
+          : canConvertNow
+            ? "border-cyan-300/25 bg-cyan-300/[0.06] text-cyan-100"
+            : "border-[var(--edge)] bg-white/[0.02] text-[var(--fg-2)]")
+      }
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.14em] opacity-70">
+            delivery command chain
+          </div>
+          <h4 className="mt-1 text-sm font-semibold tracking-tight">
+            {outputReady
+              ? "Preview, bundle, then validate the manifest"
+              : canConvertNow
+                ? "Convert unlocks preview and bundle delivery"
+                : "Delivery waits for a confirmed ASCII file"}
+          </h4>
+          <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--fg-2)]">
+            {outputReady
+              ? "The web converter wrote the ASCII handoff. The next local command should collect the HDF5 and ASCII file into a manifest-backed bundle, then validate that manifest."
+              : canConvertNow
+                ? "The dry run accepted this handoff. Run Convert to write the ASCII file, then this panel will expose the bundle and validation builders."
+                : "Run a successful conversion before packaging the handoff for another workflow or collaborator."}
+          </p>
+        </div>
+        {outputReady ? (
+          <span className="rounded border border-current/20 bg-black/15 px-2 py-1 text-[11px] uppercase tracking-wider">
+            {bundleDirReady ? "bundle dir exists" : "bundle dir target"}
+          </span>
+        ) : null}
+      </div>
+
+      {outputReady ? (
+        <>
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
+            <DeliveryPath label="Bundle directory" value={bundleDir} />
+            <DeliveryPath label="Manifest after bundle" value={manifestPath} />
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <a href="#ascii-output-preview" className="btn btn-primary">
+              Preview ASCII
+            </a>
+            <Link href={convertBundleHref(data)} className="btn btn-secondary">
+              Open bundle builder
+            </Link>
+            <Link href={convertValidateBundleHref(data)} className="btn btn-secondary">
+              Prepare validation command
+            </Link>
+          </div>
+        </>
+      ) : canConvertNow ? (
+        <button type="button" onClick={onConvert} className="mt-3 btn btn-primary">
+          Convert now
+        </button>
+      ) : null}
+    </section>
+  );
+}
+
+function DeliveryPath({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded border border-current/15 bg-black/15 px-3 py-2">
+      <div className="text-[10px] uppercase tracking-[0.14em] opacity-70">
+        {label}
+      </div>
+      <div className="mt-1 break-all font-mono text-[12px] text-[var(--fg-1)]">
+        {value}
+      </div>
+    </div>
   );
 }
 

@@ -34,6 +34,18 @@ export function convertBundleHref(data: ConvertResponse): string {
   return `/builder?${params.toString()}`;
 }
 
+export function convertValidateBundleHref(data: ConvertResponse): string {
+  const params = new URLSearchParams({
+    command: "validate-bundle",
+    manifest: convertBundleManifestPath(data),
+  });
+  return `/builder?${params.toString()}`;
+}
+
+export function convertBundleManifestPath(data: ConvertResponse): string {
+  return `${withoutTrailingSlash(convertBundleOutputDir(data))}/manifest.json`;
+}
+
 export function convertBundleOutputDir(data: ConvertResponse): string {
   return siblingBundleDir(data.output_path);
 }
@@ -43,6 +55,12 @@ function siblingBundleDir(outputPath: string): string {
   const index = trimmed.lastIndexOf("/");
   if (index <= 0) return "bundle";
   return `${trimmed.slice(0, index)}/bundle`;
+}
+
+function withoutTrailingSlash(path: string): string {
+  const trimmed = path.trim();
+  if (trimmed === "/" || trimmed === "") return trimmed || "bundle";
+  return trimmed.replace(/\/+$/, "");
 }
 
 export function convertNextSteps(

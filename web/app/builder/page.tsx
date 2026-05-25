@@ -344,10 +344,27 @@ function BundlePrefillPanel({
             {status.body}
           </p>
         </div>
-        <Link href="/commands/direct-convert" className="btn btn-secondary">
-          Direct convert notes
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          {status.validateHref ? (
+            <Link href={status.validateHref} className="btn btn-primary">
+              Prepare validation
+            </Link>
+          ) : null}
+          <Link href="/commands/direct-convert" className="btn btn-secondary">
+            Direct convert notes
+          </Link>
+        </div>
       </div>
+      {status.manifestPath ? (
+        <div className="mt-3 rounded border border-current/15 bg-black/15 px-3 py-2">
+          <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+            manifest path after bundle
+          </div>
+          <div className="mt-1 break-all font-mono text-[12px] text-[var(--fg-1)]">
+            {status.manifestPath}
+          </div>
+        </div>
+      ) : null}
       {status.chips.length > 0 ? (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {status.chips.map((chip) => (

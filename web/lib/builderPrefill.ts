@@ -5,6 +5,8 @@ export interface BundlePrefillStatus {
   title: string;
   body: string;
   chips: string[];
+  manifestPath?: string;
+  validateHref?: string;
 }
 
 const ARTIFACT_FIELDS = [
@@ -26,13 +28,16 @@ export function bundlePrefillStatus(values: BuilderValues): BundlePrefillStatus 
   const hasOutputDir = hasValue(values.output_dir);
   const hasAscii = hasValue(values.mcompo) || hasValue(values.macrolib);
   const fromConverter = hasValue(values.mgxs) && hasAscii;
+  const manifestPath = bundleManifestPath(values.output_dir);
   if (fromConverter) {
     return {
       prefilled: true,
       title: "Prefilled from a converter result",
       body:
         "The MGXS source and DONJON ASCII handoff are already in the form. Review the bundle directory, copy the CLI, then run it locally to create the delivery record.",
-      chips: ["bundle directory", ...chips],
+      chips: [...(hasOutputDir ? ["bundle directory"] : []), ...chips],
+      manifestPath,
+      validateHref: manifestPath ? validateBundleBuilderHref(manifestPath) : undefined,
     };
   }
   if (hasOutputDir || chips.length > 0) {
@@ -42,6 +47,8 @@ export function bundlePrefillStatus(values: BuilderValues): BundlePrefillStatus 
       body:
         "Some artifact paths came from the URL. Fill any remaining files you want in the manifest-backed delivery bundle.",
       chips: [...(hasOutputDir ? ["bundle directory"] : []), ...chips],
+      manifestPath,
+      validateHref: manifestPath ? validateBundleBuilderHref(manifestPath) : undefined,
     };
   }
   return {
@@ -55,4 +62,19 @@ export function bundlePrefillStatus(values: BuilderValues): BundlePrefillStatus 
 
 function hasValue(value: string | boolean | undefined): boolean {
   return typeof value === "string" && value.trim() !== "";
+}
+
+function bundleManifestPath(outputDir: string | boolean | undefined): string | undefined {
+  if (!hasValue(outputDir)) return undefined;
+  const dir = String(outputDir).trim();
+  const normalized = dir === "/" ? dir : dir.replace(/\/+$/, "");
+  return `${normalized}/manifest.json`;
+}
+
+function validateBundleBuilderHref(manifestPath: string): string {
+  const params = new URLSearchParams({
+    command: "validate-bundle",
+    manifest: manifestPath,
+  });
+  return `/builder?${params.toString()}`;
 }

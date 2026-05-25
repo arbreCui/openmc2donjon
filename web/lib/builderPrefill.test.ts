@@ -16,6 +16,10 @@ describe("bundlePrefillStatus", () => {
       "MGXS HDF5",
       "MULTICOMPO",
     ]);
+    expect(status.manifestPath).toBe("/runs/case/bundle/manifest.json");
+    expect(status.validateHref).toBe(
+      "/builder?command=validate-bundle&manifest=%2Fruns%2Fcase%2Fbundle%2Fmanifest.json",
+    );
   });
 
   it("recognizes partial bundle prefill", () => {
@@ -27,6 +31,7 @@ describe("bundlePrefillStatus", () => {
     expect(status.prefilled).toBe(true);
     expect(status.title).toBe("Bundle builder has prefilled fields");
     expect(status.chips).toEqual(["bundle directory", "check summary"]);
+    expect(status.manifestPath).toBe("/runs/case/bundle/manifest.json");
   });
 
   it("keeps empty bundle builders in explanatory mode", () => {
@@ -35,5 +40,7 @@ describe("bundlePrefillStatus", () => {
     expect(status.prefilled).toBe(false);
     expect(status.title).toBe("Bundle artifacts after conversion");
     expect(status.chips).toEqual([]);
+    expect(status.manifestPath).toBeUndefined();
+    expect(status.validateHref).toBeUndefined();
   });
 });
