@@ -13,6 +13,7 @@ import {
 import FileBrowserModal from "@/components/inspect/FileBrowserModal";
 import OpenmcArtifactList from "@/components/openmc/OpenmcArtifactList";
 import OpenmcCommandList from "@/components/openmc/OpenmcCommandList";
+import OpenmcProductionPathPanel from "@/components/openmc/OpenmcProductionPathPanel";
 import OpenmcWorkflowChoices from "@/components/openmc/OpenmcWorkflowChoices";
 import OpenmcWorkflowSummary from "@/components/openmc/OpenmcWorkflowSummary";
 import { useSettings } from "@/lib/settings";
@@ -207,6 +208,18 @@ function OpenmcPageContent() {
         </header>
 
         <OpenmcWorkflowChoices />
+
+        <OpenmcProductionPathPanel
+          state={state}
+          workflow={workflow}
+          equivalence={equivalence}
+          format={format}
+          production={production}
+          recipePath={recipePath}
+          statepointPath={statepointPath}
+          loadStatepoint={loadStatepoint}
+          runDir={runDir}
+        />
 
         <form className="glass rounded-xl p-4 space-y-4" onSubmit={plan}>
           <div className="grid gap-3 lg:grid-cols-2">
