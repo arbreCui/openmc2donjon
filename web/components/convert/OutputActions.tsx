@@ -145,58 +145,60 @@ function handoffActions(
   const outputReady = data.converted && data.output_exists && !outputKnownMissing;
   const bundleDirReady = fileStatusIsDirectory(statuses?.bundle);
   const canConvertNow = data.dry_run && data.ok && !data.output_exists && onConvert;
-  return [
-    {
-      id: "inspect",
-      label: "Evidence",
-      title: inputReady ? "Inspect input HDF5" : "Inspect source path",
-      body: inputReady
-        ? "Open mixture roster, energy mesh identity, ADF/SPH metadata, and production warnings."
-        : "The source path is not confirmed right now; opening the inspector may return a path error.",
-      href: `/inspect?path=${encodeURIComponent(data.input_path)}`,
-      status: inputReady ? "reference" : "blocked",
-      fileStatus: statuses?.input,
-      fileStatusLabel: "input",
-    },
-    {
-      id: "preview",
-      label: "ASCII",
-      title: outputReady ? "Preview ASCII blocks" : "Preview waits for output",
-      body: outputReady
-        ? "Jump to the LCM ASCII signature, visible block tree, and first lines."
-        : canConvertNow
-          ? "Dry run passed. Convert writes the ASCII file before preview is available."
-          : "The output file was not confirmed, so the preview cannot be opened yet.",
-      href: outputReady ? "#ascii-output-preview" : undefined,
-      disabled: !outputReady,
-      status: outputReady ? "ready" : "blocked",
-      fileStatus: statuses?.output,
-      fileStatusLabel: "output",
-    },
-    {
-      id: "bundle",
-      label: bundleDirReady ? "Bundle" : "Bundle target",
-      title: outputReady ? "Bundle handoff" : "Bundle after convert",
-      body: outputReady
-        ? bundleDirReady
-          ? "Open the bundle builder with MGXS and ASCII paths filled; an existing bundle directory is present."
-          : "Open the bundle builder with MGXS and ASCII paths filled; it will create or update the bundle directory."
-        : "Package the input, ASCII output, summaries, and logs after conversion succeeds.",
-      href: outputReady ? convertBundleHref(data) : undefined,
-      disabled: !outputReady,
-      status: outputReady ? "ready" : "blocked",
-      fileStatus: statuses?.bundle,
-      fileStatusLabel: "bundle dir",
-    },
-    {
-      id: "guide",
-      label: "Command",
-      title: "Open command guide",
-      body: "Review when to use direct conversion, what it writes, and where it sits in the workflow map.",
-      href: "/commands/direct-convert",
-      status: "reference",
-    },
-  ];
+  const inspect: HandoffAction = {
+    id: "inspect",
+    label: "Evidence",
+    title: inputReady ? "Inspect input HDF5" : "Inspect source path",
+    body: inputReady
+      ? "Open mixture roster, energy mesh identity, ADF/SPH metadata, and production warnings."
+      : "The source path is not confirmed right now; opening the inspector may return a path error.",
+    href: `/inspect?path=${encodeURIComponent(data.input_path)}`,
+    status: inputReady ? "reference" : "blocked",
+    fileStatus: statuses?.input,
+    fileStatusLabel: "input",
+  };
+  const preview: HandoffAction = {
+    id: "preview",
+    label: "ASCII",
+    title: outputReady ? "Preview ASCII blocks" : "Preview waits for output",
+    body: outputReady
+      ? "Jump to the LCM ASCII signature, visible block tree, and first lines."
+      : canConvertNow
+        ? "Dry run passed. Convert writes the ASCII file before preview is available."
+        : "The output file was not confirmed, so the preview cannot be opened yet.",
+    href: outputReady ? "#ascii-output-preview" : undefined,
+    disabled: !outputReady,
+    status: outputReady ? "ready" : "blocked",
+    fileStatus: statuses?.output,
+    fileStatusLabel: "output",
+  };
+  const bundle: HandoffAction = {
+    id: "bundle",
+    label: bundleDirReady ? "Bundle" : "Bundle target",
+    title: outputReady ? "Bundle handoff" : "Bundle after convert",
+    body: outputReady
+      ? bundleDirReady
+        ? "Open the bundle builder with MGXS and ASCII paths filled; an existing bundle directory is present."
+        : "Open the bundle builder with MGXS and ASCII paths filled; it will create or update the bundle directory."
+      : "Package the input, ASCII output, summaries, and logs after conversion succeeds.",
+    href: outputReady ? convertBundleHref(data) : undefined,
+    disabled: !outputReady,
+    status: outputReady ? "ready" : "blocked",
+    fileStatus: statuses?.bundle,
+    fileStatusLabel: "bundle dir",
+  };
+  const guide: HandoffAction = {
+    id: "guide",
+    label: "Command",
+    title: "Open command guide",
+    body: "Review when to use direct conversion, what it writes, and where it sits in the workflow map.",
+    href: "/commands/direct-convert",
+    status: "reference",
+  };
+  if (outputReady) {
+    return [preview, bundle, inspect, guide];
+  }
+  return [inspect, preview, bundle, guide];
 }
 
 function ActionCard({ action }: { action: HandoffAction }) {

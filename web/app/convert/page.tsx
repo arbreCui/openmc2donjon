@@ -32,6 +32,8 @@ import {
   PRODUCTION_MINICASE_ARTIFACTS,
   PRODUCTION_MINICASE_COMMAND,
   PRODUCTION_MINICASE_DEMO,
+  convertDemoBundleHref,
+  convertDemoPreviewHref,
   convertDemoRequest,
   convertDemoWalkthrough,
   isProductionMinicasePath,
@@ -51,6 +53,7 @@ import {
   type ConvertWalkthroughRun,
   type ConvertWalkthroughStatus,
 } from "@/lib/convertWalkthrough";
+import { convertShowcaseDefaultOpen } from "@/lib/convertShowcase";
 import {
   fileStatusLabel,
   fileStatusTone,
@@ -383,6 +386,7 @@ function ConvertPageContent() {
           requireKnownMesh={requireKnownMesh}
           outputPath={displayedOutput}
           input={preflightInput}
+          defaultOpen={convertShowcaseDefaultOpen(state.kind)}
         />
 
         <form
@@ -880,6 +884,22 @@ function MockDemoCard({
               ? "The mock MULTICOMPO artifact is ready for preview and bundling below."
               : "Run Convert demo output to create the mock MULTICOMPO ASCII handoff."}
           </span>
+        </div>
+      ) : null}
+      {converted ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <a
+            href={convertDemoPreviewHref(C5G7_PRODUCTION_DEMO)}
+            className="btn btn-primary"
+          >
+            Preview output
+          </a>
+          <Link
+            href={convertDemoBundleHref(C5G7_PRODUCTION_DEMO)}
+            className="btn btn-secondary"
+          >
+            Bundle demo
+          </Link>
         </div>
       ) : null}
       <div className="mt-4 grid gap-3 lg:grid-cols-4">

@@ -133,6 +133,11 @@ export function convertDemoBundleHref(preset: ConvertDemoPreset): string {
   return `/builder?${params.toString()}`;
 }
 
+export function convertDemoPreviewHref(preset: ConvertDemoPreset): string {
+  void preset;
+  return "#ascii-output-preview";
+}
+
 export function convertDemoRequest(
   preset: ConvertDemoPreset,
   {

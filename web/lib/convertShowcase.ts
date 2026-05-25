@@ -16,6 +16,8 @@ export interface ConvertShowcaseOptions {
   input: ConvertPreflightInput | null;
 }
 
+export type ConvertShowcaseRunKind = "idle" | "loading" | "ok" | "error";
+
 export function convertShowcaseFacts({
   format,
   check,
@@ -33,6 +35,12 @@ export function convertShowcaseFacts({
 
 export function convertShowcaseObjectLabel(format: ConvertFormat): string {
   return format === "macrolib" ? "L_MACROLIB" : "L_MULTICOMPO";
+}
+
+export function convertShowcaseDefaultOpen(
+  runKind: ConvertShowcaseRunKind,
+): boolean {
+  return runKind === "idle";
 }
 
 function outputObjectFact(format: ConvertFormat): ConvertShowcaseFact {

@@ -8,6 +8,7 @@ import {
   convertDemoBundleHref,
   convertDemoHref,
   convertDemoInspectHref,
+  convertDemoPreviewHref,
   convertDemoRequest,
   convertDemoWalkthrough,
   isProductionMinicasePath,
@@ -70,6 +71,9 @@ describe("convert demo presets", () => {
     );
     expect(convertDemoBundleHref(C5G7_PRODUCTION_DEMO)).toBe(
       "/builder?command=bundle&output_dir=%2Fmock%2Fhome%2Fopenmc-runs%2Fc5g7%2Fbundle&mgxs=%2Fmock%2Fhome%2Fopenmc-runs%2Fc5g7%2Fhandoff.h5&mcompo=%2Fmock%2Fhome%2Fopenmc-runs%2Fc5g7%2Fout.mcompo.txt",
+    );
+    expect(convertDemoPreviewHref(C5G7_PRODUCTION_DEMO)).toBe(
+      "#ascii-output-preview",
     );
   });
 

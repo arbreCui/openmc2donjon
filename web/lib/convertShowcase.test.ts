@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ConvertPreflightInput } from "./api";
 import {
+  convertShowcaseDefaultOpen,
   convertShowcaseFacts,
   convertShowcaseObjectLabel,
 } from "./convertShowcase";
@@ -54,6 +55,13 @@ describe("convert showcase", () => {
     }).find((fact) => fact.id === "equivalence");
     expect(equivalence?.badge).toBe("direct XS only");
     expect(equivalence?.tone).toBe("warn");
+  });
+
+  it("only expands the explanatory section before a run result exists", () => {
+    expect(convertShowcaseDefaultOpen("idle")).toBe(true);
+    expect(convertShowcaseDefaultOpen("loading")).toBe(false);
+    expect(convertShowcaseDefaultOpen("ok")).toBe(false);
+    expect(convertShowcaseDefaultOpen("error")).toBe(false);
   });
 });
 
