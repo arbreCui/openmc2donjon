@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import HomeDemoShortcuts from "@/components/HomeDemoShortcuts";
+import ProductionPathStrip from "@/components/ProductionPathStrip";
 import TaskLauncher from "@/components/TaskLauncher";
 import { ApiError, HealthResponse, api } from "@/lib/api";
 import { HOME_DEMO_SHORTCUTS } from "@/lib/demoShortcuts";
+import { PRODUCTION_PATH_STEPS } from "@/lib/productionPath";
 import { TASK_ENTRYPOINTS } from "@/lib/taskEntrypoints";
 
 type Status =
@@ -53,6 +55,8 @@ export default function Home() {
 
         <div className="grid gap-5 xl:grid-cols-[1fr_320px]">
           <div className="space-y-5">
+            <ProductionPathStrip steps={PRODUCTION_PATH_STEPS} />
+
             <TaskLauncher
               title="What are you doing now?"
               summary="Pick the entry that matches the artifact you already have. Each path stays local and keeps the equivalent CLI visible."
