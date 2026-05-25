@@ -3,11 +3,15 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { CopyCliButton } from "@/components/commands/CopyCliButton";
-import { ApiError, ConvertResponse, api } from "@/lib/api";
+import type { ConvertResponse } from "@/lib/api";
 import {
-  convertBundleHref,
-  convertBundleOutputDir,
-} from "@/lib/convertNextSteps";
+  convertArtifactPaths,
+  convertArtifactStatusSummary,
+  fetchConvertArtifactStatuses,
+  loadingConvertArtifactStatuses,
+  type ConvertArtifactStatusMap,
+} from "@/lib/convertArtifactStatus";
+import { convertBundleHref } from "@/lib/convertNextSteps";
 import {
   fileStatusIsDirectory,
   fileStatusIsFile,
@@ -15,11 +19,7 @@ import {
   fileStatusTone,
   type FileStatusState,
 } from "@/lib/fileStatus";
-
-const ARTIFACT_STATUS_IDS = ["input", "output", "bundle"] as const;
-type ArtifactStatusId = (typeof ARTIFACT_STATUS_IDS)[number];
-type ArtifactStatusMap = Record<ArtifactStatusId, FileStatusState>;
-type ArtifactPathMap = Record<ArtifactStatusId, string>;
+import RunSummaryCard from "./RunSummaryCard";
 
 export default function OutputActions({
   data,
@@ -28,41 +28,18 @@ export default function OutputActions({
   data: ConvertResponse;
   onConvert?: () => void;
 }) {
-  const paths = useMemo(() => artifactPaths(data), [data]);
-  const [statuses, setStatuses] = useState<ArtifactStatusMap>(
-    loadingStatuses,
+  const paths = useMemo(() => convertArtifactPaths(data), [data]);
+  const [statuses, setStatuses] = useState<ConvertArtifactStatusMap>(
+    loadingConvertArtifactStatuses,
   );
   const [refreshToken, setRefreshToken] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    setStatuses(loadingStatuses());
-    Promise.all(
-      ARTIFACT_STATUS_IDS.map(async (id) => {
-        try {
-          return {
-            id,
-            state: {
-              kind: "ok",
-              status: await api.fileStatus(paths[id]),
-            } satisfies FileStatusState,
-          };
-        } catch (err) {
-          const message =
-            err instanceof ApiError
-              ? err.detail ?? err.message
-              : err instanceof Error
-                ? err.message
-                : "status check failed";
-          return {
-            id,
-            state: { kind: "error", message } satisfies FileStatusState,
-          };
-        }
-      }),
-    ).then((items) => {
+    setStatuses(loadingConvertArtifactStatuses());
+    fetchConvertArtifactStatuses(paths).then((next) => {
       if (cancelled) return;
-      setStatuses(statusMapFromItems(items));
+      setStatuses(next);
     });
     return () => {
       cancelled = true;
@@ -70,6 +47,7 @@ export default function OutputActions({
   }, [paths, refreshToken]);
 
   const notice = outputNotice(data);
+  const input = data.preflight?.inputs[0] ?? null;
   const canConvertNow = data.dry_run && data.ok && !data.output_exists && onConvert;
   const pathLabel =
     data.converted && data.output_exists ? "Copy DONJON path" : "Copy target path";
@@ -89,7 +67,7 @@ export default function OutputActions({
         </span>
       </div>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-3 text-[12px] text-[var(--fg-3)]">
-        <span>{artifactStatusSummary(statuses)}</span>
+        <span>{convertArtifactStatusSummary(statuses)}</span>
         <button
           type="button"
           onClick={() => setRefreshToken((value) => value + 1)}
@@ -131,52 +109,10 @@ export default function OutputActions({
         <span className="font-semibold">{notice.title}</span>
         <span className="ml-2 text-[var(--fg-1)]">{notice.body}</span>
       </div>
+
+      <RunSummaryCard data={data} input={input} statuses={statuses} />
     </section>
   );
-}
-
-function statusMapFromItems(
-  items: readonly { id: ArtifactStatusId; state: FileStatusState }[],
-): ArtifactStatusMap {
-  const next = loadingStatuses();
-  for (const item of items) {
-    next[item.id] = item.state;
-  }
-  return next;
-}
-
-function artifactPaths(data: ConvertResponse): ArtifactPathMap {
-  return {
-    input: data.input_path,
-    output: data.output_path,
-    bundle: convertBundleOutputDir(data),
-  };
-}
-
-function loadingStatuses(): ArtifactStatusMap {
-  return {
-    input: { kind: "loading" },
-    output: { kind: "loading" },
-    bundle: { kind: "loading" },
-  };
-}
-
-function artifactStatusSummary(statuses: ArtifactStatusMap): string {
-  const loading = ARTIFACT_STATUS_IDS.some((id) => statuses[id].kind === "loading");
-  if (loading) return "Checking input, output, and bundle paths…";
-  const errors = ARTIFACT_STATUS_IDS.filter((id) => statuses[id].kind === "error");
-  if (errors.length > 0) {
-    return `${errors.length} file-status check${errors.length === 1 ? "" : "s"} failed.`;
-  }
-  const outputReady = fileStatusIsFile(statuses.output);
-  const bundleReady = fileStatusIsDirectory(statuses.bundle);
-  if (outputReady && bundleReady) {
-    return "ASCII output and bundle directory are present on disk.";
-  }
-  if (outputReady) {
-    return "ASCII output is present; the bundle directory is still a builder target.";
-  }
-  return "ASCII output is not present yet; preview and bundling wait for conversion.";
 }
 
 interface HandoffAction {
@@ -194,7 +130,7 @@ interface HandoffAction {
 function handoffActions(
   data: ConvertResponse,
   onConvert?: () => void,
-  statuses?: ArtifactStatusMap,
+  statuses?: ConvertArtifactStatusMap,
 ): HandoffAction[] {
   const inputKnownMissing =
     statuses?.input.kind === "ok" && !fileStatusIsFile(statuses.input);
