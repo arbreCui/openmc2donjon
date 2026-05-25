@@ -302,8 +302,10 @@ function DirectConvertArtifactMap() {
           </h2>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
             Direct conversion is a file handoff. The OpenMC HDF5 remains the
-            source evidence; DONJON consumes the generated ASCII library. Use a
-            bundle when you need a portable production record.
+            source evidence; DONJON consumes the generated ASCII library. The
+            web route is intentionally linear: dry-run, convert, preview the
+            ASCII blocks, then bundle when you need a portable production
+            record.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -364,9 +366,10 @@ function DirectConvertArtifactMap() {
       <div className="mt-3 rounded-lg border border-emerald-300/20 bg-emerald-300/[0.045] px-3 py-2 text-sm text-emerald-100">
         <span className="font-semibold">Web loop:</span>{" "}
         <span className="text-[var(--fg-1)]">
-          Open converter writes or dry-runs the ASCII handoff. After a successful
-          convert, the result panel opens a prefilled bundle builder so the MGXS
-          source, ASCII output, and bundle directory stay linked.
+          Open converter writes or dry-runs the ASCII handoff. After a
+          successful convert, the result panel shows the preview anchor first
+          and opens a prefilled bundle builder so the MGXS source, ASCII output,
+          and bundle directory stay linked.
         </span>
       </div>
     </section>

@@ -37,7 +37,7 @@ export function commandWorkflowMapping(
       surface: "Convert page",
       title: "Direct converter workflow",
       summary:
-        "Opens the converter page with the matching output object and check mode already selected.",
+        "Opens the converter page with the output object and check mode selected, then continues to ASCII preview and bundle links after conversion.",
       presets: [
         `Output object: ${format === "macrolib" ? "MACROLIB" : "MULTICOMPO"}`,
         `Preflight: ${check ? "on" : "off"}`,

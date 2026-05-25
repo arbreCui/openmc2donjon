@@ -11,6 +11,10 @@ import {
   loadingConvertArtifactStatuses,
   type ConvertArtifactStatusMap,
 } from "@/lib/convertArtifactStatus";
+import {
+  convertDeliveryChecklist,
+  type ConvertDeliveryItem,
+} from "@/lib/convertDeliveryChecklist";
 import { convertBundleHref } from "@/lib/convertNextSteps";
 import {
   fileStatusIsDirectory,
@@ -53,6 +57,7 @@ export default function OutputActions({
   const pathLabel =
     data.converted && data.output_exists ? "Copy DONJON path" : "Copy target path";
   const actions = handoffActions(data, onConvert, statuses);
+  const deliveryItems = convertDeliveryChecklist(data, input);
   return (
     <section className="glass rounded-xl p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
@@ -79,6 +84,8 @@ export default function OutputActions({
           Refresh file status
         </button>
       </div>
+
+      <DeliveryPathStrip items={deliveryItems} onConvert={onConvert} />
 
       <AsciiReadinessPanel data={data} outputStatus={statuses.output} />
 
@@ -117,6 +124,87 @@ export default function OutputActions({
 
       <RunSummaryCard data={data} input={input} statuses={statuses} />
     </section>
+  );
+}
+
+function DeliveryPathStrip({
+  items,
+  onConvert,
+}: {
+  items: readonly ConvertDeliveryItem[];
+  onConvert?: () => void;
+}) {
+  return (
+    <div className="mt-4 rounded-lg border border-[var(--edge)] bg-black/15 p-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <div>
+          <h4 className="text-sm font-semibold tracking-tight">
+            Handoff path after this result
+          </h4>
+          <p className="mt-1 text-[12px] leading-5 text-[var(--fg-3)]">
+            Follow this row left to right: source evidence, gates, ASCII write,
+            preview, then bundle.
+          </p>
+        </div>
+        <span className="rounded border border-[var(--edge)] px-2 py-1 text-[11px] uppercase tracking-wider text-[var(--fg-2)]">
+          delivery route
+        </span>
+      </div>
+      <ol className="mt-3 grid gap-2 md:grid-cols-5">
+        {items.map((item, index) => (
+          <li key={item.id} className={"rounded-md border px-3 py-2 " + deliveryItemClass(item.status)}>
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-mono text-[11px] opacity-70">
+                {String(index + 1).padStart(2, "0")}
+              </span>
+              <span className="rounded border border-current/25 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.14em]">
+                {item.status}
+              </span>
+            </div>
+            <h5 className="mt-2 text-[12px] font-semibold tracking-tight">
+              {item.title}
+            </h5>
+            <p className="mt-1 text-[11px] leading-4 text-[var(--fg-2)]">
+              {item.body}
+            </p>
+            <DeliveryItemAction item={item} onConvert={onConvert} />
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+function DeliveryItemAction({
+  item,
+  onConvert,
+}: {
+  item: ConvertDeliveryItem;
+  onConvert?: () => void;
+}) {
+  if (item.action === "convert" && item.status === "ready" && onConvert) {
+    return (
+      <button
+        type="button"
+        onClick={onConvert}
+        className="mt-2 text-[11px] font-medium text-[var(--accent-2)] hover:underline"
+      >
+        Convert now
+      </button>
+    );
+  }
+  if (!item.href) return null;
+  if (item.href.startsWith("#")) {
+    return (
+      <a href={item.href} className="mt-2 inline-flex text-[11px] font-medium text-[var(--accent-2)] hover:underline">
+        Jump there
+      </a>
+    );
+  }
+  return (
+    <Link href={item.href} className="mt-2 inline-flex text-[11px] font-medium text-[var(--accent-2)] hover:underline">
+      Open
+    </Link>
   );
 }
 
@@ -307,6 +395,24 @@ function actionCardClass(status: HandoffAction["status"]): string {
     return "border-amber-400/25 bg-amber-400/[0.06] text-amber-100";
   }
   return "border-cyan-300/20 bg-cyan-300/[0.045] text-cyan-100";
+}
+
+function deliveryItemClass(
+  status: "done" | "ready" | "blocked" | "pending" | "skipped",
+): string {
+  if (status === "done") {
+    return "border-emerald-400/20 bg-emerald-400/[0.05] text-emerald-100";
+  }
+  if (status === "ready") {
+    return "border-cyan-300/25 bg-cyan-300/[0.06] text-cyan-100";
+  }
+  if (status === "blocked") {
+    return "border-rose-400/25 bg-rose-400/[0.06] text-rose-100";
+  }
+  if (status === "skipped") {
+    return "border-amber-300/20 bg-amber-300/[0.045] text-amber-100";
+  }
+  return "border-[var(--edge)] bg-white/[0.02] text-[var(--fg-2)]";
 }
 
 function outputNotice(data: ConvertResponse): {

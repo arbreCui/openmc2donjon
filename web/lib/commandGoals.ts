@@ -49,11 +49,11 @@ export const COMMAND_GOALS: readonly CommandGoalDefinition[] = [
     eyebrow: "I already have MGXS HDF5",
     title: "Convert HDF5 to DONJON ASCII",
     body:
-      "Dry-run production gates, write L_MULTICOMPO or L_MACROLIB, preview the ASCII blocks, then bundle the handoff.",
+      "Follow the direct converter route: dry-run production gates, write L_MULTICOMPO or L_MACROLIB, preview the ASCII blocks, then bundle the handoff.",
     href: "/convert?intent=direct-convert&format=multicompo&check=1&production=1",
     cta: "Open converter",
     actionHint:
-      "Start with a production dry-run, then write the ASCII handoff once gates pass.",
+      "The web page guides the same sequence: fill paths, dry-run, convert, preview, bundle.",
     commandIds: ["direct-convert", "check", "inspect", "bundle"],
   },
   {

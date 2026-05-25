@@ -360,9 +360,53 @@ function BundlePrefillPanel({
           ))}
         </div>
       ) : null}
+      <div className="mt-4 grid gap-2 md:grid-cols-3">
+        {BUNDLE_WORKFLOW_STEPS.map((step, index) => (
+          <article
+            key={step.title}
+            className="rounded-md border border-[var(--edge)] bg-black/15 px-3 py-2"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-mono text-[11px] text-[var(--fg-3)]">
+                {String(index + 1).padStart(2, "0")}
+              </span>
+              <span className="rounded border border-current/20 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+                {step.badge}
+              </span>
+            </div>
+            <h4 className="mt-2 text-[12px] font-semibold tracking-tight">
+              {step.title}
+            </h4>
+            <p className="mt-1 text-[11px] leading-4 text-[var(--fg-2)]">
+              {step.body}
+            </p>
+          </article>
+        ))}
+      </div>
     </section>
   );
 }
+
+const BUNDLE_WORKFLOW_STEPS = [
+  {
+    badge: "inputs",
+    title: "Review paths",
+    body:
+      "Keep the OpenMC MGXS source, DONJON ASCII output, summaries, and logs together.",
+  },
+  {
+    badge: "manifest",
+    title: "Run bundle CLI",
+    body:
+      "The command writes the manifest-backed delivery directory on your local filesystem.",
+  },
+  {
+    badge: "handoff",
+    title: "Share or validate",
+    body:
+      "Send the bundle to DONJON users, or run validate-bundle before delivery.",
+  },
+] as const;
 
 function BuilderFieldControl({
   field,
