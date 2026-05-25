@@ -155,6 +155,8 @@ function ConvertPageContent() {
     (isProductionMinicasePath(inputPath) ||
       isProductionMinicasePath(displayedOutput));
   const preflightInput = state.kind === "ok" ? state.data.preflight?.inputs[0] ?? null : null;
+  const c5g7DemoDryRunPassed = isC5g7DemoDryRunPassed(state);
+  const c5g7DemoConverted = isC5g7DemoConverted(state);
 
   useEffect(() => {
     let cancelled = false;
@@ -258,6 +260,23 @@ function ConvertPageContent() {
     }
   }
 
+  async function runC5g7DemoConvert() {
+    const demoComment = "C5G7 mock production demo";
+    applyDemoPreset(C5G7_PRODUCTION_DEMO, demoComment);
+    setState({ kind: "loading", mode: "convert" });
+    try {
+      const data = await api.convert(
+        convertDemoRequest(C5G7_PRODUCTION_DEMO, {
+          dryRun: false,
+          comment: demoComment,
+        }),
+      );
+      setState({ kind: "ok", data });
+    } catch (err) {
+      setState(toErrorState(err));
+    }
+  }
+
   function applyBrowserPick(picked: string) {
     if (browserTarget === "input") {
       updateInput(picked);
@@ -342,7 +361,11 @@ function ConvertPageContent() {
           <MockDemoCard
             onApply={applyC5g7Demo}
             onDryRun={() => void runC5g7DemoDryRun()}
+            onConvert={() => void runC5g7DemoConvert()}
             dryRunLoading={state.kind === "loading" && state.mode === "dry-run"}
+            convertLoading={state.kind === "loading" && state.mode === "convert"}
+            canConvert={c5g7DemoDryRunPassed}
+            converted={c5g7DemoConverted}
           />
         ) : (
           <LiveMinicaseCard onApply={applyProductionMinicaseDemo} />
@@ -783,11 +806,19 @@ function actionStepClass(status: "needed" | "recommended" | "ready" | "waiting" 
 function MockDemoCard({
   onApply,
   onDryRun,
+  onConvert,
   dryRunLoading,
+  convertLoading,
+  canConvert,
+  converted,
 }: {
   onApply: () => void;
   onDryRun: () => void;
+  onConvert: () => void;
   dryRunLoading: boolean;
+  convertLoading: boolean;
+  canConvert: boolean;
+  converted: boolean;
 }) {
   const steps = convertDemoWalkthrough(C5G7_PRODUCTION_DEMO);
   return (
@@ -816,8 +847,41 @@ function MockDemoCard({
           >
             {dryRunLoading ? "Checking…" : "Run demo dry-run"}
           </button>
+          {canConvert || converted || convertLoading ? (
+            <button
+              type="button"
+              onClick={onConvert}
+              className="btn btn-primary"
+              disabled={!canConvert || converted || convertLoading}
+            >
+              {convertLoading
+                ? "Converting…"
+                : converted
+                  ? "Demo output ready"
+                  : "Convert demo output"}
+            </button>
+          ) : null}
         </div>
       </div>
+      {canConvert || converted ? (
+        <div
+          className={
+            "mt-3 rounded-md border px-3 py-2 text-sm " +
+            (converted
+              ? "border-emerald-300/20 bg-emerald-300/[0.055] text-emerald-100"
+              : "border-cyan-300/20 bg-cyan-300/[0.06] text-cyan-100")
+          }
+        >
+          <span className="font-semibold">
+            {converted ? "Demo conversion complete." : "Dry run passed."}
+          </span>
+          <span className="ml-2 text-[var(--fg-1)]">
+            {converted
+              ? "The mock MULTICOMPO artifact is ready for preview and bundling below."
+              : "Run Convert demo output to create the mock MULTICOMPO ASCII handoff."}
+          </span>
+        </div>
+      ) : null}
       <div className="mt-4 grid gap-3 lg:grid-cols-4">
         {steps.map((step) => (
           <div key={step.id} className="min-w-0">
@@ -1487,6 +1551,28 @@ function optionalNumberError(label: string, value: string): string | null {
   if (trimmed === "") return null;
   if (Number.isFinite(Number(trimmed))) return null;
   return `${label} must be a number.`;
+}
+
+function isC5g7DemoDryRunPassed(state: ConvertRunState): boolean {
+  return (
+    state.kind === "ok" &&
+    state.data.ok &&
+    state.data.dry_run &&
+    !state.data.converted &&
+    state.data.input_path === C5G7_PRODUCTION_DEMO.inputPath &&
+    state.data.output_path === C5G7_PRODUCTION_DEMO.outputPath
+  );
+}
+
+function isC5g7DemoConverted(state: ConvertRunState): boolean {
+  return (
+    state.kind === "ok" &&
+    state.data.ok &&
+    state.data.converted &&
+    state.data.output_exists &&
+    state.data.input_path === C5G7_PRODUCTION_DEMO.inputPath &&
+    state.data.output_path === C5G7_PRODUCTION_DEMO.outputPath
+  );
 }
 
 function toErrorState(

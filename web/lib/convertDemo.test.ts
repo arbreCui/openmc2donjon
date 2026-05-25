@@ -93,6 +93,23 @@ describe("convert demo presets", () => {
     });
   });
 
+  it("builds the one-click mock convert request from the same preset", () => {
+    expect(
+      convertDemoRequest(C5G7_PRODUCTION_DEMO, {
+        dryRun: false,
+        comment: "C5G7 mock production demo",
+      }),
+    ).toMatchObject({
+      input_path: "/mock/home/openmc-runs/c5g7/handoff.h5",
+      output_path: "/mock/home/openmc-runs/c5g7/out.mcompo.txt",
+      dry_run: false,
+      overwrite: false,
+      check: true,
+      production: true,
+      comment: "C5G7 mock production demo",
+    });
+  });
+
   it("describes the direct conversion walkthrough in production order", () => {
     const steps = convertDemoWalkthrough(C5G7_PRODUCTION_DEMO);
     expect(steps.map((step) => step.id)).toEqual([
