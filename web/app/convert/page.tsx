@@ -42,6 +42,12 @@ import {
   pickConvertBrowserStart,
 } from "@/lib/convertPaths";
 import {
+  convertBundleBuilderHrefFromPaths,
+  convertWalkthroughStatuses,
+  type ConvertWalkthroughRun,
+  type ConvertWalkthroughStatus,
+} from "@/lib/convertWalkthrough";
+import {
   fileStatusLabel,
   fileStatusTone,
   type FileStatusState,
@@ -320,7 +326,12 @@ function ConvertPageContent() {
         ) : (
           <LiveMinicaseCard onApply={applyProductionMinicaseDemo} />
         )}
-        <ConvertPrimer />
+        <ConvertPrimer
+          state={state}
+          inputPath={inputPath}
+          outputPath={displayedOutput}
+          format={format}
+        />
 
         <form
           className="glass rounded-xl p-4 space-y-4"
@@ -1090,22 +1101,78 @@ function ProductionMinicaseMissingHint({ onApply }: { onApply: () => void }) {
   );
 }
 
-function ConvertPrimer() {
+function ConvertPrimer({
+  state,
+  inputPath,
+  outputPath,
+  format,
+}: {
+  state: ConvertRunState;
+  inputPath: string;
+  outputPath: string;
+  format: ConvertFormat;
+}) {
+  const trimmedInput = inputPath.trim();
+  const trimmedOutput = outputPath.trim();
+  const statuses = convertWalkthroughStatuses({
+    hasInput: trimmedInput.length > 0,
+    hasOutput: trimmedOutput.length > 0,
+    run: convertWalkthroughRunFromState(state),
+  });
+  const object = format === "macrolib" ? "L_MACROLIB" : "L_MULTICOMPO";
+  const inspectHref = trimmedInput
+    ? `/inspect?path=${encodeURIComponent(trimmedInput)}`
+    : undefined;
+  const bundleHref =
+    convertBundleBuilderHrefFromPaths({
+      inputPath: trimmedInput,
+      outputPath: trimmedOutput,
+      format,
+    }) ?? undefined;
   const items = [
     {
-      label: "Input",
+      id: "source",
+      label: "01",
+      eyebrow: "Source",
       title: "OpenMC MGXS HDF5",
-      body: "Pick the homogenized handoff produced by OpenMC.",
+      body:
+        "Start from the homogenized OpenMC handoff. Inspect it when you need mixture, mesh, ADF, or SPH evidence.",
+      href: inspectHref,
+      hrefLabel: "Inspect source",
+      status: statuses.source,
     },
     {
-      label: "Dry run",
-      title: "No-write validation",
-      body: "Check the contract, output target, mesh, and production readiness.",
+      id: "dry-run",
+      label: "02",
+      eyebrow: "Dry run gates",
+      title: "No-write production check",
+      body:
+        "Run the converter in dry-run mode first. It checks the contract and physics gates without creating output.",
+      href: undefined,
+      hrefLabel: undefined,
+      status: statuses["dry-run"],
     },
     {
-      label: "Convert",
-      title: "DONJON ASCII",
-      body: "Write .mcompo.txt or .macrolib.txt for downstream deterministic use.",
+      id: "convert",
+      label: "03",
+      eyebrow: "Convert ASCII",
+      title: `Write ${object}`,
+      body:
+        "Convert writes the DONJON-facing ASCII handoff at the selected output path.",
+      href: undefined,
+      hrefLabel: undefined,
+      status: statuses.convert,
+    },
+    {
+      id: "bundle",
+      label: "04",
+      eyebrow: "Bundle handoff",
+      title: "Package delivery evidence",
+      body:
+        "Collect the MGXS input, ASCII output, summaries, and logs into a manifest-backed handoff.",
+      href: bundleHref,
+      hrefLabel: "Open bundle builder",
+      status: statuses.bundle,
     },
   ] as const;
   return (
@@ -1113,31 +1180,37 @@ function ConvertPrimer() {
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold tracking-tight">
-            Direct converter path
+            Direct converter production path
           </h2>
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
             This page turns an existing OpenMC MGXS handoff into a DONJON-facing
-            ASCII library. Dry run is the readable no-write checkpoint; Convert
-            creates the file.
+            ASCII library. Dry run is the readable no-write checkpoint, Convert
+            creates the file, and Bundle packages the delivery record.
           </p>
         </div>
         <Link href="/commands/direct-convert" className="btn btn-secondary">
           Command notes
         </Link>
       </div>
-      <div className="mt-4 grid gap-2 md:grid-cols-3">
-        {items.map((item, index) => (
+      <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+        {items.map((item) => (
           <article
-            key={item.label}
-            className="rounded-lg border border-[var(--edge)] bg-white/[0.02] px-3 py-2"
+            key={item.id}
+            className={
+              "rounded-lg border px-3 py-2 " +
+              walkthroughStatusClass(item.status)
+            }
           >
-            <div className="flex items-center gap-2">
-              <span className="rounded border border-emerald-300/20 bg-emerald-300/[0.08] px-1.5 py-0.5 font-mono text-[10px] text-emerald-200">
-                {String(index + 1).padStart(2, "0")}
-              </span>
-              <span className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+            <div className="flex items-center justify-between gap-2">
+              <span className="rounded border border-current/25 px-1.5 py-0.5 font-mono text-[10px]">
                 {item.label}
               </span>
+              <span className="text-[10px] uppercase tracking-[0.14em] opacity-80">
+                {item.status}
+              </span>
+            </div>
+            <div className="mt-2 text-[10px] uppercase tracking-[0.14em] opacity-70">
+              {item.eyebrow}
             </div>
             <h3 className="mt-2 text-sm font-semibold tracking-tight">
               {item.title}
@@ -1145,11 +1218,52 @@ function ConvertPrimer() {
             <p className="mt-1 text-[12px] leading-5 text-[var(--fg-2)]">
               {item.body}
             </p>
+            {item.href && item.hrefLabel ? (
+              <Link
+                href={item.href}
+                className="mt-3 inline-flex text-[12px] font-medium text-[var(--accent-2)] hover:underline"
+              >
+                {item.hrefLabel}
+              </Link>
+            ) : null}
           </article>
         ))}
       </div>
     </section>
   );
+}
+
+function convertWalkthroughRunFromState(state: ConvertRunState): ConvertWalkthroughRun {
+  if (state.kind === "loading") {
+    return { kind: "loading", mode: state.mode };
+  }
+  if (state.kind === "ok") {
+    return {
+      kind: "ok",
+      ok: state.data.ok,
+      dryRun: state.data.dry_run,
+      converted: state.data.converted,
+      outputExists: state.data.output_exists,
+      preflightOk: state.data.preflight_ok,
+    };
+  }
+  return { kind: state.kind };
+}
+
+function walkthroughStatusClass(status: ConvertWalkthroughStatus): string {
+  if (status === "done" || status === "passed") {
+    return "border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-100";
+  }
+  if (status === "ready") {
+    return "border-cyan-300/25 bg-cyan-300/[0.06] text-cyan-100";
+  }
+  if (status === "recommended" || status === "planned") {
+    return "border-amber-300/20 bg-amber-300/[0.045] text-amber-100";
+  }
+  if (status === "blocked") {
+    return "border-rose-400/25 bg-rose-400/[0.06] text-rose-100";
+  }
+  return "border-[var(--edge)] bg-white/[0.02] text-[var(--fg-2)]";
 }
 
 function Toggle({
