@@ -101,13 +101,16 @@ openmc2donjon prepare-openmc-sph-loop \
   --statepoint "$CASE_DIR/statepoint.12.h5" \
   --run-dir /tmp/openmc2donjon_minicase/sph_loop_handoff \
   --solve-template examples/sph_loop_minicase/templates/solve_lflux_dump.x2m.in \
-  --scalar-flux-map ASM_FUEL_LEFT=2,ASM_MOD_RIGHT=4 \
+  --scalar-flux-map ASM_FUEL_LEFT=2,ASM_MOD_RIGHT=6 \
   --force
 
 openmc2donjon run-sph-loop \
   --config /tmp/openmc2donjon_minicase/sph_loop_handoff/sph_loop_inputs/loop_config.json \
   --force
 ```
+
+The scalar flux ids are the positive DONJON low-order unknowns used as the
+region flux handoff for this tiny `DUAL 1 1` demonstration solve.
 
 The SPH loop config can carry two independent policies. Convergence tolerances
 control early stopping and are reported in `sph_loop_summary.json`;

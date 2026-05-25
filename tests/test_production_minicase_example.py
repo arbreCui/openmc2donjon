@@ -62,6 +62,8 @@ class ProductionMinicaseExampleTests(unittest.TestCase):
         self.assertIn("--force-run-dir", text)
         self.assertIn("--require-transport-dataset", text)
         self.assertIn("mgxs_input_contract_passed", text)
+        self.assertIn("--scalar-flux-map ASM_FUEL_LEFT=2,ASM_MOD_RIGHT=6", text)
+        self.assertIn('h5["scalar_flux_ids"][:], [2, 6]', text)
 
 
 def _repo_root() -> Path:
