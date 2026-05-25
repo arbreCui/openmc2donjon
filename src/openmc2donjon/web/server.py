@@ -17,6 +17,8 @@ Endpoints (M1 scope):
   generated text artifacts such as ``.mcompo.txt`` and ``.macrolib.txt``.
 - ``GET /api/file-status?path=...`` - single-path existence / kind /
   size probe used by localhost workflow cards.
+- ``GET /api/bundle/inspect?manifest=...`` - read-only bundle manifest
+  validation summary used by converter delivery cards.
 
 The ``create_app`` factory keeps the mock flag out of module globals so
 the CLI ``serve`` command can pass it in explicitly. Mock mode returns
@@ -39,6 +41,7 @@ from .._logging import get_logger
 from ..energy_groups import identify_mesh
 from ..mgxs_inspect import _report_payload, inspect_file
 from ..mgxs_physics_checks import scatter_moment_matrix
+from .bundle import register_bundle_routes
 from .commands import register_command_routes
 from .convert import register_convert_routes
 from .openmc_workflow import register_openmc_workflow_routes
@@ -100,7 +103,14 @@ _MOCK_TREE: dict[str, list[tuple[str, str, int | None]]] = {
     f"{_MOCK_HOME}/openmc-runs/c5g7": [
         ("handoff.h5", "file", 832_000),
         ("handoff_aug.h5", "file", 856_000),
+        ("bundle", "dir", None),
         ("README.md", "file", 1_024),
+    ],
+    f"{_MOCK_HOME}/openmc-runs/c5g7/bundle": [
+        ("manifest.json", "file", 2_048),
+        ("handoff.h5", "file", 832_000),
+        ("out.mcompo.txt", "file", 184_320),
+        ("convert_summary.json", "file", 8_192),
     ],
     f"{_MOCK_HOME}/openmc-runs/full-core-sph": [
         # ``sph_loop_summary.json`` is what ``/api/audit`` consumes;
@@ -227,6 +237,7 @@ def create_app(
     register_text_preview_routes(app, mock_mode=mock_mode)
 
     register_convert_routes(app, mock_mode=mock_mode)
+    register_bundle_routes(app, mock_mode=mock_mode)
 
     @app.get("/api/inspect/mixture")
     def api_inspect_mixture(

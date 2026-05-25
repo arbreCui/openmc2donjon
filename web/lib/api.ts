@@ -492,6 +492,33 @@ export interface TextPreview {
   text: string;
 }
 
+export interface BundleArtifactInspection {
+  label: string;
+  path: string;
+  bundled_path: string | null;
+  ok: boolean;
+  messages: string[];
+  size_bytes: number | null;
+  sha256: string | null;
+  summary_schema: string | null;
+  summary_decision: string | null;
+  acceptance_decision: string | null;
+}
+
+export interface BundleInspection {
+  schema: string;
+  manifest_path: string;
+  manifest_schema: string | null;
+  output_dir: string | null;
+  package_version: string | null;
+  created_at_utc: string | null;
+  ok: boolean;
+  decision: string;
+  artifact_count: number;
+  messages: string[];
+  artifacts: BundleArtifactInspection[];
+}
+
 export type OpenmcWorkflowKind = "one-step" | "two-step";
 export type OpenmcEquivalenceMode = "direct" | "adf" | "sph" | "flux-ratio-adf";
 
@@ -602,6 +629,8 @@ export const api = {
       max_bytes: maxBytes,
       max_lines: maxLines,
     }),
+  inspectBundle: (manifest: string) =>
+    getJson<BundleInspection>("/api/bundle/inspect", { manifest }),
   openmcWorkflowPlan: (request: OpenmcWorkflowRequest) =>
     postJson<OpenmcWorkflowPlan>("/api/openmc-workflow/plan", request),
   inspect: (path: string) =>

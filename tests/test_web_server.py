@@ -10,6 +10,8 @@ job installs ``.[web,dev]`` and therefore exercises them.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import tempfile
 import unittest
 from pathlib import Path
@@ -1304,6 +1306,84 @@ class OpenmcWorkflowEndpointTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 422)
         self.assertIn("h_factor_default", response.json()["detail"])
+
+
+@unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
+class BundleInspectEndpointTests(unittest.TestCase):
+    def test_mock_mode_returns_c5g7_bundle_manifest_fixture(self) -> None:
+        from openmc2donjon.web.bundle import BUNDLE_INSPECT_SCHEMA
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.get(
+            "/api/bundle/inspect",
+            params={
+                "manifest": "/mock/home/openmc-runs/c5g7/bundle/manifest.json",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["schema"], BUNDLE_INSPECT_SCHEMA)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["artifact_count"], 3)
+        labels = {artifact["label"] for artifact in payload["artifacts"]}
+        self.assertEqual(labels, {"mgxs", "mcompo", "conversion-summary"})
+
+    def test_mock_mode_rejects_unknown_bundle_manifest(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.get(
+            "/api/bundle/inspect",
+            params={"manifest": "/mock/home/openmc-runs/c5g7/nope.json"},
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_live_mode_validates_real_bundle_manifest(self) -> None:
+        from openmc2donjon.bundle import ArtifactSpec, bundle_artifacts
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=False))
+        with tempfile.TemporaryDirectory() as tmp_raw:
+            tmp = Path(tmp_raw)
+            source = tmp / "mgxs_library.h5"
+            source.write_text("mock hdf5 bytes", encoding="utf-8")
+            bundle_dir = tmp / "bundle"
+            with contextlib.redirect_stdout(io.StringIO()):
+                bundle_artifacts(
+                    output_dir=bundle_dir,
+                    artifacts=[ArtifactSpec("mgxs", source)],
+                )
+
+            response = client.get(
+                "/api/bundle/inspect",
+                params={"manifest": str(bundle_dir / "manifest.json")},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["artifact_count"], 1)
+        self.assertEqual(payload["artifacts"][0]["label"], "mgxs")
+        self.assertTrue(payload["artifacts"][0]["ok"])
+        self.assertEqual(payload["messages"], [])
+
+    def test_live_mode_rejects_non_object_manifest_json(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=False))
+        with tempfile.TemporaryDirectory() as tmp_raw:
+            path = Path(tmp_raw) / "manifest.json"
+            path.write_text("[]", encoding="utf-8")
+            response = client.get(
+                "/api/bundle/inspect",
+                params={"manifest": str(path)},
+            )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("JSON root must be an object", response.json()["detail"])
 
 
 @unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")

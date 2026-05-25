@@ -29,6 +29,7 @@ import {
   type FileStatusState,
 } from "@/lib/fileStatus";
 import AsciiReadinessPanel from "./AsciiReadinessPanel";
+import BundleManifestProbe from "./BundleManifestProbe";
 import RunSummaryCard from "./RunSummaryCard";
 
 export default function OutputActions({
@@ -204,6 +205,7 @@ function DeliveryCommandPanel({
               Prepare validation command
             </Link>
           </div>
+          <BundleManifestProbe manifestPath={manifestPath} enabled={outputReady} />
         </>
       ) : canConvertNow ? (
         <button type="button" onClick={onConvert} className="mt-3 btn btn-primary">
