@@ -1,4 +1,4 @@
-import type { ConvertFormat } from "./api";
+import type { ConvertFormat, ConvertRequest } from "./api";
 
 export interface ConvertDemoPreset {
   id: string;
@@ -131,6 +131,33 @@ export function convertDemoBundleHref(preset: ConvertDemoPreset): string {
     params.set("mcompo", preset.outputPath);
   }
   return `/builder?${params.toString()}`;
+}
+
+export function convertDemoRequest(
+  preset: ConvertDemoPreset,
+  {
+    dryRun,
+    overwrite = false,
+    comment = `${preset.label} web walkthrough`,
+  }: {
+    dryRun: boolean;
+    overwrite?: boolean;
+    comment?: string | null;
+  },
+): ConvertRequest {
+  return {
+    input_path: preset.inputPath,
+    output_path: preset.outputPath,
+    format: preset.format,
+    dry_run: dryRun,
+    overwrite,
+    check: preset.check,
+    production: preset.production,
+    warn_unknown_energy_mesh: true,
+    require_known_energy_mesh: preset.requireKnownMesh,
+    root_name: "CPO",
+    comment,
+  };
 }
 
 function parentDir(path: string): string {

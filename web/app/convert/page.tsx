@@ -32,6 +32,7 @@ import {
   PRODUCTION_MINICASE_ARTIFACTS,
   PRODUCTION_MINICASE_COMMAND,
   PRODUCTION_MINICASE_DEMO,
+  convertDemoRequest,
   convertDemoWalkthrough,
   isProductionMinicasePath,
 } from "@/lib/convertDemo";
@@ -210,37 +211,49 @@ function ConvertPageContent() {
   }
 
   function applyC5g7Demo() {
-    updateInput(C5G7_PRODUCTION_DEMO.inputPath);
-    setOutputPath(C5G7_PRODUCTION_DEMO.outputPath);
-    setOutputTouched(true);
-    setFormat(C5G7_PRODUCTION_DEMO.format);
-    setCheck(C5G7_PRODUCTION_DEMO.check);
-    setProduction(C5G7_PRODUCTION_DEMO.production);
-    setRequireKnownMesh(C5G7_PRODUCTION_DEMO.requireKnownMesh);
-    setOverwrite(false);
-    setRootName("CPO");
-    setComment("C5G7 mock production demo");
-    setBurnup("");
-    setHFactorDefault("");
-    setMixturesText("");
+    applyDemoPreset(C5G7_PRODUCTION_DEMO, "C5G7 mock production demo");
     setState({ kind: "idle" });
   }
 
   function applyProductionMinicaseDemo() {
-    updateInput(PRODUCTION_MINICASE_DEMO.inputPath);
-    setOutputPath(PRODUCTION_MINICASE_DEMO.outputPath);
+    applyDemoPreset(PRODUCTION_MINICASE_DEMO, "production minicase web repeat");
+    setState({ kind: "idle" });
+  }
+
+  function applyDemoPreset(
+    preset: typeof C5G7_PRODUCTION_DEMO,
+    demoComment: string,
+  ) {
+    updateInput(preset.inputPath);
+    setOutputPath(preset.outputPath);
     setOutputTouched(true);
-    setFormat(PRODUCTION_MINICASE_DEMO.format);
-    setCheck(PRODUCTION_MINICASE_DEMO.check);
-    setProduction(PRODUCTION_MINICASE_DEMO.production);
-    setRequireKnownMesh(PRODUCTION_MINICASE_DEMO.requireKnownMesh);
+    setFormat(preset.format);
+    setCheck(preset.check);
+    setProduction(preset.production);
+    setRequireKnownMesh(preset.requireKnownMesh);
     setOverwrite(false);
     setRootName("CPO");
-    setComment("production minicase web repeat");
+    setComment(demoComment);
     setBurnup("");
     setHFactorDefault("");
     setMixturesText("");
-    setState({ kind: "idle" });
+  }
+
+  async function runC5g7DemoDryRun() {
+    const demoComment = "C5G7 mock production demo";
+    applyDemoPreset(C5G7_PRODUCTION_DEMO, demoComment);
+    setState({ kind: "loading", mode: "dry-run" });
+    try {
+      const data = await api.convert(
+        convertDemoRequest(C5G7_PRODUCTION_DEMO, {
+          dryRun: true,
+          comment: demoComment,
+        }),
+      );
+      setState({ kind: "ok", data });
+    } catch (err) {
+      setState(toErrorState(err));
+    }
   }
 
   function applyBrowserPick(picked: string) {
@@ -324,7 +337,11 @@ function ConvertPageContent() {
 
         <ConvertIntentBanner intent={intent} />
         {mockMode ? (
-          <MockDemoCard onApply={applyC5g7Demo} />
+          <MockDemoCard
+            onApply={applyC5g7Demo}
+            onDryRun={() => void runC5g7DemoDryRun()}
+            dryRunLoading={state.kind === "loading" && state.mode === "dry-run"}
+          />
         ) : (
           <LiveMinicaseCard onApply={applyProductionMinicaseDemo} />
         )}
@@ -761,7 +778,15 @@ function actionStepClass(status: "needed" | "recommended" | "ready" | "waiting" 
   return "border-[var(--edge)] bg-white/[0.02] text-[var(--fg-2)]";
 }
 
-function MockDemoCard({ onApply }: { onApply: () => void }) {
+function MockDemoCard({
+  onApply,
+  onDryRun,
+  dryRunLoading,
+}: {
+  onApply: () => void;
+  onDryRun: () => void;
+  dryRunLoading: boolean;
+}) {
   const steps = convertDemoWalkthrough(C5G7_PRODUCTION_DEMO);
   return (
     <section className="mb-5 rounded-xl border border-cyan-300/20 bg-cyan-300/[0.05] p-4">
@@ -777,9 +802,19 @@ function MockDemoCard({ onApply }: { onApply: () => void }) {
             {C5G7_PRODUCTION_DEMO.description}
           </p>
         </div>
-        <button type="button" onClick={onApply} className="btn btn-primary">
-          Fill demo
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={onApply} className="btn btn-secondary">
+            Fill demo
+          </button>
+          <button
+            type="button"
+            onClick={onDryRun}
+            className="btn btn-primary"
+            disabled={dryRunLoading}
+          >
+            {dryRunLoading ? "Checking…" : "Run demo dry-run"}
+          </button>
+        </div>
       </div>
       <div className="mt-4 grid gap-3 lg:grid-cols-4">
         {steps.map((step) => (

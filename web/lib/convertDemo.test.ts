@@ -8,6 +8,7 @@ import {
   convertDemoBundleHref,
   convertDemoHref,
   convertDemoInspectHref,
+  convertDemoRequest,
   convertDemoWalkthrough,
   isProductionMinicasePath,
 } from "./convertDemo";
@@ -70,6 +71,26 @@ describe("convert demo presets", () => {
     expect(convertDemoBundleHref(C5G7_PRODUCTION_DEMO)).toBe(
       "/builder?command=bundle&output_dir=%2Fmock%2Fhome%2Fopenmc-runs%2Fc5g7%2Fbundle&mgxs=%2Fmock%2Fhome%2Fopenmc-runs%2Fc5g7%2Fhandoff.h5&mcompo=%2Fmock%2Fhome%2Fopenmc-runs%2Fc5g7%2Fout.mcompo.txt",
     );
+  });
+
+  it("builds the one-click mock dry-run request", () => {
+    expect(
+      convertDemoRequest(C5G7_PRODUCTION_DEMO, {
+        dryRun: true,
+        comment: "C5G7 mock production demo",
+      }),
+    ).toMatchObject({
+      input_path: "/mock/home/openmc-runs/c5g7/handoff.h5",
+      output_path: "/mock/home/openmc-runs/c5g7/out.mcompo.txt",
+      format: "multicompo",
+      dry_run: true,
+      overwrite: false,
+      check: true,
+      production: true,
+      require_known_energy_mesh: false,
+      root_name: "CPO",
+      comment: "C5G7 mock production demo",
+    });
   });
 
   it("describes the direct conversion walkthrough in production order", () => {
