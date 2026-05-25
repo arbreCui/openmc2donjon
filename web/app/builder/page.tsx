@@ -173,6 +173,7 @@ function CommandBuilderPageContent() {
             </div>
 
             {stage ? <WorkflowHint stage={stage} /> : null}
+            {stage ? <CommandContextPanel command={command} stage={stage} /> : null}
 
             {spec.id === "bundle" ? (
               <BundlePrefillPanel status={bundlePrefillStatus(values)} />
@@ -218,7 +219,7 @@ function CommandBuilderPageContent() {
                 <pre className="mt-3 overflow-x-auto rounded-md border border-[var(--edge)] bg-black/25 px-3 py-2 text-[12px] text-[var(--fg-1)]">
                   {cli}
                 </pre>
-                <CommandGuidance command={command} notes={spec.notes} />
+                <CommandGuidance notes={spec.notes} />
               </aside>
             </div>
           </section>
@@ -265,6 +266,55 @@ function WorkflowHint({
         </div>
       </div>
     </div>
+  );
+}
+
+function CommandContextPanel({
+  command,
+  stage,
+}: {
+  command: CommandCatalogEntry | null;
+  stage: ReturnType<typeof commandBuilderStage>;
+}) {
+  const rows = command
+    ? [
+        ["Use when", command.use_when],
+        ["Produces", command.produces],
+        ["After this", command.next_step],
+      ]
+    : [
+        ["Use when", stage.summary],
+        ["Produces", "A copyable CLI command assembled from the form values."],
+        ["After this", "Run the command locally and keep any generated summaries with the handoff."],
+      ];
+  return (
+    <section className="mt-4 rounded-lg border border-[var(--edge)] bg-white/[0.02] p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+            command in plain language
+          </div>
+          <h3 className="mt-1 text-sm font-semibold tracking-tight">
+            What this builder is for
+          </h3>
+        </div>
+        {command ? (
+          <span className="rounded border border-current/20 bg-black/15 px-2 py-0.5 text-[11px] text-[var(--fg-2)]">
+            {command.status_label}
+          </span>
+        ) : null}
+      </div>
+      <div className="mt-3 grid gap-2 md:grid-cols-3">
+        {rows.map(([label, body]) => (
+          <div key={label} className="rounded-md border border-[var(--edge)] bg-black/10 p-3">
+            <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+              {label}
+            </div>
+            <p className="mt-1 text-[12px] leading-5 text-[var(--fg-2)]">{body}</p>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -382,20 +432,12 @@ function BuilderFieldControl({
 }
 
 function CommandGuidance({
-  command,
   notes,
 }: {
-  command: CommandCatalogEntry | null;
   notes: readonly string[];
 }) {
   return (
     <div className="mt-3 space-y-2 text-[12px] leading-relaxed text-[var(--fg-2)]">
-      {command ? (
-        <div className="rounded-md border border-[var(--edge)] bg-white/[0.02] px-3 py-2">
-          <div className="text-[var(--fg-3)]">Use when</div>
-          <div>{command.use_when}</div>
-        </div>
-      ) : null}
       <div className="rounded-md border border-amber-300/20 bg-amber-300/[0.06] px-3 py-2 text-amber-100">
         {notes.map((note) => (
           <div key={note}>{note}</div>
