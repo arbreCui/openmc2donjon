@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
+import json
 from pathlib import Path
+import shlex
 import sys
+import tempfile
+from typing import Any
 
 from . import __version__
 from ._logging import (
@@ -334,6 +339,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="with --check, write a machine-readable preflight summary JSON",
     )
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        default=None,
+        help="write a machine-readable direct conversion summary JSON",
+    )
     return parser
 
 
@@ -408,6 +419,7 @@ def main(argv: list[str] | None = None) -> int:
         configure_cli_logging_from_args(args)
         return args.func(args)
     args = build_parser().parse_args(raw_argv)
+    args._raw_argv = raw_argv
     configure_cli_logging_from_args(args)
     return _convert_handler(args)
 
@@ -422,6 +434,8 @@ def _convert_handler(args: argparse.Namespace) -> int:
         output_path = Path("out.macrolib.txt")
     else:
         output_path = Path("out.mcompo.txt")
+    if args.summary_json is not None:
+        args.summary_json = args.summary_json.expanduser()
 
     output_error = _validate_direct_output_path(
         input_path,
@@ -432,70 +446,130 @@ def _convert_handler(args: argparse.Namespace) -> int:
     if output_error is not None:
         sys.stderr.write(f"openmc2donjon: error: {output_error}\n")
         return 1
+    summary_error = _validate_direct_summary_path(args.summary_json, output_path)
+    if summary_error is not None:
+        sys.stderr.write(f"openmc2donjon: error: {summary_error}\n")
+        return 1
 
-    if args.check:
-        ok = run_preflight(
-            [input_path],
-            output_format=args.format,
+    preflight: dict[str, Any] | None = None
+    preflight_ok = True
+    output_size = (
+        output_path.stat().st_size if output_path.exists() and output_path.is_file() else None
+    )
+
+    with contextlib.ExitStack() as stack:
+        preflight_summary_json = args.check_summary_json
+        if args.summary_json is not None and args.check and preflight_summary_json is None:
+            tmpdir = Path(stack.enter_context(tempfile.TemporaryDirectory()))
+            preflight_summary_json = tmpdir / "preflight_summary.json"
+
+        if args.check:
+            preflight_ok = _run_direct_preflight(
+                args,
+                input_path=input_path,
+                output_path=output_path,
+                summary_json=preflight_summary_json,
+            )
+            preflight = _read_json_payload(preflight_summary_json)
+            if not preflight_ok:
+                _write_direct_convert_summary_for_state(
+                    args,
+                    input_path=input_path,
+                    output_path=output_path,
+                    preflight=preflight,
+                    preflight_ok=False,
+                    converted=False,
+                    output_size=output_size,
+                )
+                return 1
+
+        if args.dry_run:
+            _write_direct_convert_summary_for_state(
+                args,
+                input_path=input_path,
+                output_path=output_path,
+                preflight=preflight,
+                preflight_ok=preflight_ok,
+                converted=False,
+                output_size=output_size,
+            )
+            return 0
+
+        if args.format == "macrolib":
+            convert_mgxs_hdf5_to_macrolib(
+                input_path,
+                output_path,
+                h_factor_default=args.h_factor_default,
+                mixture_names=args.mixture,
+            )
+        else:
+            convert_mgxs_hdf5(
+                input_path,
+                output_path,
+                root_name=args.root_name,
+                comment=args.comment,
+                burnup=args.burnup,
+                h_factor_default=args.h_factor_default,
+                mixture_names=args.mixture,
+            )
+        output_size = output_path.stat().st_size
+        _write_direct_convert_summary_for_state(
+            args,
+            input_path=input_path,
             output_path=output_path,
-            production=args.production,
-            require_adf=args.require_adf,
-            require_sph=args.require_sph,
-            expected_adf_faces=args.expected_adf_faces,
-            require_mixture_order=args.require_mixture_order,
-            require_domain_mode=args.require_domain_mode,
-            require_source_domain_metadata=args.require_source_domain_metadata,
-            require_openmc_volume_flux=args.require_openmc_volume_flux,
-            require_transport_dataset=args.require_transport_dataset,
-            require_volume=args.require_volume,
-            require_h_factor=args.require_h_factor,
-            expected_energy_group_structure=args.expected_energy_group_structure,
-            expected_energy_bounds=args.expected_energy_bounds,
-            expected_energy_bounds_sha256=args.expected_energy_bounds_sha256,
-            require_known_energy_mesh=args.require_known_energy_mesh,
-            warn_unknown_energy_mesh=args.warn_unknown_energy_mesh,
-            energy_mesh_tolerance=args.energy_mesh_tolerance,
-            scatter_row_balance_warn=args.scatter_row_balance_warn,
-            scatter_row_balance_fail=args.scatter_row_balance_fail,
-            require_energy_bounds_consistency=args.require_energy_bounds_consistency,
-            chi_sum_tolerance=args.chi_sum_tolerance,
-            require_adf_face_consistency=args.require_adf_face_consistency,
-            transport_p1_fail=args.transport_p1_fail,
-            uncertainty_warn=None if args.no_uncertainty_check else args.uncertainty_warn,
-            uncertainty_fail=None if args.no_uncertainty_check else args.uncertainty_fail,
-            uncertainty_production_fail=(
-                None if args.no_uncertainty_check else args.uncertainty_production_fail
-            ),
-            uncertainty_mean_abs_floor=args.uncertainty_mean_abs_floor,
-            require_std_dev_coverage=(
-                False if args.no_uncertainty_check else args.require_std_dev_coverage
-            ),
-            summary_json=args.check_summary_json,
-        )
-        if not ok:
-            return 1
-
-    if args.dry_run:
-        return 0
-
-    if args.format == "macrolib":
-        convert_mgxs_hdf5_to_macrolib(
-            input_path,
-            output_path,
-            h_factor_default=args.h_factor_default,
-            mixture_names=args.mixture,
-        )
-    else:
-        convert_mgxs_hdf5(
-            input_path,
-            output_path,
-            root_name=args.root_name,
-            comment=args.comment,
-            burnup=args.burnup,
-            h_factor_default=args.h_factor_default,
-            mixture_names=args.mixture,
+            preflight=preflight,
+            preflight_ok=preflight_ok,
+            converted=True,
+            output_size=output_size,
         )
     return 0
+
+
+def _run_direct_preflight(
+    args: argparse.Namespace,
+    *,
+    input_path: Path,
+    output_path: Path,
+    summary_json: Path | None,
+) -> bool:
+    return run_preflight(
+        [input_path],
+        output_format=args.format,
+        output_path=output_path,
+        production=args.production,
+        require_adf=args.require_adf,
+        require_sph=args.require_sph,
+        expected_adf_faces=args.expected_adf_faces,
+        require_mixture_order=args.require_mixture_order,
+        require_domain_mode=args.require_domain_mode,
+        require_source_domain_metadata=args.require_source_domain_metadata,
+        require_openmc_volume_flux=args.require_openmc_volume_flux,
+        require_transport_dataset=args.require_transport_dataset,
+        require_volume=args.require_volume,
+        require_h_factor=args.require_h_factor,
+        expected_energy_group_structure=args.expected_energy_group_structure,
+        expected_energy_bounds=args.expected_energy_bounds,
+        expected_energy_bounds_sha256=args.expected_energy_bounds_sha256,
+        require_known_energy_mesh=args.require_known_energy_mesh,
+        warn_unknown_energy_mesh=args.warn_unknown_energy_mesh,
+        energy_mesh_tolerance=args.energy_mesh_tolerance,
+        scatter_row_balance_warn=args.scatter_row_balance_warn,
+        scatter_row_balance_fail=args.scatter_row_balance_fail,
+        require_energy_bounds_consistency=args.require_energy_bounds_consistency,
+        chi_sum_tolerance=args.chi_sum_tolerance,
+        require_adf_face_consistency=args.require_adf_face_consistency,
+        transport_p1_fail=args.transport_p1_fail,
+        uncertainty_warn=None if args.no_uncertainty_check else args.uncertainty_warn,
+        uncertainty_fail=None if args.no_uncertainty_check else args.uncertainty_fail,
+        uncertainty_production_fail=(
+            None if args.no_uncertainty_check else args.uncertainty_production_fail
+        ),
+        uncertainty_mean_abs_floor=args.uncertainty_mean_abs_floor,
+        require_std_dev_coverage=(
+            False if args.no_uncertainty_check else args.require_std_dev_coverage
+        ),
+        summary_json=summary_json,
+    )
 
 
 def _validate_direct_output_path(
@@ -521,6 +595,90 @@ def _validate_direct_output_path(
     if output_path.exists() and not overwrite and not dry_run:
         return f"output already exists; use --overwrite to replace it: {output_path}"
     return None
+
+
+def _validate_direct_summary_path(summary_path: Path | None, output_path: Path) -> str | None:
+    if summary_path is None:
+        return None
+    if summary_path.expanduser().resolve() == output_path.expanduser().resolve():
+        return "summary JSON path must differ from output"
+    if not summary_path.parent.exists():
+        return f"summary JSON directory not found: {summary_path.parent}"
+    if not summary_path.parent.is_dir():
+        return f"summary JSON parent is not a directory: {summary_path.parent}"
+    if summary_path.exists() and not summary_path.is_file():
+        return f"summary JSON path exists but is not a file: {summary_path}"
+    return None
+
+
+def _read_json_payload(path: Path | None) -> dict[str, Any] | None:
+    if path is None or not path.exists():
+        return None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return payload if isinstance(payload, dict) else None
+
+
+def _direct_convert_summary_payload(
+    args: argparse.Namespace,
+    *,
+    input_path: Path,
+    output_path: Path,
+    preflight: dict[str, Any] | None,
+    preflight_ok: bool,
+    converted: bool,
+    output_size: int | None,
+    summary_written: bool,
+) -> dict[str, Any]:
+    dry_run = bool(args.dry_run)
+    command = ["openmc2donjon", *list(getattr(args, "_raw_argv", []))]
+    return {
+        "schema": "openmc2donjon.convert.v1",
+        "ok": bool(preflight_ok and (dry_run or converted)),
+        "dry_run": dry_run,
+        "converted": converted,
+        "format": args.format,
+        "input_path": str(input_path),
+        "output_path": str(output_path),
+        "summary_path": None if args.summary_json is None else str(args.summary_json),
+        "summary_written": summary_written,
+        "output_exists": output_path.exists(),
+        "output_size": output_size,
+        "preflight_ok": preflight_ok,
+        "preflight": preflight,
+        "cli_command": command,
+        "cli_command_text": " ".join(shlex.quote(part) for part in command),
+    }
+
+
+def _write_direct_convert_summary_for_state(
+    args: argparse.Namespace,
+    *,
+    input_path: Path,
+    output_path: Path,
+    preflight: dict[str, Any] | None,
+    preflight_ok: bool,
+    converted: bool,
+    output_size: int | None,
+) -> None:
+    if args.summary_json is None:
+        return
+    _write_direct_convert_summary(
+        args.summary_json,
+        _direct_convert_summary_payload(
+            args,
+            input_path=input_path,
+            output_path=output_path,
+            preflight=preflight,
+            preflight_ok=preflight_ok,
+            converted=converted,
+            output_size=output_size,
+            summary_written=True,
+        ),
+    )
+
+
+def _write_direct_convert_summary(path: Path, payload: dict[str, Any]) -> None:
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

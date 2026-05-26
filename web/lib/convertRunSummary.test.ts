@@ -12,6 +12,8 @@ function response(overrides: Partial<ConvertResponse> = {}): ConvertResponse {
     format: "multicompo",
     input_path: "/runs/case/mgxs_library.h5",
     output_path: "/runs/case/out.mcompo.txt",
+    summary_path: null,
+    summary_written: false,
     output_exists: false,
     output_size: null,
     preflight_ok: true,
@@ -80,6 +82,7 @@ describe("convert run summary", () => {
     );
     expect(summary).toContain("ADF: 9 mixtures, faces XMIN, XMAX, YMIN, YMAX");
     expect(summary).toContain("SPH: 9 calculations");
+    expect(summary).toContain("conversion summary: n/a");
     expect(summary).toContain("output size: n/a");
     expect(summary).toContain("input: not queried");
     expect(summary).toContain("--production");
@@ -109,12 +112,15 @@ describe("convert run summary", () => {
         converted: true,
         output_exists: true,
         output_size: 4096,
+        summary_path: "/runs/case/convert_summary.json",
+        summary_written: true,
       }),
       input({ adf_mixtures: 0, adf_faces: [], sph_calculations: 0 }),
       statuses,
     );
 
     expect(summary).toContain("run: converted (ASCII written)");
+    expect(summary).toContain("conversion summary: /runs/case/convert_summary.json");
     expect(summary).toContain("output size: 4.0 KiB");
     expect(summary).toContain("ADF: none recorded");
     expect(summary).toContain("SPH: none recorded");

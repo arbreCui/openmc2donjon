@@ -32,6 +32,9 @@ export function convertBundleHref(data: ConvertResponse): string {
   } else {
     params.set("mcompo", data.output_path);
   }
+  if (data.summary_written && data.summary_path) {
+    params.set("run_summary", data.summary_path);
+  }
   return `/builder?${params.toString()}`;
 }
 

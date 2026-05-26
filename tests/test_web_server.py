@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -1066,6 +1067,11 @@ class ConvertEndpointTests(unittest.TestCase):
         self.assertNotIn("--overwrite", payload["cli_command"])
         self.assertIn("--comment", payload["cli_command"])
         self.assertIn("C5G7 dry run", payload["cli_command"])
+        self.assertFalse(payload["summary_written"])
+        self.assertEqual(
+            payload["summary_path"],
+            "/mock/home/openmc-runs/c5g7/convert_summary.json",
+        )
         self.assertEqual(payload["preflight"]["inputs"][0]["energy_mesh_id"], "casmo_7")
 
     def test_live_mode_dry_run_runs_preflight_without_writing(self) -> None:
@@ -1100,6 +1106,8 @@ class ConvertEndpointTests(unittest.TestCase):
             self.assertFalse(output_path.exists())
             self.assertTrue(payload["dry_run"])
             self.assertFalse(payload["converted"])
+            self.assertFalse(payload["summary_written"])
+            self.assertFalse((Path(tmp) / "convert_summary.json").exists())
             self.assertIn("--dry-run", payload["cli_command"])
             self.assertEqual(payload["output_path"], str(output_path.resolve()))
             self.assertEqual(payload["preflight"]["inputs"][0]["mixtures"], 2)
@@ -1135,6 +1143,14 @@ class ConvertEndpointTests(unittest.TestCase):
             self.assertTrue(output_path.exists())
             self.assertGreater(output_path.stat().st_size, 0)
             self.assertEqual(payload["output_size"], output_path.stat().st_size)
+            summary_path = Path(payload["summary_path"])
+            self.assertTrue(payload["summary_written"])
+            self.assertEqual(summary_path, (Path(tmp) / "convert_summary.json").resolve())
+            self.assertTrue(summary_path.exists())
+            summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(summary_payload["schema"], "openmc2donjon.convert.v1")
+            self.assertEqual(summary_payload["output_path"], str(output_path.resolve()))
+            self.assertIn("--summary-json", summary_payload["cli_command"])
 
             conflict = client.post(
                 "/api/convert",

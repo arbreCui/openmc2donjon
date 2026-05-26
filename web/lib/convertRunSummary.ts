@@ -25,6 +25,7 @@ export function buildConvertRunSummary(
     "source and output:",
     `  input: ${data.input_path}`,
     `  output: ${data.output_path}`,
+    `  conversion summary: ${summaryStatus(data)}`,
     `  output size: ${data.output_size === null ? "n/a" : formatBytes(data.output_size)}`,
     `  bundle target: ${paths.bundle}`,
     "",
@@ -65,6 +66,11 @@ function productionStatus(data: ConvertResponse): string {
   if (!requested) return "not requested";
   const decision = data.preflight?.decision;
   return decision ? `requested (${decision})` : "requested";
+}
+
+function summaryStatus(data: ConvertResponse): string {
+  if (!data.summary_path) return "n/a";
+  return data.summary_written ? data.summary_path : `${data.summary_path} (not written)`;
 }
 
 function energyMesh(input: ConvertPreflightInput | null): string {

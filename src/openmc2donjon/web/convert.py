@@ -51,6 +51,8 @@ def register_convert_routes(app: Any, *, mock_mode: bool) -> None:
             dry_run=bool(request["dry_run"]),
             http_exception=HTTPException,
         )
+        summary_path = _convert_summary_path(output_path)
+        _validate_convert_summary_path(summary_path, output_path, HTTPException)
 
         preflight = None
         preflight_ok = True
@@ -74,15 +76,27 @@ def register_convert_routes(app: Any, *, mock_mode: bool) -> None:
             converted = True
             output_size = output_path.stat().st_size
 
-        return _convert_response(
+        response = _convert_response(
             request,
             input_path=input_path,
             output_path=output_path,
+            summary_path=summary_path,
+            summary_written=False,
             preflight=preflight,
             preflight_ok=preflight_ok,
             converted=converted,
             output_size=output_size,
         )
+        if converted:
+            response["summary_written"] = True
+            try:
+                _write_convert_summary(summary_path, response)
+            except OSError as exc:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"conversion summary write failed: {exc}",
+                ) from exc
+        return response
 
 
 def _validate_hdf5_path(raw: str, http_exception: Any) -> Path:
@@ -296,6 +310,27 @@ def _validate_convert_output_path(
         )
 
 
+def _convert_summary_path(output_path: Path) -> Path:
+    return output_path.parent / "convert_summary.json"
+
+
+def _validate_convert_summary_path(
+    summary_path: Path,
+    output_path: Path,
+    http_exception: Any,
+) -> None:
+    if summary_path == output_path:
+        raise http_exception(
+            status_code=400,
+            detail="output filename must not be convert_summary.json",
+        )
+    if summary_path.exists() and not summary_path.is_file():
+        raise http_exception(
+            status_code=400,
+            detail=f"conversion summary path exists but is not a file: {summary_path}",
+        )
+
+
 def _run_convert_preflight(
     input_path: Path,
     output_path: Path,
@@ -349,6 +384,8 @@ def _convert_response(
     *,
     input_path: Path,
     output_path: Path,
+    summary_path: Path,
+    summary_written: bool,
     preflight: dict[str, Any] | None,
     preflight_ok: bool,
     converted: bool,
@@ -365,6 +402,8 @@ def _convert_response(
         "format": request["format"],
         "input_path": str(input_path),
         "output_path": str(output_path),
+        "summary_path": str(summary_path),
+        "summary_written": summary_written,
         "output_exists": output_path.exists(),
         "output_size": output_size,
         "preflight_ok": preflight_ok,
@@ -379,6 +418,7 @@ def _convert_cli_command(
     input_path: Path,
     output_path: Path,
 ) -> list[str]:
+    summary_path = _convert_summary_path(output_path)
     command = [
         "openmc2donjon",
         str(input_path),
@@ -393,6 +433,8 @@ def _convert_cli_command(
         command.append("--dry-run")
     if request["overwrite"]:
         command.append("--overwrite")
+    if not request["dry_run"]:
+        command.extend(["--summary-json", str(summary_path)])
     if request["comment"] is not None:
         command.extend(["--comment", str(request["comment"])])
     if request["check"]:
@@ -436,6 +478,8 @@ def _mock_convert_response(request: dict[str, Any]) -> dict[str, Any]:
         request,
         input_path=input_path,
         output_path=output_path,
+        summary_path=_convert_summary_path(output_path),
+        summary_written=not dry_run,
         preflight=preflight,
         preflight_ok=True,
         converted=not dry_run,
@@ -443,6 +487,10 @@ def _mock_convert_response(request: dict[str, Any]) -> dict[str, Any]:
     )
     response["output_exists"] = not dry_run
     return response
+
+
+def _write_convert_summary(path: Path, payload: dict[str, Any]) -> None:
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def _mock_preflight_input(path: str) -> dict[str, Any]:

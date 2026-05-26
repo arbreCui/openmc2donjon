@@ -470,6 +470,8 @@ export interface ConvertResponse {
   format: ConvertFormat;
   input_path: string;
   output_path: string;
+  summary_path: string | null;
+  summary_written: boolean;
   output_exists: boolean;
   output_size: number | null;
   preflight_ok: boolean;

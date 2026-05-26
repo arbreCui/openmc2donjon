@@ -194,6 +194,9 @@ function DeliveryCommandPanel({
           <div className="mt-3 grid gap-2 md:grid-cols-2">
             <DeliveryPath label="Bundle directory" value={bundleDir} />
             <DeliveryPath label="Manifest after bundle" value={manifestPath} />
+            {data.summary_written && data.summary_path ? (
+              <DeliveryPath label="Conversion summary" value={data.summary_path} />
+            ) : null}
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             <a href="#ascii-output-preview" className="btn btn-primary">

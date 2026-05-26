@@ -562,6 +562,7 @@ class CliTests(unittest.TestCase):
             input_path = tmp / "mgxs.h5"
             output_path = tmp / "out.mcompo.txt"
             summary_path = tmp / "check_summary.json"
+            convert_summary_path = tmp / "convert_summary.json"
             write_valid_mgxs(input_path)
 
             stream = io.StringIO()
@@ -575,15 +576,23 @@ class CliTests(unittest.TestCase):
                         "--check",
                         "--check-summary-json",
                         str(summary_path),
+                        "--summary-json",
+                        str(convert_summary_path),
                     ]
                 )
 
             summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            convert_summary = json.loads(convert_summary_path.read_text(encoding="utf-8"))
             output_exists = output_path.exists()
 
         self.assertEqual(rc, 0)
         self.assertFalse(output_exists)
         self.assertEqual(summary["decision"], "mgxs_input_contract_passed")
+        self.assertEqual(convert_summary["schema"], "openmc2donjon.convert.v1")
+        self.assertTrue(convert_summary["dry_run"])
+        self.assertFalse(convert_summary["converted"])
+        self.assertFalse(convert_summary["output_exists"])
+        self.assertEqual(convert_summary["preflight"]["decision"], "mgxs_input_contract_passed")
         self.assertIn("mgxs_input_contract_passed", stream.getvalue())
 
     def test_convert_refuses_existing_output_without_overwrite(self) -> None:
@@ -611,15 +620,30 @@ class CliTests(unittest.TestCase):
             tmp = Path(tmpdir)
             input_path = tmp / "mgxs.h5"
             output_path = tmp / "out.mcompo.txt"
+            convert_summary_path = tmp / "convert_summary.json"
             write_valid_mgxs(input_path)
             output_path.write_text("existing output", encoding="utf-8")
 
-            rc = cli_main([str(input_path), "-o", str(output_path), "--overwrite"])
+            rc = cli_main(
+                [
+                    str(input_path),
+                    "-o",
+                    str(output_path),
+                    "--overwrite",
+                    "--summary-json",
+                    str(convert_summary_path),
+                ]
+            )
             output_text = output_path.read_text(encoding="utf-8")
+            convert_summary = json.loads(convert_summary_path.read_text(encoding="utf-8"))
 
         self.assertEqual(rc, 0)
         self.assertNotEqual(output_text, "existing output")
         self.assertIn("L_MULTICOMPO", output_text)
+        self.assertFalse(convert_summary["dry_run"])
+        self.assertTrue(convert_summary["converted"])
+        self.assertTrue(convert_summary["output_exists"])
+        self.assertEqual(convert_summary["output_path"], str(output_path))
 
     def test_convert_check_rejects_invalid_hdf5_without_writing_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

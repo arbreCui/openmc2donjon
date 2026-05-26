@@ -64,6 +64,8 @@ function response(overrides: Partial<ConvertResponse> = {}): ConvertResponse {
     format: "multicompo",
     input_path: "/mock/handoff.h5",
     output_path: "/mock/out.mcompo.txt",
+    summary_path: null,
+    summary_written: false,
     output_exists: false,
     output_size: null,
     preflight_ok: true,

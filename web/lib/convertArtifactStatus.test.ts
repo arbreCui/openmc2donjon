@@ -17,6 +17,8 @@ function response(overrides: Partial<ConvertResponse> = {}): ConvertResponse {
     format: "multicompo",
     input_path: "/runs/case/mgxs_library.h5",
     output_path: "/runs/case/out.mcompo.txt",
+    summary_path: null,
+    summary_written: false,
     output_exists: true,
     output_size: 2048,
     preflight_ok: true,

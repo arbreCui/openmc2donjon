@@ -19,6 +19,8 @@ function response(overrides: Partial<ConvertResponse> = {}): ConvertResponse {
     format: "multicompo",
     input_path: "/runs/case/mgxs_library.h5",
     output_path: "/runs/case/out.mcompo.txt",
+    summary_path: null,
+    summary_written: false,
     output_exists: false,
     output_size: null,
     preflight_ok: true,
@@ -42,11 +44,13 @@ describe("convert next steps", () => {
       dry_run: false,
       converted: true,
       output_exists: true,
+      summary_path: "/runs/case/convert_summary.json",
+      summary_written: true,
     });
     expect(
       convertBundleHref(converted),
     ).toBe(
-      "/builder?command=bundle&output_dir=%2Fruns%2Fcase%2Fbundle&mgxs=%2Fruns%2Fcase%2Fmgxs_library.h5&mcompo=%2Fruns%2Fcase%2Fout.mcompo.txt",
+      "/builder?command=bundle&output_dir=%2Fruns%2Fcase%2Fbundle&mgxs=%2Fruns%2Fcase%2Fmgxs_library.h5&mcompo=%2Fruns%2Fcase%2Fout.mcompo.txt&run_summary=%2Fruns%2Fcase%2Fconvert_summary.json",
     );
     expect(convertBundleManifestPath(converted)).toBe(
       "/runs/case/bundle/manifest.json",
