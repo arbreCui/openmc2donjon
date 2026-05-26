@@ -19,6 +19,7 @@ from typing import Any
 from ..macrolib import convert_mgxs_hdf5_to_macrolib
 from ..mgxs_input_contract import run_preflight
 from ..multicompo import DEFAULT_ROOT_NAME, convert_mgxs_hdf5
+from ..pygan_writer import convert_mgxs_hdf5_with_pygan
 
 
 CONVERT_SCHEMA = "openmc2donjon.convert.v1"
@@ -68,7 +69,7 @@ def register_convert_routes(app: Any, *, mock_mode: bool) -> None:
         if preflight_ok and not bool(request["dry_run"]):
             try:
                 _run_converter(input_path, output_path, request)
-            except (OSError, ValueError, KeyError) as exc:
+            except (OSError, RuntimeError, ValueError, KeyError) as exc:
                 raise HTTPException(
                     status_code=422,
                     detail=f"conversion failed: {exc}",
@@ -135,6 +136,12 @@ def _normalize_convert_request(
             status_code=422,
             detail="format must be 'multicompo' or 'macrolib'",
         )
+    writer_backend = str(payload.get("writer_backend", "ascii"))
+    if writer_backend not in {"ascii", "pygan"}:
+        raise http_exception(
+            status_code=422,
+            detail="writer_backend must be 'ascii' or 'pygan'",
+        )
     output_raw = payload.get("output_path")
     if output_raw is not None and not isinstance(output_raw, str):
         raise http_exception(status_code=422, detail="output_path must be a string")
@@ -143,6 +150,7 @@ def _normalize_convert_request(
         "input_path": input_path,
         "output_path": output_raw.strip() if isinstance(output_raw, str) else None,
         "format": output_format,
+        "writer_backend": writer_backend,
         "dry_run": _optional_bool(
             payload,
             "dry_run",
@@ -360,7 +368,18 @@ def _run_converter(
     output_path: Path,
     request: dict[str, Any],
 ) -> None:
-    if request["format"] == "macrolib":
+    if request["writer_backend"] == "pygan":
+        convert_mgxs_hdf5_with_pygan(
+            input_path,
+            output_path,
+            output_format=str(request["format"]),
+            root_name=str(request["root_name"]),
+            comment=request["comment"],
+            burnup=request["burnup"],
+            h_factor_default=request["h_factor_default"],
+            mixture_names=request["mixtures"],
+        )
+    elif request["format"] == "macrolib":
         convert_mgxs_hdf5_to_macrolib(
             input_path,
             output_path,
@@ -400,6 +419,7 @@ def _convert_response(
         "dry_run": dry_run,
         "converted": converted,
         "format": request["format"],
+        "writer_backend": request["writer_backend"],
         "input_path": str(input_path),
         "output_path": str(output_path),
         "summary_path": str(summary_path),
@@ -427,6 +447,8 @@ def _convert_cli_command(
         "-o",
         str(output_path),
     ]
+    if request["writer_backend"] == "pygan":
+        command.extend(["--writer-backend", "pygan"])
     if request["format"] == "multicompo" and request["root_name"] != DEFAULT_ROOT_NAME:
         command.extend(["--root-name", str(request["root_name"])])
     if request["dry_run"]:

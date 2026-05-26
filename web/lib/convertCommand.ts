@@ -1,4 +1,4 @@
-import type { ConvertFormat } from "./api";
+import type { ConvertFormat, ConvertWriterBackend } from "./api";
 
 const DEFAULT_ROOT_NAME = "CPO";
 
@@ -6,6 +6,7 @@ export interface ConvertCliPreviewOptions {
   inputPath: string;
   outputPath: string;
   format: ConvertFormat;
+  writerBackend: ConvertWriterBackend;
   dryRun: boolean;
   overwrite: boolean;
   check: boolean;
@@ -53,6 +54,9 @@ export function buildConvertCliPreview(options: ConvertCliPreviewOptions): strin
     "-o",
     output,
   ];
+  if (options.writerBackend === "pygan") {
+    command.push("--writer-backend", "pygan");
+  }
   const rootName = normalizedRootName(options.rootName);
   if (options.format === "multicompo" && rootName !== DEFAULT_ROOT_NAME) {
     command.push("--root-name", rootName);

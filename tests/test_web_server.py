@@ -1062,6 +1062,7 @@ class ConvertEndpointTests(unittest.TestCase):
         self.assertTrue(payload["dry_run"])
         self.assertFalse(payload["converted"])
         self.assertEqual(payload["format"], "multicompo")
+        self.assertEqual(payload["writer_backend"], "ascii")
         self.assertIn("--format multicompo", payload["cli_command_text"])
         self.assertIn("--dry-run", payload["cli_command"])
         self.assertNotIn("--overwrite", payload["cli_command"])
@@ -1104,6 +1105,7 @@ class ConvertEndpointTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             payload = response.json()
             self.assertFalse(output_path.exists())
+            self.assertEqual(payload["writer_backend"], "ascii")
             self.assertTrue(payload["dry_run"])
             self.assertFalse(payload["converted"])
             self.assertFalse(payload["summary_written"])
@@ -1149,6 +1151,7 @@ class ConvertEndpointTests(unittest.TestCase):
             self.assertTrue(summary_path.exists())
             summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
             self.assertEqual(summary_payload["schema"], "openmc2donjon.convert.v1")
+            self.assertEqual(summary_payload["writer_backend"], "ascii")
             self.assertEqual(summary_payload["output_path"], str(output_path.resolve()))
             self.assertIn("--summary-json", summary_payload["cli_command"])
 
@@ -1168,6 +1171,31 @@ class ConvertEndpointTests(unittest.TestCase):
             )
             self.assertEqual(conflict.status_code, 409)
             self.assertIn("already exists", conflict.json()["detail"])
+
+    def test_convert_request_accepts_pygan_writer_backend(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.post(
+            "/api/convert",
+            json={
+                "input_path": "/mock/home/openmc-runs/c5g7/handoff.h5",
+                "format": "multicompo",
+                "writer_backend": "pygan",
+                "dry_run": True,
+                "overwrite": False,
+                "check": True,
+                "production": False,
+                "warn_unknown_energy_mesh": True,
+                "require_known_energy_mesh": False,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["writer_backend"], "pygan")
+        self.assertIn("--writer-backend", payload["cli_command"])
+        self.assertIn("pygan", payload["cli_command"])
 
 
 @unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")

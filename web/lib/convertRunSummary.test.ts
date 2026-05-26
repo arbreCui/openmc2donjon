@@ -10,6 +10,7 @@ function response(overrides: Partial<ConvertResponse> = {}): ConvertResponse {
     dry_run: true,
     converted: false,
     format: "multicompo",
+    writer_backend: "ascii",
     input_path: "/runs/case/mgxs_library.h5",
     output_path: "/runs/case/out.mcompo.txt",
     summary_path: null,

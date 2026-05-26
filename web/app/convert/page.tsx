@@ -22,7 +22,7 @@ import {
   ApiError,
   api,
 } from "@/lib/api";
-import type { ConvertFormat } from "@/lib/api";
+import type { ConvertFormat, ConvertWriterBackend } from "@/lib/api";
 import {
   buildConvertCliPreview,
   convertAdvancedPayload,
@@ -99,6 +99,8 @@ function ConvertPageContent() {
   const queryInput = searchParams.get("input");
   const queryOutput = searchParams.get("output");
   const queryFormat = parseConvertFormat(searchParams.get("format"));
+  const queryWriterBackend: ConvertWriterBackend =
+    searchParams.get("writer_backend") === "pygan" ? "pygan" : "ascii";
   const queryCheck = queryFlag(searchParams, "check", true);
   const queryProduction = queryFlag(searchParams, "production", false);
   const queryRequireKnownMesh = queryFlag(
@@ -111,6 +113,7 @@ function ConvertPageContent() {
     queryInput !== null ||
     queryOutput !== null ||
     searchParams.get("format") !== null ||
+    searchParams.get("writer_backend") !== null ||
     searchParams.get("check") !== null ||
     searchParams.get("production") !== null ||
     searchParams.get("require_known_mesh") !== null ||
@@ -118,6 +121,8 @@ function ConvertPageContent() {
   const [inputPath, setInputPath] = useState(queryInput ?? "");
   const [outputPath, setOutputPath] = useState(queryOutput ?? "");
   const [format, setFormat] = useState<ConvertFormat>(queryFormat);
+  const [writerBackend, setWriterBackend] =
+    useState<ConvertWriterBackend>(queryWriterBackend);
   const [check, setCheck] = useState(queryCheck);
   const [production, setProduction] = useState(queryProduction);
   const [requireKnownMesh, setRequireKnownMesh] = useState(queryRequireKnownMesh);
@@ -148,6 +153,7 @@ function ConvertPageContent() {
     inputPath,
     outputPath: displayedOutput,
     format,
+    writerBackend,
     dryRun: true,
     overwrite,
     check,
@@ -188,6 +194,7 @@ function ConvertPageContent() {
   useEffect(() => {
     if (!queryHasPrefill) return;
     setFormat(queryFormat);
+    setWriterBackend(queryWriterBackend);
     setCheck(queryCheck);
     setProduction(queryProduction);
     setRequireKnownMesh(queryRequireKnownMesh);
@@ -214,6 +221,7 @@ function ConvertPageContent() {
     queryOutput,
     queryProduction,
     queryRequireKnownMesh,
+    queryWriterBackend,
   ]);
 
   function updateInput(value: string) {
@@ -244,6 +252,7 @@ function ConvertPageContent() {
     setOutputPath(preset.outputPath);
     setOutputTouched(true);
     setFormat(preset.format);
+    setWriterBackend("ascii");
     setCheck(preset.check);
     setProduction(preset.production);
     setRequireKnownMesh(preset.requireKnownMesh);
@@ -336,6 +345,7 @@ function ConvertPageContent() {
         input_path: trimmedInput,
         output_path: trimmedOutput,
         format,
+        writer_backend: writerBackend,
         dry_run: mode === "dry-run",
         overwrite,
         check,
@@ -546,6 +556,31 @@ function ConvertPageContent() {
                     : "Top-level MULTICOMPO directory name."
                 }
               />
+              <fieldset>
+                <legend className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
+                  Writer backend
+                </legend>
+                <div className="mt-1 grid grid-cols-2 overflow-hidden rounded-md border border-[var(--edge)]">
+                  <button
+                    type="button"
+                    onClick={() => setWriterBackend("ascii")}
+                    className={segmentClass(writerBackend === "ascii")}
+                  >
+                    ASCII
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWriterBackend("pygan")}
+                    className={segmentClass(writerBackend === "pygan")}
+                  >
+                    PyGan
+                  </button>
+                </div>
+                <span className="mt-1 block text-[12px] text-[var(--fg-3)]">
+                  ASCII is dependency-free. PyGan uses DRAGON/DONJON Python
+                  bindings for the final LCM export.
+                </span>
+              </fieldset>
               <Field
                 label="Burnup value"
                 value={burnup}

@@ -400,11 +400,13 @@ export interface SphLoopSummary {
 }
 
 export type ConvertFormat = "multicompo" | "macrolib";
+export type ConvertWriterBackend = "ascii" | "pygan";
 
 export interface ConvertRequest {
   input_path: string;
   output_path?: string | null;
   format: ConvertFormat;
+  writer_backend?: ConvertWriterBackend;
   dry_run: boolean;
   overwrite: boolean;
   check: boolean;
@@ -468,6 +470,7 @@ export interface ConvertResponse {
   dry_run: boolean;
   converted: boolean;
   format: ConvertFormat;
+  writer_backend: ConvertWriterBackend;
   input_path: string;
   output_path: string;
   summary_path: string | null;

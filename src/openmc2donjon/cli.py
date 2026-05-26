@@ -24,6 +24,7 @@ from .energy_groups import MESH_RELATIVE_TOLERANCE
 from .macrolib import convert_mgxs_hdf5_to_macrolib
 from .mgxs_input_contract import run_preflight
 from .multicompo import DEFAULT_ROOT_NAME, convert_mgxs_hdf5
+from .pygan_writer import convert_mgxs_hdf5_with_pygan
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -80,6 +81,15 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("multicompo", "macrolib"),
         default="multicompo",
         help="output object format (default: multicompo)",
+    )
+    parser.add_argument(
+        "--writer-backend",
+        choices=("ascii", "pygan"),
+        default="ascii",
+        help=(
+            "LCM ASCII writer backend (default: ascii). Use 'pygan' to build "
+            "the same LCM tree with PyGan and let PyGan export the ASCII file."
+        ),
     )
     parser.add_argument(
         "-o",
@@ -495,7 +505,18 @@ def _convert_handler(args: argparse.Namespace) -> int:
             )
             return 0
 
-        if args.format == "macrolib":
+        if args.writer_backend == "pygan":
+            convert_mgxs_hdf5_with_pygan(
+                input_path,
+                output_path,
+                output_format=args.format,
+                root_name=args.root_name,
+                comment=args.comment,
+                burnup=args.burnup,
+                h_factor_default=args.h_factor_default,
+                mixture_names=args.mixture,
+            )
+        elif args.format == "macrolib":
             convert_mgxs_hdf5_to_macrolib(
                 input_path,
                 output_path,
@@ -637,6 +658,7 @@ def _direct_convert_summary_payload(
         "dry_run": dry_run,
         "converted": converted,
         "format": args.format,
+        "writer_backend": args.writer_backend,
         "input_path": str(input_path),
         "output_path": str(output_path),
         "summary_path": None if args.summary_json is None else str(args.summary_json),

@@ -122,7 +122,7 @@ function ConvertSummary({
             </h2>
           </div>
           <span className="rounded border border-[var(--edge)] px-2 py-1 text-[11px] uppercase tracking-wider text-[var(--fg-2)]">
-            {data.format}
+            {data.format} / {data.writer_backend}
           </span>
         </div>
 
@@ -133,6 +133,7 @@ function ConvertSummary({
             label="Output size"
             value={data.output_size == null ? "—" : formatSize(data.output_size)}
           />
+          <Meta label="Writer" value={writerLabel(data.writer_backend)} />
           <Meta label="Validation" value={validationLabel(data)} />
         </dl>
 
@@ -1120,6 +1121,10 @@ function preflightMode(data: ConvertResponse): string {
 function validationLabel(data: ConvertResponse): string {
   if (!data.preflight) return "skipped";
   return data.preflight_ok ? "pass" : "fail";
+}
+
+function writerLabel(writer: ConvertResponse["writer_backend"]): string {
+  return writer === "pygan" ? "PyGan LCM exporter" : "built-in ASCII writer";
 }
 
 function humanDecision(value: string | null | undefined): string {

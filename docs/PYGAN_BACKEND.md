@@ -1,14 +1,16 @@
 # Optional PyGan Backend
 
 PyGan support is optional. The production converter still uses the built-in
-pure Python ASCII LCM writer by default. PyGan is used as a DRAGON/DONJON-side
-validation and integration backend.
+pure Python ASCII LCM writer by default. PyGan can also be selected as an
+alternate writer backend when you want the DRAGON/DONJON Python bindings to
+perform the final LCM serialization step.
 
 ## What PyGan Is Used For
 
 Use PyGan when you want to:
 
 - check whether `lcm`, `lifo`, and `cle2000` are importable from Python;
+- write the same openmc2donjon LCM tree through PyGan's native ASCII exporter;
 - read a native DRAGON/DONJON COMPO or MULTICOMPO file through the official LCM
   bindings;
 - compare PyGan's view of a reference COMPO tree with openmc2donjon's ASCII LCM
@@ -21,6 +23,20 @@ conversion path. This command still uses the default ASCII writer:
 ```sh
 openmc2donjon mgxs_library.h5 -o out.mcompo.txt --check
 ```
+
+Select the optional PyGan writer explicitly:
+
+```sh
+openmc2donjon mgxs_library.h5 \
+  --writer-backend pygan \
+  --format multicompo \
+  -o out.mcompo.txt \
+  --check
+```
+
+Both backends share the same physics builders. In other words, PyGan does not
+change how cross sections, scatter triplets, ADF, SPH, or branch metadata are
+computed. It only replaces the final ASCII serialization layer.
 
 ## Install PyGan
 
@@ -101,14 +117,15 @@ Implemented:
 
 - `pygan-doctor`
 - `pygan-inspect-compo`
+- `--writer-backend pygan` for direct HDF5 conversion to `L_MULTICOMPO` and
+  `L_MACROLIB`
 - Web command catalog entries for both commands
 
 Not implemented yet:
 
-- PyGan writer backend for OpenMC HDF5 conversion
 - PyGan-vs-ASCII semantic diff
 - CLE-2000 execution wrappers for production conversion
 
-The next useful step is a comparison command that reads the same COMPO with
-PyGan and with `openmc2donjon.lcm_ascii`, then checks that both readers see the
-same structural tree.
+The next useful step is a comparison command that writes the same HDF5 handoff
+with both backends, reads the two files semantically, and reports structural
+differences that matter to DONJON rather than whitespace or ordering churn.

@@ -247,6 +247,7 @@ export function convertDemoRequest(
     input_path: preset.inputPath,
     output_path: preset.outputPath,
     format: preset.format,
+    writer_backend: "ascii",
     dry_run: dryRun,
     overwrite,
     check: preset.check,
