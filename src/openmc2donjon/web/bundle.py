@@ -126,6 +126,14 @@ def _mock_bundle_inspection(raw: str, http_exception: Any) -> dict[str, Any]:
             "format": "multicompo",
             "ascii_path": f"{_MOCK_BUNDLE_DIR}/out.mcompo.txt",
             "mixture_count": 9,
+            "summary_path": f"{_MOCK_BUNDLE_DIR}/convert_summary.json",
+            "summary_schema": "openmc2donjon.convert.v1",
+            "ok": True,
+            "converted": True,
+            "dry_run": False,
+            "preflight_ok": True,
+            "preflight_decision": "mgxs_input_contract_passed",
+            "production_requested": True,
         },
     }
 
@@ -153,6 +161,10 @@ def _int_or_none(value: Any) -> int | None:
     return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
+def _bool_or_none(value: Any) -> bool | None:
+    return value if isinstance(value, bool) else None
+
+
 def _donjon_defaults_from_artifacts(
     manifest_path: Path,
     artifacts: list[Any],
@@ -160,13 +172,22 @@ def _donjon_defaults_from_artifacts(
     for artifact in artifacts:
         if not isinstance(artifact, dict):
             continue
-        payload = _read_optional_json_artifact(_artifact_path(manifest_path, artifact))
+        artifact_path = _artifact_path(manifest_path, artifact)
+        payload = _read_optional_json_artifact(artifact_path)
         if not _is_convert_summary(payload):
             continue
         return {
             "format": _donjon_format(payload.get("format")),
             "ascii_path": _string_or_none(payload.get("output_path")),
             "mixture_count": _summary_mixture_count(payload),
+            "summary_path": str(artifact_path),
+            "summary_schema": _string_or_none(payload.get("schema")),
+            "ok": _bool_or_none(payload.get("ok")),
+            "converted": _bool_or_none(payload.get("converted")),
+            "dry_run": _bool_or_none(payload.get("dry_run")),
+            "preflight_ok": _bool_or_none(payload.get("preflight_ok")),
+            "preflight_decision": _preflight_decision(payload),
+            "production_requested": _production_requested(payload),
         }
     return None
 
@@ -214,4 +235,21 @@ def _summary_mixture_count(payload: dict[str, Any]) -> int | None:
     mixtures = first.get("mixtures")
     if isinstance(mixtures, int) and not isinstance(mixtures, bool) and mixtures > 0:
         return mixtures
+    return None
+
+
+def _preflight_decision(payload: dict[str, Any]) -> str | None:
+    preflight = payload.get("preflight")
+    if not isinstance(preflight, dict):
+        return None
+    return _string_or_none(preflight.get("decision"))
+
+
+def _production_requested(payload: dict[str, Any]) -> bool | None:
+    command = payload.get("cli_command")
+    if isinstance(command, list):
+        return any(item == "--production" for item in command if isinstance(item, str))
+    command_text = payload.get("cli_command_text")
+    if isinstance(command_text, str):
+        return "--production" in command_text.split()
     return None

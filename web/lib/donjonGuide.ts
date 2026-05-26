@@ -58,6 +58,14 @@ export interface DonjonBundleDefaultsLike {
   format?: string | null;
   ascii_path?: string | null;
   mixture_count?: number | null;
+  summary_path?: string | null;
+  summary_schema?: string | null;
+  ok?: boolean | null;
+  converted?: boolean | null;
+  dry_run?: boolean | null;
+  preflight_ok?: boolean | null;
+  preflight_decision?: string | null;
+  production_requested?: boolean | null;
 }
 
 export interface DonjonAsciiMismatch {

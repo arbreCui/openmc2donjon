@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { CopyCliButton } from "@/components/commands/CopyCliButton";
 import { ApiError, api, type BundleInspection } from "@/lib/api";
@@ -568,21 +568,116 @@ function ManifestDonjonDefaults({
   defaults: BundleInspection["donjon_defaults"];
 }) {
   if (!defaults) return null;
-  const facts = [
-    defaults.format ? `format ${donjonObjectLabel(defaults.format)}` : null,
-    defaults.mixture_count != null ? `NMIX ${defaults.mixture_count}` : null,
-  ].filter((fact): fact is string => fact !== null);
-  if (!facts.length) return null;
+  const hasSummaryContext =
+    defaults.ascii_path ||
+    defaults.summary_path ||
+    defaults.format ||
+    defaults.mixture_count != null ||
+    defaults.preflight_decision ||
+    defaults.ok != null ||
+    defaults.preflight_ok != null ||
+    defaults.production_requested != null;
+  if (!hasSummaryContext) return null;
   return (
-    <div className="mt-2 rounded border border-cyan-300/15 bg-cyan-300/5 px-2 py-1.5 text-[11px] text-cyan-100">
-      Summary-derived DONJON defaults: {facts.join(" · ")}
-      {defaults.ascii_path ? (
-        <span className="ml-1 text-cyan-100/70">
-          from <span className="font-mono">{defaults.ascii_path}</span>
-        </span>
+    <div className="mt-2 rounded border border-cyan-300/15 bg-cyan-300/5 p-2 text-[11px] text-cyan-100">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.14em] text-cyan-100/70">
+            conversion summary
+          </div>
+          <div className="mt-1 font-semibold tracking-tight">
+            DONJON inputs inferred from convert_summary.json
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          <SummaryPill tone={defaults.ok === false ? "bad" : "good"}>
+            {conversionStateLabel(defaults)}
+          </SummaryPill>
+          <SummaryPill tone={defaults.production_requested ? "good" : "neutral"}>
+            {defaults.production_requested ? "production gates" : "standard run"}
+          </SummaryPill>
+          <SummaryPill tone={defaults.preflight_ok === false ? "bad" : "good"}>
+            {preflightStateLabel(defaults)}
+          </SummaryPill>
+        </div>
+      </div>
+      <div className="mt-2 grid gap-2 md:grid-cols-2">
+        <SummaryFact
+          label="ASCII output"
+          value={defaults.ascii_path ?? "not recorded"}
+        />
+        <SummaryFact
+          label="format"
+          value={defaults.format ? donjonObjectLabel(defaults.format) : "not recorded"}
+        />
+        <SummaryFact
+          label="mixtures"
+          value={
+            defaults.mixture_count != null
+              ? `NMIX ${defaults.mixture_count}`
+              : "not recorded"
+          }
+        />
+        <SummaryFact
+          label="preflight decision"
+          value={defaults.preflight_decision ?? "not recorded"}
+        />
+      </div>
+      {defaults.summary_path ? (
+        <div className="mt-2 truncate text-cyan-100/70" title={defaults.summary_path}>
+          source <span className="font-mono">{defaults.summary_path}</span>
+        </div>
       ) : null}
     </div>
   );
+}
+
+function SummaryPill({
+  children,
+  tone,
+}: {
+  children: ReactNode;
+  tone: "good" | "bad" | "neutral";
+}) {
+  const toneClass =
+    tone === "good"
+      ? "border-emerald-300/20 bg-emerald-300/10 text-emerald-100"
+      : tone === "bad"
+        ? "border-rose-300/25 bg-rose-300/10 text-rose-100"
+        : "border-cyan-300/20 bg-cyan-300/10 text-cyan-100";
+  return (
+    <span className={"rounded border px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] " + toneClass}>
+      {children}
+    </span>
+  );
+}
+
+function SummaryFact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded border border-cyan-300/10 bg-black/10 px-2 py-1.5">
+      <div className="text-[10px] uppercase tracking-[0.14em] text-cyan-100/55">
+        {label}
+      </div>
+      <div className="mt-0.5 truncate font-mono text-[11px]" title={value}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function conversionStateLabel(defaults: BundleInspection["donjon_defaults"]) {
+  if (!defaults) return "summary unknown";
+  if (defaults.dry_run) return "dry-run only";
+  if (defaults.converted) return "converted";
+  if (defaults.ok === false) return "conversion failed";
+  return "summary loaded";
+}
+
+function preflightStateLabel(defaults: BundleInspection["donjon_defaults"]) {
+  if (!defaults) return "preflight unknown";
+  if (defaults.preflight_ok === true) return "preflight pass";
+  if (defaults.preflight_ok === false) return "preflight fail";
+  return "preflight n/a";
 }
 
 function ManifestStat({ label, value }: { label: string; value: string }) {

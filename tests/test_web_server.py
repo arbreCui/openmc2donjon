@@ -1357,6 +1357,14 @@ class BundleInspectEndpointTests(unittest.TestCase):
                 "format": "multicompo",
                 "ascii_path": "/mock/home/openmc-runs/c5g7/bundle/out.mcompo.txt",
                 "mixture_count": 9,
+                "summary_path": "/mock/home/openmc-runs/c5g7/bundle/convert_summary.json",
+                "summary_schema": "openmc2donjon.convert.v1",
+                "ok": True,
+                "converted": True,
+                "dry_run": False,
+                "preflight_ok": True,
+                "preflight_decision": "mgxs_input_contract_passed",
+                "production_requested": True,
             },
         )
 
@@ -1414,22 +1422,35 @@ class BundleInspectEndpointTests(unittest.TestCase):
             mcompo.write_text("ASCII handoff", encoding="utf-8")
             summary = tmp / "convert_summary.json"
             summary.write_text(
-                """{
-  "schema": "openmc2donjon.convert.v1",
-  "ok": true,
-  "decision": "openmc2donjon_convert_passed",
-  "format": "multicompo",
-  "output_path": "/runs/case/out.mcompo.txt",
-  "preflight": {
-    "inputs": [
-      {
-        "path": "/runs/case/mgxs_library.h5",
-        "mixtures": 9
-      }
-    ]
-  }
-}
-""",
+                json.dumps(
+                    {
+                        "schema": "openmc2donjon.convert.v1",
+                        "ok": True,
+                        "decision": "openmc2donjon_convert_passed",
+                        "converted": True,
+                        "dry_run": False,
+                        "format": "multicompo",
+                        "output_path": "/runs/case/out.mcompo.txt",
+                        "preflight_ok": True,
+                        "preflight": {
+                            "decision": "mgxs_input_contract_passed",
+                            "inputs": [
+                                {
+                                    "path": "/runs/case/mgxs_library.h5",
+                                    "mixtures": 9,
+                                }
+                            ],
+                        },
+                        "cli_command": [
+                            "openmc2donjon",
+                            "/runs/case/mgxs_library.h5",
+                            "-o",
+                            "/runs/case/out.mcompo.txt",
+                            "--check",
+                            "--production",
+                        ],
+                    }
+                ),
                 encoding="utf-8",
             )
             bundle_dir = tmp / "bundle"
@@ -1456,6 +1477,14 @@ class BundleInspectEndpointTests(unittest.TestCase):
                 "format": "multicompo",
                 "ascii_path": "/runs/case/out.mcompo.txt",
                 "mixture_count": 9,
+                "summary_path": str((bundle_dir / "convert_summary.json").resolve()),
+                "summary_schema": "openmc2donjon.convert.v1",
+                "ok": True,
+                "converted": True,
+                "dry_run": False,
+                "preflight_ok": True,
+                "preflight_decision": "mgxs_input_contract_passed",
+                "production_requested": True,
             },
         )
 

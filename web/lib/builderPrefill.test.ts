@@ -7,6 +7,7 @@ describe("bundlePrefillStatus", () => {
       output_dir: "/runs/case/bundle",
       mgxs: "/runs/case/mgxs_library.h5",
       mcompo: "/runs/case/out.mcompo.txt",
+      run_summary: "/runs/case/convert_summary.json",
     });
 
     expect(status.prefilled).toBe(true);
@@ -15,6 +16,7 @@ describe("bundlePrefillStatus", () => {
       "bundle directory",
       "MGXS HDF5",
       "MULTICOMPO",
+      "conversion summary",
     ]);
     expect(status.manifestPath).toBe("/runs/case/bundle/manifest.json");
     expect(status.validateHref).toBe(

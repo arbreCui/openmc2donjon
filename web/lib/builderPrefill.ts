@@ -15,7 +15,7 @@ const ARTIFACT_FIELDS = [
   ["mgxs", "MGXS HDF5"],
   ["mcompo", "MULTICOMPO"],
   ["macrolib", "MACROLIB"],
-  ["run_summary", "run summary"],
+  ["run_summary", "conversion summary"],
   ["check_summary", "check summary"],
   ["inspect_summary", "inspect summary"],
   ["doctor_summary", "doctor summary"],
@@ -37,7 +37,7 @@ export function bundlePrefillStatus(values: BuilderValues): BundlePrefillStatus 
       prefilled: true,
       title: "Prefilled from a converter result",
       body:
-        "The MGXS source and DONJON ASCII handoff are already in the form. Review the bundle directory, copy the CLI, then run it locally to create the delivery record.",
+        "The MGXS source, DONJON ASCII handoff, and any conversion summary are already in the form. Review the bundle directory, copy the CLI, then run it locally to create the delivery record.",
       chips: [...(hasOutputDir ? ["bundle directory"] : []), ...chips],
       manifestPath,
       validateHref: manifestPath ? validateBundleBuilderHref(manifestPath) : undefined,
