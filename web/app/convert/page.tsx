@@ -139,7 +139,9 @@ function ConvertPageContent() {
   const [browserTarget, setBrowserTarget] = useState<BrowserTarget | null>(null);
   const [outputTouched, setOutputTouched] = useState(queryOutput !== null);
   const [state, setState] = useState<ConvertRunState>({ kind: "idle" });
-  const [mockMode, setMockMode] = useState(false);
+  const [backendMode, setBackendMode] = useState<
+    "checking" | "mock" | "live" | "unavailable"
+  >("checking");
   const [pyganStatus, setPyganStatus] = useState<PyGanBackendStatus | null>(null);
   const convertButtonRef = useRef<HTMLButtonElement | null>(null);
   const [settings, , , settingsHydrated] = useSettings();
@@ -172,7 +174,7 @@ function ConvertPageContent() {
     mixturesText,
   });
   const showMinicaseMissingHint =
-    !mockMode &&
+    backendMode === "live" &&
     state.kind === "error" &&
     state.status === 404 &&
     (isProductionMinicasePath(inputPath) ||
@@ -187,7 +189,7 @@ function ConvertPageContent() {
       .health()
       .then((health) => {
         if (!cancelled) {
-          setMockMode(health.mock_mode);
+          setBackendMode(health.mock_mode ? "mock" : "live");
           setPyganStatus(health.pygan_backend);
           if (!health.pygan_backend.available) {
             setWriterBackend("ascii");
@@ -196,7 +198,7 @@ function ConvertPageContent() {
       })
       .catch(() => {
         if (!cancelled) {
-          setMockMode(false);
+          setBackendMode("unavailable");
           setPyganStatus(null);
         }
       });
@@ -393,7 +395,13 @@ function ConvertPageContent() {
         </header>
 
         <ConvertIntentBanner intent={intent} />
-        {mockMode ? (
+        {backendMode === "checking" ? (
+          <BackendModeCard
+            tone="loading"
+            title="Checking backend mode"
+            body="The web UI is asking the FastAPI backend whether this is mock mode or live filesystem mode before showing demo paths."
+          />
+        ) : backendMode === "mock" ? (
           <MockDemoCard
             onApply={applyC5g7Demo}
             onDryRun={() => void runC5g7DemoDryRun()}
@@ -403,8 +411,14 @@ function ConvertPageContent() {
             canConvert={c5g7DemoDryRunPassed}
             converted={c5g7DemoConverted}
           />
-        ) : (
+        ) : backendMode === "live" ? (
           <LiveMinicaseCard onApply={applyProductionMinicaseDemo} />
+        ) : (
+          <BackendModeCard
+            tone="error"
+            title="Backend status unavailable"
+            body="Start or restart the FastAPI backend with `openmc2donjon serve`; the page will not show live minicase paths until `/api/health` responds."
+          />
         )}
         <ConvertPrimer
           state={state}
@@ -926,6 +940,32 @@ function actionStepClass(status: "needed" | "recommended" | "ready" | "waiting" 
     return "border-amber-300/20 bg-amber-300/[0.045] text-amber-100";
   }
   return "border-[var(--edge)] bg-white/[0.02] text-[var(--fg-2)]";
+}
+
+function BackendModeCard({
+  tone,
+  title,
+  body,
+}: {
+  tone: "loading" | "error";
+  title: string;
+  body: string;
+}) {
+  const cls =
+    tone === "error"
+      ? "border-rose-300/25 bg-rose-300/[0.06] text-rose-100"
+      : "border-cyan-300/20 bg-cyan-300/[0.05] text-cyan-100";
+  return (
+    <section className={"mb-5 rounded-xl border p-4 " + cls}>
+      <div className="text-[10px] uppercase tracking-[0.14em] opacity-80">
+        Backend status
+      </div>
+      <h2 className="mt-1 text-sm font-semibold tracking-tight">{title}</h2>
+      <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
+        {body}
+      </p>
+    </section>
+  );
 }
 
 function MockDemoCard({
