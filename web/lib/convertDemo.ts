@@ -20,6 +20,13 @@ export interface ConvertDemoStep {
   href?: string;
 }
 
+export interface ConvertDemoClickStep {
+  id: "fill" | "dry-run" | "convert";
+  label: string;
+  title: string;
+  body: string;
+}
+
 export interface ConvertDemoArtifact {
   id: string;
   label: string;
@@ -296,6 +303,32 @@ export function convertDemoWalkthrough(
       title: "Review and package",
       body: "Preview the LCM ASCII blocks, then bundle the input, output, and summaries.",
       href: convertDemoBundleHref(preset),
+    },
+  ] as const;
+}
+
+export function convertDemoClickSteps(): readonly ConvertDemoClickStep[] {
+  return [
+    {
+      id: "fill",
+      label: "01",
+      title: "Fill demo",
+      body:
+        "Load the C5G7 HDF5 path, MULTICOMPO output path, and production checks.",
+    },
+    {
+      id: "dry-run",
+      label: "02",
+      title: "Dry run",
+      body:
+        "Validate the handoff without writing or replacing the ASCII output.",
+    },
+    {
+      id: "convert",
+      label: "03",
+      title: "Convert",
+      body:
+        "Write the mock MULTICOMPO file, then preview and bundle it below.",
     },
   ] as const;
 }

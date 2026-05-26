@@ -6,6 +6,7 @@ import {
   PRODUCTION_MINICASE_DEMO,
   PRODUCTION_MINICASE_RUN_ROOT,
   convertDemoBundleHref,
+  convertDemoClickSteps,
   convertDemoHref,
   convertDemoInspectHref,
   convertDemoPreviewHref,
@@ -132,6 +133,19 @@ describe("convert demo presets", () => {
     expect(steps[0].href).toContain("/inspect?");
     expect(steps[2].href).toContain("/convert?");
     expect(steps[3].href).toContain("/builder?command=bundle");
+  });
+
+  it("keeps the mock demo click path to fill, dry-run, and convert", () => {
+    const steps = convertDemoClickSteps();
+
+    expect(steps.map((step) => step.id)).toEqual([
+      "fill",
+      "dry-run",
+      "convert",
+    ]);
+    expect(steps[0].title).toBe("Fill demo");
+    expect(steps[1].body).toContain("without writing");
+    expect(steps[2].body).toContain("preview and bundle");
   });
 
   it("describes live minicase availability while status checks are pending", () => {

@@ -37,6 +37,8 @@ import {
   PRODUCTION_MINICASE_COMMAND,
   PRODUCTION_MINICASE_DEMO,
   convertDemoBundleHref,
+  convertDemoClickSteps,
+  convertDemoInspectHref,
   convertDemoPreviewHref,
   convertDemoRequest,
   convertDemoWalkthrough,
@@ -1083,7 +1085,7 @@ function MockDemoCard({
   canConvert: boolean;
   converted: boolean;
 }) {
-  const steps = convertDemoWalkthrough(C5G7_PRODUCTION_DEMO);
+  const clickSteps = convertDemoClickSteps();
   return (
     <section className="mb-5 rounded-xl border border-cyan-300/20 bg-cyan-300/[0.05] p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1161,8 +1163,8 @@ function MockDemoCard({
           </Link>
         </div>
       ) : null}
-      <div className="mt-4 grid gap-3 lg:grid-cols-4">
-        {steps.map((step) => (
+      <div className="mt-4 grid gap-3 lg:grid-cols-3">
+        {clickSteps.map((step) => (
           <div key={step.id} className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="rounded border border-cyan-200/25 bg-cyan-200/[0.08] px-1.5 py-0.5 font-mono text-[10px] text-cyan-100">
@@ -1175,16 +1177,25 @@ function MockDemoCard({
             <p className="mt-1 text-[12px] leading-5 text-[var(--fg-2)]">
               {step.body}
             </p>
-            {step.href ? (
-              <Link
-                href={step.href}
-                className="mt-1 inline-flex text-[12px] text-[var(--accent-2)] hover:underline"
-              >
-                Open
-              </Link>
-            ) : null}
           </div>
         ))}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-[var(--edge)] bg-black/10 px-3 py-2 text-[12px] text-[var(--fg-2)]">
+        <span>
+          Optional checks before or after the three-click demo:
+        </span>
+        <Link
+          href={convertDemoInspectHref(C5G7_PRODUCTION_DEMO)}
+          className="text-[var(--accent-2)] hover:underline"
+        >
+          Inspect source HDF5
+        </Link>
+        <Link
+          href={convertDemoBundleHref(C5G7_PRODUCTION_DEMO)}
+          className="text-[var(--accent-2)] hover:underline"
+        >
+          Open bundle builder
+        </Link>
       </div>
     </section>
   );
