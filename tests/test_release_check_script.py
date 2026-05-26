@@ -56,6 +56,11 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertIn("examples/external_sph_handoff/run_smoke.sh", default_section)
         self.assertIn("== Energy mesh contract smoke ==", default_section)
         self.assertIn("scripts/run_energy_mesh_contract_smoke.sh", default_section)
+        self.assertIn("pygan-doctor --help", default_section)
+        self.assertIn("pygan-inspect-compo --help", default_section)
+        self.assertIn("compare-writers --help", default_section)
+        self.assertIn("== PyGan backend smoke ==", default_section)
+        self.assertIn("scripts/run_pygan_backend_smoke.sh", default_section)
         self.assertIn("== C5G7 ADF source reconstruction smoke ==", accepted_section)
         self.assertIn("scripts/run_c5g7_adf_source_smoke.sh", accepted_section)
         self.assertIn("== C5G7 DONJON face-flux regeneration smoke ==", accepted_section)
@@ -197,6 +202,33 @@ class ReleaseCheckScriptTests(unittest.TestCase):
             smoke_text,
         )
         self.assertIn("run_energy_mesh_contract_smoke.sh", scripts_readme)
+
+    def test_release_gate_covers_optional_pygan_backend_smoke(self) -> None:
+        release_text = _release_check().read_text(encoding="utf-8")
+        default_section = release_text.split(
+            'if [[ "$RUN_LOCAL_CANDIDATES" -eq 1 ]];',
+            maxsplit=1,
+        )[0]
+        smoke_text = (
+            _repo_root() / "scripts/run_pygan_backend_smoke.sh"
+        ).read_text(encoding="utf-8")
+        scripts_readme = (_repo_root() / "scripts/README.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("== PyGan backend smoke ==", default_section)
+        self.assertIn("scripts/run_pygan_backend_smoke.sh", default_section)
+        self.assertIn("pygan-doctor --help", default_section)
+        self.assertIn("pygan-inspect-compo --help", default_section)
+        self.assertIn("compare-writers --help", default_section)
+        self.assertIn("pygan-doctor --summary-json", smoke_text)
+        self.assertIn("compare-writers", smoke_text)
+        self.assertIn("--format multicompo", smoke_text)
+        self.assertIn("--format macrolib", smoke_text)
+        self.assertIn("pygan-inspect-compo", smoke_text)
+        self.assertIn("PyGan backend smoke skipped", smoke_text)
+        self.assertIn("openmc2donjon PyGan backend smoke: PASS", smoke_text)
+        self.assertIn("run_pygan_backend_smoke.sh", scripts_readme)
 
 
 def _repo_root() -> Path:

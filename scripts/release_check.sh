@@ -48,6 +48,7 @@ Default:
   - external SPH table handoff smoke
   - external face-flux adapter smoke
   - production minicase, OpenMC full-core, and OpenMC hex minicase smokes
+  - optional PyGan backend smoke when PyGan is available
   - OpenMC full-core real DONJON-backed SPH loop smoke with --run-donjon
   - C5G7 converter readback smoke
   - accepted baseline manifest validation
@@ -171,6 +172,9 @@ echo "== CLI smoke =="
 "$PYTHON_BIN" -m openmc2donjon.cli run-sph-loop --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli make-donjon-sph-loop-config --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli make-sph-loop-scaffold --help >/dev/null
+"$PYTHON_BIN" -m openmc2donjon.cli pygan-doctor --help >/dev/null
+"$PYTHON_BIN" -m openmc2donjon.cli pygan-inspect-compo --help >/dev/null
+"$PYTHON_BIN" -m openmc2donjon.cli compare-writers --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.donjon_deck_runner --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.export_cli --version
 "$PYTHON_BIN" -m openmc2donjon.export_cli --help >/dev/null
@@ -258,6 +262,12 @@ echo "== Production minicase smoke =="
 RUN_DIR="$RUN_DIR/production_minicase" \
 PYTHON_BIN="$PYTHON_BIN" \
   bash "$REPO_ROOT/scripts/run_production_minicase_smoke.sh"
+
+echo
+echo "== PyGan backend smoke =="
+RUN_DIR="$RUN_DIR/pygan_backend" \
+PYTHON_BIN="$PYTHON_BIN" \
+  bash "$REPO_ROOT/scripts/run_pygan_backend_smoke.sh"
 
 echo
 echo "== OpenMC full-core assembly-wise minicase smoke =="

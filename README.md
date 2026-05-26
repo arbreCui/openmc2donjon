@@ -79,7 +79,17 @@ openmc2donjon compare-writers mgxs_library.h5 \
   --summary-json writer_compare.json
 ```
 
-4. Inspect the root structure of a native DRAGON/DONJON COMPO through PyGan:
+4. Run the optional local PyGan backend smoke:
+
+```sh
+bash scripts/run_pygan_backend_smoke.sh
+```
+
+The smoke skips cleanly when PyGan is not installed. When PyGan is available,
+it compares both `L_MULTICOMPO` and `L_MACROLIB` writer outputs against the
+default ASCII backend using the bundled C5G7 production fixture.
+
+5. Inspect the root structure of a native DRAGON/DONJON COMPO through PyGan:
 
 ```sh
 openmc2donjon pygan-inspect-compo FUEL30.COMPO --summary-json fuel30.pygan.json

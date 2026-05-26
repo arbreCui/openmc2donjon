@@ -188,11 +188,25 @@ Implemented:
   running backend Python environment can import PyGan
 - Web `/pygan` doctor and semantic writer-comparison report
 - Web command catalog entries for the PyGan diagnostics and comparison path
+- Local release-smoke coverage via `scripts/run_pygan_backend_smoke.sh`
 
 Not implemented yet:
 
 - CLE-2000 execution wrappers for production conversion
 
-The next useful step is to add local release-smoke coverage that runs
-`pygan-doctor`, `compare-writers`, and a small DONJON ingest when PyGan and
-DONJON are both available on the developer machine.
+Local smoke:
+
+```sh
+bash scripts/run_pygan_backend_smoke.sh
+```
+
+The smoke uses the bundled C5G7 production HDF5 fixture, runs `pygan-doctor`,
+compares the built-in ASCII and PyGan writer outputs for both `L_MULTICOMPO`
+and `L_MACROLIB`, then inspects the PyGan `L_MULTICOMPO` output. Artifacts are
+written under `/private/tmp/openmc2donjon_pygan_backend_smoke` by default. If
+PyGan is not importable, the smoke reports a clear skip and exits successfully,
+so it can remain in the default release check without requiring every machine
+to have PyGan installed.
+
+Later useful work: add an optional DONJON/CLE-2000 ingest smoke when both
+PyGan and DONJON are available on the developer machine.
