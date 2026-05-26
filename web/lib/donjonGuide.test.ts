@@ -6,6 +6,7 @@ import {
   donjonObjectLabel,
   findDonjonBundleArtifact,
   inferDonjonFormat,
+  normalizeDonjonDeckOptions,
 } from "./donjonGuide";
 
 describe("DONJON guide helpers", () => {
@@ -46,6 +47,47 @@ describe("DONJON guide helpers", () => {
     expect(snippet).toContain("SEQ_ASCII MACRO_ASC");
     expect(snippet).toContain("MACRO := MACRO_ASC");
     expect(snippet).not.toContain("NCR:");
+  });
+
+  it("generates configurable MULTICOMPO deck skeletons", () => {
+    const snippet = donjonIngestSnippet("/runs/case/out.mcompo.txt", "multicompo", {
+      mixtureCount: 4,
+      geometry: "car3d",
+      solver: "spn",
+      spnOrder: 3,
+      xMinus: "REFL",
+      xPlus: "VOID",
+      yMinus: "REFL",
+      yPlus: "VOID",
+      zMinus: "VOID",
+      zPlus: "VOID",
+    });
+
+    expect(snippet).toContain("MACRO := NCR: CPO :: EDIT 1 MACRO NMIX 4");
+    expect(snippet).toContain("  MIX 4 USE ENDMIX");
+    expect(snippet).toContain("GEOM := GEO: :: CAR3D 1 1 1");
+    expect(snippet).toContain("Z- VOID Z+ VOID");
+    expect(snippet).toContain("TRACK := TRIVAT: GEOM :: EDIT 1 DUAL 1 1 SPN 3 SCAT 1 ;");
+  });
+
+  it("normalizes deck builder options before rendering", () => {
+    expect(
+      normalizeDonjonDeckOptions({
+        mixtureCount: 0,
+        solver: "spn",
+        spnOrder: 4,
+      }),
+    ).toMatchObject({
+      mixtureCount: 1,
+      geometry: "car2d",
+      solver: "spn",
+      spnOrder: 3,
+      xMinus: "REFL",
+      xPlus: "VOID",
+    });
+    expect(normalizeDonjonDeckOptions({ mixtureCount: 1200 }).mixtureCount).toBe(
+      999,
+    );
   });
 
   it("finds a MULTICOMPO ASCII artifact from a bundle manifest", () => {

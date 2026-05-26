@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { CopyCliButton } from "@/components/commands/CopyCliButton";
 import { ApiError, api, type BundleInspection } from "@/lib/api";
 import {
+  DEFAULT_DONJON_DECK_OPTIONS,
   donjonGuideHref,
   donjonIngestOnlySnippet,
   donjonIngestSnippet,
@@ -15,6 +16,10 @@ import {
   inferDonjonFormat,
   placeholderAsciiPath,
   type DonjonBundleArtifact,
+  type DonjonDeckBoundary,
+  type DonjonDeckGeometry,
+  type DonjonDeckOptions,
+  type DonjonDeckSolver,
   type DonjonGuideFormat,
 } from "@/lib/donjonGuide";
 
@@ -24,6 +29,27 @@ type ManifestState =
   | { kind: "ready"; data: BundleInspection; artifact: DonjonBundleArtifact | null }
   | { kind: "missing"; message: string }
   | { kind: "error"; message: string };
+
+type BoundaryKey =
+  | "xMinus"
+  | "xPlus"
+  | "yMinus"
+  | "yPlus"
+  | "zMinus"
+  | "zPlus";
+
+const BOUNDARY_FIELDS: Array<{
+  key: BoundaryKey;
+  label: string;
+  dimension: "xy" | "z";
+}> = [
+  { key: "xMinus", label: "X-", dimension: "xy" },
+  { key: "xPlus", label: "X+", dimension: "xy" },
+  { key: "yMinus", label: "Y-", dimension: "xy" },
+  { key: "yPlus", label: "Y+", dimension: "xy" },
+  { key: "zMinus", label: "Z-", dimension: "z" },
+  { key: "zPlus", label: "Z+", dimension: "z" },
+];
 
 export default function DonjonPage() {
   return (
@@ -59,12 +85,43 @@ function DonjonPageContent() {
   const [manifestState, setManifestState] = useState<ManifestState>({
     kind: "idle",
   });
+  const [mixtureCount, setMixtureCount] = useState(
+    DEFAULT_DONJON_DECK_OPTIONS.mixtureCount,
+  );
+  const [geometry, setGeometry] = useState<DonjonDeckGeometry>(
+    DEFAULT_DONJON_DECK_OPTIONS.geometry,
+  );
+  const [solver, setSolver] = useState<DonjonDeckSolver>(
+    DEFAULT_DONJON_DECK_OPTIONS.solver,
+  );
+  const [spnOrder, setSpnOrder] = useState(
+    DEFAULT_DONJON_DECK_OPTIONS.spnOrder,
+  );
+  const [boundaries, setBoundaries] = useState({
+    xMinus: DEFAULT_DONJON_DECK_OPTIONS.xMinus,
+    xPlus: DEFAULT_DONJON_DECK_OPTIONS.xPlus,
+    yMinus: DEFAULT_DONJON_DECK_OPTIONS.yMinus,
+    yPlus: DEFAULT_DONJON_DECK_OPTIONS.yPlus,
+    zMinus: DEFAULT_DONJON_DECK_OPTIONS.zMinus,
+    zPlus: DEFAULT_DONJON_DECK_OPTIONS.zPlus,
+  });
+
+  const deckOptions = useMemo<DonjonDeckOptions>(
+    () => ({
+      mixtureCount,
+      geometry,
+      solver,
+      spnOrder,
+      ...boundaries,
+    }),
+    [boundaries, geometry, mixtureCount, solver, spnOrder],
+  );
 
   const objectLabel = donjonObjectLabel(format);
   const shortName = donjonShortName(format);
   const ingestSnippet = useMemo(
-    () => donjonIngestSnippet(asciiPath, format),
-    [asciiPath, format],
+    () => donjonIngestSnippet(asciiPath, format, deckOptions),
+    [asciiPath, deckOptions, format],
   );
   const dumpSnippet = useMemo(
     () => donjonIngestOnlySnippet(asciiPath, format),
@@ -240,6 +297,21 @@ function DonjonPageContent() {
           />
         </section>
 
+        <DeckBuilderPanel
+          mixtureCount={mixtureCount}
+          onMixtureCountChange={setMixtureCount}
+          geometry={geometry}
+          onGeometryChange={setGeometry}
+          solver={solver}
+          onSolverChange={setSolver}
+          spnOrder={spnOrder}
+          onSpnOrderChange={setSpnOrder}
+          boundaries={boundaries}
+          onBoundaryChange={(key, value) =>
+            setBoundaries((current) => ({ ...current, [key]: value }))
+          }
+        />
+
         <section className="mt-5 grid gap-4 lg:grid-cols-[1fr_1fr]">
           <SnippetCard
             title={`${shortName} ingest smoke`}
@@ -373,6 +445,143 @@ function ManifestStat({ label, value }: { label: string; value: string }) {
         {value}
       </div>
     </div>
+  );
+}
+
+function DeckBuilderPanel({
+  mixtureCount,
+  onMixtureCountChange,
+  geometry,
+  onGeometryChange,
+  solver,
+  onSolverChange,
+  spnOrder,
+  onSpnOrderChange,
+  boundaries,
+  onBoundaryChange,
+}: {
+  mixtureCount: number;
+  onMixtureCountChange: (value: number) => void;
+  geometry: DonjonDeckGeometry;
+  onGeometryChange: (value: DonjonDeckGeometry) => void;
+  solver: DonjonDeckSolver;
+  onSolverChange: (value: DonjonDeckSolver) => void;
+  spnOrder: number;
+  onSpnOrderChange: (value: number) => void;
+  boundaries: Pick<
+    DonjonDeckOptions,
+    "xMinus" | "xPlus" | "yMinus" | "yPlus" | "zMinus" | "zPlus"
+  >;
+  onBoundaryChange: (key: BoundaryKey, value: DonjonDeckBoundary) => void;
+}) {
+  const visibleBoundaries = BOUNDARY_FIELDS.filter(
+    (field) => geometry === "car3d" || field.dimension === "xy",
+  );
+
+  return (
+    <section className="mt-5 rounded-xl border border-[var(--edge)] bg-black/15 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+            deck builder
+          </div>
+          <h2 className="mt-1 text-base font-semibold tracking-tight">
+            Shape the low-order skeleton before copying it
+          </h2>
+          <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--fg-2)]">
+            These controls generate the skeleton below. The geometry is still a
+            one-cell smoke model; replace its mesh and mixture map with the real
+            DONJON core deck.
+          </p>
+        </div>
+        <span className="rounded border border-cyan-300/20 bg-cyan-300/10 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-cyan-100">
+          local template
+        </span>
+      </div>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-4">
+        <label className="block">
+          <span className="text-[12px] font-semibold tracking-tight">
+            Mixtures to extract
+          </span>
+          <input
+            type="number"
+            min={1}
+            max={999}
+            step={1}
+            value={mixtureCount}
+            onChange={(event) =>
+              onMixtureCountChange(Number(event.target.value))
+            }
+            className="mt-2 w-full rounded-md border border-[var(--edge)] bg-black/20 px-3 py-2 text-sm text-[var(--fg-0)]"
+          />
+        </label>
+        <label className="block">
+          <span className="text-[12px] font-semibold tracking-tight">
+            Geometry primitive
+          </span>
+          <select
+            value={geometry}
+            onChange={(event) =>
+              onGeometryChange(event.target.value as DonjonDeckGeometry)
+            }
+            className="mt-2 w-full rounded-md border border-[var(--edge)] bg-black/20 px-3 py-2 text-sm text-[var(--fg-0)]"
+          >
+            <option value="car2d">CAR2D smoke</option>
+            <option value="car3d">CAR3D smoke</option>
+          </select>
+        </label>
+        <label className="block">
+          <span className="text-[12px] font-semibold tracking-tight">
+            Solver/tracking
+          </span>
+          <select
+            value={solver}
+            onChange={(event) =>
+              onSolverChange(event.target.value as DonjonDeckSolver)
+            }
+            className="mt-2 w-full rounded-md border border-[var(--edge)] bg-black/20 px-3 py-2 text-sm text-[var(--fg-0)]"
+          >
+            <option value="diffusion">Diffusion</option>
+            <option value="spn">SPN</option>
+          </select>
+        </label>
+        <label className="block">
+          <span className="text-[12px] font-semibold tracking-tight">
+            SPN order
+          </span>
+          <select
+            value={spnOrder}
+            disabled={solver !== "spn"}
+            onChange={(event) => onSpnOrderChange(Number(event.target.value))}
+            className="mt-2 w-full rounded-md border border-[var(--edge)] bg-black/20 px-3 py-2 text-sm text-[var(--fg-0)] disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            <option value={3}>SPN 3</option>
+            <option value={5}>SPN 5</option>
+          </select>
+        </label>
+      </div>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
+        {visibleBoundaries.map((field) => (
+          <label key={field.key} className="block">
+            <span className="text-[11px] font-semibold tracking-tight text-[var(--fg-2)]">
+              {field.label}
+            </span>
+            <select
+              value={boundaries[field.key]}
+              onChange={(event) =>
+                onBoundaryChange(field.key, event.target.value as DonjonDeckBoundary)
+              }
+              className="mt-1.5 w-full rounded-md border border-[var(--edge)] bg-black/20 px-2 py-1.5 text-[12px] text-[var(--fg-0)]"
+            >
+              <option value="REFL">REFL</option>
+              <option value="VOID">VOID</option>
+            </select>
+          </label>
+        ))}
+      </div>
+    </section>
   );
 }
 

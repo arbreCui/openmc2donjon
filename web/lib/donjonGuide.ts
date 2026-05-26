@@ -1,4 +1,33 @@
 export type DonjonGuideFormat = "multicompo" | "macrolib";
+export type DonjonDeckGeometry = "car2d" | "car3d";
+export type DonjonDeckSolver = "diffusion" | "spn";
+export type DonjonDeckBoundary = "REFL" | "VOID";
+
+export interface DonjonDeckOptions {
+  mixtureCount: number;
+  geometry: DonjonDeckGeometry;
+  solver: DonjonDeckSolver;
+  spnOrder: number;
+  xMinus: DonjonDeckBoundary;
+  xPlus: DonjonDeckBoundary;
+  yMinus: DonjonDeckBoundary;
+  yPlus: DonjonDeckBoundary;
+  zMinus: DonjonDeckBoundary;
+  zPlus: DonjonDeckBoundary;
+}
+
+export const DEFAULT_DONJON_DECK_OPTIONS: DonjonDeckOptions = {
+  mixtureCount: 1,
+  geometry: "car2d",
+  solver: "diffusion",
+  spnOrder: 3,
+  xMinus: "REFL",
+  xPlus: "VOID",
+  yMinus: "REFL",
+  yPlus: "VOID",
+  zMinus: "REFL",
+  zPlus: "VOID",
+};
 
 export interface DonjonGuideLinkInput {
   asciiPath?: string | null;
@@ -56,8 +85,11 @@ export function donjonShortName(format: DonjonGuideFormat): string {
 export function donjonIngestSnippet(
   asciiPath: string,
   format: DonjonGuideFormat,
+  options: Partial<DonjonDeckOptions> = {},
 ): string {
   const path = asciiPath.trim() || placeholderAsciiPath(format);
+  const deck = normalizeDonjonDeckOptions(options);
+  const solverLabel = deck.solver === "spn" ? `SPN${deck.spnOrder}` : "DIFFUSION";
   if (format === "macrolib") {
     return [
       "MODULE GEO: TRIVAT: TRIVAA: FLUD: GREP: END: ABORT: ;",
@@ -67,15 +99,11 @@ export function donjonIngestSnippet(
       "",
       "MACRO := MACRO_ASC ;",
       "",
-      "* Replace this geometry / tracking block with your low-order model.",
-      "GEOM := GEO: :: CAR2D 1 1",
-      "  EDIT 0 X- REFL X+ VOID Y- REFL Y+ VOID",
-      "  MIX 1 MESHX 0.0 1.0 MESHY 0.0 1.0 ;",
-      "TRACK := TRIVAT: GEOM :: EDIT 1 DUAL 1 1 ;",
+      ...lowOrderSkeletonLines(deck),
       "SYS := TRIVAA: MACRO TRACK :: EDIT 0 ;",
       "FLUX := FLUD: SYS TRACK :: EDIT 1 ADI 4 ACCE 5 3 EXTE 200 1.E-6 ;",
       "GREP: FLUX :: GETVAL 'K-EFFECTIVE ' 1 >>keff<< ;",
-      "ECHO 'OPENMC2DONJON MACROLIB K-EFFECTIVE' keff ;",
+      `ECHO 'OPENMC2DONJON MACROLIB ${solverLabel} K-EFFECTIVE' keff ;`,
       "END: ;",
     ].join("\n");
   }
@@ -86,22 +114,16 @@ export function donjonIngestSnippet(
     `SEQ_ASCII CPO_ASC :: FILE '${path}' ;`,
     "",
     "CPO := CPO_ASC ;",
-    "MACRO := NCR: CPO :: EDIT 1 MACRO NMIX <number_of_mixtures>",
+    `MACRO := NCR: CPO :: EDIT 1 MACRO NMIX ${deck.mixtureCount}`,
     "  COMPO CPO CPO",
-    "  MIX 1 USE ENDMIX",
-    "  MIX 2 USE ENDMIX",
-    "  * ...repeat MIX lines for the mixture indices used by GEOM...",
+    ...ncrMixLines(deck.mixtureCount),
     ";",
     "",
-    "* Replace this geometry / tracking block with your low-order model.",
-    "GEOM := GEO: :: CAR2D 1 1",
-    "  EDIT 0 X- REFL X+ VOID Y- REFL Y+ VOID",
-    "  MIX 1 MESHX 0.0 1.0 MESHY 0.0 1.0 ;",
-    "TRACK := TRIVAT: GEOM :: EDIT 1 DUAL 1 1 ;",
+    ...lowOrderSkeletonLines(deck),
     "SYS := TRIVAA: MACRO TRACK :: EDIT 0 ;",
     "FLUX := FLUD: SYS TRACK :: EDIT 1 ADI 4 ACCE 5 3 EXTE 200 1.E-6 ;",
     "GREP: FLUX :: GETVAL 'K-EFFECTIVE ' 1 >>keff<< ;",
-    "ECHO 'OPENMC2DONJON MULTICOMPO K-EFFECTIVE' keff ;",
+    `ECHO 'OPENMC2DONJON MULTICOMPO ${solverLabel} K-EFFECTIVE' keff ;`,
     "END: ;",
   ].join("\n");
 }
@@ -133,6 +155,99 @@ export function donjonIngestOnlySnippet(
 
 export function placeholderAsciiPath(format: DonjonGuideFormat): string {
   return format === "macrolib" ? "out.macrolib.txt" : "out.mcompo.txt";
+}
+
+export function normalizeDonjonDeckOptions(
+  options: Partial<DonjonDeckOptions>,
+): DonjonDeckOptions {
+  return {
+    ...DEFAULT_DONJON_DECK_OPTIONS,
+    ...options,
+    mixtureCount: normalizeMixtureCount(options.mixtureCount),
+    spnOrder: normalizeSpnOrder(options.spnOrder),
+    geometry: normalizeGeometry(options.geometry),
+    solver: normalizeSolver(options.solver),
+    xMinus: normalizeBoundary(
+      options.xMinus,
+      DEFAULT_DONJON_DECK_OPTIONS.xMinus,
+    ),
+    xPlus: normalizeBoundary(options.xPlus, DEFAULT_DONJON_DECK_OPTIONS.xPlus),
+    yMinus: normalizeBoundary(
+      options.yMinus,
+      DEFAULT_DONJON_DECK_OPTIONS.yMinus,
+    ),
+    yPlus: normalizeBoundary(options.yPlus, DEFAULT_DONJON_DECK_OPTIONS.yPlus),
+    zMinus: normalizeBoundary(
+      options.zMinus,
+      DEFAULT_DONJON_DECK_OPTIONS.zMinus,
+    ),
+    zPlus: normalizeBoundary(options.zPlus, DEFAULT_DONJON_DECK_OPTIONS.zPlus),
+  };
+}
+
+function ncrMixLines(mixtureCount: number): string[] {
+  return Array.from(
+    { length: mixtureCount },
+    (_, index) => `  MIX ${index + 1} USE ENDMIX`,
+  );
+}
+
+function lowOrderSkeletonLines(options: DonjonDeckOptions): string[] {
+  return [
+    "* Replace this geometry / tracking block with your low-order model.",
+    options.mixtureCount > 1
+      ? `* The one-cell GEOM below references MIX 1 only; expand it to map all ${options.mixtureCount} mixtures.`
+      : "* The one-cell GEOM below is only an ingest smoke model.",
+    ...geometryLines(options),
+    trackingLine(options),
+  ];
+}
+
+function geometryLines(options: DonjonDeckOptions): string[] {
+  if (options.geometry === "car3d") {
+    return [
+      "GEOM := GEO: :: CAR3D 1 1 1",
+      `  EDIT 0 X- ${options.xMinus} X+ ${options.xPlus} Y- ${options.yMinus} Y+ ${options.yPlus} Z- ${options.zMinus} Z+ ${options.zPlus}`,
+      "  MIX 1 MESHX 0.0 1.0 MESHY 0.0 1.0 MESHZ 0.0 1.0 ;",
+    ];
+  }
+  return [
+    "GEOM := GEO: :: CAR2D 1 1",
+    `  EDIT 0 X- ${options.xMinus} X+ ${options.xPlus} Y- ${options.yMinus} Y+ ${options.yPlus}`,
+    "  MIX 1 MESHX 0.0 1.0 MESHY 0.0 1.0 ;",
+  ];
+}
+
+function trackingLine(options: DonjonDeckOptions): string {
+  const spn = options.solver === "spn" ? ` SPN ${options.spnOrder} SCAT 1` : "";
+  return `TRACK := TRIVAT: GEOM :: EDIT 1 DUAL 1 1${spn} ;`;
+}
+
+function normalizeMixtureCount(value: number | undefined): number {
+  if (!Number.isFinite(value)) return DEFAULT_DONJON_DECK_OPTIONS.mixtureCount;
+  return Math.min(999, Math.max(1, Math.floor(Number(value))));
+}
+
+function normalizeSpnOrder(value: number | undefined): number {
+  if (!Number.isFinite(value)) return DEFAULT_DONJON_DECK_OPTIONS.spnOrder;
+  const order = Math.floor(Number(value));
+  return order === 5 ? 5 : 3;
+}
+
+function normalizeGeometry(value: DonjonDeckGeometry | undefined): DonjonDeckGeometry {
+  return value === "car3d" ? "car3d" : "car2d";
+}
+
+function normalizeSolver(value: DonjonDeckSolver | undefined): DonjonDeckSolver {
+  return value === "spn" ? "spn" : "diffusion";
+}
+
+function normalizeBoundary(
+  value: DonjonDeckBoundary | undefined,
+  fallback: DonjonDeckBoundary,
+): DonjonDeckBoundary {
+  if (value === "REFL" || value === "VOID") return value;
+  return fallback;
 }
 
 export function findDonjonBundleArtifact(
