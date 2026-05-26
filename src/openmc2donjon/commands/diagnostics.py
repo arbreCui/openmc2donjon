@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 from .base import (
@@ -17,6 +18,7 @@ from ..energy_groups import MESH_RELATIVE_TOLERANCE
 from ..mgxs_diff import diff_hdf5_files
 from ..mgxs_input_contract import run_preflight
 from ..mgxs_inspect import inspect_files
+from ..pygan_backend import PyGanStatus, probe_pygan
 
 
 def command_specs() -> tuple[CommandSpec, ...]:
@@ -41,6 +43,12 @@ def command_specs() -> tuple[CommandSpec, ...]:
             "check the local runtime environment",
         ),
         CommandSpec(
+            "pygan-doctor",
+            build_pygan_doctor_parser,
+            pygan_doctor_handler,
+            "check optional PyGan backend availability",
+        ),
+        CommandSpec(
             "diff",
             build_diff_parser,
             diff_handler,
@@ -59,6 +67,48 @@ def command_specs() -> tuple[CommandSpec, ...]:
             "validate MGXS HDF5 files against the input contract",
         ),
     )
+
+
+def build_pygan_doctor_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="openmc2donjon pygan-doctor",
+        description=(
+            "Check whether the optional PyGan backend is importable. "
+            "PyGan is used for DRAGON/DONJON validation and future alternate "
+            "writers; the default converter writer remains pure Python ASCII."
+        ),
+    )
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        default=None,
+        help="write a machine-readable PyGan availability summary",
+    )
+    return parser
+
+
+def pygan_doctor_handler(args: argparse.Namespace) -> int:
+    status = probe_pygan()
+    payload = status.as_dict()
+    if args.summary_json is not None:
+        text = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+        args.summary_json.write_text(text, encoding="utf-8")
+
+    print_pygan_status(status)
+    return 0 if status.available else 1
+
+
+def print_pygan_status(status: PyGanStatus) -> None:
+    state = "available" if status.available else "unavailable"
+    print(f"pygan_backend={state}")
+    print(f"role={status.role}")
+    for module in status.modules:
+        if module.available:
+            print(f"{module.name}=available ({module.module_file})")
+        else:
+            print(f"{module.name}=missing ({module.error})")
+    if not status.available:
+        print(f"install_hint={status.install_hint}")
 
 
 def build_check_parser() -> argparse.ArgumentParser:

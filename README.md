@@ -47,6 +47,23 @@ Either invocation style composes with any of the equivalence methods above.
 Accepted validation: C5G7 assembly-wise OpenMC -> DONJON handoff with
 documented k-effective comparisons; see [Validation Status](#validation-status).
 
+## PyGan Integration
+
+The default converter backend is the pure Python ASCII LCM writer shipped in
+this package. PyGan is treated as an optional DRAGON/DONJON integration layer
+for validation, inspection, and future alternate writer experiments.
+
+Check whether the optional backend is available:
+
+```sh
+openmc2donjon pygan-doctor
+```
+
+If PyGan is not installed, conversion still works through the default ASCII
+writer. Installing PyGan is useful when you want Python-side access to native
+DRAGON/DONJON LCM objects or want to run CLE-2000 procedures as part of a local
+validation harness.
+
 ## Quick Start
 
 New users should start with the short path-oriented guide:

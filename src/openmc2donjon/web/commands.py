@@ -471,6 +471,19 @@ DETAILS: dict[str, CommandDetail] = {
         cli="openmc2donjon doctor",
         tags=("environment",),
     ),
+    "pygan-doctor": CommandDetail(
+        group="package",
+        title="PyGan doctor",
+        summary=(
+            "Check whether the optional PyGan DRAGON/DONJON validation "
+            "backend is available."
+        ),
+        status="partial",
+        status_label="Command builder ready",
+        web_path="/builder?command=pygan-doctor",
+        cli="openmc2donjon pygan-doctor",
+        tags=("environment", "PyGan"),
+    ),
     "serve": CommandDetail(
         group="web",
         title="Start web backend",
