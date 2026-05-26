@@ -21,6 +21,7 @@ import {
   convertBundleManifestPath,
   convertBundleOutputDir,
   convertValidateBundleHref,
+  convertWriterCompareHref,
 } from "@/lib/convertNextSteps";
 import {
   fileStatusIsDirectory,
@@ -202,6 +203,11 @@ function DeliveryCommandPanel({
             <a href="#ascii-output-preview" className="btn btn-primary">
               Preview ASCII
             </a>
+            {data.writer_backend === "pygan" ? (
+              <Link href={convertWriterCompareHref(data)} className="btn btn-secondary">
+                Validate PyGan writer
+              </Link>
+            ) : null}
             <Link href={convertBundleHref(data)} className="btn btn-secondary">
               Open bundle builder
             </Link>
@@ -384,6 +390,17 @@ function handoffActions(
     fileStatus: statuses?.bundle,
     fileStatusLabel: "bundle dir",
   };
+  const compare: HandoffAction = {
+    id: "compare-writers",
+    label: "PyGan",
+    title: outputReady ? "Validate PyGan writer" : "Validate after convert",
+    body: outputReady
+      ? "Open a command builder that regenerates this handoff with ASCII and PyGan, then compares their LCM trees semantically."
+      : "PyGan writer validation is available once the converted handoff is confirmed.",
+    href: outputReady ? convertWriterCompareHref(data) : undefined,
+    disabled: !outputReady,
+    status: outputReady ? "ready" : "blocked",
+  };
   const guide: HandoffAction = {
     id: "guide",
     label: "Command",
@@ -393,9 +410,13 @@ function handoffActions(
     status: "reference",
   };
   if (outputReady) {
-    return [preview, bundle, inspect, guide];
+    return data.writer_backend === "pygan"
+      ? [preview, compare, bundle, inspect, guide]
+      : [preview, bundle, inspect, guide];
   }
-  return [inspect, preview, bundle, guide];
+  return data.writer_backend === "pygan"
+    ? [inspect, preview, compare, bundle, guide]
+    : [inspect, preview, bundle, guide];
 }
 
 function ActionCard({ action }: { action: HandoffAction }) {

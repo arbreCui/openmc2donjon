@@ -59,6 +59,17 @@ export function convertDonjonGuideHref(data: ConvertResponse): string {
   });
 }
 
+export function convertWriterCompareHref(data: ConvertResponse): string {
+  const params = new URLSearchParams({
+    command: "compare-writers",
+    input_h5: data.input_path,
+    format: data.format,
+    summary_json: siblingPath(data.output_path, "writer_compare.json"),
+    keep_dir: siblingPath(data.output_path, "writer_compare"),
+  });
+  return `/builder?${params.toString()}`;
+}
+
 export function convertBundleManifestPath(data: ConvertResponse): string {
   return `${withoutTrailingSlash(convertBundleOutputDir(data))}/manifest.json`;
 }
@@ -68,10 +79,19 @@ export function convertBundleOutputDir(data: ConvertResponse): string {
 }
 
 function siblingBundleDir(outputPath: string): string {
+  return siblingPath(outputPath, "bundle");
+}
+
+function siblingDir(outputPath: string): string {
   const trimmed = outputPath.trim();
   const index = trimmed.lastIndexOf("/");
-  if (index <= 0) return "bundle";
-  return `${trimmed.slice(0, index)}/bundle`;
+  if (index <= 0) return ".";
+  return trimmed.slice(0, index);
+}
+
+function siblingPath(outputPath: string, child: string): string {
+  const dir = siblingDir(outputPath);
+  return dir === "." ? child : `${dir}/${child}`;
 }
 
 function withoutTrailingSlash(path: string): string {
@@ -157,6 +177,19 @@ export function convertNextSteps(
       href: convertDonjonGuideHref(data),
       status: "ready",
     },
+    ...(data.writer_backend === "pygan"
+      ? [
+          {
+            id: "compare-writers",
+            label: "Validate",
+            title: "Compare PyGan and ASCII writers",
+            body:
+              "Build a semantic comparison command that regenerates this handoff with both writer backends and checks their LCM trees.",
+            href: convertWriterCompareHref(data),
+            status: "ready" as const,
+          },
+        ]
+      : []),
     {
       id: "bundle",
       label: "Bundle",

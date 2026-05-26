@@ -9,6 +9,7 @@ import {
 } from "@/lib/convertActionGuide";
 import {
   convertBundleHref,
+  convertWriterCompareHref,
   convertNextSteps,
 } from "@/lib/convertNextSteps";
 import type { ConvertWalkthroughRun } from "@/lib/convertWalkthrough";
@@ -472,6 +473,11 @@ function PrimaryOutcomeActions({
         {converted ? (
           <Link href={convertBundleHref(data)} className="btn btn-secondary">
             Bundle
+          </Link>
+        ) : null}
+        {converted && data.writer_backend === "pygan" ? (
+          <Link href={convertWriterCompareHref(data)} className="btn btn-secondary">
+            Validate PyGan
           </Link>
         ) : null}
         {stopped ? (

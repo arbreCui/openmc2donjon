@@ -7,6 +7,7 @@ import {
   convertObjectDescription,
   convertObjectLabel,
   convertValidateBundleHref,
+  convertWriterCompareHref,
 } from "./convertNextSteps";
 import type { ConvertPreflightInput, ConvertResponse } from "./api";
 
@@ -137,6 +138,50 @@ describe("convert next steps", () => {
     expect(steps[2].href).toContain("mgxs=");
     expect(steps[2].href).toContain("mcompo=");
     expect(steps[3].title).toContain("SPH/ADF");
+  });
+
+  it("adds a PyGan writer comparison step only for converted PyGan output", () => {
+    const converted = response({
+      dry_run: false,
+      converted: true,
+      output_exists: true,
+      writer_backend: "pygan",
+    });
+    const steps = convertNextSteps(converted, null);
+
+    expect(steps.map((step) => step.id)).toEqual([
+      "preview",
+      "donjon",
+      "compare-writers",
+      "bundle",
+      "inspect",
+    ]);
+    expect(steps[2].href).toBe(
+      "/builder?command=compare-writers&input_h5=%2Fruns%2Fcase%2Fmgxs_library.h5&format=multicompo&summary_json=%2Fruns%2Fcase%2Fwriter_compare.json&keep_dir=%2Fruns%2Fcase%2Fwriter_compare",
+    );
+    expect(convertWriterCompareHref(converted)).toBe(steps[2].href);
+    expect(
+      convertWriterCompareHref(
+        response({
+          dry_run: false,
+          converted: true,
+          output_exists: true,
+          writer_backend: "pygan",
+          output_path: "out.mcompo.txt",
+        }),
+      ),
+    ).toContain("summary_json=writer_compare.json&keep_dir=writer_compare");
+    expect(
+      convertNextSteps(
+        response({
+          dry_run: false,
+          converted: true,
+          output_exists: true,
+          writer_backend: "ascii",
+        }),
+        null,
+      ).some((step) => step.id === "compare-writers"),
+    ).toBe(false);
   });
 
   it("blocks downstream handoff guidance when conversion fails", () => {
