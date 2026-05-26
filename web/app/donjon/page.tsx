@@ -7,11 +7,13 @@ import { CopyCliButton } from "@/components/commands/CopyCliButton";
 import { ApiError, api, type BundleInspection } from "@/lib/api";
 import {
   DEFAULT_DONJON_DECK_OPTIONS,
+  donjonDeckFilename,
   donjonGuideHref,
   donjonIngestOnlySnippet,
   donjonIngestSnippet,
   findDonjonBundleArtifact,
   donjonObjectLabel,
+  donjonRunCommand,
   donjonShortName,
   inferDonjonFormat,
   placeholderAsciiPath,
@@ -125,6 +127,14 @@ function DonjonPageContent() {
   );
   const dumpSnippet = useMemo(
     () => donjonIngestOnlySnippet(asciiPath, format),
+    [asciiPath, format],
+  );
+  const ingestDeckFilename = useMemo(
+    () => donjonDeckFilename(asciiPath, format, "ingest"),
+    [asciiPath, format],
+  );
+  const solveDeckFilename = useMemo(
+    () => donjonDeckFilename(asciiPath, format, "solve"),
     [asciiPath, format],
   );
   const selfHref = donjonGuideHref({
@@ -317,11 +327,15 @@ function DonjonPageContent() {
             title={`${shortName} ingest smoke`}
             description="Use this tiny deck first when you only want to confirm that DONJON can read the ASCII file."
             code={dumpSnippet}
+            downloadFilename={ingestDeckFilename}
+            runCommand={donjonRunCommand(ingestDeckFilename)}
           />
           <SnippetCard
             title="Low-order solve skeleton"
             description="Use this as a starting point for a real DONJON deck; replace geometry, tracking, and solver details."
             code={ingestSnippet}
+            downloadFilename={solveDeckFilename}
+            runCommand={donjonRunCommand(solveDeckFilename)}
           />
         </section>
 
@@ -609,11 +623,16 @@ function SnippetCard({
   title,
   description,
   code,
+  downloadFilename,
+  runCommand,
 }: {
   title: string;
   description: string;
   code: string;
+  downloadFilename?: string;
+  runCommand?: string;
 }) {
+  const downloadHref = `data:text/plain;charset=utf-8,${encodeURIComponent(code)}`;
   return (
     <article className="rounded-xl border border-[var(--edge)] bg-black/15 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -622,8 +641,35 @@ function SnippetCard({
           <p className="mt-1 text-[12px] leading-5 text-[var(--fg-3)]">
             {description}
           </p>
+          {downloadFilename ? (
+            <p className="mt-1 text-[11px] text-[var(--fg-3)]">
+              Suggested file:{" "}
+              <span className="font-mono text-[var(--fg-2)]">
+                {downloadFilename}
+              </span>
+            </p>
+          ) : null}
         </div>
-        <CopyCliButton value={code} label="Copy deck" compact />
+        <div className="flex flex-wrap justify-end gap-2">
+          <CopyCliButton value={code} label="Copy deck" compact />
+          {downloadFilename ? (
+            <a
+              href={downloadHref}
+              download={downloadFilename}
+              className="btn btn-secondary px-2 py-1 text-[11px]"
+            >
+              Download .x2m
+            </a>
+          ) : null}
+          {runCommand ? (
+            <CopyCliButton
+              value={runCommand}
+              label="Copy run command"
+              ariaLabel={`Copy DONJON run command for ${title}`}
+              compact
+            />
+          ) : null}
+        </div>
       </div>
       <pre className="mt-3 max-h-[460px] overflow-auto rounded-lg border border-[var(--edge)] bg-black/30 p-3 text-[12px] leading-5 text-[var(--fg-1)]">
         {code}

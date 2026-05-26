@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  donjonDeckFilename,
   donjonGuideHref,
   donjonIngestOnlySnippet,
   donjonIngestSnippet,
   donjonObjectLabel,
+  donjonRunCommand,
   findDonjonBundleArtifact,
   inferDonjonFormat,
   normalizeDonjonDeckOptions,
@@ -47,6 +49,30 @@ describe("DONJON guide helpers", () => {
     expect(snippet).toContain("SEQ_ASCII MACRO_ASC");
     expect(snippet).toContain("MACRO := MACRO_ASC");
     expect(snippet).not.toContain("NCR:");
+  });
+
+  it("suggests safe DONJON deck filenames from ASCII output paths", () => {
+    expect(
+      donjonDeckFilename("/runs/case/out.mcompo.txt", "multicompo", "ingest"),
+    ).toBe("out_donjon_ingest.x2m");
+    expect(
+      donjonDeckFilename("/runs/case/OpenMC case.macrolib.txt", "macrolib"),
+    ).toBe("OpenMC_case_donjon_solve.x2m");
+    expect(donjonDeckFilename("", "multicompo")).toBe(
+      "openmc2donjon_multicompo_donjon_solve.x2m",
+    );
+  });
+
+  it("generates a shell-safe DONJON run command for downloaded decks", () => {
+    expect(donjonRunCommand("out_donjon_solve.x2m")).toBe(
+      "rdonjon out_donjon_solve.x2m",
+    );
+    expect(donjonRunCommand("case with spaces.x2m")).toBe(
+      "rdonjon 'case with spaces.x2m'",
+    );
+    expect(donjonRunCommand("case's deck.x2m")).toBe(
+      "rdonjon 'case'\\''s deck.x2m'",
+    );
   });
 
   it("generates configurable MULTICOMPO deck skeletons", () => {

@@ -82,6 +82,20 @@ export function donjonShortName(format: DonjonGuideFormat): string {
   return format === "macrolib" ? "MACROLIB" : "MULTICOMPO";
 }
 
+export function donjonDeckFilename(
+  asciiPath: string,
+  format: DonjonGuideFormat,
+  purpose: "ingest" | "solve" = "solve",
+): string {
+  const base = deckBaseName(asciiPath, format);
+  return `${base}_donjon_${purpose}.x2m`;
+}
+
+export function donjonRunCommand(deckFilename: string): string {
+  const filename = deckFilename.trim() || "openmc2donjon_donjon_solve.x2m";
+  return `rdonjon ${shellQuote(filename)}`;
+}
+
 export function donjonIngestSnippet(
   asciiPath: string,
   format: DonjonGuideFormat,
@@ -248,6 +262,33 @@ function normalizeBoundary(
 ): DonjonDeckBoundary {
   if (value === "REFL" || value === "VOID") return value;
   return fallback;
+}
+
+function deckBaseName(asciiPath: string, format: DonjonGuideFormat): string {
+  const fallback = format === "macrolib" ? "openmc2donjon_macrolib" : "openmc2donjon_multicompo";
+  const trimmed = asciiPath.trim();
+  if (!trimmed) return fallback;
+  const leaf = trimmed.split(/[\\/]/).filter(Boolean).at(-1) ?? "";
+  const withoutKnownSuffix = leaf
+    .replace(/\.txt$/i, "")
+    .replace(/\.mcompo$/i, "")
+    .replace(/\.macrolib$/i, "")
+    .replace(/\.compo$/i, "")
+    .replace(/\.mco$/i, "");
+  return sanitizeFilename(withoutKnownSuffix) || fallback;
+}
+
+function sanitizeFilename(value: string): string {
+  return value
+    .replace(/[^A-Za-z0-9._-]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^[._-]+|[._-]+$/g, "")
+    .slice(0, 80);
+}
+
+function shellQuote(value: string): string {
+  if (/^[A-Za-z0-9_@%+=:,./-]+$/.test(value)) return value;
+  return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
 export function findDonjonBundleArtifact(
