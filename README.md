@@ -53,20 +53,16 @@ The default converter backend is the pure Python ASCII LCM writer shipped in
 this package. PyGan is treated as an optional DRAGON/DONJON integration layer
 for validation, inspection, and an alternate writer backend.
 
-Check whether the optional backend is available:
+Recommended PyGan demonstration path:
+
+1. Check whether the optional backend is available:
 
 ```sh
 openmc2donjon pygan-doctor
 ```
 
-Inspect the root structure of a native DRAGON/DONJON COMPO through PyGan:
-
-```sh
-openmc2donjon pygan-inspect-compo FUEL30.COMPO --summary-json fuel30.pygan.json
-```
-
-Write the same converter LCM tree through PyGan instead of the built-in ASCII
-writer:
+2. Write the same converter LCM tree through PyGan instead of the built-in
+   ASCII writer:
 
 ```sh
 openmc2donjon mgxs_library.h5 \
@@ -75,16 +71,29 @@ openmc2donjon mgxs_library.h5 \
   -o out.mcompo.txt
 ```
 
-Compare the default writer and PyGan writer:
+3. Compare the default writer and PyGan writer semantically:
 
 ```sh
-openmc2donjon compare-writers mgxs_library.h5 --format multicompo
+openmc2donjon compare-writers mgxs_library.h5 \
+  --format multicompo \
+  --summary-json writer_compare.json
+```
+
+4. Inspect the root structure of a native DRAGON/DONJON COMPO through PyGan:
+
+```sh
+openmc2donjon pygan-inspect-compo FUEL30.COMPO --summary-json fuel30.pygan.json
 ```
 
 If PyGan is not installed, conversion still works through the default ASCII
 writer. Installing PyGan is useful when you want Python-side access to native
 DRAGON/DONJON LCM objects, want PyGan to export the ASCII file, or want to run
 CLE-2000 procedures as part of a local validation harness.
+
+In the localhost Web UI, `/convert` reports whether PyGan is importable from
+the running backend Python environment. When a PyGan conversion succeeds, the
+result panel links directly to a `compare-writers` command builder so the user
+can validate PyGan-vs-ASCII writer equivalence.
 
 See [docs/PYGAN_BACKEND.md](docs/PYGAN_BACKEND.md) for install notes, command
 examples, and the current scope of the optional backend.

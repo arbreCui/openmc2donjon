@@ -33,6 +33,18 @@ If the backend listens somewhere other than the default
 `http://localhost:8000`, copy `.env.local.example` to `.env.local` and
 set `NEXT_PUBLIC_API_BASE_URL` accordingly.
 
+### PyGan backend demo
+
+The Web UI reflects the Python environment used to start the backend:
+
+- `/convert` calls `/api/health` and reports whether PyGan is importable.
+- If PyGan is available, the writer selector enables the PyGan backend.
+- After a successful PyGan conversion, the result panel shows `Validate PyGan`
+  and opens a prefilled `compare-writers` command builder.
+
+For a PyGan-focused demo, start the backend from the same Python environment
+where `openmc2donjon pygan-doctor` reports `pygan_backend=available`.
+
 ## Scripts
 
 | Command           | What it does                                  |

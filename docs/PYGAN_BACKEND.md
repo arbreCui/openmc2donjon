@@ -49,6 +49,58 @@ This writes two temporary files, reads them back as LCM ASCII, and compares the
 LCM tree rather than whitespace or associative-table ordering. Real payloads use
 a tolerance because PyGan's native type-2 real export is single precision.
 
+## Recommended Demonstration Path
+
+For a meeting or local validation demo, use this order:
+
+1. Confirm the Python environment can import PyGan:
+
+   ```sh
+   openmc2donjon pygan-doctor
+   ```
+
+2. Convert an OpenMC MGXS handoff with the optional PyGan writer:
+
+   ```sh
+   openmc2donjon mgxs_library.h5 \
+     --writer-backend pygan \
+     --format multicompo \
+     -o out.mcompo.txt \
+     --check
+   ```
+
+3. Validate that PyGan serialization is semantically aligned with the default
+   ASCII writer:
+
+   ```sh
+   openmc2donjon compare-writers mgxs_library.h5 \
+     --format multicompo \
+     --summary-json writer_compare.json \
+     --keep-dir writer_compare_files
+   ```
+
+   A successful report should show `decision: PASS`. The comparison is semantic:
+   it ignores whitespace and associative-table ordering, but checks integer,
+   string, and real payloads within tolerance.
+
+4. Inspect a native DRAGON/DONJON COMPO or MULTICOMPO through PyGan:
+
+   ```sh
+   openmc2donjon pygan-inspect-compo FUEL30.COMPO \
+     --summary-json fuel30.pygan.json
+   ```
+
+This path demonstrates the intended PyGan role clearly: optional environment
+diagnostics, optional writer backend, writer equivalence validation, and native
+DRAGON/DONJON LCM inspection.
+
+In the localhost Web UI, the same story is exposed in two places:
+
+- `/convert` reports PyGan availability for the running backend Python
+  environment and enables the PyGan writer only when it is importable.
+- After a successful PyGan conversion, `/convert` shows a `Validate PyGan`
+  action that opens the `compare-writers` command builder with paths prefilled.
+
 ## Install PyGan
 
 PyGan is built from the DRAGON/DONJON source tree. A typical local install is:
