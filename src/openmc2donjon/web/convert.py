@@ -389,6 +389,12 @@ def _convert_cli_command(
     ]
     if request["format"] == "multicompo" and request["root_name"] != DEFAULT_ROOT_NAME:
         command.extend(["--root-name", str(request["root_name"])])
+    if request["dry_run"]:
+        command.append("--dry-run")
+    if request["overwrite"]:
+        command.append("--overwrite")
+    if request["comment"] is not None:
+        command.extend(["--comment", str(request["comment"])])
     if request["check"]:
         command.append("--check")
     if request["production"]:

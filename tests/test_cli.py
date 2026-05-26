@@ -556,6 +556,71 @@ class CliTests(unittest.TestCase):
         self.assertEqual(summary["decision"], "mgxs_input_contract_passed")
         self.assertIn("mgxs_input_contract_passed", stream.getvalue())
 
+    def test_convert_dry_run_does_not_write_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            input_path = tmp / "mgxs.h5"
+            output_path = tmp / "out.mcompo.txt"
+            summary_path = tmp / "check_summary.json"
+            write_valid_mgxs(input_path)
+
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                rc = cli_main(
+                    [
+                        str(input_path),
+                        "-o",
+                        str(output_path),
+                        "--dry-run",
+                        "--check",
+                        "--check-summary-json",
+                        str(summary_path),
+                    ]
+                )
+
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            output_exists = output_path.exists()
+
+        self.assertEqual(rc, 0)
+        self.assertFalse(output_exists)
+        self.assertEqual(summary["decision"], "mgxs_input_contract_passed")
+        self.assertIn("mgxs_input_contract_passed", stream.getvalue())
+
+    def test_convert_refuses_existing_output_without_overwrite(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            input_path = tmp / "mgxs.h5"
+            output_path = tmp / "out.mcompo.txt"
+            write_valid_mgxs(input_path)
+            output_path.write_text("existing output", encoding="utf-8")
+
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err):
+                rc = cli_main([str(input_path), "-o", str(output_path)])
+
+            rendered = err.getvalue()
+            output_text = output_path.read_text(encoding="utf-8")
+
+        self.assertEqual(rc, 1)
+        self.assertEqual(output_text, "existing output")
+        self.assertIn("output already exists", rendered)
+        self.assertIn("--overwrite", rendered)
+
+    def test_convert_overwrite_allows_existing_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            input_path = tmp / "mgxs.h5"
+            output_path = tmp / "out.mcompo.txt"
+            write_valid_mgxs(input_path)
+            output_path.write_text("existing output", encoding="utf-8")
+
+            rc = cli_main([str(input_path), "-o", str(output_path), "--overwrite"])
+            output_text = output_path.read_text(encoding="utf-8")
+
+        self.assertEqual(rc, 0)
+        self.assertNotEqual(output_text, "existing output")
+        self.assertIn("L_MULTICOMPO", output_text)
+
     def test_convert_check_rejects_invalid_hdf5_without_writing_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)

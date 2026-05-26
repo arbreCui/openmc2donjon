@@ -128,6 +128,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="run HDF5 input-contract preflight before conversion",
     )
     parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="run requested checks and resolve the output path without writing ASCII",
+    )
+    parser.add_argument(
+        "--overwrite",
+        "--force",
+        action="store_true",
+        help="allow replacing an existing ASCII output file",
+    )
+    parser.add_argument(
         "--production",
         action="store_true",
         help=(
@@ -404,13 +415,23 @@ def main(argv: list[str] | None = None) -> int:
 def _convert_handler(args: argparse.Namespace) -> int:
     if args.production:
         args.check = True
-    input_path = Path(args.input_h5)
+    input_path = Path(args.input_h5).expanduser()
     if args.output:
-        output_path = Path(args.output)
+        output_path = Path(args.output).expanduser()
     elif args.format == "macrolib":
         output_path = Path("out.macrolib.txt")
     else:
         output_path = Path("out.mcompo.txt")
+
+    output_error = _validate_direct_output_path(
+        input_path,
+        output_path,
+        overwrite=args.overwrite,
+        dry_run=args.dry_run,
+    )
+    if output_error is not None:
+        sys.stderr.write(f"openmc2donjon: error: {output_error}\n")
+        return 1
 
     if args.check:
         ok = run_preflight(
@@ -454,6 +475,9 @@ def _convert_handler(args: argparse.Namespace) -> int:
         if not ok:
             return 1
 
+    if args.dry_run:
+        return 0
+
     if args.format == "macrolib":
         convert_mgxs_hdf5_to_macrolib(
             input_path,
@@ -472,6 +496,31 @@ def _convert_handler(args: argparse.Namespace) -> int:
             mixture_names=args.mixture,
         )
     return 0
+
+
+def _validate_direct_output_path(
+    input_path: Path,
+    output_path: Path,
+    *,
+    overwrite: bool,
+    dry_run: bool,
+) -> str | None:
+    if not input_path.exists():
+        return f"input HDF5 not found: {input_path}"
+    if not input_path.is_file():
+        return f"input path is not a file: {input_path}"
+    if output_path.resolve() == input_path.resolve():
+        return "output path must differ from input"
+    parent = output_path.parent
+    if not parent.exists():
+        return f"output directory not found: {parent}"
+    if not parent.is_dir():
+        return f"output parent is not a directory: {parent}"
+    if output_path.exists() and not output_path.is_file():
+        return f"output path exists but is not a file: {output_path}"
+    if output_path.exists() and not overwrite and not dry_run:
+        return f"output already exists; use --overwrite to replace it: {output_path}"
+    return None
 
 
 if __name__ == "__main__":

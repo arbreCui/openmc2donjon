@@ -6,6 +6,8 @@ export interface ConvertCliPreviewOptions {
   inputPath: string;
   outputPath: string;
   format: ConvertFormat;
+  dryRun: boolean;
+  overwrite: boolean;
   check: boolean;
   production: boolean;
   warnUnknownEnergyMesh: boolean;
@@ -55,6 +57,8 @@ export function buildConvertCliPreview(options: ConvertCliPreviewOptions): strin
   if (options.format === "multicompo" && rootName !== DEFAULT_ROOT_NAME) {
     command.push("--root-name", rootName);
   }
+  if (options.dryRun) command.push("--dry-run");
+  if (options.overwrite) command.push("--overwrite");
   const comment = normalizedOptionalString(options.comment);
   if (comment !== null) command.push("--comment", comment);
   const burnup = normalizedOptionalString(options.burnup);

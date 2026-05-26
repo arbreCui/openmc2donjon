@@ -26,11 +26,12 @@ function response(overrides: Partial<ConvertResponse> = {}): ConvertResponse {
       "/runs/case/mgxs_library.h5",
       "--format",
       "multicompo",
+      "--dry-run",
       "--check",
       "--production",
     ],
     cli_command_text:
-      "openmc2donjon /runs/case/mgxs_library.h5 --format multicompo --check --production",
+      "openmc2donjon /runs/case/mgxs_library.h5 --format multicompo --dry-run --check --production",
     ...overrides,
   };
 }

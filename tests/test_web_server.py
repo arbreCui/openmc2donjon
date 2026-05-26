@@ -1050,6 +1050,7 @@ class ConvertEndpointTests(unittest.TestCase):
                 "production": False,
                 "warn_unknown_energy_mesh": True,
                 "require_known_energy_mesh": False,
+                "comment": "C5G7 dry run",
             },
         )
 
@@ -1061,6 +1062,10 @@ class ConvertEndpointTests(unittest.TestCase):
         self.assertFalse(payload["converted"])
         self.assertEqual(payload["format"], "multicompo")
         self.assertIn("--format multicompo", payload["cli_command_text"])
+        self.assertIn("--dry-run", payload["cli_command"])
+        self.assertNotIn("--overwrite", payload["cli_command"])
+        self.assertIn("--comment", payload["cli_command"])
+        self.assertIn("C5G7 dry run", payload["cli_command"])
         self.assertEqual(payload["preflight"]["inputs"][0]["energy_mesh_id"], "casmo_7")
 
     def test_live_mode_dry_run_runs_preflight_without_writing(self) -> None:
@@ -1095,6 +1100,7 @@ class ConvertEndpointTests(unittest.TestCase):
             self.assertFalse(output_path.exists())
             self.assertTrue(payload["dry_run"])
             self.assertFalse(payload["converted"])
+            self.assertIn("--dry-run", payload["cli_command"])
             self.assertEqual(payload["output_path"], str(output_path.resolve()))
             self.assertEqual(payload["preflight"]["inputs"][0]["mixtures"], 2)
 

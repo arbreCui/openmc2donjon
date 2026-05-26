@@ -50,6 +50,8 @@ describe("convert command helpers", () => {
       inputPath: "/tmp/mgxs handoff.h5",
       outputPath: "/tmp/out.mcompo.txt",
       format: "multicompo",
+      dryRun: true,
+      overwrite: true,
       check: true,
       production: true,
       warnUnknownEnergyMesh: true,
@@ -63,6 +65,7 @@ describe("convert command helpers", () => {
 
     expect(cli).toContain("'/tmp/mgxs handoff.h5'");
     expect(cli).toContain("--root-name CORE");
+    expect(cli).toContain("--dry-run --overwrite");
     expect(cli).toContain("--comment 'C5G7 direct'");
     expect(cli).toContain("--burnup 0");
     expect(cli).toContain("--h-factor-default 200");
@@ -77,6 +80,8 @@ describe("convert command helpers", () => {
         inputPath: "/tmp/mgxs.h5",
         outputPath: "/tmp/out.macrolib.txt",
         format: "macrolib",
+        dryRun: false,
+        overwrite: false,
         check: false,
         production: false,
         warnUnknownEnergyMesh: true,

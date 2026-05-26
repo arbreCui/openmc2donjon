@@ -148,6 +148,8 @@ function ConvertPageContent() {
     inputPath,
     outputPath: displayedOutput,
     format,
+    dryRun: true,
+    overwrite,
     check,
     production,
     warnUnknownEnergyMesh: true,
@@ -599,8 +601,8 @@ function ConvertPageContent() {
                   CLI preview
                 </div>
                 <div className="mt-1 text-[12px] text-[var(--fg-3)]">
-                  The web endpoint calls the Python converter directly; this is
-                  the equivalent terminal command.
+                  Safe no-write terminal command for the current form values.
+                  The result panel shows the exact command for each run.
                 </div>
               </div>
               <CopyCliButton value={cliPreview} />
