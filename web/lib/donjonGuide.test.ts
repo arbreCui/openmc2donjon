@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  donjonDeckOptionsFromSearchParams,
   donjonDeckFilename,
   donjonGuideHref,
   donjonIngestOnlySnippet,
@@ -22,6 +23,49 @@ describe("DONJON guide helpers", () => {
     ).toBe(
       "/donjon?ascii=%2Fruns%2Fcase%2Fout.mcompo.txt&format=multicompo&manifest=%2Fruns%2Fcase%2Fbundle%2Fmanifest.json",
     );
+  });
+
+  it("round-trips DONJON deck options through guide links", () => {
+    const href = donjonGuideHref({
+      asciiPath: "/runs/case/out.mcompo.txt",
+      format: "multicompo",
+      deckFilename: "case_donjon_solve.x2m",
+      deckOptions: {
+        mixtureCount: 4,
+        geometry: "car3d",
+        solver: "spn",
+        spnOrder: 5,
+        xMinus: "VOID",
+        zPlus: "REFL",
+      },
+    });
+    expect(href).toBe(
+      "/donjon?ascii=%2Fruns%2Fcase%2Fout.mcompo.txt&format=multicompo&deck=case_donjon_solve.x2m&nmix=4&geometry=car3d&solver=spn&spn=5&xm=VOID&zp=REFL",
+    );
+    const params = new URLSearchParams(href.split("?")[1]);
+    expect(donjonDeckOptionsFromSearchParams(params)).toMatchObject({
+      mixtureCount: 4,
+      geometry: "car3d",
+      solver: "spn",
+      spnOrder: 5,
+      xMinus: "VOID",
+      xPlus: "VOID",
+      zPlus: "REFL",
+    });
+  });
+
+  it("normalizes invalid DONJON deck URL parameters", () => {
+    const params = new URLSearchParams(
+      "nmix=1200&geometry=hex&solver=sn&spn=4&xm=BAD&xp=REFL",
+    );
+    expect(donjonDeckOptionsFromSearchParams(params)).toMatchObject({
+      mixtureCount: 999,
+      geometry: "car2d",
+      solver: "diffusion",
+      spnOrder: 3,
+      xMinus: "REFL",
+      xPlus: "REFL",
+    });
   });
 
   it("infers MACROLIB format from path unless explicit format wins", () => {

@@ -1,5 +1,5 @@
 import type { ConvertPreflightInput, ConvertResponse } from "./api";
-import { donjonGuideHref } from "./donjonGuide";
+import { donjonDeckFilename, donjonGuideHref } from "./donjonGuide";
 
 export interface ConvertNextStep {
   id: string;
@@ -44,10 +44,15 @@ export function convertValidateBundleHref(data: ConvertResponse): string {
 }
 
 export function convertDonjonGuideHref(data: ConvertResponse): string {
+  const mixtureCount = data.preflight?.inputs[0]?.mixtures ?? undefined;
   return donjonGuideHref({
     asciiPath: data.output_path,
     format: data.format,
     manifestPath: convertBundleManifestPath(data),
+    deckFilename: donjonDeckFilename(data.output_path, data.format, "solve"),
+    deckOptions: {
+      mixtureCount: mixtureCount ?? undefined,
+    },
   });
 }
 

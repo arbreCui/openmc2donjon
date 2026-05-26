@@ -55,8 +55,33 @@ describe("convert next steps", () => {
       "/builder?command=validate-bundle&manifest=%2Fruns%2Fcase%2Fbundle%2Fmanifest.json",
     );
     expect(convertDonjonGuideHref(converted)).toBe(
-      "/donjon?ascii=%2Fruns%2Fcase%2Fout.mcompo.txt&format=multicompo&manifest=%2Fruns%2Fcase%2Fbundle%2Fmanifest.json",
+      "/donjon?ascii=%2Fruns%2Fcase%2Fout.mcompo.txt&format=multicompo&manifest=%2Fruns%2Fcase%2Fbundle%2Fmanifest.json&deck=out_donjon_solve.x2m",
     );
+    expect(
+      convertDonjonGuideHref(
+        response({
+          dry_run: false,
+          converted: true,
+          output_exists: true,
+          preflight: {
+            schema: "openmc2donjon.mgxs-input-preflight.v1",
+            decision: "passed",
+            output_issue: null,
+            inputs: [
+              {
+                path: "/runs/case/mgxs_library.h5",
+                ok: true,
+                energy_groups: 7,
+                legendre_order: 1,
+                mixtures: 9,
+                issues: [],
+                warnings: [],
+              },
+            ],
+          },
+        }),
+      ),
+    ).toContain("&nmix=9");
     expect(
       convertBundleHref(
         response({

@@ -33,6 +33,8 @@ export interface DonjonGuideLinkInput {
   asciiPath?: string | null;
   format?: string | null;
   manifestPath?: string | null;
+  deckFilename?: string | null;
+  deckOptions?: Partial<DonjonDeckOptions> | null;
 }
 
 export interface DonjonBundleArtifactLike {
@@ -58,6 +60,8 @@ export function donjonGuideHref(input: DonjonGuideLinkInput): string {
   const format = inferDonjonFormat(input.asciiPath ?? "", input.format ?? undefined);
   params.set("format", format);
   if (input.manifestPath?.trim()) params.set("manifest", input.manifestPath.trim());
+  if (input.deckFilename?.trim()) params.set("deck", input.deckFilename.trim());
+  appendDonjonDeckParams(params, input.deckOptions ?? undefined);
   const query = params.toString();
   return query ? `/donjon?${query}` : "/donjon";
 }
@@ -94,6 +98,27 @@ export function donjonDeckFilename(
 export function donjonRunCommand(deckFilename: string): string {
   const filename = deckFilename.trim() || "openmc2donjon_donjon_solve.x2m";
   return `rdonjon ${shellQuote(filename)}`;
+}
+
+export interface DonjonDeckSearchParams {
+  get(name: string): string | null;
+}
+
+export function donjonDeckOptionsFromSearchParams(
+  params: DonjonDeckSearchParams,
+): DonjonDeckOptions {
+  return normalizeDonjonDeckOptions({
+    mixtureCount: numericParam(params.get("nmix")),
+    geometry: deckGeometryParam(params.get("geometry")),
+    solver: deckSolverParam(params.get("solver")),
+    spnOrder: numericParam(params.get("spn")),
+    xMinus: deckBoundaryParam(params.get("xm")),
+    xPlus: deckBoundaryParam(params.get("xp")),
+    yMinus: deckBoundaryParam(params.get("ym")),
+    yPlus: deckBoundaryParam(params.get("yp")),
+    zMinus: deckBoundaryParam(params.get("zm")),
+    zPlus: deckBoundaryParam(params.get("zp")),
+  });
 }
 
 export function donjonIngestSnippet(
@@ -262,6 +287,47 @@ function normalizeBoundary(
 ): DonjonDeckBoundary {
   if (value === "REFL" || value === "VOID") return value;
   return fallback;
+}
+
+function appendDonjonDeckParams(
+  params: URLSearchParams,
+  options: Partial<DonjonDeckOptions> | undefined,
+) {
+  if (!options) return;
+  const deck = normalizeDonjonDeckOptions(options);
+  const defaults = DEFAULT_DONJON_DECK_OPTIONS;
+  if (deck.mixtureCount !== defaults.mixtureCount) {
+    params.set("nmix", String(deck.mixtureCount));
+  }
+  if (deck.geometry !== defaults.geometry) params.set("geometry", deck.geometry);
+  if (deck.solver !== defaults.solver) params.set("solver", deck.solver);
+  if (deck.solver === "spn" && deck.spnOrder !== defaults.spnOrder) {
+    params.set("spn", String(deck.spnOrder));
+  }
+  if (deck.xMinus !== defaults.xMinus) params.set("xm", deck.xMinus);
+  if (deck.xPlus !== defaults.xPlus) params.set("xp", deck.xPlus);
+  if (deck.yMinus !== defaults.yMinus) params.set("ym", deck.yMinus);
+  if (deck.yPlus !== defaults.yPlus) params.set("yp", deck.yPlus);
+  if (deck.zMinus !== defaults.zMinus) params.set("zm", deck.zMinus);
+  if (deck.zPlus !== defaults.zPlus) params.set("zp", deck.zPlus);
+}
+
+function numericParam(value: string | null): number | undefined {
+  if (value === null || value.trim() === "") return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function deckGeometryParam(value: string | null): DonjonDeckGeometry | undefined {
+  return value === "car3d" || value === "car2d" ? value : undefined;
+}
+
+function deckSolverParam(value: string | null): DonjonDeckSolver | undefined {
+  return value === "spn" || value === "diffusion" ? value : undefined;
+}
+
+function deckBoundaryParam(value: string | null): DonjonDeckBoundary | undefined {
+  return value === "REFL" || value === "VOID" ? value : undefined;
 }
 
 function deckBaseName(asciiPath: string, format: DonjonGuideFormat): string {

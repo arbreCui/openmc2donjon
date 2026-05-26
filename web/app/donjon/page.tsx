@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { CopyCliButton } from "@/components/commands/CopyCliButton";
 import { ApiError, api, type BundleInspection } from "@/lib/api";
 import {
-  DEFAULT_DONJON_DECK_OPTIONS,
+  donjonDeckOptionsFromSearchParams,
   donjonDeckFilename,
   donjonGuideHref,
   donjonIngestOnlySnippet,
@@ -78,35 +78,37 @@ function DonjonPageContent() {
   const queryAscii = searchParams.get("ascii") ?? "";
   const queryFormat = searchParams.get("format");
   const queryManifest = searchParams.get("manifest") ?? "";
+  const queryDeckFilename = searchParams.get("deck") ?? "";
+  const initialDeckOptions = donjonDeckOptionsFromSearchParams(searchParams);
+  const initialFormat = inferDonjonFormat(queryAscii, queryFormat);
   const [asciiPath, setAsciiPath] = useState(queryAscii);
   const [asciiEdited, setAsciiEdited] = useState(Boolean(queryAscii.trim()));
-  const [format, setFormat] = useState<DonjonGuideFormat>(
-    inferDonjonFormat(queryAscii, queryFormat),
-  );
+  const [format, setFormat] = useState<DonjonGuideFormat>(initialFormat);
   const [manifestPath, setManifestPath] = useState(queryManifest);
   const [manifestState, setManifestState] = useState<ManifestState>({
     kind: "idle",
   });
-  const [mixtureCount, setMixtureCount] = useState(
-    DEFAULT_DONJON_DECK_OPTIONS.mixtureCount,
-  );
+  const [mixtureCount, setMixtureCount] = useState(initialDeckOptions.mixtureCount);
   const [geometry, setGeometry] = useState<DonjonDeckGeometry>(
-    DEFAULT_DONJON_DECK_OPTIONS.geometry,
+    initialDeckOptions.geometry,
   );
-  const [solver, setSolver] = useState<DonjonDeckSolver>(
-    DEFAULT_DONJON_DECK_OPTIONS.solver,
-  );
-  const [spnOrder, setSpnOrder] = useState(
-    DEFAULT_DONJON_DECK_OPTIONS.spnOrder,
-  );
+  const [solver, setSolver] = useState<DonjonDeckSolver>(initialDeckOptions.solver);
+  const [spnOrder, setSpnOrder] = useState(initialDeckOptions.spnOrder);
   const [boundaries, setBoundaries] = useState({
-    xMinus: DEFAULT_DONJON_DECK_OPTIONS.xMinus,
-    xPlus: DEFAULT_DONJON_DECK_OPTIONS.xPlus,
-    yMinus: DEFAULT_DONJON_DECK_OPTIONS.yMinus,
-    yPlus: DEFAULT_DONJON_DECK_OPTIONS.yPlus,
-    zMinus: DEFAULT_DONJON_DECK_OPTIONS.zMinus,
-    zPlus: DEFAULT_DONJON_DECK_OPTIONS.zPlus,
+    xMinus: initialDeckOptions.xMinus,
+    xPlus: initialDeckOptions.xPlus,
+    yMinus: initialDeckOptions.yMinus,
+    yPlus: initialDeckOptions.yPlus,
+    zMinus: initialDeckOptions.zMinus,
+    zPlus: initialDeckOptions.zPlus,
   });
+  const [solveDeckFilename, setSolveDeckFilename] = useState(
+    queryDeckFilename.trim() ||
+      donjonDeckFilename(queryAscii, initialFormat, "solve"),
+  );
+  const [deckFilenameEdited, setDeckFilenameEdited] = useState(
+    Boolean(queryDeckFilename.trim()),
+  );
 
   const deckOptions = useMemo<DonjonDeckOptions>(
     () => ({
@@ -133,15 +135,18 @@ function DonjonPageContent() {
     () => donjonDeckFilename(asciiPath, format, "ingest"),
     [asciiPath, format],
   );
-  const solveDeckFilename = useMemo(
-    () => donjonDeckFilename(asciiPath, format, "solve"),
-    [asciiPath, format],
-  );
   const selfHref = donjonGuideHref({
     asciiPath,
     format,
     manifestPath,
+    deckFilename: solveDeckFilename,
+    deckOptions,
   });
+
+  useEffect(() => {
+    if (deckFilenameEdited) return;
+    setSolveDeckFilename(donjonDeckFilename(asciiPath, format, "solve"));
+  }, [asciiPath, deckFilenameEdited, format]);
 
   useEffect(() => {
     const trimmed = manifestPath.trim();
@@ -194,6 +199,11 @@ function DonjonPageContent() {
     setAsciiPath(artifact.asciiPath);
     setFormat(artifact.format);
     setAsciiEdited(true);
+    if (!deckFilenameEdited) {
+      setSolveDeckFilename(
+        donjonDeckFilename(artifact.asciiPath, artifact.format, "solve"),
+      );
+    }
   }
 
   return (
@@ -308,6 +318,15 @@ function DonjonPageContent() {
         </section>
 
         <DeckBuilderPanel
+          solveDeckFilename={solveDeckFilename}
+          onSolveDeckFilenameChange={(value) => {
+            setSolveDeckFilename(value);
+            setDeckFilenameEdited(true);
+          }}
+          onResetSolveDeckFilename={() => {
+            setSolveDeckFilename(donjonDeckFilename(asciiPath, format, "solve"));
+            setDeckFilenameEdited(false);
+          }}
           mixtureCount={mixtureCount}
           onMixtureCountChange={setMixtureCount}
           geometry={geometry}
@@ -463,6 +482,9 @@ function ManifestStat({ label, value }: { label: string; value: string }) {
 }
 
 function DeckBuilderPanel({
+  solveDeckFilename,
+  onSolveDeckFilenameChange,
+  onResetSolveDeckFilename,
   mixtureCount,
   onMixtureCountChange,
   geometry,
@@ -474,6 +496,9 @@ function DeckBuilderPanel({
   boundaries,
   onBoundaryChange,
 }: {
+  solveDeckFilename: string;
+  onSolveDeckFilenameChange: (value: string) => void;
+  onResetSolveDeckFilename: () => void;
   mixtureCount: number;
   onMixtureCountChange: (value: number) => void;
   geometry: DonjonDeckGeometry;
@@ -513,7 +538,26 @@ function DeckBuilderPanel({
         </span>
       </div>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-4">
+      <div className="mt-4 grid gap-3 lg:grid-cols-[1.5fr_repeat(4,minmax(0,1fr))]">
+        <label className="block">
+          <span className="text-[12px] font-semibold tracking-tight">
+            Solve deck filename
+          </span>
+          <div className="mt-2 flex gap-2">
+            <input
+              value={solveDeckFilename}
+              onChange={(event) => onSolveDeckFilenameChange(event.target.value)}
+              className="min-w-0 flex-1 rounded-md border border-[var(--edge)] bg-black/20 px-3 py-2 font-mono text-sm text-[var(--fg-0)]"
+            />
+            <button
+              type="button"
+              onClick={onResetSolveDeckFilename}
+              className="btn btn-secondary px-2 py-1 text-[11px]"
+            >
+              Reset
+            </button>
+          </div>
+        </label>
         <label className="block">
           <span className="text-[12px] font-semibold tracking-tight">
             Mixtures to extract

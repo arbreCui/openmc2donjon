@@ -1,5 +1,5 @@
 import type { BuilderValues } from "./commandBuilder";
-import { donjonGuideHref } from "./donjonGuide";
+import { donjonDeckFilename, donjonGuideHref } from "./donjonGuide";
 
 export interface BundlePrefillStatus {
   prefilled: boolean;
@@ -96,6 +96,11 @@ function bundleDonjonGuideHref(
     asciiPath,
     format: macrolib ? "macrolib" : "multicompo",
     manifestPath,
+    deckFilename: donjonDeckFilename(
+      asciiPath,
+      macrolib ? "macrolib" : "multicompo",
+      "solve",
+    ),
   });
 }
 
