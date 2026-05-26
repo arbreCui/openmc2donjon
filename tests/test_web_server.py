@@ -1329,6 +1329,14 @@ class BundleInspectEndpointTests(unittest.TestCase):
         self.assertEqual(payload["artifact_count"], 3)
         labels = {artifact["label"] for artifact in payload["artifacts"]}
         self.assertEqual(labels, {"mgxs", "mcompo", "conversion-summary"})
+        self.assertEqual(
+            payload["donjon_defaults"],
+            {
+                "format": "multicompo",
+                "ascii_path": "/mock/home/openmc-runs/c5g7/bundle/out.mcompo.txt",
+                "mixture_count": 9,
+            },
+        )
 
     def test_mock_mode_rejects_unknown_bundle_manifest(self) -> None:
         from openmc2donjon.web.server import create_app
@@ -1369,6 +1377,65 @@ class BundleInspectEndpointTests(unittest.TestCase):
         self.assertEqual(payload["artifacts"][0]["label"], "mgxs")
         self.assertTrue(payload["artifacts"][0]["ok"])
         self.assertEqual(payload["messages"], [])
+        self.assertIsNone(payload["donjon_defaults"])
+
+    def test_live_mode_reads_convert_summary_for_donjon_defaults(self) -> None:
+        from openmc2donjon.bundle import ArtifactSpec, bundle_artifacts
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=False))
+        with tempfile.TemporaryDirectory() as tmp_raw:
+            tmp = Path(tmp_raw)
+            source = tmp / "mgxs_library.h5"
+            source.write_text("mock hdf5 bytes", encoding="utf-8")
+            mcompo = tmp / "out.mcompo.txt"
+            mcompo.write_text("ASCII handoff", encoding="utf-8")
+            summary = tmp / "convert_summary.json"
+            summary.write_text(
+                """{
+  "schema": "openmc2donjon.convert.v1",
+  "ok": true,
+  "decision": "openmc2donjon_convert_passed",
+  "format": "multicompo",
+  "output_path": "/runs/case/out.mcompo.txt",
+  "preflight": {
+    "inputs": [
+      {
+        "path": "/runs/case/mgxs_library.h5",
+        "mixtures": 9
+      }
+    ]
+  }
+}
+""",
+                encoding="utf-8",
+            )
+            bundle_dir = tmp / "bundle"
+            with contextlib.redirect_stdout(io.StringIO()):
+                bundle_artifacts(
+                    output_dir=bundle_dir,
+                    artifacts=[
+                        ArtifactSpec("mgxs", source),
+                        ArtifactSpec("mcompo", mcompo),
+                        ArtifactSpec("conversion-summary", summary),
+                    ],
+                )
+
+            response = client.get(
+                "/api/bundle/inspect",
+                params={"manifest": str(bundle_dir / "manifest.json")},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(
+            payload["donjon_defaults"],
+            {
+                "format": "multicompo",
+                "ascii_path": "/runs/case/out.mcompo.txt",
+                "mixture_count": 9,
+            },
+        )
 
     def test_live_mode_rejects_non_object_manifest_json(self) -> None:
         from openmc2donjon.web.server import create_app

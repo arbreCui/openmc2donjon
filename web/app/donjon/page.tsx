@@ -79,6 +79,7 @@ function DonjonPageContent() {
   const queryFormat = searchParams.get("format");
   const queryManifest = searchParams.get("manifest") ?? "";
   const queryDeckFilename = searchParams.get("deck") ?? "";
+  const queryMixtureCount = searchParams.get("nmix");
   const initialDeckOptions = donjonDeckOptionsFromSearchParams(searchParams);
   const initialFormat = inferDonjonFormat(queryAscii, queryFormat);
   const [asciiPath, setAsciiPath] = useState(queryAscii);
@@ -89,6 +90,9 @@ function DonjonPageContent() {
     kind: "idle",
   });
   const [mixtureCount, setMixtureCount] = useState(initialDeckOptions.mixtureCount);
+  const [mixtureCountEdited, setMixtureCountEdited] = useState(
+    queryMixtureCount !== null,
+  );
   const [geometry, setGeometry] = useState<DonjonDeckGeometry>(
     initialDeckOptions.geometry,
   );
@@ -194,6 +198,14 @@ function DonjonPageContent() {
     setAsciiPath(manifestState.artifact.asciiPath);
     setFormat(manifestState.artifact.format);
   }, [asciiEdited, manifestState]);
+
+  useEffect(() => {
+    if (manifestState.kind !== "ready") return;
+    if (mixtureCountEdited) return;
+    const nextMixtureCount = manifestState.data.donjon_defaults?.mixture_count;
+    if (typeof nextMixtureCount !== "number") return;
+    setMixtureCount(nextMixtureCount);
+  }, [manifestState, mixtureCountEdited]);
 
   function applyManifestArtifact(artifact: DonjonBundleArtifact) {
     setAsciiPath(artifact.asciiPath);
@@ -328,7 +340,10 @@ function DonjonPageContent() {
             setDeckFilenameEdited(false);
           }}
           mixtureCount={mixtureCount}
-          onMixtureCountChange={setMixtureCount}
+          onMixtureCountChange={(value) => {
+            setMixtureCount(value);
+            setMixtureCountEdited(true);
+          }}
           geometry={geometry}
           onGeometryChange={setGeometry}
           solver={solver}
@@ -430,6 +445,7 @@ function ManifestCasePanel({
           value={state.data.ok ? "ready to share" : "needs attention"}
         />
       </div>
+      <ManifestDonjonDefaults defaults={state.data.donjon_defaults} />
       {artifact ? (
         <div className="mt-2 rounded border border-emerald-300/15 bg-emerald-300/5 p-2">
           <div className="flex flex-wrap items-start justify-between gap-2">
@@ -464,6 +480,29 @@ function ManifestCasePanel({
           the ASCII path above explicit.
         </p>
       )}
+    </div>
+  );
+}
+
+function ManifestDonjonDefaults({
+  defaults,
+}: {
+  defaults: BundleInspection["donjon_defaults"];
+}) {
+  if (!defaults) return null;
+  const facts = [
+    defaults.format ? `format ${donjonObjectLabel(defaults.format)}` : null,
+    defaults.mixture_count != null ? `NMIX ${defaults.mixture_count}` : null,
+  ].filter((fact): fact is string => fact !== null);
+  if (!facts.length) return null;
+  return (
+    <div className="mt-2 rounded border border-cyan-300/15 bg-cyan-300/5 px-2 py-1.5 text-[11px] text-cyan-100">
+      Summary-derived DONJON defaults: {facts.join(" · ")}
+      {defaults.ascii_path ? (
+        <span className="ml-1 text-cyan-100/70">
+          from <span className="font-mono">{defaults.ascii_path}</span>
+        </span>
+      ) : null}
     </div>
   );
 }

@@ -69,6 +69,7 @@ def inspect_bundle_manifest(manifest_path: Path) -> dict[str, Any]:
             }
         )
 
+    donjon_defaults = _donjon_defaults_from_artifacts(manifest_path, raw_artifacts)
     return {
         "schema": BUNDLE_INSPECT_SCHEMA,
         "manifest_path": str(report.manifest_path),
@@ -81,6 +82,7 @@ def inspect_bundle_manifest(manifest_path: Path) -> dict[str, Any]:
         "artifact_count": report.artifact_count,
         "messages": list(report.messages),
         "artifacts": artifact_payloads,
+        "donjon_defaults": donjon_defaults,
     }
 
 
@@ -120,6 +122,11 @@ def _mock_bundle_inspection(raw: str, http_exception: Any) -> dict[str, Any]:
             _mock_artifact("mcompo", "out.mcompo.txt", 184_320),
             _mock_artifact("conversion-summary", "convert_summary.json", 8_192),
         ],
+        "donjon_defaults": {
+            "format": "multicompo",
+            "ascii_path": f"{_MOCK_BUNDLE_DIR}/out.mcompo.txt",
+            "mixture_count": 9,
+        },
     }
 
 
@@ -144,3 +151,67 @@ def _string_or_none(value: Any) -> str | None:
 
 def _int_or_none(value: Any) -> int | None:
     return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _donjon_defaults_from_artifacts(
+    manifest_path: Path,
+    artifacts: list[Any],
+) -> dict[str, Any] | None:
+    for artifact in artifacts:
+        if not isinstance(artifact, dict):
+            continue
+        payload = _read_optional_json_artifact(_artifact_path(manifest_path, artifact))
+        if not _is_convert_summary(payload):
+            continue
+        return {
+            "format": _donjon_format(payload.get("format")),
+            "ascii_path": _string_or_none(payload.get("output_path")),
+            "mixture_count": _summary_mixture_count(payload),
+        }
+    return None
+
+
+def _artifact_path(manifest_path: Path, artifact: dict[str, Any]) -> Path:
+    bundled = artifact.get("bundled_path")
+    if isinstance(bundled, str) and bundled:
+        return manifest_path.parent / bundled
+    raw = artifact.get("path")
+    if isinstance(raw, str) and raw:
+        return Path(raw)
+    return manifest_path.parent / str(artifact.get("label") or "artifact")
+
+
+def _read_optional_json_artifact(path: Path) -> dict[str, Any] | None:
+    if path.suffix.lower() != ".json":
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _is_convert_summary(payload: dict[str, Any] | None) -> bool:
+    return payload is not None and payload.get("schema") == "openmc2donjon.convert.v1"
+
+
+def _donjon_format(value: Any) -> str | None:
+    if value in {"multicompo", "macrolib"}:
+        return str(value)
+    return None
+
+
+def _summary_mixture_count(payload: dict[str, Any]) -> int | None:
+    preflight = payload.get("preflight")
+    if not isinstance(preflight, dict):
+        return None
+    inputs = preflight.get("inputs")
+    if not isinstance(inputs, list) or not inputs:
+        return None
+    first = inputs[0]
+    if not isinstance(first, dict):
+        return None
+    mixtures = first.get("mixtures")
+    if isinstance(mixtures, int) and not isinstance(mixtures, bool) and mixtures > 0:
+        return mixtures
+    return None

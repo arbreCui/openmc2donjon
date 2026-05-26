@@ -505,6 +505,12 @@ export interface BundleArtifactInspection {
   acceptance_decision: string | null;
 }
 
+export interface BundleDonjonDefaults {
+  format: ConvertFormat | null;
+  ascii_path: string | null;
+  mixture_count: number | null;
+}
+
 export interface BundleInspection {
   schema: string;
   manifest_path: string;
@@ -517,6 +523,7 @@ export interface BundleInspection {
   artifact_count: number;
   messages: string[];
   artifacts: BundleArtifactInspection[];
+  donjon_defaults: BundleDonjonDefaults | null;
 }
 
 export type OpenmcWorkflowKind = "one-step" | "two-step";
