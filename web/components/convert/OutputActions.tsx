@@ -23,6 +23,7 @@ import {
   convertValidateBundleHref,
   convertWriterCompareHref,
 } from "@/lib/convertNextSteps";
+import { convertPostWriteFocus } from "@/lib/convertPostWriteFocus";
 import {
   fileStatusIsDirectory,
   fileStatusIsFile,
@@ -60,6 +61,7 @@ export default function OutputActions({
   }, [paths, refreshToken]);
 
   const notice = outputNotice(data);
+  const postWriteFocus = convertPostWriteFocus(data);
   const input = data.preflight?.inputs[0] ?? null;
   const canConvertNow = data.dry_run && data.ok && !data.output_exists && onConvert;
   const pathLabel =
@@ -97,6 +99,7 @@ export default function OutputActions({
 
       <AsciiReadinessPanel data={data} outputStatus={statuses.output} />
       <DeliveryCommandPanel data={data} statuses={statuses} onConvert={onConvert} />
+      {postWriteFocus ? <PostWriteFocusPanel focus={postWriteFocus} /> : null}
 
       <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
         {actions.map((action) => (
@@ -132,6 +135,38 @@ export default function OutputActions({
       </div>
 
       <RunSummaryCard data={data} input={input} statuses={statuses} />
+    </section>
+  );
+}
+
+function PostWriteFocusPanel({
+  focus,
+}: {
+  focus: NonNullable<ReturnType<typeof convertPostWriteFocus>>;
+}) {
+  return (
+    <section className="mt-3 rounded-lg border border-emerald-300/20 bg-emerald-300/[0.045] p-3 text-emerald-100">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[10px] uppercase tracking-[0.14em] opacity-75">
+            {focus.badge}
+          </div>
+          <h4 className="mt-1 text-sm font-semibold tracking-tight">
+            {focus.title}
+          </h4>
+          <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--fg-1)]">
+            {focus.body}
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Link href={focus.primaryHref} className="btn btn-primary">
+            {focus.primaryLabel}
+          </Link>
+          <Link href={focus.secondaryHref} className="btn btn-secondary">
+            {focus.secondaryLabel}
+          </Link>
+        </div>
+      </div>
     </section>
   );
 }
