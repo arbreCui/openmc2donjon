@@ -9,7 +9,7 @@ export interface HealthResponse {
   status: "ok" | "degraded";
   mock_mode: boolean;
   version: string;
-  pygan_backend: PyGanBackendStatus;
+  pygan_backend?: PyGanBackendStatus;
 }
 
 export interface PyGanModuleStatus {

@@ -74,6 +74,15 @@ import { useSettings } from "@/lib/settings";
 import { parseConvertFormat, queryFlag } from "@/lib/workflowQuery";
 
 const FALLBACK_INPUT = "/path/to/mgxs_library.h5";
+const UNKNOWN_PYGAN_BACKEND: PyGanBackendStatus = {
+  available: false,
+  role: "optional PyGan writer backend",
+  install_hint:
+    "Restart `openmc2donjon serve` from the current checkout to expose PyGan backend status.",
+  modules: [],
+  missing_modules: [],
+};
+
 type BrowserTarget = "input" | "output-directory";
 type ArtifactStatusMap = Record<string, FileStatusState>;
 
@@ -190,8 +199,9 @@ function ConvertPageContent() {
       .then((health) => {
         if (!cancelled) {
           setBackendMode(health.mock_mode ? "mock" : "live");
-          setPyganStatus(health.pygan_backend);
-          if (!health.pygan_backend.available) {
+          const pyganBackend = health.pygan_backend ?? UNKNOWN_PYGAN_BACKEND;
+          setPyganStatus(pyganBackend);
+          if (!pyganBackend.available) {
             setWriterBackend("ascii");
           }
         }
