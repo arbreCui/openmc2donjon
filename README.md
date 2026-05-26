@@ -49,6 +49,10 @@ documented k-effective comparisons; see [Validation Status](#validation-status).
 
 ## Quick Start
 
+New users should start with the short path-oriented guide:
+
+- [User README: HDF5 -> Convert -> Bundle -> DONJON](docs/CONVERTER_USER_README.md)
+
 Install from a source checkout:
 
 ```sh
