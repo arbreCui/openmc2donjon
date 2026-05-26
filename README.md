@@ -59,6 +59,12 @@ Check whether the optional backend is available:
 openmc2donjon pygan-doctor
 ```
 
+Inspect the root structure of a native DRAGON/DONJON COMPO through PyGan:
+
+```sh
+openmc2donjon pygan-inspect-compo FUEL30.COMPO --summary-json fuel30.pygan.json
+```
+
 If PyGan is not installed, conversion still works through the default ASCII
 writer. Installing PyGan is useful when you want Python-side access to native
 DRAGON/DONJON LCM objects or want to run CLE-2000 procedures as part of a local

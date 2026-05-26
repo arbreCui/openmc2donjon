@@ -18,7 +18,7 @@ from ..energy_groups import MESH_RELATIVE_TOLERANCE
 from ..mgxs_diff import diff_hdf5_files
 from ..mgxs_input_contract import run_preflight
 from ..mgxs_inspect import inspect_files
-from ..pygan_backend import PyGanStatus, probe_pygan
+from ..pygan_backend import PyGanCompoInspection, PyGanStatus, inspect_pygan_compo, probe_pygan
 
 
 def command_specs() -> tuple[CommandSpec, ...]:
@@ -47,6 +47,12 @@ def command_specs() -> tuple[CommandSpec, ...]:
             build_pygan_doctor_parser,
             pygan_doctor_handler,
             "check optional PyGan backend availability",
+        ),
+        CommandSpec(
+            "pygan-inspect-compo",
+            build_pygan_inspect_compo_parser,
+            pygan_inspect_compo_handler,
+            "inspect a DRAGON/DONJON COMPO with optional PyGan backend",
         ),
         CommandSpec(
             "diff",
@@ -87,6 +93,45 @@ def build_pygan_doctor_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_pygan_inspect_compo_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="openmc2donjon pygan-inspect-compo",
+        description=(
+            "Inspect a DRAGON/DONJON LCM ASCII COMPO/MULTICOMPO with the "
+            "optional PyGan backend. This is a validation/debugging helper, "
+            "not the default converter writer."
+        ),
+    )
+    parser.add_argument("input_compo", type=Path, help="DRAGON/DONJON ASCII LCM file to inspect")
+    parser.add_argument(
+        "--root-name",
+        default=None,
+        help="top-level LCM root to inspect when the file contains more than one",
+    )
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        default=None,
+        help="write a machine-readable PyGan COMPO inspection summary",
+    )
+    return parser
+
+
+def pygan_inspect_compo_handler(args: argparse.Namespace) -> int:
+    parser = parser_from_args(args)
+    try:
+        inspection = inspect_pygan_compo(args.input_compo, root_name=args.root_name)
+    except USER_FACING_EXCEPTIONS as exc:
+        exit_with_command_error(parser, "pygan-inspect-compo", exc)
+
+    payload = inspection.as_dict()
+    if args.summary_json is not None:
+        text = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+        args.summary_json.write_text(text, encoding="utf-8")
+    print_pygan_compo_inspection(inspection)
+    return 0
+
+
 def pygan_doctor_handler(args: argparse.Namespace) -> int:
     status = probe_pygan()
     payload = status.as_dict()
@@ -109,6 +154,29 @@ def print_pygan_status(status: PyGanStatus) -> None:
             print(f"{module.name}=missing ({module.error})")
     if not status.available:
         print(f"install_hint={status.install_hint}")
+
+
+def print_pygan_compo_inspection(inspection: PyGanCompoInspection) -> None:
+    print("PyGan COMPO inspection")
+    print("  schema: openmc2donjon.pygan-compo-inspect.v1")
+    print(f"  path: {inspection.path}")
+    print(f"  object_name: {inspection.object_name}")
+    print(f"  signature: {inspection.signature or 'missing'}")
+    print(f"  top_keys: {', '.join(inspection.top_keys) or 'none'}")
+    print(f"  root_name: {inspection.root_name}")
+    print(f"  root_keys: {', '.join(inspection.root_keys) or 'none'}")
+    if inspection.state_vector is None:
+        print("  state_vector: missing")
+    else:
+        head = ", ".join(str(value) for value in inspection.state_vector[:12])
+        print(f"  state_vector_head: {head}")
+    print(f"  mixtures: {inspection.mixture_count if inspection.mixture_count is not None else 'unknown'}")
+    print(
+        "  calculations: "
+        f"{inspection.calculation_count if inspection.calculation_count is not None else 'unknown'}"
+    )
+    print(f"  first_mixture_keys: {', '.join(inspection.first_mixture_keys) or 'none'}")
+    print(f"  first_calculation_keys: {', '.join(inspection.first_calculation_keys) or 'none'}")
 
 
 def build_check_parser() -> argparse.ArgumentParser:

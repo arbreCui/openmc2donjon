@@ -484,6 +484,19 @@ DETAILS: dict[str, CommandDetail] = {
         cli="openmc2donjon pygan-doctor",
         tags=("environment", "PyGan"),
     ),
+    "pygan-inspect-compo": CommandDetail(
+        group="package",
+        title="Inspect COMPO with PyGan",
+        summary=(
+            "Read a DRAGON/DONJON COMPO or MULTICOMPO through PyGan and "
+            "report its LCM root structure."
+        ),
+        status="partial",
+        status_label="Command builder ready",
+        web_path="/builder?command=pygan-inspect-compo",
+        cli="openmc2donjon pygan-inspect-compo FUEL30.COMPO --summary-json fuel30.pygan.json",
+        tags=("PyGan", "COMPO", "validation"),
+    ),
     "serve": CommandDetail(
         group="web",
         title="Start web backend",
