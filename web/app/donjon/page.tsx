@@ -7,6 +7,7 @@ import { CopyCliButton } from "@/components/commands/CopyCliButton";
 import { ApiError, api, type BundleInspection } from "@/lib/api";
 import {
   donjonBundleAsciiMismatch,
+  donjonDeckChecklist,
   donjonDeckOptionsFromSearchParams,
   donjonDeckFilename,
   donjonDefaultsArtifact,
@@ -21,6 +22,7 @@ import {
   placeholderAsciiPath,
   type DonjonBundleArtifact,
   type DonjonDeckBoundary,
+  type DonjonDeckChecklistItem,
   type DonjonDeckGeometry,
   type DonjonDeckOptions,
   type DonjonDeckSolver,
@@ -153,6 +155,10 @@ function DonjonPageContent() {
     deckFilename: solveDeckFilename,
     deckOptions,
   });
+  const checklist = useMemo(
+    () => donjonDeckChecklist(asciiPath, format, deckOptions),
+    [asciiPath, deckOptions, format],
+  );
 
   useEffect(() => {
     if (deckFilenameEdited) return;
@@ -365,6 +371,7 @@ function DonjonPageContent() {
             setBoundaries((current) => ({ ...current, [key]: value }))
           }
         />
+        <DeckHandoffChecklist items={checklist} />
 
         <section className="mt-5 grid gap-4 lg:grid-cols-[1fr_1fr]">
           <SnippetCard
@@ -750,6 +757,70 @@ function DeckBuilderPanel({
         ))}
       </div>
     </section>
+  );
+}
+
+function DeckHandoffChecklist({ items }: { items: DonjonDeckChecklistItem[] }) {
+  return (
+    <section className="mt-5 rounded-xl border border-[var(--edge)] bg-white/[0.02] p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+            handoff checklist
+          </div>
+          <h2 className="mt-1 text-base font-semibold tracking-tight">
+            Before running the downloaded deck
+          </h2>
+          <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--fg-2)]">
+            The generated deck is a DONJON smoke and starter skeleton. These are
+            the production checks to make before treating the result as a real
+            low-order calculation.
+          </p>
+        </div>
+        <span className="rounded border border-amber-300/20 bg-amber-300/10 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-amber-100">
+          review before physics
+        </span>
+      </div>
+      <div className="mt-4 grid gap-2 lg:grid-cols-5">
+        {items.map((item, index) => (
+          <article
+            key={item.id}
+            className="rounded-lg border border-[var(--edge)] bg-black/15 p-3"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+                step {index + 1}
+              </span>
+              <ChecklistBadge tone={item.tone} />
+            </div>
+            <h3 className="mt-2 text-[13px] font-semibold tracking-tight">
+              {item.title}
+            </h3>
+            <p className="mt-1 text-[12px] leading-5 text-[var(--fg-2)]">
+              {item.body}
+            </p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ChecklistBadge({ tone }: { tone: DonjonDeckChecklistItem["tone"] }) {
+  const label =
+    tone === "ready" ? "filled" : tone === "review" ? "check" : "manual";
+  const className =
+    tone === "ready"
+      ? "border-emerald-300/20 bg-emerald-300/10 text-emerald-100"
+      : tone === "review"
+        ? "border-cyan-300/20 bg-cyan-300/10 text-cyan-100"
+        : "border-amber-300/20 bg-amber-300/10 text-amber-100";
+  return (
+    <span
+      className={`rounded border px-1.5 py-0.5 text-[9px] uppercase tracking-[0.12em] ${className}`}
+    >
+      {label}
+    </span>
   );
 }
 

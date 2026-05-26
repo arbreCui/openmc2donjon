@@ -65,6 +65,15 @@ export interface DonjonAsciiMismatch {
   summaryPath: string;
 }
 
+export type DonjonDeckChecklistTone = "ready" | "review" | "manual";
+
+export interface DonjonDeckChecklistItem {
+  id: string;
+  title: string;
+  body: string;
+  tone: DonjonDeckChecklistTone;
+}
+
 export function donjonGuideHref(input: DonjonGuideLinkInput): string {
   const params = new URLSearchParams();
   if (input.asciiPath?.trim()) params.set("ascii", input.asciiPath.trim());
@@ -109,6 +118,64 @@ export function donjonDeckFilename(
 export function donjonRunCommand(deckFilename: string): string {
   const filename = deckFilename.trim() || "openmc2donjon_donjon_solve.x2m";
   return `rdonjon ${shellQuote(filename)}`;
+}
+
+export function donjonDeckChecklist(
+  asciiPath: string,
+  format: DonjonGuideFormat,
+  options: Partial<DonjonDeckOptions> = {},
+): DonjonDeckChecklistItem[] {
+  const deck = normalizeDonjonDeckOptions(options);
+  const trimmedPath = asciiPath.trim();
+  const object = donjonObjectLabel(format);
+  const solver = deck.solver === "spn" ? `SPN${deck.spnOrder}` : "diffusion";
+  return [
+    {
+      id: "ascii-path",
+      title: trimmedPath ? "ASCII path resolves from DONJON" : "Set the ASCII path",
+      body: trimmedPath
+        ? `The deck loads ${trimmedPath} as ${object}. Run DONJON from a directory where this path resolves, or make it absolute.`
+        : `Enter the ${object} text file written by the converter before using the generated deck.`,
+      tone: trimmedPath ? "ready" : "review",
+    },
+    format === "multicompo"
+      ? {
+          id: "ncr-mixtures",
+          title: `NCR extracts ${deck.mixtureCount} mixture${deck.mixtureCount === 1 ? "" : "s"}`,
+          body: `The skeleton uses NMIX ${deck.mixtureCount} and emits one NCR MIX line per extracted mixture. Match this count to the exported domain order.`,
+          tone: "ready",
+        }
+      : {
+          id: "macrolib-direct",
+          title: "MACROLIB is assigned directly",
+          body: "The deck loads L_MACROLIB into MACRO without NCR. Geometry MIX numbers refer directly to macrolib mixture indices.",
+          tone: "ready",
+        },
+    {
+      id: "geometry-map",
+      title: "Replace the one-cell geometry",
+      body:
+        deck.mixtureCount > 1
+          ? `The sample GEOM still maps only MIX 1. Replace it with the real ${deck.geometry.toUpperCase()} mesh and assign all ${deck.mixtureCount} mixture regions.`
+          : `The sample GEOM is a one-cell smoke model. Replace it with the real ${deck.geometry.toUpperCase()} geometry before comparing physics.`,
+      tone: "manual",
+    },
+    {
+      id: "boundary-solver",
+      title: `Confirm boundaries and ${solver} settings`,
+      body:
+        deck.geometry === "car3d"
+          ? `Current boundaries are X- ${deck.xMinus}, X+ ${deck.xPlus}, Y- ${deck.yMinus}, Y+ ${deck.yPlus}, Z- ${deck.zMinus}, Z+ ${deck.zPlus}. Keep them aligned with the OpenMC reference problem.`
+          : `Current boundaries are X- ${deck.xMinus}, X+ ${deck.xPlus}, Y- ${deck.yMinus}, Y+ ${deck.yPlus}. Keep them aligned with the OpenMC reference problem.`,
+      tone: "review",
+    },
+    {
+      id: "smoke-first",
+      title: "Run the ingest smoke before the physics deck",
+      body: "First run the small UTL:DUMP deck to prove the ASCII object is readable, then run the low-order solve skeleton after replacing the geometry block.",
+      tone: "manual",
+    },
+  ];
 }
 
 export interface DonjonDeckSearchParams {

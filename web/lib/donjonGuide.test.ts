@@ -3,6 +3,7 @@ import {
   donjonBundleAsciiMismatch,
   donjonDeckOptionsFromSearchParams,
   donjonDeckFilename,
+  donjonDeckChecklist,
   donjonDefaultsArtifact,
   donjonGuideHref,
   donjonIngestOnlySnippet,
@@ -119,6 +120,49 @@ describe("DONJON guide helpers", () => {
     expect(donjonRunCommand("case's deck.x2m")).toBe(
       "rdonjon 'case'\\''s deck.x2m'",
     );
+  });
+
+  it("summarizes production handoff checklist items for MULTICOMPO decks", () => {
+    const items = donjonDeckChecklist("/runs/case/out.mcompo.txt", "multicompo", {
+      mixtureCount: 9,
+      geometry: "car3d",
+      solver: "spn",
+      spnOrder: 5,
+      zPlus: "REFL",
+    });
+
+    expect(items.map((item) => item.id)).toEqual([
+      "ascii-path",
+      "ncr-mixtures",
+      "geometry-map",
+      "boundary-solver",
+      "smoke-first",
+    ]);
+    expect(items[0]).toMatchObject({ tone: "ready" });
+    expect(items[1].body).toContain("NMIX 9");
+    expect(items[2].body).toContain("assign all 9 mixture regions");
+    expect(items[3].title).toContain("SPN5");
+    expect(items[3].body).toContain("Z+ REFL");
+  });
+
+  it("marks missing ASCII path and MACROLIB direct assignment in the checklist", () => {
+    const items = donjonDeckChecklist("", "macrolib", {
+      mixtureCount: 3,
+      geometry: "car2d",
+      solver: "diffusion",
+    });
+
+    expect(items[0]).toMatchObject({
+      id: "ascii-path",
+      title: "Set the ASCII path",
+      tone: "review",
+    });
+    expect(items[1]).toMatchObject({
+      id: "macrolib-direct",
+      tone: "ready",
+    });
+    expect(items[1].body).toContain("without NCR");
+    expect(items[3].title).toContain("diffusion");
   });
 
   it("generates configurable MULTICOMPO deck skeletons", () => {
