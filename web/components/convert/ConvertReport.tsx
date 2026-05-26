@@ -14,6 +14,7 @@ import {
 } from "@/lib/convertNextSteps";
 import type { ConvertWalkthroughRun } from "@/lib/convertWalkthrough";
 import { convertDecision } from "@/lib/convertDecision";
+import { convertWriterBackendResultLabel } from "@/lib/convertWriterBackend";
 import AsciiPreview from "./AsciiPreview";
 import ArtifactAnatomyCard from "./ArtifactAnatomyCard";
 import ConversionSummaryStrip from "./ConversionSummaryStrip";
@@ -134,7 +135,10 @@ function ConvertSummary({
             label="Output size"
             value={data.output_size == null ? "—" : formatSize(data.output_size)}
           />
-          <Meta label="Writer" value={writerLabel(data.writer_backend)} />
+          <Meta
+            label="Writer"
+            value={convertWriterBackendResultLabel(data.writer_backend)}
+          />
           <Meta label="Validation" value={validationLabel(data)} />
         </dl>
 
@@ -1127,10 +1131,6 @@ function preflightMode(data: ConvertResponse): string {
 function validationLabel(data: ConvertResponse): string {
   if (!data.preflight) return "skipped";
   return data.preflight_ok ? "pass" : "fail";
-}
-
-function writerLabel(writer: ConvertResponse["writer_backend"]): string {
-  return writer === "pygan" ? "PyGan LCM exporter" : "built-in ASCII writer";
 }
 
 function humanDecision(value: string | null | undefined): string {

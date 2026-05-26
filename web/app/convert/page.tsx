@@ -52,6 +52,11 @@ import {
   type ConvertModeReferenceItem,
 } from "@/lib/convertModeReference";
 import {
+  convertWriterBackendOptions,
+  convertWriterBackendShortLabel,
+  type ConvertWriterBackendOption,
+} from "@/lib/convertWriterBackend";
+import {
   defaultConvertOutputPath,
   outputPathInDirectory,
   pickConvertBrowserStart,
@@ -536,6 +541,12 @@ function ConvertPageContent() {
             </button>
           </div>
 
+          <WriterBackendSelector
+            value={writerBackend}
+            onChange={setWriterBackend}
+            status={pyganStatus}
+          />
+
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <Toggle
               label="Validate first"
@@ -572,6 +583,7 @@ function ConvertPageContent() {
             check={check}
             production={production}
             format={format}
+            writerBackend={writerBackend}
             onConvert={() => void run("convert")}
             convertButtonRef={convertButtonRef}
           />
@@ -594,32 +606,6 @@ function ConvertPageContent() {
                     : "Top-level MULTICOMPO directory name."
                 }
               />
-              <fieldset>
-                <legend className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
-                  Writer backend
-                </legend>
-                <div className="mt-1 grid grid-cols-2 overflow-hidden rounded-md border border-[var(--edge)]">
-                  <button
-                    type="button"
-                    onClick={() => setWriterBackend("ascii")}
-                    className={segmentClass(writerBackend === "ascii")}
-                  >
-                    ASCII
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setWriterBackend("pygan")}
-                    disabled={pyganStatus?.available === false}
-                    className={segmentClass(
-                      writerBackend === "pygan",
-                      pyganStatus?.available === false,
-                    )}
-                  >
-                    PyGan
-                  </button>
-                </div>
-                <WriterBackendHint status={pyganStatus} />
-              </fieldset>
               <Field
                 label="Burnup value"
                 value={burnup}
@@ -750,6 +736,105 @@ function ConvertIntentBanner({ intent }: { intent: ConvertIntentCopy }) {
   );
 }
 
+function WriterBackendSelector({
+  value,
+  onChange,
+  status,
+}: {
+  value: ConvertWriterBackend;
+  onChange: (value: ConvertWriterBackend) => void;
+  status: PyGanBackendStatus | null;
+}) {
+  const options = convertWriterBackendOptions(status);
+  return (
+    <section className="rounded-xl border border-[var(--edge)] bg-black/10 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+            Writer backend
+          </div>
+          <h2 className="mt-1 text-sm font-semibold tracking-tight">
+            Choose how the DONJON ASCII file is serialized
+          </h2>
+          <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--fg-2)]">
+            The physics tree is built by openmc2donjon in both modes. The
+            default writer is the built-in pure Python ASCII LCM writer; PyGan
+            is optional and useful when you want the DRAGON/DONJON Python
+            bindings to perform the final export.
+          </p>
+        </div>
+        <Link href="/pygan" className="btn btn-secondary shrink-0">
+          PyGan status
+        </Link>
+      </div>
+      <div className="mt-3 grid gap-2 md:grid-cols-2">
+        {options.map((option) => (
+          <WriterBackendOptionCard
+            key={option.id}
+            option={option}
+            active={value === option.id}
+            onSelect={() => onChange(option.id)}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function WriterBackendOptionCard({
+  option,
+  active,
+  onSelect,
+}: {
+  option: ConvertWriterBackendOption;
+  active: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      disabled={option.disabled}
+      aria-pressed={active}
+      className={
+        "min-w-0 rounded-lg border p-3 text-left transition disabled:cursor-not-allowed " +
+        writerBackendCardClass(option, active)
+      }
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-sm font-semibold tracking-tight">
+          {option.title}
+        </span>
+        <span className="rounded border border-current/25 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.14em]">
+          {option.badge}
+        </span>
+      </div>
+      <p className="mt-2 text-[12px] leading-5 text-[var(--fg-2)]">
+        {option.body}
+      </p>
+      <p className="mt-2 text-[11px] leading-4 text-[var(--fg-3)]">
+        {option.detail}
+      </p>
+    </button>
+  );
+}
+
+function writerBackendCardClass(
+  option: ConvertWriterBackendOption,
+  active: boolean,
+): string {
+  if (option.disabled) {
+    return "border-white/10 bg-white/[0.015] text-[var(--fg-3)] opacity-75";
+  }
+  if (active) {
+    return "border-emerald-300/35 bg-emerald-300/[0.075] text-emerald-100";
+  }
+  if (option.tone === "available") {
+    return "border-cyan-300/20 bg-cyan-300/[0.035] text-cyan-100 hover:border-cyan-300/35";
+  }
+  return "border-[var(--edge)] bg-white/[0.02] text-[var(--fg-1)] hover:border-[var(--edge-bright)]";
+}
+
 function DirectConvertActionPanel({
   state,
   inputPath,
@@ -757,6 +842,7 @@ function DirectConvertActionPanel({
   check,
   production,
   format,
+  writerBackend,
   onConvert,
   convertButtonRef,
 }: {
@@ -766,6 +852,7 @@ function DirectConvertActionPanel({
   check: boolean;
   production: boolean;
   format: ConvertFormat;
+  writerBackend: ConvertWriterBackend;
   onConvert: () => void;
   convertButtonRef: RefObject<HTMLButtonElement | null>;
 }) {
@@ -782,6 +869,7 @@ function DirectConvertActionPanel({
     state.kind === "error";
   const object = format === "macrolib" ? "MACROLIB" : "MULTICOMPO";
   const checkMode = production ? "production" : check ? "standard" : "minimal";
+  const writer = convertWriterBackendShortLabel(writerBackend);
   return (
     <section className="rounded-xl border border-cyan-300/20 bg-cyan-300/[0.035] p-4">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -798,7 +886,7 @@ function DirectConvertActionPanel({
           </p>
         </div>
         <span className="rounded border border-[var(--edge)] px-2 py-1 font-mono text-[11px] uppercase tracking-wider text-[var(--fg-2)]">
-          {object} · {checkMode} checks
+          {object} · {writer} · {checkMode} checks
         </span>
       </div>
 
@@ -1811,32 +1899,6 @@ function Field({
       />
       <span className="mt-1 block text-[12px] text-[var(--fg-3)]">{hint}</span>
     </label>
-  );
-}
-
-function WriterBackendHint({ status }: { status: PyGanBackendStatus | null }) {
-  if (status === null) {
-    return (
-      <span className="mt-1 block text-[12px] text-[var(--fg-3)]">
-        ASCII is dependency-free. PyGan availability is checked from the
-        running backend.
-      </span>
-    );
-  }
-  if (status.available) {
-    return (
-      <span className="mt-1 block text-[12px] text-emerald-300/80">
-        PyGan available in this backend. PyGan uses DRAGON/DONJON Python
-        bindings for the final LCM export.
-      </span>
-    );
-  }
-  const missing = status.missing_modules.join(", ") || "unknown modules";
-  return (
-    <span className="mt-1 block text-[12px] text-amber-300/85">
-      PyGan unavailable here ({missing}). Start the web backend from the PyGan
-      Python environment to enable it.
-    </span>
   );
 }
 
