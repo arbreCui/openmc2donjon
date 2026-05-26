@@ -157,7 +157,7 @@ describe("convert next steps", () => {
       "inspect",
     ]);
     expect(steps[2].href).toBe(
-      "/builder?command=compare-writers&input_h5=%2Fruns%2Fcase%2Fmgxs_library.h5&format=multicompo&summary_json=%2Fruns%2Fcase%2Fwriter_compare.json&keep_dir=%2Fruns%2Fcase%2Fwriter_compare",
+      "/pygan?tab=compare&input_h5=%2Fruns%2Fcase%2Fmgxs_library.h5&format=multicompo&summary_json=%2Fruns%2Fcase%2Fwriter_compare.json&keep_dir=%2Fruns%2Fcase%2Fwriter_compare",
     );
     expect(convertWriterCompareHref(converted)).toBe(steps[2].href);
     expect(

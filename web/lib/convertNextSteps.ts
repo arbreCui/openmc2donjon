@@ -61,13 +61,13 @@ export function convertDonjonGuideHref(data: ConvertResponse): string {
 
 export function convertWriterCompareHref(data: ConvertResponse): string {
   const params = new URLSearchParams({
-    command: "compare-writers",
+    tab: "compare",
     input_h5: data.input_path,
     format: data.format,
     summary_json: siblingPath(data.output_path, "writer_compare.json"),
     keep_dir: siblingPath(data.output_path, "writer_compare"),
   });
-  return `/builder?${params.toString()}`;
+  return `/pygan?${params.toString()}`;
 }
 
 export function convertBundleManifestPath(data: ConvertResponse): string {

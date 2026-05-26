@@ -25,6 +25,8 @@ export interface PyGanBackendStatus {
   install_hint: string;
   modules: PyGanModuleStatus[];
   missing_modules: string[];
+  schema?: string;
+  mock_mode?: boolean;
 }
 
 export interface MeshMatch {
@@ -555,6 +557,46 @@ export interface BundleInspection {
   donjon_defaults: BundleDonjonDefaults | null;
 }
 
+export interface WriterComparisonIssue {
+  path: string;
+  message: string;
+}
+
+export interface WriterComparisonRequest {
+  input_h5: string;
+  format: ConvertFormat;
+  root_name?: string;
+  comment?: string | null;
+  burnup?: number | null;
+  h_factor_default?: number | null;
+  mixtures?: string[] | null;
+  rtol?: number;
+  atol?: number;
+  summary_json?: string | null;
+  keep_dir?: string | null;
+}
+
+export interface WriterComparisonResponse {
+  schema: string;
+  web_schema: string;
+  mock_mode: boolean;
+  input_h5: string;
+  format: ConvertFormat;
+  ok: boolean;
+  rtol: number;
+  atol: number;
+  compared_payloads: number;
+  compared_real_payloads: number;
+  max_abs_diff: number;
+  max_rel_diff: number;
+  issue_count: number;
+  issues: WriterComparisonIssue[];
+  cli_command: string[];
+  cli_command_text: string;
+  summary_json: string | null;
+  keep_dir: string | null;
+}
+
 export type OpenmcWorkflowKind = "one-step" | "two-step";
 export type OpenmcEquivalenceMode = "direct" | "adf" | "sph" | "flux-ratio-adf";
 
@@ -656,6 +698,9 @@ export interface CommandCatalog {
 
 export const api = {
   health: () => getJson<HealthResponse>("/api/health"),
+  pyganDoctor: () => getJson<PyGanBackendStatus>("/api/pygan/doctor"),
+  pyganCompareWriters: (request: WriterComparisonRequest) =>
+    postJson<WriterComparisonResponse>("/api/pygan/compare-writers", request),
   commands: () => getJson<CommandCatalog>("/api/commands"),
   convert: (request: ConvertRequest) =>
     postJson<ConvertResponse>("/api/convert", request),

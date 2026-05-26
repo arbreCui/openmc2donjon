@@ -16,6 +16,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 try:  # pragma: no cover - import guard exercised via skip path
@@ -193,6 +194,90 @@ class HealthEndpointTests(unittest.TestCase):
 
 
 @unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
+class PyGanWebEndpointTests(unittest.TestCase):
+    def test_pygan_doctor_endpoint_reports_backend_status(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.get("/api/pygan/doctor")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["schema"], "openmc2donjon.pygan-doctor.v1")
+        self.assertTrue(payload["mock_mode"])
+        self.assertIn("available", payload)
+        self.assertIn("modules", payload)
+
+    def test_mock_pygan_compare_writers_endpoint_returns_report(self) -> None:
+        from openmc2donjon.web.pygan import PYGAN_COMPARE_WEB_SCHEMA
+        from openmc2donjon.web.server import create_app
+        from openmc2donjon.writer_compare import WRITER_COMPARISON_SCHEMA
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.post(
+            "/api/pygan/compare-writers",
+            json={
+                "input_h5": "/mock/home/openmc-runs/c5g7/handoff.h5",
+                "format": "multicompo",
+                "summary_json": "/mock/home/openmc-runs/c5g7/writer_compare.json",
+                "keep_dir": "/mock/home/openmc-runs/c5g7/writer_compare",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["schema"], WRITER_COMPARISON_SCHEMA)
+        self.assertEqual(payload["web_schema"], PYGAN_COMPARE_WEB_SCHEMA)
+        self.assertTrue(payload["ok"])
+        self.assertTrue(payload["mock_mode"])
+        self.assertIn("compare-writers", payload["cli_command"])
+        self.assertIn("--summary-json", payload["cli_command"])
+        self.assertEqual(payload["issue_count"], 0)
+
+    def test_live_pygan_compare_writers_endpoint_dispatches_comparison(self) -> None:
+        from openmc2donjon.web.server import create_app
+        from openmc2donjon.writer_compare import WriterComparisonReport
+
+        def fake_compare(*args: object, **kwargs: object) -> WriterComparisonReport:
+            self.assertEqual(args[0], "input.h5")
+            self.assertEqual(kwargs["output_format"], "macrolib")
+            self.assertEqual(kwargs["root_name"], "ROOT")
+            self.assertEqual(kwargs["mixture_names"], ["M1", "M2"])
+            self.assertEqual(kwargs["rtol"], 2.0e-6)
+            return WriterComparisonReport(
+                input_h5="input.h5",
+                output_format="macrolib",
+                ok=True,
+                rtol=2.0e-6,
+                atol=1.0e-8,
+                compared_payloads=4,
+                compared_real_payloads=2,
+                max_abs_diff=0.0,
+                max_rel_diff=0.0,
+                issues=(),
+            )
+
+        client = TestClient(create_app(mock_mode=False))
+        with patch("openmc2donjon.web.pygan.compare_writer_backends", side_effect=fake_compare):
+            response = client.post(
+                "/api/pygan/compare-writers",
+                json={
+                    "input_h5": "input.h5",
+                    "format": "macrolib",
+                    "root_name": "ROOT",
+                    "mixtures": ["M1", "M2"],
+                    "rtol": 2.0e-6,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["format"], "macrolib")
+        self.assertFalse(payload["mock_mode"])
+        self.assertEqual(payload["compared_payloads"], 4)
+
+
+@unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
 class CommandCatalogEndpointTests(unittest.TestCase):
     def test_catalog_endpoint_returns_all_cli_commands_plus_direct_convert(self) -> None:
         from openmc2donjon.commands import adf, diagnostics, openmc, sph, web
@@ -291,9 +376,10 @@ class CommandCatalogEndpointTests(unittest.TestCase):
             "/equivalence?kind=augment-sph",
         )
         self.assertEqual(commands["diff"]["web_path"], "/builder?command=diff")
+        self.assertEqual(commands["pygan-doctor"]["web_path"], "/pygan")
         self.assertEqual(
             commands["compare-writers"]["web_path"],
-            "/builder?command=compare-writers",
+            "/pygan?tab=compare",
         )
         self.assertEqual(commands["doctor"]["web_path"], "/builder?command=doctor")
         self.assertEqual(commands["bundle"]["web_path"], "/builder?command=bundle")

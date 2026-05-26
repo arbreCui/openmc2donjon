@@ -186,7 +186,8 @@ Implemented:
   the PyGan writer
 - Web `/convert` writer-backend status: the PyGan option reports whether the
   running backend Python environment can import PyGan
-- Web command catalog entries for both commands
+- Web `/pygan` doctor and semantic writer-comparison report
+- Web command catalog entries for the PyGan diagnostics and comparison path
 
 Not implemented yet:
 

@@ -479,8 +479,8 @@ DETAILS: dict[str, CommandDetail] = {
             "backend is available."
         ),
         status="partial",
-        status_label="Command builder ready",
-        web_path="/builder?command=pygan-doctor",
+        status_label="Web diagnostics ready",
+        web_path="/pygan",
         cli="openmc2donjon pygan-doctor",
         tags=("environment", "PyGan"),
     ),
@@ -505,8 +505,8 @@ DETAILS: dict[str, CommandDetail] = {
             "the resulting LCM trees semantically."
         ),
         status="partial",
-        status_label="Command builder ready",
-        web_path="/builder?command=compare-writers",
+        status_label="Web compare ready",
+        web_path="/pygan?tab=compare",
         cli="openmc2donjon compare-writers mgxs_library.h5 --format multicompo",
         tags=("PyGan", "validation", "writer"),
     ),

@@ -13,6 +13,7 @@ const ITEMS: Item[] = [
   { href: "/commands", label: "Commands" },
   { href: "/openmc", label: "OpenMC" },
   { href: "/convert", label: "Convert" },
+  { href: "/pygan", label: "PyGan" },
   { href: "/donjon", label: "DONJON" },
   { href: "/equivalence", label: "Equivalence" },
   { href: "/inspect", label: "Inspect" },
