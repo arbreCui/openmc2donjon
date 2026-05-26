@@ -75,6 +75,12 @@ openmc2donjon mgxs_library.h5 \
   -o out.mcompo.txt
 ```
 
+Compare the default writer and PyGan writer:
+
+```sh
+openmc2donjon compare-writers mgxs_library.h5 --format multicompo
+```
+
 If PyGan is not installed, conversion still works through the default ASCII
 writer. Installing PyGan is useful when you want Python-side access to native
 DRAGON/DONJON LCM objects, want PyGan to export the ASCII file, or want to run

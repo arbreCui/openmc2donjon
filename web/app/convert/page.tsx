@@ -22,7 +22,11 @@ import {
   ApiError,
   api,
 } from "@/lib/api";
-import type { ConvertFormat, ConvertWriterBackend } from "@/lib/api";
+import type {
+  ConvertFormat,
+  ConvertWriterBackend,
+  PyGanBackendStatus,
+} from "@/lib/api";
 import {
   buildConvertCliPreview,
   convertAdvancedPayload,
@@ -136,6 +140,7 @@ function ConvertPageContent() {
   const [outputTouched, setOutputTouched] = useState(queryOutput !== null);
   const [state, setState] = useState<ConvertRunState>({ kind: "idle" });
   const [mockMode, setMockMode] = useState(false);
+  const [pyganStatus, setPyganStatus] = useState<PyGanBackendStatus | null>(null);
   const convertButtonRef = useRef<HTMLButtonElement | null>(null);
   const [settings, , , settingsHydrated] = useSettings();
   const savedPrefix = settings.default_inspect_path.trim();
@@ -181,10 +186,19 @@ function ConvertPageContent() {
     api
       .health()
       .then((health) => {
-        if (!cancelled) setMockMode(health.mock_mode);
+        if (!cancelled) {
+          setMockMode(health.mock_mode);
+          setPyganStatus(health.pygan_backend);
+          if (!health.pygan_backend.available) {
+            setWriterBackend("ascii");
+          }
+        }
       })
       .catch(() => {
-        if (!cancelled) setMockMode(false);
+        if (!cancelled) {
+          setMockMode(false);
+          setPyganStatus(null);
+        }
       });
     return () => {
       cancelled = true;
@@ -571,15 +585,16 @@ function ConvertPageContent() {
                   <button
                     type="button"
                     onClick={() => setWriterBackend("pygan")}
-                    className={segmentClass(writerBackend === "pygan")}
+                    disabled={pyganStatus?.available === false}
+                    className={segmentClass(
+                      writerBackend === "pygan",
+                      pyganStatus?.available === false,
+                    )}
                   >
                     PyGan
                   </button>
                 </div>
-                <span className="mt-1 block text-[12px] text-[var(--fg-3)]">
-                  ASCII is dependency-free. PyGan uses DRAGON/DONJON Python
-                  bindings for the final LCM export.
-                </span>
+                <WriterBackendHint status={pyganStatus} />
               </fieldset>
               <Field
                 label="Burnup value"
@@ -1749,7 +1764,36 @@ function Field({
   );
 }
 
-function segmentClass(active: boolean): string {
+function WriterBackendHint({ status }: { status: PyGanBackendStatus | null }) {
+  if (status === null) {
+    return (
+      <span className="mt-1 block text-[12px] text-[var(--fg-3)]">
+        ASCII is dependency-free. PyGan availability is checked from the
+        running backend.
+      </span>
+    );
+  }
+  if (status.available) {
+    return (
+      <span className="mt-1 block text-[12px] text-emerald-300/80">
+        PyGan available in this backend. PyGan uses DRAGON/DONJON Python
+        bindings for the final LCM export.
+      </span>
+    );
+  }
+  const missing = status.missing_modules.join(", ") || "unknown modules";
+  return (
+    <span className="mt-1 block text-[12px] text-amber-300/85">
+      PyGan unavailable here ({missing}). Start the web backend from the PyGan
+      Python environment to enable it.
+    </span>
+  );
+}
+
+function segmentClass(active: boolean, disabled = false): string {
+  if (disabled) {
+    return "px-3 py-2 text-[12px] font-semibold uppercase tracking-wider bg-white/[0.01] text-[var(--fg-3)] cursor-not-allowed";
+  }
   return (
     "px-3 py-2 text-[12px] font-semibold uppercase tracking-wider transition " +
     (active

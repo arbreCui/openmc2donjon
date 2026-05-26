@@ -175,6 +175,9 @@ class HealthEndpointTests(unittest.TestCase):
         self.assertEqual(payload["status"], "ok")
         self.assertFalse(payload["mock_mode"])
         self.assertEqual(payload["version"], __version__)
+        self.assertIn("pygan_backend", payload)
+        self.assertIn("available", payload["pygan_backend"])
+        self.assertIn("missing_modules", payload["pygan_backend"])
 
     def test_mock_mode_payload(self) -> None:
         from openmc2donjon.web.server import create_app
@@ -186,6 +189,7 @@ class HealthEndpointTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["status"], "ok")
         self.assertTrue(payload["mock_mode"])
+        self.assertIn("pygan_backend", payload)
 
 
 @unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
@@ -287,6 +291,10 @@ class CommandCatalogEndpointTests(unittest.TestCase):
             "/equivalence?kind=augment-sph",
         )
         self.assertEqual(commands["diff"]["web_path"], "/builder?command=diff")
+        self.assertEqual(
+            commands["compare-writers"]["web_path"],
+            "/builder?command=compare-writers",
+        )
         self.assertEqual(commands["doctor"]["web_path"], "/builder?command=doctor")
         self.assertEqual(commands["bundle"]["web_path"], "/builder?command=bundle")
         self.assertEqual(

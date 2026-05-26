@@ -38,6 +38,17 @@ Both backends share the same physics builders. In other words, PyGan does not
 change how cross sections, scatter triplets, ADF, SPH, or branch metadata are
 computed. It only replaces the final ASCII serialization layer.
 
+Compare the built-in writer and PyGan writer semantically:
+
+```sh
+openmc2donjon compare-writers mgxs_library.h5 --format multicompo \
+  --summary-json writer_compare.json
+```
+
+This writes two temporary files, reads them back as LCM ASCII, and compares the
+LCM tree rather than whitespace or associative-table ordering. Real payloads use
+a tolerance because PyGan's native type-2 real export is single precision.
+
 ## Install PyGan
 
 PyGan is built from the DRAGON/DONJON source tree. A typical local install is:
@@ -119,13 +130,16 @@ Implemented:
 - `pygan-inspect-compo`
 - `--writer-backend pygan` for direct HDF5 conversion to `L_MULTICOMPO` and
   `L_MACROLIB`
+- `compare-writers` semantic comparison between the built-in ASCII writer and
+  the PyGan writer
+- Web `/convert` writer-backend status: the PyGan option reports whether the
+  running backend Python environment can import PyGan
 - Web command catalog entries for both commands
 
 Not implemented yet:
 
-- PyGan-vs-ASCII semantic diff
 - CLE-2000 execution wrappers for production conversion
 
-The next useful step is a comparison command that writes the same HDF5 handoff
-with both backends, reads the two files semantically, and reports structural
-differences that matter to DONJON rather than whitespace or ordering churn.
+The next useful step is to add local release-smoke coverage that runs
+`pygan-doctor`, `compare-writers`, and a small DONJON ingest when PyGan and
+DONJON are both available on the developer machine.

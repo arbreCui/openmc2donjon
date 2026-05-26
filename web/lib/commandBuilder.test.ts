@@ -24,6 +24,25 @@ describe("commandBuilder", () => {
     );
   });
 
+  it("builds PyGan writer comparison commands", () => {
+    const spec = commandBuilderSpec("compare-writers");
+    expect(spec).not.toBeNull();
+    const values = defaultBuilderValues(spec!);
+    expect(values.format).toBe("multicompo");
+    values.input_h5 = "/runs/case/mgxs_library.h5";
+    values.format = "multicompo";
+    values.mixture = "ASM_01, ASM_02";
+    values.summary_json = "/runs/case/writer_compare.json";
+    values.keep_dir = "/runs/case/writer_compare_files";
+    values.no_fail = true;
+
+    expect(buildCommandCli(spec!, values)).toBe(
+      "openmc2donjon compare-writers /runs/case/mgxs_library.h5 --format multicompo " +
+        "--mixture ASM_01 --mixture ASM_02 --summary-json /runs/case/writer_compare.json " +
+        "--keep-dir /runs/case/writer_compare_files --no-fail",
+    );
+  });
+
   it("keeps required placeholders visible for incomplete ADF driver commands", () => {
     const spec = commandBuilderSpec("make-homogeneous-face-flux");
     expect(spec).not.toBeNull();

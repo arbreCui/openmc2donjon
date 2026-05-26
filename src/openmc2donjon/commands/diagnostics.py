@@ -19,6 +19,7 @@ from ..mgxs_diff import diff_hdf5_files
 from ..mgxs_input_contract import run_preflight
 from ..mgxs_inspect import inspect_files
 from ..pygan_backend import PyGanCompoInspection, PyGanStatus, inspect_pygan_compo, probe_pygan
+from ..writer_compare import compare_writer_backends, print_writer_comparison_report
 
 
 def command_specs() -> tuple[CommandSpec, ...]:
@@ -53,6 +54,12 @@ def command_specs() -> tuple[CommandSpec, ...]:
             build_pygan_inspect_compo_parser,
             pygan_inspect_compo_handler,
             "inspect a DRAGON/DONJON COMPO with optional PyGan backend",
+        ),
+        CommandSpec(
+            "compare-writers",
+            build_compare_writers_parser,
+            compare_writers_handler,
+            "compare built-in ASCII and PyGan writer outputs",
         ),
         CommandSpec(
             "diff",
@@ -117,6 +124,79 @@ def build_pygan_inspect_compo_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_compare_writers_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="openmc2donjon compare-writers",
+        description=(
+            "Write the same MGXS HDF5 handoff with the built-in ASCII writer "
+            "and the optional PyGan writer, then compare the resulting LCM "
+            "trees semantically."
+        ),
+    )
+    parser.add_argument("input_h5", type=Path, help="OpenMC MGXS HDF5 input file")
+    parser.add_argument(
+        "--format",
+        choices=("multicompo", "macrolib"),
+        default="multicompo",
+        help="output object format to compare (default: multicompo)",
+    )
+    parser.add_argument(
+        "--root-name",
+        default="CPO",
+        help="top-level MULTICOMPO root name (default: CPO)",
+    )
+    parser.add_argument("--comment", default=None, help="optional COMMENT block text")
+    parser.add_argument("--burnup", type=float, default=None, help="optional single BURN value")
+    parser.add_argument(
+        "--h-factor-default",
+        type=float,
+        default=None,
+        help="constant H-FACTOR fallback, matching direct conversion",
+    )
+    parser.add_argument(
+        "--mixture",
+        action="append",
+        default=None,
+        help="compare only this mixture; repeat to keep several mixtures",
+    )
+    parser.add_argument(
+        "--rtol",
+        type=float,
+        default=1.0e-6,
+        help="relative tolerance for real payload comparison (default: 1e-6)",
+    )
+    parser.add_argument(
+        "--atol",
+        type=float,
+        default=1.0e-8,
+        help="absolute tolerance for real payload comparison (default: 1e-8)",
+    )
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        default=None,
+        help="write a machine-readable writer comparison summary",
+    )
+    parser.add_argument(
+        "--keep-dir",
+        type=Path,
+        default=None,
+        help="directory to keep the generated ascii.* and pygan.* files for review",
+    )
+    parser.add_argument(
+        "--max-issues",
+        type=int,
+        default=20,
+        help="maximum number of issues to print (default: 20)",
+    )
+    parser.add_argument(
+        "--no-fail",
+        action="store_true",
+        help="always return zero after printing the comparison report",
+    )
+    return parser
+
+
 def pygan_inspect_compo_handler(args: argparse.Namespace) -> int:
     parser = parser_from_args(args)
     try:
@@ -141,6 +221,28 @@ def pygan_doctor_handler(args: argparse.Namespace) -> int:
 
     print_pygan_status(status)
     return 0 if status.available else 1
+
+
+def compare_writers_handler(args: argparse.Namespace) -> int:
+    parser = parser_from_args(args)
+    try:
+        report = compare_writer_backends(
+            args.input_h5,
+            output_format=args.format,
+            root_name=args.root_name,
+            comment=args.comment,
+            burnup=args.burnup,
+            h_factor_default=args.h_factor_default,
+            mixture_names=args.mixture,
+            rtol=args.rtol,
+            atol=args.atol,
+            summary_json=args.summary_json,
+            keep_dir=args.keep_dir,
+        )
+    except USER_FACING_EXCEPTIONS as exc:
+        exit_with_command_error(parser, "compare-writers", exc)
+    print_writer_comparison_report(report, max_issues=args.max_issues)
+    return 0 if report.ok or args.no_fail else 1
 
 
 def print_pygan_status(status: PyGanStatus) -> None:

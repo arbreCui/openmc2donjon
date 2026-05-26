@@ -497,6 +497,19 @@ DETAILS: dict[str, CommandDetail] = {
         cli="openmc2donjon pygan-inspect-compo FUEL30.COMPO --summary-json fuel30.pygan.json",
         tags=("PyGan", "COMPO", "validation"),
     ),
+    "compare-writers": CommandDetail(
+        group="package",
+        title="Compare ASCII and PyGan writers",
+        summary=(
+            "Write the same MGXS handoff with both writer backends and compare "
+            "the resulting LCM trees semantically."
+        ),
+        status="partial",
+        status_label="Command builder ready",
+        web_path="/builder?command=compare-writers",
+        cli="openmc2donjon compare-writers mgxs_library.h5 --format multicompo",
+        tags=("PyGan", "validation", "writer"),
+    ),
     "serve": CommandDetail(
         group="web",
         title="Start web backend",

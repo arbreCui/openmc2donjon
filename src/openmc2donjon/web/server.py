@@ -41,6 +41,7 @@ from .._logging import get_logger
 from ..energy_groups import identify_mesh
 from ..mgxs_inspect import _report_payload, inspect_file
 from ..mgxs_physics_checks import scatter_moment_matrix
+from ..pygan_backend import probe_pygan
 from .bundle import register_bundle_routes
 from .commands import register_command_routes
 from .convert import register_convert_routes
@@ -192,6 +193,7 @@ def create_app(
             "status": "ok",
             "mock_mode": mock_mode,
             "version": __version__,
+            "pygan_backend": _cached_pygan_status(),
         }
 
     register_command_routes(app)
@@ -307,6 +309,11 @@ def _validate_hdf5_path(raw: str, http_exception: Any) -> Path:
     if not is_hdf5:
         raise http_exception(status_code=400, detail=f"not an HDF5 file: {raw}")
     return real
+
+
+@lru_cache(maxsize=1)
+def _cached_pygan_status() -> dict[str, object]:
+    return probe_pygan().as_dict()
 
 
 def _validate_audit_path(raw: str, http_exception: Any) -> Path:

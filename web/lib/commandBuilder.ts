@@ -100,6 +100,35 @@ export const COMMAND_BUILDER_SPECS: readonly CommandBuilderSpec[] = [
     ],
   },
   {
+    id: "compare-writers",
+    title: "Compare ASCII and PyGan writers",
+    summary:
+      "Build the validation command that writes the same MGXS handoff with both backends and compares the LCM trees.",
+    base: ["openmc2donjon", "compare-writers"],
+    fields: [
+      path("input_h5", "MGXS HDF5", "Input handoff to write with both backends.", "<mgxs_library.h5>", 0, H5),
+      {
+        ...select("format", "ASCII format", "Writer format to compare.", "--format", FORMAT_OPTIONS),
+        defaultValue: "multicompo",
+      },
+      text("root_name", "LCM root name", "Optional LCM root name override.", "--root-name"),
+      text("comment", "Comment", "Optional comment embedded in the generated handoff.", "--comment"),
+      text("burnup", "Burnup", "Optional burnup value for one-state branch metadata.", "--burnup"),
+      text("h_factor_default", "H-factor default", "Optional H-FACTOR fallback value.", "--h-factor-default"),
+      text("mixture", "Mixture filter", "Comma-separated mixtures; each becomes one --mixture flag.", "--mixture", undefined, true),
+      text("rtol", "Relative tolerance", "Semantic real-payload relative tolerance.", "--rtol"),
+      text("atol", "Absolute tolerance", "Semantic real-payload absolute tolerance.", "--atol"),
+      optionPath("summary_json", "Summary JSON", "Optional comparison summary JSON.", "--summary-json", "writer_compare.json", JSON),
+      optionPath("keep_dir", "Keep generated files", "Optional directory for ascii.* and pygan.* outputs.", "--keep-dir", "writer_compare", undefined, false, "directory"),
+      text("max_issues", "Max printed issues", "Optional --max-issues override.", "--max-issues"),
+      toggle("no_fail", "No fail", "Always exit zero after printing the comparison report.", "--no-fail"),
+    ],
+    notes: [
+      "Use this after installing PyGan to verify that the optional backend stays semantically aligned with the default ASCII writer.",
+      "This is a validation command: it does not replace the default writer used by production conversion.",
+    ],
+  },
+  {
     id: "export-surface-flux",
     title: "Export OpenMC surface flux",
     summary:
@@ -380,7 +409,7 @@ export function commandBuilderSpec(id: string): CommandBuilderSpec | null {
 }
 
 export function commandBuilderStage(id: string): CommandBuilderStage {
-  if (id === "diff" || id === "doctor") {
+  if (id === "diff" || id === "compare-writers" || id === "doctor") {
     return {
       label: "Inspect and preflight",
       summary:

@@ -9,6 +9,22 @@ export interface HealthResponse {
   status: "ok" | "degraded";
   mock_mode: boolean;
   version: string;
+  pygan_backend: PyGanBackendStatus;
+}
+
+export interface PyGanModuleStatus {
+  name: string;
+  available: boolean;
+  module_file: string | null;
+  error: string | null;
+}
+
+export interface PyGanBackendStatus {
+  available: boolean;
+  role: string;
+  install_hint: string;
+  modules: PyGanModuleStatus[];
+  missing_modules: string[];
 }
 
 export interface MeshMatch {
