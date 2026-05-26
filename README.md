@@ -70,6 +70,9 @@ writer. Installing PyGan is useful when you want Python-side access to native
 DRAGON/DONJON LCM objects or want to run CLE-2000 procedures as part of a local
 validation harness.
 
+See [docs/PYGAN_BACKEND.md](docs/PYGAN_BACKEND.md) for install notes, command
+examples, and the current scope of the optional backend.
+
 ## Quick Start
 
 New users should start with the short path-oriented guide:
