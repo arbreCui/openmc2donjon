@@ -6,6 +6,23 @@ export interface DonjonGuideLinkInput {
   manifestPath?: string | null;
 }
 
+export interface DonjonBundleArtifactLike {
+  label: string;
+  path: string;
+  bundled_path?: string | null;
+  ok?: boolean;
+  messages?: string[];
+}
+
+export interface DonjonBundleArtifact {
+  label: string;
+  asciiPath: string;
+  format: DonjonGuideFormat;
+  bundledPath: string | null;
+  ok: boolean | null;
+  messages: string[];
+}
+
 export function donjonGuideHref(input: DonjonGuideLinkInput): string {
   const params = new URLSearchParams();
   if (input.asciiPath?.trim()) params.set("ascii", input.asciiPath.trim());
@@ -116,4 +133,69 @@ export function donjonIngestOnlySnippet(
 
 export function placeholderAsciiPath(format: DonjonGuideFormat): string {
   return format === "macrolib" ? "out.macrolib.txt" : "out.mcompo.txt";
+}
+
+export function findDonjonBundleArtifact(
+  artifacts: readonly DonjonBundleArtifactLike[],
+): DonjonBundleArtifact | null {
+  const candidates = artifacts
+    .map((artifact, index) => {
+      const match = classifyDonjonArtifact(artifact);
+      if (match === null) return null;
+      return {
+        artifact,
+        format: match.format,
+        score: match.score + (artifact.ok === false ? 0 : 2) - index * 0.001,
+      };
+    })
+    .filter((candidate) => candidate !== null);
+
+  if (!candidates.length) return null;
+  const best = candidates.reduce((left, right) =>
+    right.score > left.score ? right : left,
+  );
+  return {
+    label: best.artifact.label,
+    asciiPath: best.artifact.path,
+    format: best.format,
+    bundledPath: best.artifact.bundled_path ?? null,
+    ok: typeof best.artifact.ok === "boolean" ? best.artifact.ok : null,
+    messages: Array.isArray(best.artifact.messages)
+      ? best.artifact.messages
+      : [],
+  };
+}
+
+function classifyDonjonArtifact(
+  artifact: DonjonBundleArtifactLike,
+): { format: DonjonGuideFormat; score: number } | null {
+  const label = artifact.label.toLowerCase();
+  const path = artifact.path.toLowerCase();
+  const bundled = (artifact.bundled_path ?? "").toLowerCase();
+  const haystack = `${label} ${path} ${bundled}`;
+
+  if (label === "macrolib" || label === "macro") {
+    return { format: "macrolib", score: 100 };
+  }
+  if (label === "mcompo" || label === "multicompo" || label === "compo") {
+    return { format: "multicompo", score: 100 };
+  }
+  if (
+    path.endsWith(".macrolib.txt") ||
+    bundled.endsWith(".macrolib.txt") ||
+    haystack.includes("macrolib")
+  ) {
+    return { format: "macrolib", score: 70 };
+  }
+  if (
+    path.endsWith(".mcompo.txt") ||
+    bundled.endsWith(".mcompo.txt") ||
+    path.endsWith(".compo.txt") ||
+    bundled.endsWith(".compo.txt") ||
+    haystack.includes("multicompo") ||
+    haystack.includes("mcompo")
+  ) {
+    return { format: "multicompo", score: 70 };
+  }
+  return null;
 }

@@ -4,6 +4,7 @@ import {
   donjonIngestOnlySnippet,
   donjonIngestSnippet,
   donjonObjectLabel,
+  findDonjonBundleArtifact,
   inferDonjonFormat,
 } from "./donjonGuide";
 
@@ -45,5 +46,62 @@ describe("DONJON guide helpers", () => {
     expect(snippet).toContain("SEQ_ASCII MACRO_ASC");
     expect(snippet).toContain("MACRO := MACRO_ASC");
     expect(snippet).not.toContain("NCR:");
+  });
+
+  it("finds a MULTICOMPO ASCII artifact from a bundle manifest", () => {
+    const artifact = findDonjonBundleArtifact([
+      {
+        label: "mgxs",
+        path: "/runs/case/handoff.h5",
+        ok: true,
+      },
+      {
+        label: "mcompo",
+        path: "/runs/case/bundle/out.mcompo.txt",
+        bundled_path: "out.mcompo.txt",
+        ok: true,
+      },
+      {
+        label: "conversion-summary",
+        path: "/runs/case/bundle/convert_summary.json",
+        ok: true,
+      },
+    ]);
+
+    expect(artifact).toMatchObject({
+      label: "mcompo",
+      asciiPath: "/runs/case/bundle/out.mcompo.txt",
+      format: "multicompo",
+      bundledPath: "out.mcompo.txt",
+      ok: true,
+    });
+  });
+
+  it("finds a MACROLIB ASCII artifact by path suffix", () => {
+    const artifact = findDonjonBundleArtifact([
+      {
+        label: "ascii-output",
+        path: "/runs/case/out.macrolib.txt",
+        ok: false,
+        messages: ["sha256 mismatch"],
+      },
+    ]);
+
+    expect(artifact).toMatchObject({
+      label: "ascii-output",
+      asciiPath: "/runs/case/out.macrolib.txt",
+      format: "macrolib",
+      ok: false,
+      messages: ["sha256 mismatch"],
+    });
+  });
+
+  it("returns null when a manifest has no DONJON ASCII artifact", () => {
+    expect(
+      findDonjonBundleArtifact([
+        { label: "mgxs", path: "/runs/case/handoff.h5" },
+        { label: "summary", path: "/runs/case/summary.json" },
+      ]),
+    ).toBeNull();
   });
 });
