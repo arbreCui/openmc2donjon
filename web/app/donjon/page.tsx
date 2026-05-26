@@ -6,8 +6,10 @@ import { useSearchParams } from "next/navigation";
 import { CopyCliButton } from "@/components/commands/CopyCliButton";
 import { ApiError, api, type BundleInspection } from "@/lib/api";
 import {
+  donjonBundleAsciiMismatch,
   donjonDeckOptionsFromSearchParams,
   donjonDeckFilename,
+  donjonDefaultsArtifact,
   donjonGuideHref,
   donjonIngestOnlySnippet,
   donjonIngestSnippet,
@@ -28,7 +30,12 @@ import {
 type ManifestState =
   | { kind: "idle" }
   | { kind: "loading" }
-  | { kind: "ready"; data: BundleInspection; artifact: DonjonBundleArtifact | null }
+  | {
+      kind: "ready";
+      data: BundleInspection;
+      artifact: DonjonBundleArtifact | null;
+      summaryArtifact: DonjonBundleArtifact | null;
+    }
   | { kind: "missing"; message: string }
   | { kind: "error"; message: string };
 
@@ -168,6 +175,7 @@ function DonjonPageContent() {
           kind: "ready",
           data,
           artifact: findDonjonBundleArtifact(data.artifacts),
+          summaryArtifact: donjonDefaultsArtifact(data.donjon_defaults),
         });
       })
       .catch((err) => {
@@ -193,10 +201,12 @@ function DonjonPageContent() {
   }, [manifestPath]);
 
   useEffect(() => {
-    if (manifestState.kind !== "ready" || !manifestState.artifact) return;
+    if (manifestState.kind !== "ready") return;
+    const preferredArtifact = manifestState.artifact ?? manifestState.summaryArtifact;
+    if (!preferredArtifact) return;
     if (asciiEdited) return;
-    setAsciiPath(manifestState.artifact.asciiPath);
-    setFormat(manifestState.artifact.format);
+    setAsciiPath(preferredArtifact.asciiPath);
+    setFormat(preferredArtifact.format);
   }, [asciiEdited, manifestState]);
 
   useEffect(() => {
@@ -419,6 +429,8 @@ function ManifestCasePanel({
   }
 
   const artifact = state.artifact;
+  const summaryArtifact = state.summaryArtifact;
+  const mismatch = donjonBundleAsciiMismatch(artifact, summaryArtifact);
   const artifactCount = `${state.data.artifact_count} artifact${
     state.data.artifact_count === 1 ? "" : "s"
   }`;
@@ -446,6 +458,36 @@ function ManifestCasePanel({
         />
       </div>
       <ManifestDonjonDefaults defaults={state.data.donjon_defaults} />
+      {mismatch ? (
+        <div className="mt-2 rounded border border-amber-300/25 bg-amber-300/10 p-2 text-amber-100">
+          <div className="text-[10px] uppercase tracking-[0.14em] text-amber-100/70">
+            summary/artifact mismatch
+          </div>
+          <p className="mt-1 leading-5">
+            The bundle contains one DONJON ASCII artifact, but the conversion
+            summary points to a different output path. Use the bundled artifact
+            for a self-contained package, or choose the summary output if you
+            are working in the original run directory.
+          </p>
+          <div className="mt-1 grid gap-1 font-mono text-[11px] text-amber-100/80">
+            <span className="truncate" title={mismatch.artifactPath}>
+              artifact: {mismatch.artifactPath}
+            </span>
+            <span className="truncate" title={mismatch.summaryPath}>
+              summary: {mismatch.summaryPath}
+            </span>
+          </div>
+          {selectedAsciiPath.trim() === mismatch.summaryPath ? null : (
+            <button
+              type="button"
+              className="btn btn-secondary mt-2 px-2 py-1 text-[11px]"
+              onClick={() => summaryArtifact && onUseArtifact(summaryArtifact)}
+            >
+              Use summary output
+            </button>
+          )}
+        </div>
+      ) : null}
       {artifact ? (
         <div className="mt-2 rounded border border-emerald-300/15 bg-emerald-300/5 p-2">
           <div className="flex flex-wrap items-start justify-between gap-2">
@@ -473,11 +515,40 @@ function ManifestCasePanel({
             )}
           </div>
         </div>
+      ) : summaryArtifact ? (
+        <div className="mt-2 rounded border border-cyan-300/15 bg-cyan-300/5 p-2">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase tracking-[0.14em] text-cyan-100/70">
+                output from conversion summary
+              </div>
+              <div
+                className="mt-1 truncate font-mono text-[11px]"
+                title={summaryArtifact.asciiPath}
+              >
+                {summaryArtifact.asciiPath}
+              </div>
+              <div className="mt-1 text-cyan-100/70">
+                {donjonObjectLabel(summaryArtifact.format)} · not listed as a
+                bundle artifact
+              </div>
+            </div>
+            {selectedAsciiPath.trim() === summaryArtifact.asciiPath ? null : (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => onUseArtifact(summaryArtifact)}
+              >
+                Use summary output
+              </button>
+            )}
+          </div>
+        </div>
       ) : (
         <p className="mt-2 text-[var(--fg-2)]">
           Manifest loaded, but no <span className="font-mono">mcompo</span> or{" "}
-          <span className="font-mono">macrolib</span> artifact was found. Keep
-          the ASCII path above explicit.
+          <span className="font-mono">macrolib</span> artifact or conversion
+          summary output was found. Keep the ASCII path above explicit.
         </p>
       )}
     </div>

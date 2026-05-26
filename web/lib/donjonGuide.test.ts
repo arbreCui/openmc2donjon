@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  donjonBundleAsciiMismatch,
   donjonDeckOptionsFromSearchParams,
   donjonDeckFilename,
+  donjonDefaultsArtifact,
   donjonGuideHref,
   donjonIngestOnlySnippet,
   donjonIngestSnippet,
@@ -215,5 +217,40 @@ describe("DONJON guide helpers", () => {
         { label: "summary", path: "/runs/case/summary.json" },
       ]),
     ).toBeNull();
+  });
+
+  it("creates a DONJON output candidate from convert summary defaults", () => {
+    expect(
+      donjonDefaultsArtifact({
+        format: "multicompo",
+        ascii_path: "/runs/case/out.mcompo.txt",
+        mixture_count: 9,
+      }),
+    ).toMatchObject({
+      label: "convert-summary",
+      asciiPath: "/runs/case/out.mcompo.txt",
+      format: "multicompo",
+      bundledPath: null,
+    });
+
+    expect(donjonDefaultsArtifact({ ascii_path: "" })).toBeNull();
+  });
+
+  it("detects artifact paths that differ from convert summary output", () => {
+    const artifact = findDonjonBundleArtifact([
+      {
+        label: "mcompo",
+        path: "/runs/case/bundle/out.mcompo.txt",
+      },
+    ]);
+    const summaryArtifact = donjonDefaultsArtifact({
+      ascii_path: "/runs/case/out.mcompo.txt",
+    });
+
+    expect(donjonBundleAsciiMismatch(artifact, summaryArtifact)).toEqual({
+      artifactPath: "/runs/case/bundle/out.mcompo.txt",
+      summaryPath: "/runs/case/out.mcompo.txt",
+    });
+    expect(donjonBundleAsciiMismatch(summaryArtifact, summaryArtifact)).toBeNull();
   });
 });

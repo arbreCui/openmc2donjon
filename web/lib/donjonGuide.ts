@@ -54,6 +54,17 @@ export interface DonjonBundleArtifact {
   messages: string[];
 }
 
+export interface DonjonBundleDefaultsLike {
+  format?: string | null;
+  ascii_path?: string | null;
+  mixture_count?: number | null;
+}
+
+export interface DonjonAsciiMismatch {
+  artifactPath: string;
+  summaryPath: string;
+}
+
 export function donjonGuideHref(input: DonjonGuideLinkInput): string {
   const params = new URLSearchParams();
   if (input.asciiPath?.trim()) params.set("ascii", input.asciiPath.trim());
@@ -420,4 +431,31 @@ function classifyDonjonArtifact(
     return { format: "multicompo", score: 70 };
   }
   return null;
+}
+
+export function donjonDefaultsArtifact(
+  defaults: DonjonBundleDefaultsLike | null | undefined,
+): DonjonBundleArtifact | null {
+  const asciiPath = defaults?.ascii_path?.trim() ?? "";
+  if (!asciiPath) return null;
+  return {
+    label: "convert-summary",
+    asciiPath,
+    format: inferDonjonFormat(asciiPath, defaults?.format ?? undefined),
+    bundledPath: null,
+    ok: null,
+    messages: [],
+  };
+}
+
+export function donjonBundleAsciiMismatch(
+  artifact: DonjonBundleArtifact | null,
+  summaryArtifact: DonjonBundleArtifact | null,
+): DonjonAsciiMismatch | null {
+  if (!artifact || !summaryArtifact) return null;
+  if (artifact.asciiPath === summaryArtifact.asciiPath) return null;
+  return {
+    artifactPath: artifact.asciiPath,
+    summaryPath: summaryArtifact.asciiPath,
+  };
 }
