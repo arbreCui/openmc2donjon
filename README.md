@@ -89,7 +89,9 @@ The smoke skips cleanly when PyGan is not installed. When PyGan is available,
 it compares both `L_MULTICOMPO` and `L_MACROLIB` writer outputs against the
 default ASCII backend using the bundled C5G7 production fixture. If DONJON is
 also available locally, the same smoke runs a read-only CLE-2000 ingest deck so
-DONJON itself reads the PyGan-exported ASCII files.
+DONJON itself reads the PyGan-exported ASCII files, runs `NCR:` on the PyGan
+`L_MULTICOMPO`, and checks the extracted macrolib against the PyGan direct
+`L_MACROLIB`.
 
 5. Inspect the root structure of a native DRAGON/DONJON COMPO through PyGan:
 

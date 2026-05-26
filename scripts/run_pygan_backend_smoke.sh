@@ -113,26 +113,42 @@ if [[ -x "$DONJON_RUNNER" ]]; then
   result_path="$DONJON_RESULT_DIR/${case_id}.result"
   short_mcompo="/tmp/${short_tag}.mco"
   short_macrolib="/tmp/${short_tag}.mac"
+  short_ncr_macrolib="/tmp/${short_tag}.ncr.mac"
+  ncr_macrolib="$RUN_DIR/pygan_ncr_extracted.macrolib.txt"
 
   mkdir -p "$data_case_dir"
   cp "$multicompo_dir/pygan.mcompo.txt" "$short_mcompo"
   cp "$macrolib_dir/pygan.macrolib.txt" "$short_macrolib"
+  rm -f "$short_ncr_macrolib" "$ncr_macrolib"
 
-  "$PYTHON_BIN" - "$deck_path" "$short_mcompo" "$short_macrolib" <<'PY'
+  "$PYTHON_BIN" - "$deck_path" "$short_mcompo" "$short_macrolib" "$short_ncr_macrolib" "$inspection_json" <<'PY'
+import json
 from pathlib import Path
 import sys
 
 deck = Path(sys.argv[1])
 mcompo = Path(sys.argv[2])
 macrolib = Path(sys.argv[3])
+extracted = Path(sys.argv[4])
+inspection = json.loads(Path(sys.argv[5]).read_text(encoding="utf-8"))
+nmix = int(inspection.get("mixture_count") or 0)
+if nmix <= 0:
+    raise SystemExit("PyGan MULTICOMPO inspection did not report a positive mixture count")
+mix_lines = "\n".join(f"  MIX {index} USE ENDMIX" for index in range(1, nmix + 1))
 deck.write_text(
-    f"""* Read PyGan-exported ASCII LCM payloads in DONJON.
-MODULE END: ABORT: ;
-LINKED_LIST CPO MACRO ;
+    f"""* Read PyGan-exported ASCII LCM payloads and extract a MACROLIB with NCR.
+MODULE NCR: END: ABORT: ;
+LINKED_LIST CPO MACRO_DIRECT MACRO_NCR ;
 SEQ_ASCII CPO_ASC :: FILE '{mcompo}' ;
 SEQ_ASCII MACRO_ASC :: FILE '{macrolib}' ;
+SEQ_ASCII NCR_ASC :: FILE '{extracted}' ;
 CPO := CPO_ASC ;
-MACRO := MACRO_ASC ;
+MACRO_DIRECT := MACRO_ASC ;
+MACRO_NCR := NCR: CPO :: EDIT 1 MACRO NMIX {nmix}
+  COMPO CPO CPO
+{mix_lines}
+;
+NCR_ASC := MACRO_NCR ;
 ECHO 'OPENMC2DONJON PYGAN DONJON INGEST OK' ;
 END: ;
 """,
@@ -145,11 +161,19 @@ PY
     "$DONJON_RUNNER" -q "$deck_rel"
   )
 
-  "$PYTHON_BIN" - "$result_path" <<'PY'
+  cp "$short_ncr_macrolib" "$ncr_macrolib"
+
+  "$PYTHON_BIN" - "$result_path" "$macrolib_dir/pygan.macrolib.txt" "$ncr_macrolib" <<'PY'
 from pathlib import Path
 import sys
 
+import numpy as np
+
+from openmc2donjon.macrolib import read_macrolib_ascii
+
 result = Path(sys.argv[1])
+direct_path = Path(sys.argv[2])
+ncr_path = Path(sys.argv[3])
 if not result.exists():
     raise SystemExit(f"DONJON ingest listing is missing: {result}")
 text = result.read_text(encoding="utf-8", errors="replace")
@@ -157,7 +181,40 @@ if "normal end of execution" not in text:
     raise SystemExit(f"DONJON ingest did not end normally: {result}")
 if "OPENMC2DONJON PYGAN DONJON INGEST OK" not in text:
     raise SystemExit(f"DONJON ingest marker is missing: {result}")
+
+direct = read_macrolib_ascii(direct_path)
+ncr = read_macrolib_ascii(ncr_path)
+if (direct.ngroups, direct.nmixtures) != (ncr.ngroups, ncr.nmixtures):
+    raise SystemExit(
+        "NCR-extracted macrolib dimensions differ from PyGan direct macrolib: "
+        f"direct={(direct.ngroups, direct.nmixtures)} ncr={(ncr.ngroups, ncr.nmixtures)}"
+    )
+for name in ("energy", "volume", "ntot0", "diff", "nusigf", "chi"):
+    np.testing.assert_allclose(
+        getattr(ncr, name),
+        getattr(direct, name),
+        rtol=1.0e-6,
+        atol=1.0e-8,
+        err_msg=f"NCR-extracted {name} differs from PyGan direct MACROLIB",
+    )
+for moment in sorted(set(direct.sigs).intersection(ncr.sigs)):
+    np.testing.assert_allclose(
+        ncr.sigs[moment],
+        direct.sigs[moment],
+        rtol=1.0e-6,
+        atol=1.0e-8,
+        err_msg=f"NCR-extracted SIGS{moment:02d} differs from PyGan direct MACROLIB",
+    )
+for moment in sorted(set(direct.scatter).intersection(ncr.scatter)):
+    np.testing.assert_allclose(
+        ncr.scatter[moment],
+        direct.scatter[moment],
+        rtol=1.0e-6,
+        atol=1.0e-8,
+        err_msg=f"NCR-extracted SCAT{moment:02d} differs from PyGan direct MACROLIB",
+    )
 print(f"DONJON read PyGan MULTICOMPO and MACROLIB ASCII outputs: {result}")
+print(f"DONJON NCR extracted MACROLIB matches PyGan direct MACROLIB: {ncr_path}")
 PY
 else
   echo

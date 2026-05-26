@@ -203,8 +203,14 @@ bash scripts/run_pygan_backend_smoke.sh
 The smoke uses the bundled C5G7 production HDF5 fixture, runs `pygan-doctor`,
 compares the built-in ASCII and PyGan writer outputs for both `L_MULTICOMPO`
 and `L_MACROLIB`, then inspects the PyGan `L_MULTICOMPO` output. If a DONJON
-runner is available, it also generates a small CLE-2000 deck that reads both
-PyGan ASCII outputs through DONJON `SEQ_ASCII` and verifies normal termination.
+runner is available, it also generates a small CLE-2000 deck that:
+
+1. reads both PyGan ASCII outputs through DONJON `SEQ_ASCII`;
+2. runs `NCR:` on the PyGan `L_MULTICOMPO`;
+3. writes the NCR-extracted `L_MACROLIB`; and
+4. compares the extracted macrolib against the PyGan direct `L_MACROLIB` for
+   the core MGXS payloads.
+
 Artifacts are written under `/private/tmp/openmc2donjon_pygan_backend_smoke` by
 default.
 
@@ -213,6 +219,5 @@ successfully, so it can remain in the default release check without requiring
 every machine to have PyGan installed. If PyGan is available but DONJON is not,
 the writer comparison still runs and the DONJON ingest step is skipped.
 
-Later useful work: extend the optional DONJON/CLE-2000 smoke from read-only
-ingest to a physics action such as extracting a MACROLIB from MULTICOMPO or
-running a minimal keff deck.
+Later useful work: extend the optional DONJON/CLE-2000 smoke from
+`NCR:`-extraction to a minimal keff deck.
