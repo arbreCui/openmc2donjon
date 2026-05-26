@@ -16,8 +16,8 @@ These are stable entry points used directly by the release check.
 - `run_recipe_export_smoke.sh` - portable recipe-to-HDF5-to-ASCII smoke.
 - `run_production_minicase_smoke.sh` - small real OpenMC production-export
   workflow smoke.
-- `run_pygan_backend_smoke.sh` - optional PyGan backend writer-comparison
-  smoke; skips cleanly when PyGan is not installed.
+- `run_pygan_backend_smoke.sh` - optional PyGan backend writer-comparison and
+  DONJON read-only ingest smoke; skips cleanly when PyGan is not installed.
 - `run_openmc_full_core_production_smoke.sh` - full-core assembly-wise
   OpenMC production handoff and SPH loop smoke.
 - `run_dragon_sph_handoff_smoke.sh` - DRAGON NSPH extraction and handoff smoke.
