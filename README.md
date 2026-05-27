@@ -11,7 +11,8 @@ uses this package as the delivery bridge into DRAGON/DONJON:
 
 ```text
 OpenMC CE reference
-  + OpenMC MG 33g with the same geometry (typically Hn angular histogram)
+  + OpenMC MG using the selected group structure and the same geometry
+    (typically with Hn angular histogram scattering)
   -> OpenMC-side SPH factors and/or ADF/DF sidecars
   -> corrected MGXS HDF5 handoff
   -> openmc2donjon converter
@@ -29,7 +30,7 @@ representations at once:
 ```text
 OpenMC CE run
   P3 Legendre MGXS   -> converter-facing HDF5 -> DONJON scatter blocks
-  H16 histogram MGXS -> OpenMC MG 33g macro solve -> MG-H16 flux
+  H16 histogram MGXS -> OpenMC MG macro solve on the selected mesh -> MG-H16 flux
 
 OpenMC CE flux vs OpenMC MG-H16 flux -> SPH(region, group)
 ```
@@ -47,7 +48,7 @@ production SPH route.
 | Method | What it does | Entry point |
 | --- | --- | --- |
 | Direct | No equivalence factors; accept the homogenization bias. | Convert without equivalence flags. |
-| OpenMC-side SPH / ADF | Generate SPH factors from OpenMC CE reference vs OpenMC MG 33g macro calculation with the same geometry, usually using OpenMC Hn histogram angular representation for the MG macro solve; or build ADF/DF sidecars from OpenMC face-flux evidence. | `make-openmc-sph-sidecar` + `augment-sph`, `make-adf-sidecar` + `augment-adf`, or `openmc2donjon-from-openmc --sph-source` / `--build-flux-ratio-adf`. |
+| OpenMC-side SPH / ADF | Generate SPH factors from OpenMC CE reference vs an OpenMC MG macro calculation on the selected group structure with the same geometry, usually using OpenMC Hn histogram angular representation for the MG macro solve; or build ADF/DF sidecars from OpenMC face-flux evidence. | `make-openmc-sph-sidecar` + `augment-sph`, `make-adf-sidecar` + `augment-adf`, or `openmc2donjon-from-openmc --sph-source` / `--build-flux-ratio-adf`. |
 
 ## Export And Convert Modes
 
@@ -281,7 +282,7 @@ openmc2donjon augment-adf mgxs_library.h5 --adf-source adf_sidecar.h5 -o mgxs_wi
 openmc2donjon make-openmc-sph-sidecar mgxs_library.h5 \
   -o sph_sidecar.h5 \
   --reference-flux openmc_ce_flux.h5::openmc_volume_flux \
-  --mg-flux openmc_mg_33g_flux.h5::openmc_volume_flux
+  --mg-flux openmc_mg_flux.h5::openmc_volume_flux
 openmc2donjon augment-sph mgxs_library.h5 --sph-source sph_sidecar.h5 -o mgxs_with_sph.h5
 openmc2donjon mgxs_with_sph.h5 --format macrolib -o out.macrolib.txt --check --require-sph
 ```

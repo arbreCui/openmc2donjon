@@ -34,7 +34,7 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
         self.assertIn("reverse_openmc_energy_filter_flux", text)
         self.assertIn("write_openmc_volume_flux_hdf5", text)
         self.assertIn('"sph_route"', text)
-        self.assertIn("OpenMC CE reference + OpenMC MG 33g same geometry", text)
+        self.assertIn("OpenMC CE reference + OpenMC MG same geometry", text)
 
     def test_recipe_uses_explicit_domain_specs_and_flux_postprocess(self) -> None:
         text = (_example_dir() / "export_recipe.py").read_text(encoding="utf-8")
@@ -64,7 +64,9 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
         script = (_example_dir() / "run_workflow.sh").read_text(encoding="utf-8")
 
         self.assertIn("OpenMC continuous-energy reference", readme)
-        self.assertIn("OpenMC multi-group 33g macro calculation", readme)
+        self.assertIn("OpenMC multi-group macro calculation", readme)
+        self.assertIn("using the selected energy mesh", readme)
+        self.assertIn("limited to 33 groups", readme)
         self.assertIn("CS_FUEL  -> DONJON mixture 1", readme)
         self.assertIn("CS_MOD   -> DONJON mixture 2", readme)
         self.assertIn("CS_ABS   -> DONJON mixture 3", readme)
@@ -101,7 +103,7 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
             markdown = (handoff / "physics_summary.md").read_text(encoding="utf-8")
             self.assertEqual(
                 payload["schema"],
-                "openmc2donjon.openmc-ce-mg-33g-sph-physics-summary.v1",
+                "openmc2donjon.openmc-ce-mg-sph-physics-summary.v1",
             )
             self.assertEqual(payload["mixture_count"], 2)
             self.assertEqual(payload["energy_groups"], 2)
@@ -112,7 +114,7 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
             self.assertEqual(payload["handoff"]["accepted_sph_consumption_format"], "macrolib")
             self.assertEqual(payload["handoff"]["macrolib_ascii_nsp_block_count"], 1)
             self.assertTrue(payload["handoff"]["augmented_hdf5_has_sph"])
-            self.assertIn("OpenMC CE/MG 33g SPH Physics Summary", markdown)
+            self.assertIn("OpenMC CE/MG SPH Physics Summary", markdown)
             self.assertIn("Accepted SPH consumption format", markdown)
             self.assertIn("CS_FUEL", markdown)
 
@@ -181,7 +183,7 @@ def _write_summary_fixture(handoff: Path) -> None:
     (handoff / "mg_macro_summary.json").write_text(
         json.dumps(
             {
-                "schema": "openmc2donjon.openmc-ce-mg-33g-sph-mg-macro.v1",
+                "schema": "openmc2donjon.openmc-ce-mg-sph-mg-macro.v1",
                 "scatter_format": "histogram",
                 "histogram_bins": 16,
                 "legendre_order": None,

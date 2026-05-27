@@ -9,8 +9,11 @@ from typing import Any
 
 
 OPENMC_SPH_PHYSICS_SUMMARY_SCHEMA = (
-    "openmc2donjon.openmc-ce-mg-33g-sph-physics-summary.v1"
+    "openmc2donjon.openmc-ce-mg-sph-physics-summary.v1"
 )
+_LEGACY_OPENMC_SPH_PHYSICS_SUMMARY_SCHEMAS = {
+    "openmc2donjon.openmc-ce-mg-33g-sph-physics-summary.v1",
+}
 
 
 def register_openmc_sph_summary_routes(app: Any, *, mock_mode: bool) -> None:
@@ -71,7 +74,10 @@ def _load_fixture_summary() -> dict[str, Any]:
 def _validate_summary_payload(payload: dict[str, Any], http_exception: Any) -> None:
     errors: list[str] = []
     _require_type(payload, "schema", str, errors)
-    if payload.get("schema") != OPENMC_SPH_PHYSICS_SUMMARY_SCHEMA:
+    if payload.get("schema") not in {
+        OPENMC_SPH_PHYSICS_SUMMARY_SCHEMA,
+        *_LEGACY_OPENMC_SPH_PHYSICS_SUMMARY_SCHEMAS,
+    }:
         errors.append(f"schema must be {OPENMC_SPH_PHYSICS_SUMMARY_SCHEMA!r}")
     _require_type(payload, "route", str, errors)
     for key in ("mixture_count", "energy_groups", "legendre_order"):

@@ -66,9 +66,9 @@ export default function OpenmcProductionPathPanel({
           id: "ce-mg",
           label: "01",
           eyebrow: "OpenMC physics",
-          title: "Run CE + MG 33g",
+          title: "Run CE + MG",
           body:
-            "Run the CE reference and the 33-group OpenMC macro calculation with the same geometry and output regions.",
+            "Run the CE reference and OpenMC MG macro calculation on the selected group structure with the same geometry and output regions.",
           status: statuses.source,
           href: undefined,
           hrefLabel: undefined,

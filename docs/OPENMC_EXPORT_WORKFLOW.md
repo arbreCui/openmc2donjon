@@ -474,7 +474,7 @@ requires both MGXS and reference-flux uncertainty to be present:
 openmc2donjon make-openmc-sph-sidecar mgxs_library.h5 \
   -o sph_sidecar.h5 \
   --reference-flux openmc_ce_flux.h5::openmc_volume_flux \
-  --mg-flux openmc_mg_33g_flux.h5::openmc_volume_flux \
+  --mg-flux openmc_mg_flux.h5::openmc_volume_flux \
   --table-output sph_openmc_ce_mg.csv
 ```
 

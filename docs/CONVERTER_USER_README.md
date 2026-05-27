@@ -175,8 +175,9 @@ The `/equivalence` page is currently a command builder. It helps construct
 sidecar/augmentation CLI commands, but it does not execute the physics workflow
 inside the browser.
 
-For production SPH, generate factors upstream from OpenMC CE reference versus
-OpenMC MG 33g with the same geometry. The MG macro calculation can use OpenMC
+For production SPH, generate factors upstream from an OpenMC CE reference
+versus an OpenMC MG macro calculation on the selected group structure with the
+same geometry. The MG macro calculation can use OpenMC
 Hn histogram angular representation to better retain anisotropic scattering
 effects while the converter-facing handoff remains ordinary Pn/Legendre for
 DONJON. A single assembly usually does not need SPH; colorsets and full-core

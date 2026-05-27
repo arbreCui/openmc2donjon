@@ -138,7 +138,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"materials cross_sections: {materials.cross_sections}")
     if args.summary_json is not None:
         payload = {
-            "schema": "openmc2donjon.openmc-ce-mg-33g-sph-mg-macro.v1",
+            "schema": "openmc2donjon.openmc-ce-mg-sph-mg-macro.v1",
             "scatter_format": args.scatter_format,
             "histogram_bins": args.histogram_bins
             if args.scatter_format == "histogram"

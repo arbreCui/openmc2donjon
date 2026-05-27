@@ -48,7 +48,7 @@ export const OPENMC_SPH_WORKFLOW_STEPS: readonly OpenmcSphWorkflowStep[] = [
     title: "Export MG macro flux",
     badge: "MG",
     body:
-      "Run OpenMC in 33-group MG mode with the same geometry and export the matching region/group flux.",
+      "Run OpenMC MG on the selected group structure with the same geometry and export the matching region/group flux.",
     commandId: "export-volume-flux",
     href: MG_EXPORT_HREF,
     cli:

@@ -1,4 +1,4 @@
-"""openmc2donjon export recipe for the OpenMC CE/MG 33g SPH colorset.
+"""openmc2donjon export recipe for the OpenMC CE/MG SPH colorset.
 
 Set ``OPENMC2DONJON_COLORSET_DIR`` to the directory containing the generated
 continuous-energy OpenMC XML files before running ``openmc2donjon-from-openmc``.

@@ -1,6 +1,6 @@
 {
-  "schema": "openmc2donjon.openmc-ce-mg-33g-sph-physics-summary.v1",
-  "route": "OpenMC CE reference + OpenMC MG 33g same geometry -> OpenMC-side SPH",
+  "schema": "openmc2donjon.openmc-ce-mg-sph-physics-summary.v1",
+  "route": "OpenMC CE reference + OpenMC MG same geometry -> OpenMC-side SPH",
   "handoff_dir": "/mock/home/openmc-runs/openmc-sph-minicase",
   "mixture_count": 3,
   "energy_groups": 33,
@@ -10,7 +10,7 @@
     "legendre_order": 3
   },
   "mg_macro_scatter": {
-    "schema": "openmc2donjon.openmc-ce-mg-33g-sph-mg-macro.v1",
+    "schema": "openmc2donjon.openmc-ce-mg-sph-mg-macro.v1",
     "scatter_format": "histogram",
     "histogram_bins": 16,
     "legendre_order": null,

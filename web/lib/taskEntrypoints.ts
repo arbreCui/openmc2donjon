@@ -40,7 +40,7 @@ export const TASK_ENTRYPOINTS: readonly TaskEntrypoint[] = [
     eyebrow: "Need SPH factors",
     title: "Prepare OpenMC-side SPH",
     body:
-      "Generate SPH factors upstream from OpenMC CE versus OpenMC MG 33g, then inject the sidecar before MACROLIB conversion.",
+      "Generate SPH factors upstream from OpenMC CE versus OpenMC MG on the selected group structure, then inject the sidecar before MACROLIB conversion.",
     href: "/openmc?workflow=two-step&equivalence=sph&format=macrolib&production=1",
     cta: "Open SPH planner",
   },

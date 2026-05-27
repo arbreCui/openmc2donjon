@@ -359,5 +359,5 @@ def root_attrs() -> dict[str, object]:
         "mg_macro_scatter_format": MG_MACRO_SCATTER_FORMAT,
         "mg_macro_histogram_bins": MG_MACRO_HISTOGRAM_BINS,
         "spatial_mapping": "one OpenMC CE/MG cell domain -> one SPH/DONJON mixture",
-        "sph_route": "OpenMC CE reference + OpenMC MG 33g same geometry",
+        "sph_route": "OpenMC CE reference + OpenMC MG same geometry",
     }

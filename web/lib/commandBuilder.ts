@@ -359,7 +359,7 @@ export function commandBuilderStage(id: string): CommandBuilderStage {
       label: "OpenMC-side SPH",
       summary:
         "OpenMC equivalence command: compare CE reference and MG macro flux, then write explicit SPH factors for each output region and energy group.",
-      reference: "OpenMC CE reference plus OpenMC MG 33g macro flux",
+      reference: "OpenMC CE reference plus OpenMC MG macro flux on the selected group structure",
     };
   }
   if (

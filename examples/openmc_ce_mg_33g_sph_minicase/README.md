@@ -1,11 +1,11 @@
-# OpenMC CE/MG 33g SPH Colorset Minicase
+# OpenMC CE/MG SPH Colorset Minicase
 
 This example is the new physics route for SPH equivalence:
 
 ```text
 OpenMC continuous-energy reference
-  + OpenMC multi-group 33g macro calculation
-  using the same geometry and output regions
+  + OpenMC multi-group macro calculation
+    using the selected energy mesh and the same geometry/output regions
   -> OpenMC-side SPH factors
   -> corrected MGXS HDF5 / SPH sidecar
   -> openmc2donjon L_MACROLIB ASCII for DONJON SPH consumption
@@ -25,10 +25,14 @@ CS_MOD   -> DONJON mixture 2 / SPH region 2
 CS_ABS   -> DONJON mixture 3 / SPH region 3
 ```
 
-The energy mesh is ECCO-33.  The converter-facing handoff uses Legendre order
-3 so DONJON receives ordinary P1/P2/P3 scatter moments.  The OpenMC MG macro
-calculation used to derive SPH factors uses histogram angular representation
-by default (`H16`):
+This concrete minicase uses the ECCO-33 energy mesh, but the workflow is not
+limited to 33 groups: any valid OpenMC MG group structure can be used as long
+as the CE-tallied MGXS handoff, OpenMC MG macro solve, CE flux export, and MG
+flux export all share the same group boundaries and output-region ordering.
+
+The converter-facing handoff uses Legendre order 3 so DONJON receives ordinary
+P1/P2/P3 scatter moments.  The OpenMC MG macro calculation used to derive SPH
+factors uses histogram angular representation by default (`H16`):
 
 ```text
 CE statepoint tallies:
@@ -81,7 +85,7 @@ would otherwise pick up a stale `libopenmc.dylib` from another Python or conda
 environment.
 
 The default particle counts are intentionally small so the workflow can be
-tested quickly.  They are not production statistics.  If any 33-group region
+tested quickly.  They are not production statistics.  If any MG region
 has zero sampled flux, the flux export/SPH gate should fail; increase
 `PARTICLES`/`BATCHES` rather than accepting a zero-flux SPH ratio.
 

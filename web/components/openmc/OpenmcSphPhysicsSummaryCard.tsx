@@ -55,9 +55,10 @@ export default function OpenmcSphPhysicsSummaryCard({
             Review CE/MG flux agreement and exported NSPH factors
           </h3>
           <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--fg-2)]">
-            Load the `physics_summary.json` written by the CE/MG 33g minicase.
-            It summarizes OpenMC CE reference flux, OpenMC MG flux, SPH
-            factors, and the corrected DONJON handoff.
+            Load the `physics_summary.json` written by the CE/MG SPH workflow.
+            It summarizes OpenMC CE reference flux, OpenMC MG flux on the
+            selected group structure, SPH factors, and the corrected DONJON
+            handoff.
           </p>
         </div>
       </div>
@@ -93,7 +94,7 @@ function SummaryBody({ state }: { state: SummaryState }) {
   if (state.kind === "idle") {
     return (
       <div className="rounded-md border border-[var(--edge)] bg-black/15 p-3 text-[12px] text-[var(--fg-2)]">
-        After running the CE/MG 33g workflow, load the summary to confirm
+        After running the CE/MG SPH workflow, load the summary to confirm
         `NSPH` is present and inspect the SPH factor range.
       </div>
     );

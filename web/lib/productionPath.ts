@@ -13,7 +13,7 @@ export const PRODUCTION_PATH_STEPS: readonly ProductionPathStep[] = [
     label: "01",
     title: "OpenMC-side equivalence",
     body:
-      "Use OpenMC CE as the reference and OpenMC MG 33g with the same geometry to produce corrected MGXS or SPH factors.",
+      "Use OpenMC CE as the reference and an OpenMC MG macro solve on the selected group structure with the same geometry to produce corrected MGXS or SPH factors.",
     result: "corrected HDF5 / SPH sidecar",
     href: "/openmc?workflow=two-step&equivalence=sph&production=1",
   },

@@ -34,7 +34,7 @@ describe("commandWorkflowLanes", () => {
       "convert",
     ]);
     expect(sphLane!.steps[0].body).toContain("continuous-energy OpenMC");
-    expect(sphLane!.steps[1].body).toContain("33-group MG");
+    expect(sphLane!.steps[1].body).toContain("selected group structure");
     expect(sphLane!.steps[2].commandIds).toContain("make-openmc-sph-sidecar");
     expect(sphLane!.steps[2].commandIds).toContain("make-sph-update-table");
   });

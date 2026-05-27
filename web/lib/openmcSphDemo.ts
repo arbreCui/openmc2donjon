@@ -56,7 +56,7 @@ export const LIVE_OPENMC_SPH_DEMO: OpenmcSphDemoPreset = {
   id: "live-openmc-sph",
   label: "Live OpenMC-side SPH minicase",
   description:
-    "Run the CE/MG 33g workflow, then prefill the planner with its corrected MGXS and SPH artifacts.",
+    "Run the CE/MG SPH workflow, then prefill the planner with its corrected MGXS and SPH artifacts.",
   runRoot: "/private/tmp/openmc2donjon_ce_mg_33g_sph_minicase",
   mgxs: "/private/tmp/openmc2donjon_ce_mg_33g_sph_minicase/handoff/mgxs_library.h5",
   ceStatepoint:

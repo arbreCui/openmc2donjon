@@ -1,4 +1,4 @@
-"""Summarize the CE/MG 33g OpenMC-side SPH minicase outputs.
+"""Summarize the CE/MG OpenMC-side SPH minicase outputs.
 
 The report is intentionally small and auditable.  It does not decide whether
 the minicase is a benchmark; it records what happened in one run:
@@ -19,7 +19,7 @@ import h5py
 import numpy as np
 
 
-SUMMARY_SCHEMA = "openmc2donjon.openmc-ce-mg-33g-sph-physics-summary.v1"
+SUMMARY_SCHEMA = "openmc2donjon.openmc-ce-mg-sph-physics-summary.v1"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -97,7 +97,7 @@ def summarize_handoff(handoff_dir: Path) -> dict[str, Any]:
 
     return {
         "schema": SUMMARY_SCHEMA,
-        "route": "OpenMC CE reference + OpenMC MG 33g same geometry -> OpenMC-side SPH",
+        "route": "OpenMC CE reference + OpenMC MG same geometry -> OpenMC-side SPH",
         "handoff_dir": str(handoff_dir),
         "mixture_count": len(mixture_names),
         "energy_groups": energy_groups,
@@ -155,7 +155,7 @@ def render_markdown(summary: dict[str, Any]) -> str:
     flux = summary["flux_uncertainty"]
     handoff = summary["handoff"]
     lines = [
-        "# OpenMC CE/MG 33g SPH Physics Summary",
+        "# OpenMC CE/MG SPH Physics Summary",
         "",
         f"Route: `{summary['route']}`",
         "",

@@ -37,7 +37,7 @@ run_openmc_case() {
   fi
 }
 
-echo "== OpenMC CE/MG 33g SPH colorset minicase =="
+echo "== OpenMC CE/MG SPH colorset minicase (ECCO-33 example) =="
 echo "run root: $RUN_ROOT"
 if [[ "$MG_MACRO_SCATTER_FORMAT" == "histogram" ]]; then
   echo "OpenMC MG macro scatter treatment: H$MG_MACRO_HISTOGRAM_BINS"
@@ -80,7 +80,7 @@ OPENMC2DONJON_COLORSET_DIR="$CE_CASE_DIR" \
   --run-dir "$OUT_DIR/from_openmc_run"
 
 echo
-echo "== Prepare OpenMC MG 33g macro input from the CE MGXS library =="
+echo "== Prepare OpenMC MG macro input from the CE MGXS library =="
 "$PYTHON_BIN" "$REPO_ROOT/examples/openmc_ce_mg_33g_sph_minicase/prepare_mg_case.py" \
   --ce-case-dir "$CE_CASE_DIR" \
   --ce-statepoint "$CE_SP" \
@@ -151,7 +151,7 @@ echo "== Summarize OpenMC-side SPH physics handoff =="
   --handoff-dir "$OUT_DIR"
 
 echo
-echo "OpenMC CE/MG 33g SPH colorset minicase complete:"
+echo "OpenMC CE/MG SPH colorset minicase complete:"
 echo "  MGXS: $MGXS_H5"
 echo "  CE flux: $CE_FLUX::openmc_volume_flux"
 echo "  MG flux: $MG_FLUX::openmc_mg_flux"

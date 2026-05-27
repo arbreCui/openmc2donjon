@@ -76,8 +76,8 @@ def _write_fake_hdf5(path: Path) -> None:
 
 def _minimal_openmc_sph_physics_summary() -> dict[str, object]:
     return {
-        "schema": "openmc2donjon.openmc-ce-mg-33g-sph-physics-summary.v1",
-        "route": "OpenMC CE reference + OpenMC MG 33g same geometry -> OpenMC-side SPH",
+        "schema": "openmc2donjon.openmc-ce-mg-sph-physics-summary.v1",
+        "route": "OpenMC CE reference + OpenMC MG same geometry -> OpenMC-side SPH",
         "handoff_dir": "/tmp/handoff",
         "mixture_count": 2,
         "energy_groups": 33,

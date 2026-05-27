@@ -24,8 +24,9 @@ export default function ProductionPathStrip({ steps }: Props) {
 
       <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
         Production SPH now stays upstream in OpenMC: compare CE reference and
-        MG 33g macro calculations with the same geometry, carry the resulting
-        factors into HDF5, then use the direct converter for DONJON delivery.
+        MG macro calculations on the selected group structure with the same
+        geometry, carry the resulting factors into HDF5, then use the direct
+        converter for DONJON delivery.
       </p>
 
       <ol className="mt-4 grid gap-3 lg:grid-cols-3">

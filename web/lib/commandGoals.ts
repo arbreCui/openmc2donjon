@@ -94,7 +94,7 @@ export const COMMAND_GOALS: readonly CommandGoalDefinition[] = [
     eyebrow: "I need SPH factors",
     title: "Carry OpenMC-side SPH to DONJON",
     body:
-      "Use SPH factors generated from OpenMC CE versus OpenMC MG 33g, inject them into the HDF5 handoff, then convert to MACROLIB for DONJON SPH consumption.",
+      "Use SPH factors generated from OpenMC CE versus OpenMC MG on the selected group structure, inject them into the HDF5 handoff, then convert to MACROLIB for DONJON SPH consumption.",
     href: "/equivalence?kind=openmc-sph-sidecar",
     cta: "Open OpenMC SPH builder",
     actionHint:

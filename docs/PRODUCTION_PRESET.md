@@ -34,8 +34,8 @@ DONJON-facing ASCII.
 
 For SPH handoffs, production review should record:
 
-- the OpenMC CE reference case and the OpenMC MG 33g macro case used to derive
-  the factors;
+- the OpenMC CE reference case and the OpenMC MG macro case, with its selected
+  group structure, used to derive the factors;
 - the homogenized output regions/media, because SPH is one factor per output
   region and energy group;
 - the angular treatment used in the MG macro calculation, such as Legendre
