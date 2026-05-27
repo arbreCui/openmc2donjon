@@ -377,6 +377,10 @@ class CommandCatalogEndpointTests(unittest.TestCase):
             "/equivalence?kind=sph-sidecar",
         )
         self.assertEqual(
+            commands["make-openmc-sph-sidecar"]["web_path"],
+            "/equivalence?kind=openmc-sph-sidecar",
+        )
+        self.assertEqual(
             commands["make-sph-update-table"]["web_path"],
             "/builder?command=make-sph-update-table",
         )

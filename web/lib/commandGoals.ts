@@ -83,6 +83,7 @@ export const COMMAND_GOALS: readonly CommandGoalDefinition[] = [
       "make-low-order-driver",
       "make-adf-sidecar",
       "augment-adf",
+      "make-openmc-sph-sidecar",
       "make-sph-sidecar",
       "augment-sph",
     ],
@@ -93,11 +94,11 @@ export const COMMAND_GOALS: readonly CommandGoalDefinition[] = [
     title: "Carry OpenMC-side SPH to DONJON",
     body:
       "Use SPH factors generated from OpenMC CE versus OpenMC MG 33g, inject them into the HDF5 handoff, then convert.",
-    href: "/equivalence?kind=sph-sidecar",
-    cta: "Open SPH sidecar",
+    href: "/equivalence?kind=openmc-sph-sidecar",
+    cta: "Open OpenMC SPH builder",
     actionHint:
-      "Build or point to the SPH sidecar first; conversion remains the same after augmentation.",
-    commandIds: ["make-sph-sidecar", "augment-sph", "direct-convert"],
+      "Compute the SPH sidecar from CE/MG fluxes, inject it, then run the direct converter.",
+    commandIds: ["make-openmc-sph-sidecar", "augment-sph", "direct-convert"],
   },
   {
     id: "package",

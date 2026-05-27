@@ -23,8 +23,12 @@ type BrowserTarget =
   | "adfSource"
   | "surfaceFlux"
   | "homogeneousFaceFlux"
+  | "referenceFlux"
+  | "mgFlux"
+  | "previousSph"
   | "sphSource"
   | "macrolib"
+  | "tableOutput"
   | "table";
 
 export default function EquivalencePage() {
@@ -161,6 +165,13 @@ function EquivalencePageContent() {
               {kind === "augment-adf" ? (
                 <AugmentAdfFields options={options} patch={patch} setBrowserTarget={setBrowserTarget} />
               ) : null}
+              {kind === "openmc-sph-sidecar" ? (
+                <OpenmcSphSidecarFields
+                  options={options}
+                  patch={patch}
+                  setBrowserTarget={setBrowserTarget}
+                />
+              ) : null}
               {kind === "sph-sidecar" ? (
                 <SphSidecarFields options={options} patch={patch} setBrowserTarget={setBrowserTarget} />
               ) : null}
@@ -230,7 +241,7 @@ function EquivalencePageContent() {
 
 function EquivalenceTabs({ active }: { active: EquivalenceKind }) {
   return (
-    <nav className="mb-5 grid gap-2 md:grid-cols-4" aria-label="Equivalence tool">
+    <nav className="mb-5 grid gap-2 md:grid-cols-3 lg:grid-cols-5" aria-label="Equivalence tool">
       {EQUIVALENCE_KINDS.map((item) => (
         <Link
           key={item.kind}
@@ -415,6 +426,90 @@ function SphSidecarFields({
             placeholder="sph.csv"
           />
         ) : null}
+      </div>
+    </section>
+  );
+}
+
+function OpenmcSphSidecarFields({
+  options,
+  patch,
+  setBrowserTarget,
+}: FieldGroupProps) {
+  return (
+    <section className="rounded-lg border border-[var(--edge)] bg-white/[0.015] p-4">
+      <h3 className="text-sm font-semibold tracking-tight">OpenMC CE/MG SPH options</h3>
+      <p className="mt-1 text-[12px] leading-relaxed text-[var(--fg-3)]">
+        Use fluxes from the same OpenMC geometry and output regions: CE is the reference;
+        MG is the macro calculation being corrected.
+      </p>
+      <div className="mt-3 grid gap-3 lg:grid-cols-2">
+        <PathField
+          label="OpenMC CE reference flux"
+          value={options.referenceFlux}
+          onChange={(value) => patch({ referenceFlux: value })}
+          onBrowse={() => setBrowserTarget("referenceFlux")}
+          placeholder="openmc_ce_flux.h5::openmc_volume_flux"
+        />
+        <PathField
+          label="OpenMC MG macro flux"
+          value={options.mgFlux}
+          onChange={(value) => patch({ mgFlux: value })}
+          onBrowse={() => setBrowserTarget("mgFlux")}
+          placeholder="openmc_mg_flux.h5::openmc_mg_flux"
+        />
+        <PathField
+          label="SPH CSV table"
+          value={options.tableOutput}
+          onChange={(value) => patch({ tableOutput: value })}
+          onBrowse={() => setBrowserTarget("tableOutput")}
+          placeholder="sph_sidecar.sph.csv"
+        />
+        <PathField
+          label="Previous SPH"
+          value={options.previousSph}
+          onChange={(value) => patch({ previousSph: value })}
+          onBrowse={() => setBrowserTarget("previousSph")}
+          placeholder="previous_sph.csv or previous_sph.h5"
+        />
+        <TextField
+          label="Damping"
+          value={options.damping}
+          onChange={(value) => patch({ damping: value })}
+          placeholder="1.0"
+          mono
+          hint="Use 1.0 for one-shot factors; lower values damp an iterative update."
+        />
+        <SelectField
+          label="Flux normalization"
+          value={options.fluxNormalization}
+          onChange={(value) =>
+            patch({ fluxNormalization: value as "none" | "total" | "power" | "auto" })
+          }
+          options={[
+            ["none", "none"],
+            ["total", "total flux"],
+            ["power", "power weighted"],
+            ["auto", "auto"],
+          ]}
+          hint="Optional global scaling before forming MG/CE flux ratios."
+        />
+        <TextField
+          label="Clip min"
+          value={options.clipMin}
+          onChange={(value) => patch({ clipMin: value })}
+          placeholder="0.2"
+          mono
+          hint="Optional lower clamp."
+        />
+        <TextField
+          label="Clip max"
+          value={options.clipMax}
+          onChange={(value) => patch({ clipMax: value })}
+          placeholder="5.0"
+          mono
+          hint="Optional upper clamp."
+        />
       </div>
     </section>
   );
@@ -639,25 +734,30 @@ function browserInitialPath(
   options: EquivalenceCommandOptions,
   savedPrefix: string,
 ): string {
-  const value =
-    target === "inputH5"
-      ? options.inputH5
-      : target === "outputDir"
-        ? options.outputPath
-        : target === "adfSource"
-          ? options.adfSource
-          : target === "surfaceFlux"
-            ? options.surfaceFlux
-            : target === "homogeneousFaceFlux"
-              ? options.homogeneousFaceFlux
-              : target === "sphSource"
-                ? options.sphSource
-                : target === "macrolib"
-                  ? options.macrolib
-                  : target === "table"
-                    ? options.table
-                    : "";
+  const value = browserTargetValue(target, options);
   return browserStart(value || savedPrefix || "~");
+}
+
+function browserTargetValue(
+  target: BrowserTarget | null,
+  options: EquivalenceCommandOptions,
+): string {
+  if (target == null) return "";
+  const values: Record<BrowserTarget, string> = {
+    inputH5: options.inputH5,
+    outputDir: options.outputPath,
+    adfSource: options.adfSource,
+    surfaceFlux: options.surfaceFlux,
+    homogeneousFaceFlux: options.homogeneousFaceFlux,
+    referenceFlux: options.referenceFlux,
+    mgFlux: options.mgFlux,
+    previousSph: options.previousSph,
+    sphSource: options.sphSource,
+    macrolib: options.macrolib,
+    tableOutput: options.tableOutput,
+    table: options.table,
+  };
+  return values[target];
 }
 
 function browserStart(path: string): string {
@@ -671,13 +771,14 @@ function browserStart(path: string): string {
 
 function browserExtensions(target: BrowserTarget | null): readonly string[] {
   if (target === "outputDir") return [];
-  if (target === "table") return ["csv"];
+  if (target === "table" || target === "tableOutput") return ["csv"];
+  if (target === "previousSph") return ["h5", "hdf5", "csv"];
   if (target === "macrolib") return ["txt", "mco"];
   return ["h5", "hdf5"];
 }
 
 function browserChip(target: BrowserTarget | null): string {
-  if (target === "table") return "CSV";
+  if (target === "table" || target === "tableOutput") return "CSV";
   if (target === "macrolib") return "TXT";
   return "H5";
 }

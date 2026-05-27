@@ -69,7 +69,7 @@ export const COMMAND_WORKFLOW_LANES: readonly WorkflowLane[] = [
         title: "Prepare OpenMC evidence",
         body: "Export OpenMC surface currents for ADF/DF, or bring OpenMC CE/MG SPH factors for each output region and group.",
         href: "/builder?command=export-surface-flux",
-        commandIds: ["export-surface-flux", "make-low-order-driver", "make-sph-sidecar"],
+        commandIds: ["export-surface-flux", "make-low-order-driver", "make-openmc-sph-sidecar"],
       },
       {
         id: "qa",
@@ -83,7 +83,7 @@ export const COMMAND_WORKFLOW_LANES: readonly WorkflowLane[] = [
         title: "Build sidecar factors",
         body: "Create ADF/DF or OpenMC-side SPH sidecars as explicit artifacts, not hidden converter behavior.",
         href: "/equivalence?kind=adf-sidecar",
-        commandIds: ["make-adf-sidecar", "make-sph-update-table", "make-sph-sidecar"],
+        commandIds: ["make-adf-sidecar", "make-openmc-sph-sidecar", "make-sph-sidecar"],
       },
       {
         id: "augment",

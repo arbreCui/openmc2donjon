@@ -1,6 +1,7 @@
 export type EquivalenceKind =
   | "adf-sidecar"
   | "augment-adf"
+  | "openmc-sph-sidecar"
   | "sph-sidecar"
   | "augment-sph";
 
@@ -27,6 +28,12 @@ export interface EquivalenceCommandOptions {
   sphValue: string;
   macrolib: string;
   table: string;
+  referenceFlux: string;
+  mgFlux: string;
+  tableOutput: string;
+  previousSph: string;
+  damping: string;
+  fluxNormalization: "none" | "total" | "power" | "auto";
   sphSource: string;
   sphApplied: BooleanChoice;
 }
@@ -60,6 +67,15 @@ export const EQUIVALENCE_KINDS: readonly EquivalenceKindInfo[] = [
     outputPlaceholder: "mgxs_with_adf.h5",
   },
   {
+    kind: "openmc-sph-sidecar",
+    commandId: "make-openmc-sph-sidecar",
+    label: "OpenMC SPH",
+    title: "Build OpenMC-side SPH sidecar",
+    summary:
+      "Compare OpenMC CE reference flux and OpenMC MG macro flux from the same geometry, then write an auditable SPH table plus HDF5 sidecar.",
+    outputPlaceholder: "sph_sidecar.h5",
+  },
+  {
     kind: "sph-sidecar",
     commandId: "make-sph-sidecar",
     label: "SPH sidecar",
@@ -83,6 +99,7 @@ export function parseEquivalenceKind(value: string | null): EquivalenceKind {
   if (
     value === "adf-sidecar" ||
     value === "augment-adf" ||
+    value === "openmc-sph-sidecar" ||
     value === "sph-sidecar" ||
     value === "augment-sph"
   ) {
@@ -115,6 +132,12 @@ export function defaultEquivalenceOptions(kind: EquivalenceKind): EquivalenceCom
     sphValue: "1.0",
     macrolib: "",
     table: "",
+    referenceFlux: "",
+    mgFlux: "",
+    tableOutput: "",
+    previousSph: "",
+    damping: "1.0",
+    fluxNormalization: "none",
     sphSource: "",
     sphApplied: "",
   };
@@ -123,6 +146,7 @@ export function defaultEquivalenceOptions(kind: EquivalenceKind): EquivalenceCom
 export function buildEquivalenceCli(options: EquivalenceCommandOptions): string {
   if (options.kind === "adf-sidecar") return buildAdfSidecarCli(options);
   if (options.kind === "augment-adf") return buildAugmentAdfCli(options);
+  if (options.kind === "openmc-sph-sidecar") return buildOpenmcSphSidecarCli(options);
   if (options.kind === "sph-sidecar") return buildSphSidecarCli(options);
   return buildAugmentSphCli(options);
 }
@@ -183,6 +207,28 @@ function buildSphSidecarCli(options: EquivalenceCommandOptions): string {
   } else {
     pushOptional(command, "--table", options.table);
   }
+  pushCommon(command, options);
+  return command.map(shellQuote).join(" ");
+}
+
+function buildOpenmcSphSidecarCli(options: EquivalenceCommandOptions): string {
+  const command = [
+    "openmc2donjon",
+    "make-openmc-sph-sidecar",
+    pathOrPlaceholder(options.inputH5, "<mgxs_library.h5>"),
+    "-o",
+    pathOrPlaceholder(options.outputPath, "sph_sidecar.h5"),
+    "--reference-flux",
+    pathOrPlaceholder(options.referenceFlux, "<openmc_ce_flux.h5::openmc_volume_flux>"),
+    "--mg-flux",
+    pathOrPlaceholder(options.mgFlux, "<openmc_mg_flux.h5::openmc_mg_flux>"),
+  ];
+  pushOptional(command, "--table-output", options.tableOutput);
+  pushOptional(command, "--previous-sph", options.previousSph);
+  pushOptional(command, "--damping", options.damping);
+  pushOptional(command, "--flux-normalization", options.fluxNormalization);
+  pushOptional(command, "--clip-min", options.clipMin);
+  pushOptional(command, "--clip-max", options.clipMax);
   pushCommon(command, options);
   return command.map(shellQuote).join(" ");
 }

@@ -482,7 +482,7 @@ function CommandWorkflowPosition({ command }: { command: CommandCatalogEntry }) 
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
             Where this command sits in the production map. Some commands appear
             in more than one lane because the same artifact can be useful in
-            direct conversion, equivalence, or SPH feedback workflows.
+            direct conversion or OpenMC-side equivalence workflows.
           </p>
         </div>
         <Link href="/commands" className="btn btn-secondary shrink-0">

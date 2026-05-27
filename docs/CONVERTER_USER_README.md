@@ -154,8 +154,9 @@ inside the browser.
 For production SPH, generate factors upstream from OpenMC CE reference versus
 OpenMC MG 33g with the same geometry. A single assembly usually does not need
 SPH; colorsets and full-core macro models need one factor per output region
-and energy group. After those factors exist, use `/equivalence` to build or
-inject the SPH sidecar, then return to `/convert`.
+and energy group. Use `make-openmc-sph-sidecar` to turn the CE/MG flux
+comparison into both an auditable CSV table and an SPH sidecar, then use
+`augment-sph` to inject that sidecar before returning to `/convert`.
 
 ## Hexagonal Cases
 

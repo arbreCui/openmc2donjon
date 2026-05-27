@@ -29,7 +29,7 @@ describe("commandWorkflowLanes", () => {
 
     expect(firstStep.title).toContain("OpenMC");
     expect(firstStep.body).toContain("OpenMC CE/MG SPH");
-    expect(sidecarStep?.commandIds).toContain("make-sph-update-table");
+    expect(sidecarStep?.commandIds).toContain("make-openmc-sph-sidecar");
     expect(sidecarStep?.commandIds).toContain("make-sph-sidecar");
   });
 

@@ -13,6 +13,71 @@ from openmc2donjon.sph_iteration import create_sph_update_table
 
 
 class SphIterationTests(unittest.TestCase):
+    def test_cli_builds_openmc_sph_sidecar_in_one_step(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference_flux = root / "openmc_ce_flux.csv"
+            mg_flux = root / "openmc_mg_flux.h5"
+            sidecar = root / "openmc_sph.h5"
+            table = root / "openmc_sph.csv"
+            summary = root / "openmc_sph_summary.json"
+            write_mgxs(mgxs)
+            reference_flux.write_text(
+                "mixture,group,reference_flux\n"
+                "fuel,1,1.21\nfuel,2,0.81\n"
+                "moderator,1,0.64\nmoderator,2,1.44\n",
+                encoding="utf-8",
+            )
+            with h5py.File(mg_flux, "w") as h5:
+                dataset = h5.create_dataset("openmc_mg_flux", data=np.ones((2, 2)))
+                dataset.attrs["mixture_names"] = np.asarray(("fuel", "moderator"), dtype="S")
+                dataset.attrs["group_order"] = "mgxs_donjon"
+
+            self.assertEqual(
+                cli_main(
+                    [
+                        "make-openmc-sph-sidecar",
+                        str(mgxs),
+                        "-o",
+                        str(sidecar),
+                        "--reference-flux",
+                        str(reference_flux),
+                        "--mg-flux",
+                        f"{mg_flux}::openmc_mg_flux",
+                        "--table-output",
+                        str(table),
+                        "--damping",
+                        "0.5",
+                        "--summary-json",
+                        str(summary),
+                    ]
+                ),
+                0,
+            )
+
+            expected = np.array(
+                [
+                    [np.sqrt(1.0 / 1.21), np.sqrt(1.0 / 0.81)],
+                    [np.sqrt(1.0 / 0.64), np.sqrt(1.0 / 1.44)],
+                ]
+            )
+            self.assertTrue(table.exists())
+            with h5py.File(sidecar, "r") as h5:
+                self.assertEqual(h5.attrs["sph_kind"], "openmc-ce-mg")
+                self.assertEqual(bool(h5.attrs["sph_real"]), True)
+                self.assertEqual(bool(h5.attrs["sph_applied"]), False)
+                self.assertEqual(h5.attrs["source_table"], str(table))
+                np.testing.assert_allclose(h5["sph"][:], expected, rtol=1.0e-11)
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+            self.assertEqual(payload["schema"], "openmc2donjon.openmc-sph-sidecar.v1")
+            self.assertEqual(payload["decision"], "openmc2donjon_openmc_sph_sidecar_passed")
+            self.assertEqual(payload["output_h5"], str(sidecar))
+            self.assertEqual(payload["output_table"], str(table))
+            self.assertEqual(payload["mg_flux_dataset"], "openmc_mg_flux")
+            self.assertEqual(payload["source_label"], "openmc-ce-mg-sph")
+            self.assertIn("openmc_ce_reference_flux", payload["formula"])
+
     def test_cli_builds_damped_sph_update_table(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

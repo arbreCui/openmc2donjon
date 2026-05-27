@@ -153,6 +153,7 @@ echo "== CLI smoke =="
 "$PYTHON_BIN" -m openmc2donjon.cli make-homogeneous-face-flux --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli make-adf-sidecar --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli augment-adf --help >/dev/null
+"$PYTHON_BIN" -m openmc2donjon.cli make-openmc-sph-sidecar --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli make-sph-sidecar --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli make-sph-update-table --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli augment-sph --help >/dev/null

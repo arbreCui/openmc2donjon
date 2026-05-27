@@ -35,6 +35,7 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertIn("scripts/run_donjon_sph_consume_smoke.sh", default_section)
         self.assertIn("== DONJON SPH solver response smoke ==", default_section)
         self.assertIn("scripts/run_donjon_sph_solver_response_smoke.sh", default_section)
+        self.assertIn("make-openmc-sph-sidecar --help", default_section)
         self.assertIn("make-sph-update-table --help", default_section)
         self.assertIn("openmc2donjon.donjon_deck_runner --help", default_section)
         self.assertNotIn("extract-donjon-volume-flux --help", default_section)

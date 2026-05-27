@@ -360,6 +360,29 @@ DETAILS: dict[str, CommandDetail] = {
         produces="A command that writes an SPH sidecar HDF5 when run locally.",
         next_step="Run the CLI command, inject the sidecar, then convert the augmented HDF5.",
     ),
+    "make-openmc-sph-sidecar": CommandDetail(
+        group="sph",
+        title="Compute OpenMC-side SPH sidecar",
+        summary=(
+            "Compare OpenMC CE reference flux and OpenMC MG macro flux, then "
+            "write both an auditable SPH table and sidecar HDF5."
+        ),
+        status="partial",
+        status_label="Command builder ready",
+        web_path="/equivalence?kind=openmc-sph-sidecar",
+        cli=(
+            "openmc2donjon make-openmc-sph-sidecar mgxs_library.h5 "
+            "-o sph_sidecar.h5 --reference-flux openmc_ce_flux.h5 "
+            "--mg-flux openmc_mg_flux.h5"
+        ),
+        tags=("SPH", "OpenMC"),
+        use_when=(
+            "You have OpenMC CE and OpenMC MG fluxes from the same geometry "
+            "and want explicit SPH factors per output region and group."
+        ),
+        produces="A command that writes an SPH CSV table and sidecar HDF5 when run locally.",
+        next_step="Inject the sidecar with augment-sph, then convert the augmented HDF5.",
+    ),
     "make-sph-update-table": CommandDetail(
         group="sph",
         title="Compute OpenMC-side SPH table",

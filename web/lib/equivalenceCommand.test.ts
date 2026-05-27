@@ -9,6 +9,7 @@ describe("equivalence command builder", () => {
   it("parses known sidecar kinds with a safe default", () => {
     expect(parseEquivalenceKind("adf-sidecar")).toBe("adf-sidecar");
     expect(parseEquivalenceKind("augment-adf")).toBe("augment-adf");
+    expect(parseEquivalenceKind("openmc-sph-sidecar")).toBe("openmc-sph-sidecar");
     expect(parseEquivalenceKind("sph-sidecar")).toBe("sph-sidecar");
     expect(parseEquivalenceKind("augment-sph")).toBe("augment-sph");
     expect(parseEquivalenceKind("bad")).toBe("adf-sidecar");
@@ -46,6 +47,20 @@ describe("equivalence command builder", () => {
   });
 
   it("builds SPH sidecar and augmentation commands", () => {
+    expect(
+      buildEquivalenceCli({
+        ...defaultEquivalenceOptions("openmc-sph-sidecar"),
+        inputH5: "/tmp/mgxs.h5",
+        outputPath: "/tmp/openmc_sph.h5",
+        referenceFlux: "/tmp/ce_flux.h5::openmc_volume_flux",
+        mgFlux: "/tmp/mg_flux.h5::openmc_mg_flux",
+        tableOutput: "/tmp/openmc_sph.csv",
+        damping: "0.5",
+      }),
+    ).toBe(
+      "openmc2donjon make-openmc-sph-sidecar /tmp/mgxs.h5 -o /tmp/openmc_sph.h5 --reference-flux /tmp/ce_flux.h5::openmc_volume_flux --mg-flux /tmp/mg_flux.h5::openmc_mg_flux --table-output /tmp/openmc_sph.csv --damping 0.5 --flux-normalization none",
+    );
+
     expect(
       buildEquivalenceCli({
         ...defaultEquivalenceOptions("sph-sidecar"),

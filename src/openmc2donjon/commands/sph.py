@@ -16,6 +16,7 @@ from .acceptance import add_sph_loop_acceptance_args, sph_loop_acceptance_from_a
 from ..donjon_flux import extract_donjon_volume_flux
 from ..donjon_sph_config import write_donjon_sph_loop_config
 from ..multicompo import DEFAULT_ROOT_NAME
+from ..openmc_sph_sidecar import create_openmc_sph_sidecar
 from ..sph_augment import (
     augment_hdf5_with_sph,
     create_macrolib_sph_sidecar,
@@ -30,6 +31,12 @@ from ..sph_workflow import run_sph_iteration_workflow
 
 def command_specs() -> tuple[CommandSpec, ...]:
     return (
+        CommandSpec(
+            "make-openmc-sph-sidecar",
+            build_make_openmc_sph_sidecar_parser,
+            make_openmc_sph_sidecar_handler,
+            "compute OpenMC CE/MG SPH factors and write a sidecar",
+        ),
         CommandSpec(
             "make-sph-sidecar",
             build_make_sph_sidecar_parser,
@@ -84,6 +91,90 @@ def command_specs() -> tuple[CommandSpec, ...]:
             hidden=True,
         ),
     )
+
+
+def build_make_openmc_sph_sidecar_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="openmc2donjon make-openmc-sph-sidecar",
+        description=(
+            "Compute SPH factors from OpenMC continuous-energy reference flux "
+            "and OpenMC multi-group macro flux, then write both an auditable "
+            "CSV table and an SPH sidecar HDF5. The CE and MG calculations "
+            "must use the same geometry and output regions."
+        ),
+    )
+    parser.add_argument("input_h5", type=Path, help="MGXS HDF5 file used for mixture/group metadata")
+    parser.add_argument("-o", "--output", type=Path, required=True, help="SPH sidecar HDF5 output path")
+    parser.add_argument(
+        "--reference-flux",
+        required=True,
+        help="OpenMC CE reference flux CSV or HDF5 source, optionally PATH::DATASET",
+    )
+    parser.add_argument(
+        "--mg-flux",
+        "--macro-flux",
+        dest="mg_flux",
+        required=True,
+        help="OpenMC MG macro flux CSV or HDF5 source, optionally PATH::DATASET",
+    )
+    parser.add_argument(
+        "--table-output",
+        type=Path,
+        default=None,
+        help="SPH CSV table output path (default: sidecar path with .sph.csv suffix)",
+    )
+    parser.add_argument(
+        "--previous-sph",
+        default=None,
+        help="previous SPH CSV or HDF5 sidecar/source; defaults to unity",
+    )
+    parser.add_argument(
+        "--damping",
+        type=float,
+        default=1.0,
+        help="multiplicative update damping in 0..1 (default: 1.0)",
+    )
+    parser.add_argument("--clip-min", type=float, default=None, help="minimum SPH value after update")
+    parser.add_argument("--clip-max", type=float, default=None, help="maximum SPH value after update")
+    parser.add_argument(
+        "--flux-normalization",
+        choices=FLUX_NORMALIZATIONS,
+        default="none",
+        help=(
+            "scale MG flux before forming the SPH ratio: none, total, power, "
+            "or auto using group-wise H-FACTOR/kappa_fission (default: none)"
+        ),
+    )
+    parser.add_argument(
+        "--sph-kind",
+        default="openmc-ce-mg",
+        help="root sph_kind provenance attribute (default: openmc-ce-mg)",
+    )
+    parser.add_argument(
+        "--sph-real",
+        choices=("true", "false"),
+        default="true",
+        help="root sph_real provenance attribute (default: true)",
+    )
+    parser.add_argument(
+        "--sph-applied",
+        choices=("true", "false"),
+        default="false",
+        help="root sph_applied provenance attribute (default: false)",
+    )
+    parser.add_argument(
+        "--source-label",
+        default="openmc-ce-mg-sph",
+        help="provenance label recorded in the summary JSON",
+    )
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        default=None,
+        help="write a machine-readable OpenMC SPH sidecar summary JSON",
+    )
+    parser.add_argument("--force", action="store_true", help="overwrite generated outputs")
+    return parser
 
 
 def build_augment_sph_parser() -> argparse.ArgumentParser:
@@ -866,6 +957,32 @@ def make_sph_update_table_handler(args: argparse.Namespace) -> int:
         )
     except USER_FACING_EXCEPTIONS as exc:
         exit_with_command_error(parser, "make-sph-update-table", exc)
+    return 0
+
+
+def make_openmc_sph_sidecar_handler(args: argparse.Namespace) -> int:
+    parser = parser_from_args(args)
+    try:
+        create_openmc_sph_sidecar(
+            args.input_h5,
+            args.output,
+            reference_flux=args.reference_flux,
+            mg_flux=args.mg_flux,
+            table_output=args.table_output,
+            previous_sph=args.previous_sph,
+            damping=args.damping,
+            clip_min=args.clip_min,
+            clip_max=args.clip_max,
+            flux_normalization=args.flux_normalization,
+            source_label=args.source_label,
+            sph_kind=args.sph_kind,
+            sph_real=args.sph_real == "true",
+            sph_applied=args.sph_applied == "true",
+            force=args.force,
+            summary_json=args.summary_json,
+        )
+    except USER_FACING_EXCEPTIONS as exc:
+        exit_with_command_error(parser, "make-openmc-sph-sidecar", exc)
     return 0
 
 

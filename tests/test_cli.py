@@ -44,6 +44,8 @@ class CliTests(unittest.TestCase):
     def test_top_level_help_hides_legacy_donjon_sph_loop_commands(self) -> None:
         help_text = _parser_help(["--help"])
 
+        self.assertIn("make-openmc-sph-sidecar", help_text)
+        self.assertIn("compute OpenMC CE/MG SPH factors and write a sidecar", help_text)
         self.assertIn("make-sph-update-table", help_text)
         self.assertIn("compute an OpenMC CE/MG SPH factor table", help_text)
         self.assertNotIn("run-sph-loop", help_text)

@@ -145,6 +145,7 @@ function equivalenceLabel(value: string): string {
 
 function equivalenceBuilderLabel(value: string): string {
   if (value === "augment-adf") return "inject ADF/DF";
+  if (value === "openmc-sph-sidecar") return "compute OpenMC CE/MG SPH sidecar";
   if (value === "sph-sidecar") return "make OpenMC-side SPH sidecar";
   if (value === "augment-sph") return "inject SPH";
   return "make ADF/DF sidecar";
@@ -158,6 +159,14 @@ function equivalenceRequiredInputs(value: string): string[] {
     return [
       "Input MGXS HDF5 path",
       "OpenMC CE/MG SPH table or source options",
+      "SPH sidecar output path",
+    ];
+  }
+  if (value === "openmc-sph-sidecar") {
+    return [
+      "Input MGXS HDF5 path",
+      "OpenMC CE reference flux",
+      "OpenMC MG macro flux",
       "SPH sidecar output path",
     ];
   }

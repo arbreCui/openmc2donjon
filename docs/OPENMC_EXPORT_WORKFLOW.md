@@ -409,24 +409,21 @@ uncertainty coverage. Enable strict production checks when the case policy
 requires both MGXS and reference-flux uncertainty to be present:
 
 ```sh
-openmc2donjon make-sph-update-table mgxs_library.h5 \
+openmc2donjon make-openmc-sph-sidecar mgxs_library.h5 \
+  -o sph_sidecar.h5 \
   --reference-flux openmc_ce_flux.h5::openmc_volume_flux \
-  --low-order-flux openmc_mg_33g_flux.h5::openmc_volume_flux \
-  -o sph_openmc_ce_mg.csv
+  --mg-flux openmc_mg_33g_flux.h5::openmc_volume_flux \
+  --table-output sph_openmc_ce_mg.csv
 ```
 
 These are two different uncertainty paths. MGXS `*_std_dev` datasets audit the
 cross sections exported to DONJON; `openmc_volume_flux_std_dev` audits the
 OpenMC CE reference flux used to compute SPH factors.
 
-After the SPH table is reviewed, turn it into a sidecar and inject it:
+The command above writes both the auditable CSV table and the HDF5 sidecar.
+After the sidecar is reviewed, inject it:
 
 ```sh
-openmc2donjon make-sph-sidecar mgxs_library.h5 \
-  --mode table \
-  --table sph_openmc_ce_mg.csv \
-  -o sph_sidecar.h5
-
 openmc2donjon augment-sph mgxs_library.h5 \
   --sph-source sph_sidecar.h5 \
   -o mgxs_with_sph.h5
