@@ -1,4 +1,4 @@
-"""SPH and DONJON-flux CLI commands."""
+"""SPH sidecar and legacy DONJON-flux CLI commands."""
 
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ def command_specs() -> tuple[CommandSpec, ...]:
             "make-sph-update-table",
             build_make_sph_update_table_parser,
             make_sph_update_table_handler,
-            "compute the next SPH update table",
+            "compute an OpenMC CE/MG SPH factor table",
         ),
         CommandSpec(
             "augment-sph",
@@ -52,31 +52,36 @@ def command_specs() -> tuple[CommandSpec, ...]:
             "extract-donjon-volume-flux",
             build_extract_donjon_volume_flux_parser,
             extract_donjon_volume_flux_handler,
-            "extract DONJON L_FLUX scalar unknowns",
+            "legacy: extract DONJON L_FLUX scalar unknowns",
+            hidden=True,
         ),
         CommandSpec(
             "run-sph-iteration",
             build_run_sph_iteration_parser,
             run_sph_iteration_handler,
-            "run one fixed-OpenMC SPH iteration",
+            "legacy: run one DONJON-backed SPH iteration",
+            hidden=True,
         ),
         CommandSpec(
             "run-sph-loop",
             build_run_sph_loop_parser,
             run_sph_loop_handler,
-            "run a DONJON-backed fixed-OpenMC SPH loop",
+            "legacy: run a DONJON-backed fixed-OpenMC SPH loop",
+            hidden=True,
         ),
         CommandSpec(
             "make-donjon-sph-loop-config",
             build_make_donjon_sph_loop_config_parser,
             make_donjon_sph_loop_config_handler,
-            "write a generic DONJON-backed SPH loop config",
+            "legacy: write a generic DONJON-backed SPH loop config",
+            hidden=True,
         ),
         CommandSpec(
             "make-sph-loop-scaffold",
             build_make_sph_loop_scaffold_parser,
             make_sph_loop_scaffold_handler,
-            "write reference flux, flux map, and SPH loop config",
+            "legacy: write reference flux, flux map, and SPH loop config",
+            hidden=True,
         ),
     )
 
@@ -143,10 +148,11 @@ def build_make_sph_sidecar_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="openmc2donjon make-sph-sidecar",
         description=(
-            "Create an SPH sidecar HDF5 from an MGXS handoff. Unity SPH is "
-            "useful for plumbing; macrolib mode extracts DONJON/DRAGON NSPH "
-            "factors from an L_MACROLIB ASCII dump; table mode canonicalizes "
-            "external SPH factors from CSV."
+            "Create an SPH sidecar HDF5 from an MGXS handoff. Production SPH "
+            "factors should come from OpenMC CE reference versus OpenMC MG "
+            "macro calculations using the same geometry. Unity SPH is useful "
+            "for plumbing; table mode canonicalizes external SPH factors from "
+            "CSV; macrolib mode remains available for legacy NSPH extraction."
         ),
     )
     parser.add_argument("input_h5", type=Path, help="MGXS HDF5 file used for mixture/group metadata")
@@ -219,8 +225,9 @@ def build_make_sph_update_table_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="openmc2donjon make-sph-update-table",
         description=(
-            "Create the next external SPH CSV table from reference and "
-            "low-order volume fluxes using a damped flux-ratio update."
+            "Create an external SPH CSV table from OpenMC CE reference flux "
+            "and OpenMC MG macro flux using a damped flux-ratio update. The "
+            "two flux sources should use the same geometry and output regions."
         ),
     )
     parser.add_argument("input_h5", type=Path, help="MGXS HDF5 file used for mixture/group metadata")
@@ -228,12 +235,12 @@ def build_make_sph_update_table_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--reference-flux",
         required=True,
-        help="reference flux CSV or HDF5 source, optionally PATH::DATASET",
+        help="OpenMC CE reference flux CSV or HDF5 source, optionally PATH::DATASET",
     )
     parser.add_argument(
         "--low-order-flux",
         required=True,
-        help="low-order flux CSV or HDF5 source, optionally PATH::DATASET",
+        help="OpenMC MG macro flux CSV or HDF5 source, optionally PATH::DATASET",
     )
     parser.add_argument(
         "--previous-sph",
@@ -270,7 +277,7 @@ def build_make_sph_update_table_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--source-label",
-        default="external low-order SPH iteration",
+        default="openmc-ce-mg-sph",
         help="provenance label recorded in the summary JSON",
     )
     parser.add_argument(

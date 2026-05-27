@@ -36,22 +36,22 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertIn("== DONJON SPH solver response smoke ==", default_section)
         self.assertIn("scripts/run_donjon_sph_solver_response_smoke.sh", default_section)
         self.assertIn("make-sph-update-table --help", default_section)
-        self.assertIn("extract-donjon-volume-flux --help", default_section)
-        self.assertIn("run-sph-iteration --help", default_section)
-        self.assertIn("run-sph-loop --help", default_section)
-        self.assertIn("make-donjon-sph-loop-config --help", default_section)
-        self.assertIn("make-sph-loop-scaffold --help", default_section)
-        self.assertIn("prepare-openmc-sph-loop --help", default_section)
         self.assertIn("openmc2donjon.donjon_deck_runner --help", default_section)
-        self.assertIn("== OpenMC-to-SPH-loop entrypoint smoke ==", default_section)
-        self.assertIn("examples/openmc_sph_loop_entrypoint/run_smoke.sh", default_section)
+        self.assertNotIn("extract-donjon-volume-flux --help", default_section)
+        self.assertNotIn("run-sph-iteration --help", default_section)
+        self.assertNotIn("run-sph-loop --help", default_section)
+        self.assertNotIn("make-donjon-sph-loop-config --help", default_section)
+        self.assertNotIn("make-sph-loop-scaffold --help", default_section)
+        self.assertNotIn("prepare-openmc-sph-loop --help", default_section)
+        self.assertNotIn("== OpenMC-to-SPH-loop entrypoint smoke ==", default_section)
+        self.assertNotIn("examples/openmc_sph_loop_entrypoint/run_smoke.sh", default_section)
         self.assertIn('RUN_REAL_DONJON="$RUN_DONJON"', default_section)
-        self.assertIn("== SPH iteration loop smoke ==", default_section)
-        self.assertIn("examples/sph_iteration_loop/run_smoke.sh", default_section)
-        self.assertIn("== Generic DONJON SPH loop adapter smoke ==", default_section)
-        self.assertIn("examples/donjon_sph_loop_adapter/run_smoke.sh", default_section)
-        self.assertIn("== Minimal SPH loop user-case smoke ==", default_section)
-        self.assertIn("examples/sph_loop_minicase/run_smoke.sh", default_section)
+        self.assertNotIn("== SPH iteration loop smoke ==", default_section)
+        self.assertNotIn("examples/sph_iteration_loop/run_smoke.sh", default_section)
+        self.assertNotIn("== Generic DONJON SPH loop adapter smoke ==", default_section)
+        self.assertNotIn("examples/donjon_sph_loop_adapter/run_smoke.sh", default_section)
+        self.assertNotIn("== Minimal SPH loop user-case smoke ==", default_section)
+        self.assertNotIn("examples/sph_loop_minicase/run_smoke.sh", default_section)
         self.assertIn("== External SPH handoff smoke ==", default_section)
         self.assertIn("examples/external_sph_handoff/run_smoke.sh", default_section)
         self.assertIn("== Energy mesh contract smoke ==", default_section)
@@ -69,13 +69,13 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertIn("scripts/run_c5g7_from_openmc_adf_smoke.sh", accepted_section)
         self.assertIn("== C5G7 SPH solver response smoke ==", accepted_section)
         self.assertIn("scripts/run_c5g7_sph_solver_response_smoke.sh", accepted_section)
-        self.assertIn("== C5G7 SPH iteration from DONJON flux smoke ==", accepted_section)
-        self.assertIn(
+        self.assertNotIn("== C5G7 SPH iteration from DONJON flux smoke ==", accepted_section)
+        self.assertNotIn(
             "scripts/run_c5g7_sph_iteration_from_donjon_flux_smoke.sh",
             accepted_section,
         )
-        self.assertIn("== C5G7 fixed-OpenMC SPH loop smoke ==", accepted_section)
-        self.assertIn("scripts/run_c5g7_fixed_openmc_sph_loop_smoke.sh", accepted_section)
+        self.assertNotIn("== C5G7 fixed-OpenMC SPH loop smoke ==", accepted_section)
+        self.assertNotIn("scripts/run_c5g7_fixed_openmc_sph_loop_smoke.sh", accepted_section)
         self.assertIn("== OpenMC hex DONJON k-eff comparison ==", accepted_section)
         self.assertIn("examples/openmc_hex_minicase/run_keff_comparison.sh", accepted_section)
         self.assertNotIn("examples/openmc_hex_minicase/run_smoke.sh", candidate_section)
@@ -141,7 +141,7 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertIn("require_production_audit", example)
         self.assertIn("production_audit", example)
 
-    def test_release_gate_covers_reference_flux_uncertainty_contract(self) -> None:
+    def test_legacy_minicase_keeps_reference_flux_uncertainty_contract(self) -> None:
         release_text = _release_check().read_text(encoding="utf-8")
         default_section = release_text.split(
             'if [[ "$RUN_LOCAL_CANDIDATES" -eq 1 ]]; then',
@@ -151,8 +151,8 @@ class ReleaseCheckScriptTests(unittest.TestCase):
             _repo_root() / "examples/sph_loop_minicase/run_smoke.sh"
         ).read_text(encoding="utf-8")
 
-        self.assertIn("== Minimal SPH loop user-case smoke ==", default_section)
-        self.assertIn("examples/sph_loop_minicase/run_smoke.sh", default_section)
+        self.assertNotIn("== Minimal SPH loop user-case smoke ==", default_section)
+        self.assertNotIn("examples/sph_loop_minicase/run_smoke.sh", default_section)
         self.assertIn(
             'config["acceptance"]["require_reference_flux_std_dev"] is True',
             smoke_text,

@@ -48,20 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
             "computed discontinuity factors, 'openmc2donjon make-sph-sidecar "
             "<input_h5> ...', 'openmc2donjon make-sph-update-table "
             "<input_h5> ...', and 'openmc2donjon augment-sph <input_h5> ...' "
-            "to iterate and carry SPH equivalence factors, "
-            "'openmc2donjon extract-donjon-volume-flux <input_h5> ...' to "
-            "adapt DONJON L_FLUX dumps into canonical low-order volume flux, "
-            "'openmc2donjon run-sph-iteration <input_h5> ...' to run one "
-            "fixed-OpenMC SPH iteration handoff, "
-            "'openmc2donjon run-sph-loop --config loop.json' to iterate "
-            "DONJON solves and SPH handoffs, "
-            "'openmc2donjon make-donjon-sph-loop-config ...' to write a "
-            "generic DONJON-backed loop config, "
-            "'openmc2donjon make-sph-loop-scaffold <input_h5> ...' to write "
-            "reference flux, scalar-flux map, and loop config from an OpenMC "
-            "handoff, "
-            "'openmc2donjon prepare-openmc-sph-loop ...' to export an OpenMC "
-            "recipe and prepare the SPH loop handoff in one run, "
+            "to carry OpenMC CE/MG SPH equivalence factors, "
             "'openmc2donjon bundle --output-dir DIR ...' to collect "
             "production artifacts, 'openmc2donjon validate-bundle manifest.json' "
             "to validate a bundle, 'openmc2donjon doctor' for environment checks, or "
@@ -370,17 +357,33 @@ def build_command_parser() -> argparse.ArgumentParser:
         help="show package version and exit",
     )
     add_cli_logging_arguments(parser)
-    subparsers = parser.add_subparsers(dest="command", required=True)
-    for spec in _command_specs():
+    specs = _command_specs()
+    visible_command_names: list[str] = []
+    for spec in specs:
+        if not spec.hidden:
+            visible_command_names.append(spec.name)
+            visible_command_names.extend(spec.aliases)
+    subparsers = parser.add_subparsers(
+        dest="command",
+        required=True,
+        metavar="{" + ",".join(visible_command_names) + "}",
+    )
+    for spec in specs:
         parent = spec.parser_builder()
         command_parser = subparsers.add_parser(
             spec.name,
             aliases=list(spec.aliases),
             parents=[parent],
             add_help=False,
-            help=spec.help,
+            help=argparse.SUPPRESS if spec.hidden else spec.help,
             description=parent.description,
         )
+        if spec.hidden:
+            # argparse keeps hidden subcommands callable but still lists them
+            # unless their choice actions are removed from help rendering.
+            subparsers._choices_actions = [
+                action for action in subparsers._choices_actions if action.dest != spec.name
+            ]
         add_cli_logging_arguments(command_parser, defaults=False)
         command_parser.set_defaults(func=spec.handler, _parser=command_parser)
     return parser

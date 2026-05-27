@@ -34,27 +34,17 @@ Default:
   - package tests
   - CLI help/version smoke
   - recipe/statepoint exporter smoke
-  - OpenMC-to-SPH-loop entrypoint smoke
-  - OpenMC-to-SPH-loop real DONJON loop smoke with --run-donjon
   - DRAGON SPH macrolib handoff smoke when local DRAGON TCM38 inputs exist
   - DONJON DSPH consume smoke when local DONJON is available
   - DONJON SPH solver-response smoke when local DONJON is available
-  - SPH iteration table smoke
-  - DONJON L_FLUX volume-flux extraction CLI smoke
-  - SPH iteration workflow CLI smoke
-  - SPH loop driver CLI smoke
-  - generic DONJON SPH loop adapter smoke
-  - minimal SPH loop user-case smoke
+  - OpenMC CE/MG SPH table handoff smoke
   - external SPH table handoff smoke
   - external face-flux adapter smoke
   - production minicase, OpenMC full-core, and OpenMC hex minicase smokes
   - optional PyGan backend smoke when PyGan is available
-  - OpenMC full-core real DONJON-backed SPH loop smoke with --run-donjon
   - C5G7 converter readback smoke
   - accepted baseline manifest validation
   - C5G7 SPH solver-response smoke when local DONJON is available
-  - C5G7 SPH iteration from accepted DONJON/OpenMC volume-flux artifact
-  - C5G7 fixed-OpenMC SPH loop smoke when local DONJON is available
   - C5G7 DONJON face-flux regeneration smoke when local DONJON dumps exist
   - C5G7 production ADF source reconstruction smoke
   - C5G7 from-OpenMC flux-ratio ADF smoke when C5G7_STATEPOINT exists
@@ -155,7 +145,6 @@ echo
 echo "== CLI smoke =="
 "$PYTHON_BIN" -m openmc2donjon.cli --version
 "$PYTHON_BIN" -m openmc2donjon.cli --help >/dev/null
-"$PYTHON_BIN" -m openmc2donjon.cli prepare-openmc-sph-loop --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli check --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli export-surface-flux --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli check-face-flux --help >/dev/null
@@ -167,11 +156,6 @@ echo "== CLI smoke =="
 "$PYTHON_BIN" -m openmc2donjon.cli make-sph-sidecar --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli make-sph-update-table --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli augment-sph --help >/dev/null
-"$PYTHON_BIN" -m openmc2donjon.cli extract-donjon-volume-flux --help >/dev/null
-"$PYTHON_BIN" -m openmc2donjon.cli run-sph-iteration --help >/dev/null
-"$PYTHON_BIN" -m openmc2donjon.cli run-sph-loop --help >/dev/null
-"$PYTHON_BIN" -m openmc2donjon.cli make-donjon-sph-loop-config --help >/dev/null
-"$PYTHON_BIN" -m openmc2donjon.cli make-sph-loop-scaffold --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli pygan-doctor --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli pygan-inspect-compo --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli compare-writers --help >/dev/null
@@ -192,13 +176,6 @@ echo "== Recipe export smoke =="
 RUN_DIR="$RUN_DIR/recipe_export_smoke" \
 PYTHON_BIN="$PYTHON_BIN" \
   bash "$REPO_ROOT/scripts/run_recipe_export_smoke.sh"
-
-echo
-echo "== OpenMC-to-SPH-loop entrypoint smoke =="
-RUN_DIR="$RUN_DIR/openmc_sph_loop_entrypoint" \
-PYTHON_BIN="$PYTHON_BIN" \
-RUN_REAL_DONJON="$RUN_DONJON" \
-  bash "$REPO_ROOT/examples/openmc_sph_loop_entrypoint/run_smoke.sh"
 
 echo
 echo "== DRAGON SPH macrolib handoff smoke =="
@@ -226,24 +203,6 @@ echo "== External low-order handoff smoke =="
 RUN_DIR="$RUN_DIR/external_low_order_handoff" \
 PYTHON_BIN="$PYTHON_BIN" \
   bash "$REPO_ROOT/examples/external_low_order_handoff/run_smoke.sh"
-
-echo
-echo "== SPH iteration loop smoke =="
-RUN_DIR="$RUN_DIR/sph_iteration_loop" \
-PYTHON_BIN="$PYTHON_BIN" \
-  bash "$REPO_ROOT/examples/sph_iteration_loop/run_smoke.sh"
-
-echo
-echo "== Generic DONJON SPH loop adapter smoke =="
-RUN_DIR="$RUN_DIR/donjon_sph_loop_adapter" \
-PYTHON_BIN="$PYTHON_BIN" \
-  bash "$REPO_ROOT/examples/donjon_sph_loop_adapter/run_smoke.sh"
-
-echo
-echo "== Minimal SPH loop user-case smoke =="
-RUN_DIR="$RUN_DIR/sph_loop_minicase" \
-PYTHON_BIN="$PYTHON_BIN" \
-  bash "$REPO_ROOT/examples/sph_loop_minicase/run_smoke.sh"
 
 echo
 echo "== External SPH handoff smoke =="
@@ -426,20 +385,6 @@ RUN_DIR="$RUN_DIR/c5g7_sph_solver_response" \
 PYTHON_BIN="$PYTHON_BIN" \
 C5G7_ACCEPTED_H5="$C5G7_ACCEPTED_H5" \
   bash "$REPO_ROOT/scripts/run_c5g7_sph_solver_response_smoke.sh"
-
-echo
-echo "== C5G7 SPH iteration from DONJON flux smoke =="
-RUN_DIR="$RUN_DIR/c5g7_sph_iteration_flux" \
-PYTHON_BIN="$PYTHON_BIN" \
-C5G7_ACCEPTED_H5="$C5G7_ACCEPTED_H5" \
-  bash "$REPO_ROOT/scripts/run_c5g7_sph_iteration_from_donjon_flux_smoke.sh"
-
-echo
-echo "== C5G7 fixed-OpenMC SPH loop smoke =="
-RUN_DIR="$RUN_DIR/c5g7_fixed_openmc_sph_loop" \
-PYTHON_BIN="$PYTHON_BIN" \
-C5G7_ACCEPTED_H5="$C5G7_ACCEPTED_H5" \
-  bash "$REPO_ROOT/scripts/run_c5g7_fixed_openmc_sph_loop_smoke.sh"
 
 echo
 echo "== C5G7 DONJON face-flux regeneration smoke =="

@@ -41,6 +41,26 @@ class CliTests(unittest.TestCase):
         self.assertIn("production preset does not imply this", normalized)
         self.assertIn("independent of the acceptance preset", normalized)
 
+    def test_top_level_help_hides_legacy_donjon_sph_loop_commands(self) -> None:
+        help_text = _parser_help(["--help"])
+
+        self.assertIn("make-sph-update-table", help_text)
+        self.assertIn("compute an OpenMC CE/MG SPH factor table", help_text)
+        self.assertNotIn("run-sph-loop", help_text)
+        self.assertNotIn("make-donjon-sph-loop-config", help_text)
+        self.assertNotIn("prepare-openmc-sph-loop", help_text)
+
+    def test_direct_convert_help_points_to_openmc_side_sph_route(self) -> None:
+        stream = io.StringIO()
+        with contextlib.redirect_stdout(stream), self.assertRaises(SystemExit) as cm:
+            build_parser().parse_args(["--help"])
+
+        self.assertEqual(cm.exception.code, 0)
+        help_text = stream.getvalue()
+        self.assertIn("OpenMC CE/MG SPH equivalence factors", help_text)
+        self.assertNotIn("run-sph-loop", help_text)
+        self.assertNotIn("extract-donjon-volume-flux", help_text)
+
     def test_check_command_accepts_valid_hdf5(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "mgxs.h5"

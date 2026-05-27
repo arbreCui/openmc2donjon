@@ -26,7 +26,8 @@ def command_specs() -> tuple[CommandSpec, ...]:
             "prepare-openmc-sph-loop",
             build_prepare_openmc_sph_loop_parser,
             prepare_openmc_sph_loop_handler,
-            "export an OpenMC recipe and prepare SPH loop inputs",
+            "legacy: export an OpenMC recipe and prepare DONJON SPH loop inputs",
+            hidden=True,
         ),
     )
 

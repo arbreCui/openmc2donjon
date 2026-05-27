@@ -17,6 +17,7 @@ class CommandSpec:
     handler: Callable[[argparse.Namespace], int]
     help: str
     aliases: tuple[str, ...] = ()
+    hidden: bool = False
 
 
 def parser_from_args(args: argparse.Namespace) -> argparse.ArgumentParser:
