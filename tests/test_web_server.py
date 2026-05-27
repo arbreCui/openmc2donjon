@@ -178,6 +178,19 @@ class PyGanWebEndpointTests(unittest.TestCase):
         self.assertIn("available", payload)
         self.assertIn("modules", payload)
 
+    def test_pygan_doctor_legacy_alias_reports_backend_status(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.get("/api/pygan-doctor")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["schema"], "openmc2donjon.pygan-doctor.v1")
+        self.assertTrue(payload["mock_mode"])
+        self.assertIn("available", payload)
+        self.assertIn("modules", payload)
+
     def test_mock_pygan_compare_writers_endpoint_returns_report(self) -> None:
         from openmc2donjon.web.pygan import PYGAN_COMPARE_WEB_SCHEMA
         from openmc2donjon.web.server import create_app

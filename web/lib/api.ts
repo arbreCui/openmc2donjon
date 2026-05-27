@@ -200,6 +200,25 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
   return (await response.json()) as T;
 }
 
+async function pyganDoctor(): Promise<PyGanBackendStatus> {
+  try {
+    return await getJson<PyGanBackendStatus>("/api/pygan/doctor");
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      const health = await getJson<HealthResponse>("/api/health");
+      if (health.pygan_backend) {
+        return {
+          ...health.pygan_backend,
+          schema:
+            health.pygan_backend.schema ?? "openmc2donjon.pygan-doctor.v1",
+          mock_mode: health.pygan_backend.mock_mode ?? health.mock_mode,
+        };
+      }
+    }
+    throw err;
+  }
+}
+
 export interface CrossSections {
   total: number[] | null;
   absorption: number[] | null;
@@ -617,7 +636,7 @@ export interface CommandCatalog {
 
 export const api = {
   health: () => getJson<HealthResponse>("/api/health"),
-  pyganDoctor: () => getJson<PyGanBackendStatus>("/api/pygan/doctor"),
+  pyganDoctor,
   pyganCompareWriters: (request: WriterComparisonRequest) =>
     postJson<WriterComparisonResponse>("/api/pygan/compare-writers", request),
   commands: () => getJson<CommandCatalog>("/api/commands"),

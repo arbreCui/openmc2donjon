@@ -25,6 +25,7 @@ def register_pygan_routes(app: Any, *, mock_mode: bool) -> None:
     compare_body = Body(...)
 
     @app.get("/api/pygan/doctor")
+    @app.get("/api/pygan-doctor")
     def api_pygan_doctor() -> dict[str, Any]:
         payload = probe_pygan().as_dict()
         payload["schema"] = "openmc2donjon.pygan-doctor.v1"
