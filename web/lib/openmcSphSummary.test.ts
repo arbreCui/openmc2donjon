@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { OpenmcSphPhysicsSummary } from "./api";
 import {
+  formatScatterTreatment,
   formatPhysicsNumber,
   summaryStatus,
   topSphDeviationRows,
@@ -13,6 +14,15 @@ const SUMMARY: OpenmcSphPhysicsSummary = {
   mixture_count: 2,
   energy_groups: 33,
   legendre_order: 3,
+  handoff_scatter: {
+    format: "legendre",
+    legendre_order: 3,
+  },
+  mg_macro_scatter: {
+    scatter_format: "histogram",
+    histogram_bins: 16,
+    legendre_order: null,
+  },
   mixture_names: ["A", "B"],
   decisions: {
     openmc_sph: "openmc2donjon_openmc_sph_sidecar_passed",
@@ -94,5 +104,9 @@ describe("openmcSphSummary", () => {
     expect(formatPhysicsNumber(0)).toBe("0");
     expect(formatPhysicsNumber(0.000000123)).toBe("1.230e-7");
     expect(formatPhysicsNumber(1.2300)).toBe("1.23");
+  });
+
+  it("describes the Pn handoff and Hn MG macro treatments separately", () => {
+    expect(formatScatterTreatment(SUMMARY)).toBe("P3 handoff · H16 MG macro");
   });
 });

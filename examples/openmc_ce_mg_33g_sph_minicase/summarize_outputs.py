@@ -71,13 +71,19 @@ def summarize_handoff(handoff_dir: Path) -> dict[str, Any]:
         "sph_sidecar": handoff_dir / "openmc_sph_sidecar.h5",
         "sph_summary": handoff_dir / "openmc_sph_summary.json",
         "augment_summary": handoff_dir / "sph_augment_summary.json",
+        "mg_macro_summary": handoff_dir / "mg_macro_summary.json",
         "multicompo_ascii": handoff_dir / "out_with_openmc_sph.mcompo.txt",
         "macrolib_ascii": handoff_dir / "out_with_openmc_sph.macrolib.txt",
     }
-    _require_paths(paths)
+    _require_paths({name: path for name, path in paths.items() if name != "mg_macro_summary"})
 
     sph_summary = _read_json(paths["sph_summary"])
     augment_summary = _read_json(paths["augment_summary"])
+    mg_macro_summary = (
+        _read_json(paths["mg_macro_summary"])
+        if paths["mg_macro_summary"].exists()
+        else {"scatter_format": "unknown"}
+    )
     mixture_names = _read_mixture_names(paths["augmented_mgxs"])
     energy_groups, legendre_order = _read_mgxs_shape(paths["mgxs"])
     ce_flux, ce_std = _read_flux(paths["ce_flux"], "openmc_volume_flux")
@@ -96,6 +102,11 @@ def summarize_handoff(handoff_dir: Path) -> dict[str, Any]:
         "mixture_count": len(mixture_names),
         "energy_groups": energy_groups,
         "legendre_order": legendre_order,
+        "handoff_scatter": {
+            "format": "legendre",
+            "legendre_order": legendre_order,
+        },
+        "mg_macro_scatter": mg_macro_summary,
         "mixture_names": mixture_names,
         "decisions": {
             "openmc_sph": sph_summary.get("decision"),
@@ -152,7 +163,8 @@ def render_markdown(summary: dict[str, Any]) -> str:
         "",
         f"- Mixtures: {summary['mixture_count']}",
         f"- Energy groups: {summary['energy_groups']}",
-        f"- Legendre order: P{summary['legendre_order']}",
+        f"- Converter handoff scatter: P{summary['legendre_order']} Legendre",
+        f"- OpenMC MG macro scatter: {_render_mg_macro_scatter(summary['mg_macro_scatter'])}",
         f"- OpenMC SPH decision: `{summary['decisions']['openmc_sph']}`",
         f"- SPH augment decision: `{summary['decisions']['sph_augment']}`",
         "",
@@ -212,6 +224,15 @@ def _require_paths(paths: dict[str, Path]) -> None:
 
 def _read_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _render_mg_macro_scatter(summary: dict[str, Any]) -> str:
+    scatter_format = summary.get("scatter_format")
+    if scatter_format == "histogram":
+        return f"H{summary.get('histogram_bins')} histogram"
+    if scatter_format == "legendre":
+        return f"P{summary.get('legendre_order')} Legendre"
+    return "unknown"
 
 
 def _read_mixture_names(path: Path) -> list[str]:

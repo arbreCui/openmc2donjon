@@ -472,6 +472,13 @@ export interface OpenmcSphPhysicsSummaryMixture {
   max_abs_sph_minus_1: number;
 }
 
+export interface OpenmcSphPhysicsSummaryScatter {
+  format?: string;
+  scatter_format?: string;
+  legendre_order?: number | null;
+  histogram_bins?: number | null;
+}
+
 export interface OpenmcSphPhysicsSummary {
   schema: string;
   route: string;
@@ -480,6 +487,8 @@ export interface OpenmcSphPhysicsSummary {
   mixture_count: number;
   energy_groups: number;
   legendre_order: number;
+  handoff_scatter?: OpenmcSphPhysicsSummaryScatter;
+  mg_macro_scatter?: OpenmcSphPhysicsSummaryScatter;
   mixture_names: string[];
   decisions: OpenmcSphPhysicsSummaryDecision;
   normalization: OpenmcSphPhysicsSummaryNormalization;

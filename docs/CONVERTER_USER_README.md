@@ -176,11 +176,25 @@ sidecar/augmentation CLI commands, but it does not execute the physics workflow
 inside the browser.
 
 For production SPH, generate factors upstream from OpenMC CE reference versus
-OpenMC MG 33g with the same geometry. A single assembly usually does not need
-SPH; colorsets and full-core macro models need one factor per output region
-and energy group. Use `make-openmc-sph-sidecar` to turn the CE/MG flux
-comparison into both an auditable CSV table and an SPH sidecar, then use
-`augment-sph` to inject that sidecar before returning to `/convert`.
+OpenMC MG 33g with the same geometry. The MG macro calculation can use OpenMC
+Hn histogram angular representation to better retain anisotropic scattering
+effects while the converter-facing handoff remains ordinary Pn/Legendre for
+DONJON. A single assembly usually does not need SPH; colorsets and full-core
+macro models need one factor per output region and energy group. Use
+`make-openmc-sph-sidecar` to turn the CE/MG flux comparison into both an
+auditable CSV table and an SPH sidecar, then use `augment-sph` to inject that
+sidecar before returning to `/convert`.
+
+Practically, the CE run may tally both representations:
+
+```text
+P3 Legendre MGXS   -> DONJON handoff
+Hn histogram MGXS  -> OpenMC MG macro solve -> SPH factor generation
+```
+
+There is no Hn-to-Legendre conversion step in the normal workflow. The Hn data
+improves the OpenMC MG flux used to compute SPH; DONJON receives directly
+tallied Pn/Legendre MGXS plus explicit `NSPH` factors.
 
 For downstream DONJON consumption of OpenMC-side SPH today, convert the
 augmented HDF5 with `--format macrolib` so that the SPH factors appear as

@@ -33,6 +33,25 @@ export function formatPhysicsNumber(value: number | null | undefined): string {
   return value.toPrecision(4).replace(/\.?0+$/, "");
 }
 
+export function formatScatterTreatment(
+  summary: OpenmcSphPhysicsSummary,
+): string {
+  const handoff = summary.handoff_scatter;
+  const mgMacro = summary.mg_macro_scatter;
+  const handoffLabel =
+    handoff?.format === "legendre" || handoff?.scatter_format === "legendre"
+      ? `P${handoff.legendre_order ?? summary.legendre_order} handoff`
+      : `P${summary.legendre_order} handoff`;
+  const macroFormat = mgMacro?.scatter_format ?? mgMacro?.format;
+  const macroLabel =
+    macroFormat === "histogram"
+      ? `H${mgMacro?.histogram_bins ?? "?"} MG macro`
+      : macroFormat === "legendre"
+        ? `P${mgMacro?.legendre_order ?? "?"} MG macro`
+        : "MG macro";
+  return `${handoffLabel} · ${macroLabel}`;
+}
+
 export function topSphDeviationRows(
   summary: OpenmcSphPhysicsSummary,
   limit = 3,

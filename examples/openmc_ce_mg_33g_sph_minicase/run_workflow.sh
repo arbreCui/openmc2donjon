@@ -18,6 +18,9 @@ MG_FLUX="$OUT_DIR/openmc_mg_flux.h5"
 SPH_SIDECAR="$OUT_DIR/openmc_sph_sidecar.h5"
 SPH_TABLE="$OUT_DIR/openmc_sph.csv"
 AUGMENTED="$OUT_DIR/mgxs_with_openmc_sph.h5"
+MG_MACRO_SCATTER_FORMAT="${MG_MACRO_SCATTER_FORMAT:-histogram}"
+MG_MACRO_HISTOGRAM_BINS="${MG_MACRO_HISTOGRAM_BINS:-16}"
+MG_MACRO_LEGENDRE_ORDER="${MG_MACRO_LEGENDRE_ORDER:-3}"
 
 run_openmc_case() {
   local case_dir="$1"
@@ -36,6 +39,11 @@ run_openmc_case() {
 
 echo "== OpenMC CE/MG 33g SPH colorset minicase =="
 echo "run root: $RUN_ROOT"
+if [[ "$MG_MACRO_SCATTER_FORMAT" == "histogram" ]]; then
+  echo "OpenMC MG macro scatter treatment: H$MG_MACRO_HISTOGRAM_BINS"
+else
+  echo "OpenMC MG macro scatter treatment: P$MG_MACRO_LEGENDRE_ORDER"
+fi
 if [[ -n "$OPENMC_LIB_DIR" ]]; then
   echo "OpenMC library dir: $OPENMC_LIB_DIR"
 fi
@@ -47,7 +55,10 @@ echo "== Build continuous-energy OpenMC input =="
   --case-dir "$CE_CASE_DIR" \
   --batches "${BATCHES:-20}" \
   --inactive "${INACTIVE:-5}" \
-  --particles "${PARTICLES:-1000}"
+  --particles "${PARTICLES:-1000}" \
+  --mg-macro-scatter-format "$MG_MACRO_SCATTER_FORMAT" \
+  --mg-macro-histogram-bins "$MG_MACRO_HISTOGRAM_BINS" \
+  --mg-macro-legendre-order "$MG_MACRO_LEGENDRE_ORDER"
 
 echo
 echo "== Run OpenMC CE reference =="
@@ -76,7 +87,11 @@ echo "== Prepare OpenMC MG 33g macro input from the CE MGXS library =="
   --mg-case-dir "$MG_CASE_DIR" \
   --batches "${MG_BATCHES:-20}" \
   --inactive "${MG_INACTIVE:-5}" \
-  --particles "${MG_PARTICLES:-1000}"
+  --particles "${MG_PARTICLES:-1000}" \
+  --scatter-format "$MG_MACRO_SCATTER_FORMAT" \
+  --histogram-bins "$MG_MACRO_HISTOGRAM_BINS" \
+  --legendre-order "$MG_MACRO_LEGENDRE_ORDER" \
+  --summary-json "$OUT_DIR/mg_macro_summary.json"
 
 echo
 echo "== Run OpenMC MG macro calculation =="
@@ -140,6 +155,7 @@ echo "OpenMC CE/MG 33g SPH colorset minicase complete:"
 echo "  MGXS: $MGXS_H5"
 echo "  CE flux: $CE_FLUX::openmc_volume_flux"
 echo "  MG flux: $MG_FLUX::openmc_mg_flux"
+echo "  MG macro scatter summary: $OUT_DIR/mg_macro_summary.json"
 echo "  SPH sidecar: $SPH_SIDECAR"
 echo "  MULTICOMPO ASCII: $OUT_DIR/out_with_openmc_sph.mcompo.txt"
 echo "  MACROLIB ASCII: $OUT_DIR/out_with_openmc_sph.macrolib.txt"

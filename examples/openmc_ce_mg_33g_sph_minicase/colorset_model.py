@@ -42,7 +42,12 @@ DOMAIN_NAME_BY_ID = {
 DOMAIN_VOLUME_BY_ID = {cell_id: 32.0 for cell_id in DOMAIN_IDS}
 ENERGY_MESH_ID = "ecco_33"
 ENERGY_GROUP_STRUCTURE = "ECCO-33"
-LEGENDRE_ORDER = 3
+HANDOFF_SCATTER_FORMAT = "legendre"
+HANDOFF_LEGENDRE_ORDER = 3
+MG_MACRO_SCATTER_FORMAT = "histogram"
+MG_MACRO_HISTOGRAM_BINS = 16
+MG_MACRO_LEGENDRE_ORDER = HANDOFF_LEGENDRE_ORDER
+LEGENDRE_ORDER = HANDOFF_LEGENDRE_ORDER
 MGXS_TYPES = [
     "total",
     "absorption",
@@ -177,6 +182,9 @@ def build_library(
     geometry: openmc.Geometry | None = None,
     *,
     case_dir: Path | None = None,
+    scatter_format: str = HANDOFF_SCATTER_FORMAT,
+    legendre_order: int = HANDOFF_LEGENDRE_ORDER,
+    histogram_bins: int = MG_MACRO_HISTOGRAM_BINS,
 ) -> mgxs.Library:
     if geometry is None:
         case_dir = Path(case_dir or default_case_dir()).resolve()
@@ -189,8 +197,14 @@ def build_library(
     library.domain_type = DOMAIN_TYPE
     library.domains = selected_domains(geometry)
     library.by_nuclide = False
-    library.legendre_order = LEGENDRE_ORDER
     library.correction = None
+    library.scatter_format = scatter_format
+    if scatter_format == "legendre":
+        library.legendre_order = legendre_order
+    elif scatter_format == "histogram":
+        library.histogram_bins = histogram_bins
+    else:
+        raise ValueError("scatter_format must be 'legendre' or 'histogram'")
     library.build_library()
     return library
 
@@ -205,15 +219,56 @@ def build_volume_flux_tally() -> openmc.Tally:
     return tally
 
 
-def build_ce_tallies(geometry: openmc.Geometry) -> openmc.Tallies:
+def build_ce_tallies(
+    geometry: openmc.Geometry,
+    *,
+    mg_macro_scatter_format: str = MG_MACRO_SCATTER_FORMAT,
+    mg_macro_histogram_bins: int = MG_MACRO_HISTOGRAM_BINS,
+    mg_macro_legendre_order: int = MG_MACRO_LEGENDRE_ORDER,
+) -> openmc.Tallies:
     library = build_library(geometry)
     tallies = openmc.Tallies()
     if hasattr(library, "add_to_tallies"):
         library.add_to_tallies(tallies, merge=True)
     else:
         library.add_to_tallies_file(tallies, merge=True)
+    if not _same_scatter_treatment(
+        HANDOFF_SCATTER_FORMAT,
+        HANDOFF_LEGENDRE_ORDER,
+        MG_MACRO_HISTOGRAM_BINS,
+        mg_macro_scatter_format,
+        mg_macro_legendre_order,
+        mg_macro_histogram_bins,
+    ):
+        mg_macro_library = build_library(
+            geometry,
+            scatter_format=mg_macro_scatter_format,
+            legendre_order=mg_macro_legendre_order,
+            histogram_bins=mg_macro_histogram_bins,
+        )
+        if hasattr(mg_macro_library, "add_to_tallies"):
+            mg_macro_library.add_to_tallies(tallies, merge=True)
+        else:
+            mg_macro_library.add_to_tallies_file(tallies, merge=True)
     tallies.append(build_volume_flux_tally())
     return tallies
+
+
+def _same_scatter_treatment(
+    left_format: str,
+    left_legendre_order: int,
+    left_histogram_bins: int,
+    right_format: str,
+    right_legendre_order: int,
+    right_histogram_bins: int,
+) -> bool:
+    if left_format != right_format:
+        return False
+    if left_format == "legendre":
+        return left_legendre_order == right_legendre_order
+    if left_format == "histogram":
+        return left_histogram_bins == right_histogram_bins
+    return False
 
 
 def build_mg_tallies() -> openmc.Tallies:
@@ -224,13 +279,21 @@ def export_ce_xml(
     case_dir: Path,
     *,
     run_settings: RunSettings | None = None,
+    mg_macro_scatter_format: str = MG_MACRO_SCATTER_FORMAT,
+    mg_macro_histogram_bins: int = MG_MACRO_HISTOGRAM_BINS,
+    mg_macro_legendre_order: int = MG_MACRO_LEGENDRE_ORDER,
 ) -> None:
     case_dir = Path(case_dir).resolve()
     case_dir.mkdir(parents=True, exist_ok=True)
     materials = build_materials()
     geometry = build_geometry(materials)
     settings = build_settings(run_settings, energy_mode="continuous-energy")
-    tallies = build_ce_tallies(geometry)
+    tallies = build_ce_tallies(
+        geometry,
+        mg_macro_scatter_format=mg_macro_scatter_format,
+        mg_macro_histogram_bins=mg_macro_histogram_bins,
+        mg_macro_legendre_order=mg_macro_legendre_order,
+    )
 
     materials.export_to_xml(case_dir / "materials.xml")
     geometry.export_to_xml(case_dir / "geometry.xml")
@@ -291,7 +354,10 @@ def root_attrs() -> dict[str, object]:
         "domain_type": DOMAIN_TYPE,
         "energy_group_structure": ENERGY_GROUP_STRUCTURE,
         "energy_group_count": len(energy_bounds_ev()) - 1,
-        "legendre_order": LEGENDRE_ORDER,
+        "legendre_order": HANDOFF_LEGENDRE_ORDER,
+        "handoff_scatter_format": HANDOFF_SCATTER_FORMAT,
+        "mg_macro_scatter_format": MG_MACRO_SCATTER_FORMAT,
+        "mg_macro_histogram_bins": MG_MACRO_HISTOGRAM_BINS,
         "spatial_mapping": "one OpenMC CE/MG cell domain -> one SPH/DONJON mixture",
         "sph_route": "OpenMC CE reference + OpenMC MG 33g same geometry",
     }

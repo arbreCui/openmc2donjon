@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ApiError, OpenmcSphPhysicsSummary, api } from "@/lib/api";
 import {
+  formatScatterTreatment,
   formatPhysicsNumber,
   summaryStatus,
   topSphDeviationRows,
@@ -128,8 +129,8 @@ function SummaryBody({ state }: { state: SummaryState }) {
               {summary.route}
             </div>
             <div className="mt-1 text-sm font-semibold tracking-tight">
-              {summary.mixture_count} mixtures · {summary.energy_groups} groups · P
-              {summary.legendre_order}
+              {summary.mixture_count} mixtures · {summary.energy_groups} groups ·{" "}
+              {formatScatterTreatment(summary)}
             </div>
           </div>
           <span

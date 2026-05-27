@@ -11,7 +11,7 @@ uses this package as the delivery bridge into DRAGON/DONJON:
 
 ```text
 OpenMC CE reference
-  + OpenMC MG 33g with the same geometry
+  + OpenMC MG 33g with the same geometry (typically Hn angular histogram)
   -> OpenMC-side SPH factors and/or ADF/DF sidecars
   -> corrected MGXS HDF5 handoff
   -> openmc2donjon converter
@@ -23,6 +23,21 @@ For OpenMC-side SPH consumed by DONJON `DSPH:`/`MAC:`, use the
 reads directly. `L_MULTICOMPO` remains the mapped-library route for
 domain-wise handoffs extracted through `NCR:`.
 
+In the OpenMC CE/MG SPH route, the CE run can tally two scattering
+representations at once:
+
+```text
+OpenMC CE run
+  P3 Legendre MGXS   -> converter-facing HDF5 -> DONJON scatter blocks
+  H16 histogram MGXS -> OpenMC MG 33g macro solve -> MG-H16 flux
+
+OpenMC CE flux vs OpenMC MG-H16 flux -> SPH(region, group)
+```
+
+Thus Hn is used to improve the OpenMC MG macro calculation that generates SPH
+factors. It is not converted to DONJON scatter; DONJON receives the directly
+tallied Pn/Legendre MGXS plus explicit SPH factors.
+
 ## Equivalence Methods
 
 The converter does not compute the physics correction itself. It carries
@@ -32,7 +47,7 @@ production SPH route.
 | Method | What it does | Entry point |
 | --- | --- | --- |
 | Direct | No equivalence factors; accept the homogenization bias. | Convert without equivalence flags. |
-| OpenMC-side SPH / ADF | Generate SPH factors from OpenMC CE reference vs OpenMC MG 33g macro calculation with the same geometry, or build ADF/DF sidecars from OpenMC face-flux evidence. | `make-openmc-sph-sidecar` + `augment-sph`, `make-adf-sidecar` + `augment-adf`, or `openmc2donjon-from-openmc --sph-source` / `--build-flux-ratio-adf`. |
+| OpenMC-side SPH / ADF | Generate SPH factors from OpenMC CE reference vs OpenMC MG 33g macro calculation with the same geometry, usually using OpenMC Hn histogram angular representation for the MG macro solve; or build ADF/DF sidecars from OpenMC face-flux evidence. | `make-openmc-sph-sidecar` + `augment-sph`, `make-adf-sidecar` + `augment-adf`, or `openmc2donjon-from-openmc --sph-source` / `--build-flux-ratio-adf`. |
 
 ## Export And Convert Modes
 

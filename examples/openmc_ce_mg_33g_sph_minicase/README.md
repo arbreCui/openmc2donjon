@@ -25,15 +25,31 @@ CS_MOD   -> DONJON mixture 2 / SPH region 2
 CS_ABS   -> DONJON mixture 3 / SPH region 3
 ```
 
-The energy mesh is ECCO-33.  The OpenMC MGXS library uses Legendre order 3 so
-the route is ready for P1/P2/P3 scatter moments.  The SPH factors produced by
-this example are still scalar factors per region and energy group:
+The energy mesh is ECCO-33.  The converter-facing handoff uses Legendre order
+3 so DONJON receives ordinary P1/P2/P3 scatter moments.  The OpenMC MG macro
+calculation used to derive SPH factors uses histogram angular representation
+by default (`H16`):
+
+```text
+CE statepoint tallies:
+  P3 Legendre scatter -> converter MGXS HDF5
+  H16 histogram scatter -> OpenMC MG macro solve
+```
+
+The H16 data is not written to DONJON as scatter data.  It is only used inside
+OpenMC's MG run to obtain a higher-fidelity MG flux.  The final DONJON handoff
+is:
+
+```text
+CE-tallied P3 MGXS + OpenMC-side SPH(region, group)
+```
+
+The SPH factors produced by this example are still scalar factors per region
+and energy group:
 
 ```text
 SPH(region, group)
 ```
-
-Angular/Hn-dependent SPH is a later extension.
 
 ## Run
 
@@ -53,6 +69,8 @@ Optional knobs:
 RUN_ROOT=/private/tmp/openmc2donjon_ce_mg_33g_sph_minicase
 PARTICLES=1000 BATCHES=20 INACTIVE=5
 MG_PARTICLES=1000 MG_BATCHES=20 MG_INACTIVE=5
+MG_MACRO_SCATTER_FORMAT=histogram
+MG_MACRO_HISTOGRAM_BINS=16
 MAX_CE_FLUX_REL_STD=0.20
 MAX_MG_FLUX_REL_STD=0.20
 OPENMC_LIB_DIR=/path/to/openmc/build/lib
@@ -77,6 +95,7 @@ mg_case/                         OpenMC MG XML + mgxs.h5 + statepoint
 handoff/mgxs_library.h5          converter-facing MGXS handoff from CE run
 handoff/openmc_ce_flux.h5        CE reference flux, shape (region, group)
 handoff/openmc_mg_flux.h5        OpenMC MG macro flux, same shape/order
+handoff/mg_macro_summary.json    OpenMC MG macro scatter treatment (Hn/Pn)
 handoff/openmc_sph.csv           auditable SPH table
 handoff/openmc_sph_sidecar.h5    HDF5 SPH sidecar
 handoff/mgxs_with_openmc_sph.h5  MGXS handoff after SPH augmentation
@@ -107,7 +126,10 @@ benchmark-quality validation.
 The shell script expands to these core commands:
 
 ```sh
-python examples/openmc_ce_mg_33g_sph_minicase/build_ce_case.py --case-dir ce_case
+python examples/openmc_ce_mg_33g_sph_minicase/build_ce_case.py \
+  --case-dir ce_case \
+  --mg-macro-scatter-format histogram \
+  --mg-macro-histogram-bins 16
 (cd ce_case && openmc)
 
 OPENMC2DONJON_COLORSET_DIR=ce_case \
@@ -122,7 +144,10 @@ openmc2donjon-from-openmc \
 python examples/openmc_ce_mg_33g_sph_minicase/prepare_mg_case.py \
   --ce-case-dir ce_case \
   --ce-statepoint ce_case/statepoint.20.h5 \
-  --mg-case-dir mg_case
+  --mg-case-dir mg_case \
+  --scatter-format histogram \
+  --histogram-bins 16 \
+  --summary-json handoff/mg_macro_summary.json
 (cd mg_case && openmc)
 
 openmc2donjon export-volume-flux ce_case/statepoint.20.h5 \
@@ -166,6 +191,8 @@ python examples/openmc_ce_mg_33g_sph_minicase/summarize_outputs.py \
 ## What This Proves
 
 - CE and MG calculations share geometry, output regions, and energy groups.
+- The OpenMC MG macro solve can use Hn histogram scatter while the DONJON
+  handoff remains Pn/Legendre.
 - SPH factors are generated on the OpenMC side from CE/MG flux comparison.
 - The converter carries those factors as `NSPH` into DONJON ASCII.
 - The accepted DONJON downstream route is `L_MACROLIB`, where `NSPH` is written
@@ -179,5 +206,5 @@ python examples/openmc_ce_mg_33g_sph_minicase/summarize_outputs.py \
 - `L_MULTICOMPO + NCR:` currently extracts the macroscopic XS but does not
   promote OpenMC-side `NSPH` into non-unity `GROUP/*/NSPH`; use `L_MACROLIB`
   for the SPH consumption smoke.
-- Hn/angular SPH factors are not implemented here; only scalar
-  region-by-group SPH is generated.
+- Angular-bin-dependent SPH factors, such as `SPH(region, group, H-bin)`, are
+  not implemented here; only scalar region-by-group SPH is generated.

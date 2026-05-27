@@ -27,6 +27,8 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
 
         self.assertIn('ENERGY_MESH_ID = "ecco_33"', text)
         self.assertIn("LEGENDRE_ORDER = 3", text)
+        self.assertIn('MG_MACRO_SCATTER_FORMAT = "histogram"', text)
+        self.assertIn("MG_MACRO_HISTOGRAM_BINS = 16", text)
         self.assertIn("DOMAIN_IDS = (FUEL_CELL_ID, MODERATOR_CELL_ID, ABSORBER_CELL_ID)", text)
         self.assertIn("VOLUME_FLUX_TALLY_NAME", text)
         self.assertIn("reverse_openmc_energy_filter_flux", text)
@@ -50,6 +52,8 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
 
         self.assertIn("library.create_mg_mode()", text)
         self.assertIn('energy_mode="multi-group"', text)
+        self.assertIn("--scatter-format", text)
+        self.assertIn("--histogram-bins", text)
         self.assertIn("mgxs_path = (mg_dir / args.mgxs_name).resolve()", text)
         self.assertIn("materials.cross_sections = str(mgxs_path)", text)
         self.assertIn("mgxs_file.export_to_hdf5", text)
@@ -65,10 +69,14 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
         self.assertIn("CS_MOD   -> DONJON mixture 2", readme)
         self.assertIn("CS_ABS   -> DONJON mixture 3", readme)
         self.assertIn("does **not** use a DONJON feedback loop", readme)
-        self.assertIn("Angular/Hn-dependent SPH is a later extension", readme)
+        self.assertIn("H16 histogram scatter", readme)
+        self.assertIn("SPH(region, group)", readme)
 
         self.assertIn("build_ce_case.py", script)
         self.assertIn("prepare_mg_case.py", script)
+        self.assertIn("MG_MACRO_SCATTER_FORMAT", script)
+        self.assertIn("--scatter-format \"$MG_MACRO_SCATTER_FORMAT\"", script)
+        self.assertIn("--summary-json \"$OUT_DIR/mg_macro_summary.json\"", script)
         self.assertIn("--dataset-name openmc_volume_flux", script)
         self.assertIn("--dataset-name openmc_mg_flux", script)
         self.assertIn("make-openmc-sph-sidecar", script)
@@ -98,6 +106,8 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
             self.assertEqual(payload["mixture_count"], 2)
             self.assertEqual(payload["energy_groups"], 2)
             self.assertEqual(payload["legendre_order"], 3)
+            self.assertEqual(payload["mg_macro_scatter"]["scatter_format"], "histogram")
+            self.assertEqual(payload["mg_macro_scatter"]["histogram_bins"], 16)
             self.assertEqual(payload["handoff"]["ascii_nsp_block_count"], 1)
             self.assertEqual(payload["handoff"]["accepted_sph_consumption_format"], "macrolib")
             self.assertEqual(payload["handoff"]["macrolib_ascii_nsp_block_count"], 1)
@@ -164,6 +174,17 @@ def _write_summary_fixture(handoff: Path) -> None:
                 "sph_kind": "openmc-ce-mg",
                 "sph_real": True,
                 "clipped_count": 0,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (handoff / "mg_macro_summary.json").write_text(
+        json.dumps(
+            {
+                "schema": "openmc2donjon.openmc-ce-mg-33g-sph-mg-macro.v1",
+                "scatter_format": "histogram",
+                "histogram_bins": 16,
+                "legendre_order": None,
             }
         ),
         encoding="utf-8",
