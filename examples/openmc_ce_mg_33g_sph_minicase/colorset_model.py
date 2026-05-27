@@ -1,0 +1,297 @@
+"""Three-region OpenMC CE/MG colorset used for OpenMC-side SPH.
+
+The same spatial cell domains are used in the continuous-energy reference
+calculation and in the OpenMC multi-group macro calculation.  Each cell domain
+becomes one SPH/output region:
+
+``CS_FUEL`` -> ``CS_MOD`` -> ``CS_ABS``
+
+The model is intentionally small.  It is a production workflow fixture, not an
+accepted reactor benchmark.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+import os
+from pathlib import Path
+
+import numpy as np
+import openmc
+import openmc.mgxs as mgxs
+
+from openmc2donjon.energy_groups import load_energy_mesh
+from openmc2donjon.openmc_volume_flux import (
+    reverse_openmc_energy_filter_flux,
+    write_openmc_volume_flux_hdf5,
+)
+
+
+CASE_NAME = "openmc_ce_mg_33g_sph_minicase"
+DOMAIN_MODE = "colorset"
+DOMAIN_TYPE = "cell"
+FUEL_CELL_ID = 201
+MODERATOR_CELL_ID = 202
+ABSORBER_CELL_ID = 203
+DOMAIN_IDS = (FUEL_CELL_ID, MODERATOR_CELL_ID, ABSORBER_CELL_ID)
+DOMAIN_NAME_BY_ID = {
+    FUEL_CELL_ID: "CS_FUEL",
+    MODERATOR_CELL_ID: "CS_MOD",
+    ABSORBER_CELL_ID: "CS_ABS",
+}
+DOMAIN_VOLUME_BY_ID = {cell_id: 32.0 for cell_id in DOMAIN_IDS}
+ENERGY_MESH_ID = "ecco_33"
+ENERGY_GROUP_STRUCTURE = "ECCO-33"
+LEGENDRE_ORDER = 3
+MGXS_TYPES = [
+    "total",
+    "absorption",
+    "fission",
+    "kappa-fission",
+    "nu-fission",
+    "chi",
+    "scatter matrix",
+    "nu-scatter matrix",
+    "multiplicity matrix",
+    "transport",
+]
+VOLUME_FLUX_TALLY_NAME = "openmc_ce_mg_sph_volume_flux"
+
+
+@dataclass(frozen=True)
+class RunSettings:
+    batches: int = 20
+    inactive: int = 5
+    particles: int = 1_000
+    seed: int = 31
+
+
+def energy_bounds_ev() -> list[float]:
+    """Return ECCO-33 boundaries in OpenMC ascending-energy order."""
+
+    return load_energy_mesh(ENERGY_MESH_ID).boundaries_descending[::-1].tolist()
+
+
+def default_case_dir() -> Path:
+    return Path(
+        os.environ.get("OPENMC2DONJON_COLORSET_DIR", Path(__file__).parent)
+    ).resolve()
+
+
+def build_materials() -> openmc.Materials:
+    fuel = openmc.Material(material_id=1, name="colorset fuel")
+    fuel.set_density("g/cm3", 10.4)
+    fuel.add_nuclide("U235", 4.8e-2)
+    fuel.add_nuclide("U238", 2.10e-2)
+    fuel.add_nuclide("O16", 1.38e-1)
+
+    moderator = openmc.Material(material_id=2, name="colorset moderator")
+    moderator.set_density("g/cm3", 1.0)
+    moderator.add_nuclide("H1", 6.66e-2)
+    moderator.add_nuclide("O16", 3.33e-2)
+
+    absorber = openmc.Material(material_id=3, name="colorset absorber")
+    absorber.set_density("g/cm3", 1.1)
+    absorber.add_nuclide("H1", 6.0e-2)
+    absorber.add_nuclide("O16", 3.0e-2)
+    absorber.add_nuclide("B10", 8.0e-4)
+    absorber.add_nuclide("B11", 3.2e-3)
+
+    materials = openmc.Materials([fuel, moderator, absorber])
+    cross_sections = openmc.config.get("cross_sections")
+    if cross_sections:
+        materials.cross_sections = str(cross_sections)
+    return materials
+
+
+def build_geometry(materials: openmc.Materials | None = None) -> openmc.Geometry:
+    materials = materials or build_materials()
+    by_name = {material.name: material for material in materials}
+
+    x0 = openmc.XPlane(surface_id=10, x0=-3.0, boundary_type="reflective")
+    x1 = openmc.XPlane(surface_id=11, x0=-1.0)
+    x2 = openmc.XPlane(surface_id=12, x0=1.0)
+    x3 = openmc.XPlane(surface_id=13, x0=3.0, boundary_type="reflective")
+    y0 = openmc.YPlane(surface_id=14, y0=-2.0, boundary_type="reflective")
+    y1 = openmc.YPlane(surface_id=15, y0=2.0, boundary_type="reflective")
+    z0 = openmc.ZPlane(surface_id=16, z0=-2.0, boundary_type="reflective")
+    z1 = openmc.ZPlane(surface_id=17, z0=2.0, boundary_type="reflective")
+
+    fuel_cell = openmc.Cell(cell_id=FUEL_CELL_ID, name=DOMAIN_NAME_BY_ID[FUEL_CELL_ID])
+    fuel_cell.fill = by_name["colorset fuel"]
+    fuel_cell.region = +x0 & -x1 & +y0 & -y1 & +z0 & -z1
+    fuel_cell.volume = DOMAIN_VOLUME_BY_ID[FUEL_CELL_ID]
+
+    moderator_cell = openmc.Cell(
+        cell_id=MODERATOR_CELL_ID,
+        name=DOMAIN_NAME_BY_ID[MODERATOR_CELL_ID],
+    )
+    moderator_cell.fill = by_name["colorset moderator"]
+    moderator_cell.region = +x1 & -x2 & +y0 & -y1 & +z0 & -z1
+    moderator_cell.volume = DOMAIN_VOLUME_BY_ID[MODERATOR_CELL_ID]
+
+    absorber_cell = openmc.Cell(
+        cell_id=ABSORBER_CELL_ID,
+        name=DOMAIN_NAME_BY_ID[ABSORBER_CELL_ID],
+    )
+    absorber_cell.fill = by_name["colorset absorber"]
+    absorber_cell.region = +x2 & -x3 & +y0 & -y1 & +z0 & -z1
+    absorber_cell.volume = DOMAIN_VOLUME_BY_ID[ABSORBER_CELL_ID]
+
+    root = openmc.Universe(universe_id=1, name="colorset root")
+    root.add_cells([fuel_cell, moderator_cell, absorber_cell])
+    return openmc.Geometry(root)
+
+
+def build_settings(
+    run_settings: RunSettings | None = None,
+    *,
+    energy_mode: str = "continuous-energy",
+) -> openmc.Settings:
+    run_settings = run_settings or RunSettings()
+    settings = openmc.Settings()
+    settings.run_mode = "eigenvalue"
+    settings.energy_mode = energy_mode
+    settings.batches = run_settings.batches
+    settings.inactive = run_settings.inactive
+    settings.particles = run_settings.particles
+    settings.seed = run_settings.seed
+    settings.source = openmc.IndependentSource(
+        space=openmc.stats.Box((-2.9, -1.9, -1.9), (-1.1, 1.9, 1.9)),
+        constraints={"fissionable": True},
+    )
+    settings.output = {"tallies": False}
+    settings.statepoint = {"batches": [run_settings.batches]}
+    return settings
+
+
+def selected_domains(geometry: openmc.Geometry) -> list[openmc.Cell]:
+    cells = geometry.get_all_cells()
+    selected = [cells[cell_id] for cell_id in DOMAIN_IDS]
+    for cell in selected:
+        cell.volume = DOMAIN_VOLUME_BY_ID[int(cell.id)]
+    return selected
+
+
+def build_library(
+    geometry: openmc.Geometry | None = None,
+    *,
+    case_dir: Path | None = None,
+) -> mgxs.Library:
+    if geometry is None:
+        case_dir = Path(case_dir or default_case_dir()).resolve()
+        materials = openmc.Materials.from_xml(str(case_dir / "materials.xml"))
+        geometry = openmc.Geometry.from_xml(str(case_dir / "geometry.xml"), materials=materials)
+
+    library = mgxs.Library(geometry)
+    library.energy_groups = mgxs.EnergyGroups(energy_bounds_ev())
+    library.mgxs_types = MGXS_TYPES
+    library.domain_type = DOMAIN_TYPE
+    library.domains = selected_domains(geometry)
+    library.by_nuclide = False
+    library.legendre_order = LEGENDRE_ORDER
+    library.correction = None
+    library.build_library()
+    return library
+
+
+def build_volume_flux_tally() -> openmc.Tally:
+    tally = openmc.Tally(name=VOLUME_FLUX_TALLY_NAME)
+    tally.filters = [
+        openmc.CellFilter(list(DOMAIN_IDS), filter_id=9_001),
+        openmc.EnergyFilter(energy_bounds_ev(), filter_id=9_002),
+    ]
+    tally.scores = ["flux"]
+    return tally
+
+
+def build_ce_tallies(geometry: openmc.Geometry) -> openmc.Tallies:
+    library = build_library(geometry)
+    tallies = openmc.Tallies()
+    if hasattr(library, "add_to_tallies"):
+        library.add_to_tallies(tallies, merge=True)
+    else:
+        library.add_to_tallies_file(tallies, merge=True)
+    tallies.append(build_volume_flux_tally())
+    return tallies
+
+
+def build_mg_tallies() -> openmc.Tallies:
+    return openmc.Tallies([build_volume_flux_tally()])
+
+
+def export_ce_xml(
+    case_dir: Path,
+    *,
+    run_settings: RunSettings | None = None,
+) -> None:
+    case_dir = Path(case_dir).resolve()
+    case_dir.mkdir(parents=True, exist_ok=True)
+    materials = build_materials()
+    geometry = build_geometry(materials)
+    settings = build_settings(run_settings, energy_mode="continuous-energy")
+    tallies = build_ce_tallies(geometry)
+
+    materials.export_to_xml(case_dir / "materials.xml")
+    geometry.export_to_xml(case_dir / "geometry.xml")
+    settings.export_to_xml(case_dir / "settings.xml")
+    tallies.export_to_xml(case_dir / "tallies.xml")
+
+
+def load_statepoint(library: mgxs.Library, statepoint_path: Path) -> None:
+    with openmc.StatePoint(str(statepoint_path)) as statepoint:
+        library.load_from_statepoint(statepoint)
+        keff = getattr(statepoint, "keff", None)
+        if keff is not None:
+            print(f"OpenMC colorset keff = {keff}")
+
+
+def extract_volume_flux_with_std_dev(
+    statepoint_path: Path,
+) -> tuple[np.ndarray, np.ndarray]:
+    with openmc.StatePoint(str(statepoint_path)) as statepoint:
+        tally = statepoint.get_tally(name=VOLUME_FLUX_TALLY_NAME)
+        values = np.asarray(tally.get_values(scores=["flux"], value="mean"), dtype=float)
+        std_dev = np.asarray(
+            tally.get_values(scores=["flux"], value="std_dev"),
+            dtype=float,
+        )
+    shape = {
+        "mixture_count": len(DOMAIN_IDS),
+        "energy_groups": len(energy_bounds_ev()) - 1,
+    }
+    return (
+        reverse_openmc_energy_filter_flux(values, **shape),
+        reverse_openmc_energy_filter_flux(std_dev, **shape),
+    )
+
+
+def append_volume_flux_hdf5(
+    output_path: Path,
+    statepoint_path: Path,
+    mixture_names: list[str],
+) -> None:
+    values, std_dev = extract_volume_flux_with_std_dev(statepoint_path)
+    write_openmc_volume_flux_hdf5(
+        output_path,
+        values,
+        mixture_names=mixture_names,
+        std_dev=std_dev,
+    )
+
+
+def domain_names(_library: mgxs.Library | None = None) -> dict[int, str]:
+    return dict(DOMAIN_NAME_BY_ID)
+
+
+def root_attrs() -> dict[str, object]:
+    return {
+        "case": CASE_NAME,
+        "domain_mode": DOMAIN_MODE,
+        "domain_type": DOMAIN_TYPE,
+        "energy_group_structure": ENERGY_GROUP_STRUCTURE,
+        "energy_group_count": len(energy_bounds_ev()) - 1,
+        "legendre_order": LEGENDRE_ORDER,
+        "spatial_mapping": "one OpenMC CE/MG cell domain -> one SPH/DONJON mixture",
+        "sph_route": "OpenMC CE reference + OpenMC MG 33g same geometry",
+    }
