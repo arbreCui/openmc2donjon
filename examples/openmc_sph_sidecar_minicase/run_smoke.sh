@@ -50,6 +50,10 @@ echo "== Compute OpenMC-side SPH sidecar =="
   --mg-flux "$MG_FLUX::openmc_mg_flux" \
   --table-output "$SPH_TABLE" \
   --damping 0.5 \
+  --require-reference-flux-std-dev \
+  --max-reference-flux-std-dev-rel 0.02 \
+  --require-mg-flux-std-dev \
+  --max-mg-flux-std-dev-rel 0.02 \
   --source-label openmc-ce-mg-minicase \
   --summary-json "$OPENMC_SPH_SUMMARY" \
   --force
@@ -153,6 +157,14 @@ if summary["reference_flux_dataset"] != "openmc_volume_flux":
     raise SystemExit("summary did not record CE flux dataset")
 if summary["mg_flux_dataset"] != "openmc_mg_flux":
     raise SystemExit("summary did not record MG flux dataset")
+if summary["reference_flux_std_dev_dataset"] != "openmc_volume_flux_std_dev":
+    raise SystemExit("summary did not record CE flux std_dev dataset")
+if summary["mg_flux_std_dev_dataset"] != "openmc_mg_flux_std_dev":
+    raise SystemExit("summary did not record MG flux std_dev dataset")
+if summary["reference_flux_max_relative_std_dev"] > 0.02:
+    raise SystemExit("CE flux uncertainty gate was not applied")
+if summary["mg_flux_max_relative_std_dev"] > 0.02:
+    raise SystemExit("MG flux uncertainty gate was not applied")
 if summary["source_label"] != "openmc-ce-mg-minicase":
     raise SystemExit("summary did not record source label")
 

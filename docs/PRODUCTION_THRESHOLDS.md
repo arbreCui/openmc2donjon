@@ -14,8 +14,8 @@ Monte Carlo tallies are exact.
 | Transport/P1 consistency | `5.0e-2` relative | Max residual between explicit `transport_total` and `total - sum(P1 scatter out)`. |
 | Local energy bounds | exact shape + `rtol=1.0e-10` | Any local mixture/state `energy_bounds` must match root `/energy_bounds`. |
 | MGXS uncertainty coverage | off by default; exact coverage when required | If `--require-std-dev-coverage` or the workflow promotes coverage to a hard gate, every eligible mean MGXS dataset must have a matching `*_std_dev` dataset. |
-| Reference-flux uncertainty coverage | off by default; exact coverage when required | If the OpenMC-side SPH workflow promotes coverage to a hard gate, the CE reference flux dataset must have a matching `<dataset>_std_dev` dataset. |
-| Reference-flux uncertainty ceiling | off by default; caller-defined relative limit | If the case policy sets a ceiling, max `std_dev / |mean|` for the OpenMC CE reference flux must not exceed that value. |
+| CE/MG flux uncertainty coverage | off by default; exact coverage when required | If the OpenMC-side SPH workflow promotes coverage to a hard gate, the CE reference flux and/or OpenMC MG macro flux dataset must have a matching `<dataset>_std_dev` dataset. |
+| CE/MG flux uncertainty ceiling | off by default; caller-defined relative limit | If the case policy sets a ceiling, max `std_dev / |mean|` for the OpenMC CE reference flux and/or OpenMC MG macro flux must not exceed that value. |
 
 Scatter row balance and transport/P1 use `5.0e-2` because these checks are
 meant to catch wrong axes, transposed scatter matrices, and mismatched
@@ -64,7 +64,10 @@ turn it into hard gates explicitly:
 
 - `--require-std-dev-coverage` for MGXS preflight;
 - workflow-specific hard gates for OpenMC-side SPH MGXS coverage;
-- workflow-specific hard gates for the SPH OpenMC CE reference flux;
+- `--require-reference-flux-std-dev` / `--max-reference-flux-std-dev-rel`
+  for the OpenMC CE reference flux used by `make-openmc-sph-sidecar`;
+- `--require-mg-flux-std-dev` / `--max-mg-flux-std-dev-rel` for the
+  OpenMC MG macro flux used by `make-openmc-sph-sidecar`;
 - a relative uncertainty ceiling when the reference flux also needs one.
 
 ## Override Policy

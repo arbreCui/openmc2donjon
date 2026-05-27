@@ -38,6 +38,10 @@ def create_openmc_sph_sidecar(
     clip_min: float | None = None,
     clip_max: float | None = None,
     flux_normalization: str = "none",
+    require_reference_flux_std_dev: bool = False,
+    max_reference_flux_std_dev_rel: float | None = None,
+    require_mg_flux_std_dev: bool = False,
+    max_mg_flux_std_dev_rel: float | None = None,
     source_label: str = "openmc-ce-mg-sph",
     sph_kind: str = "openmc-ce-mg",
     sph_real: bool = True,
@@ -74,6 +78,10 @@ def create_openmc_sph_sidecar(
         clip_min=clip_min,
         clip_max=clip_max,
         flux_normalization=flux_normalization,
+        require_reference_flux_std_dev=require_reference_flux_std_dev,
+        max_reference_flux_std_dev_rel=max_reference_flux_std_dev_rel,
+        require_low_order_flux_std_dev=require_mg_flux_std_dev,
+        max_low_order_flux_std_dev_rel=max_mg_flux_std_dev_rel,
         source_label=source_label,
         force=force,
         summary_json=None,
@@ -132,8 +140,14 @@ def write_summary(path: Path, report: OpenmcSphSidecarReport) -> None:
         "output_table": str(report.output_table),
         "reference_flux": str(report.reference_flux),
         "reference_flux_dataset": report.update.reference_flux_dataset,
+        "reference_flux_std_dev_dataset": report.update.reference_flux_std_dev_dataset,
+        "reference_flux_max_relative_std_dev": (
+            report.update.reference_flux_max_relative_std_dev
+        ),
         "mg_flux": str(report.mg_flux),
         "mg_flux_dataset": report.update.low_order_flux_dataset,
+        "mg_flux_std_dev_dataset": report.update.low_order_flux_std_dev_dataset,
+        "mg_flux_max_relative_std_dev": report.update.low_order_flux_max_relative_std_dev,
         "previous_sph": None
         if report.update.previous_sph_source is None
         else str(report.update.previous_sph_source),

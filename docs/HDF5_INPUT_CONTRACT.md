@@ -225,24 +225,25 @@ attrs:
   std_dev_of = "openmc_volume_flux"
 ```
 
-OpenMC-side SPH tooling should detect `<reference_dataset>_std_dev` when the
-reference flux source is HDF5, validate it, and preserve matching aliases such
-as `openmc_volume_flux_std_dev`, `reference_flux_std_dev`, and
-`volume_flux_std_dev` in the SPH derivation record. A workflow-specific gate can
-then enforce:
+`make-openmc-sph-sidecar` detects `<dataset>_std_dev` when either the CE
+reference flux or the OpenMC MG macro flux source is HDF5, validates it, and
+preserves the dataset names plus max relative standard deviations in the SPH
+derivation record. A workflow-specific gate can then enforce:
 
 ```json
 {
   "acceptance": {
     "require_reference_flux_std_dev": true,
-    "max_reference_flux_std_dev_rel": 0.01
+    "max_reference_flux_std_dev_rel": 0.01,
+    "require_mg_flux_std_dev": true,
+    "max_mg_flux_std_dev_rel": 0.01
   }
 }
 ```
 
 This gate is separate from MGXS `*_std_dev` coverage: MGXS uncertainty belongs
-to cross-section means, while reference-flux uncertainty belongs to the fixed
-OpenMC flux target used by the SPH update.
+to cross-section means, while CE/MG flux uncertainty belongs to the OpenMC flux
+comparison used by the SPH update.
 
 ## Optional SPH Payload
 

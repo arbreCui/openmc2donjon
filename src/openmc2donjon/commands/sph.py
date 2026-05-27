@@ -146,6 +146,30 @@ def build_make_openmc_sph_sidecar_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--require-reference-flux-std-dev",
+        action="store_true",
+        help="fail unless the CE reference flux HDF5 source has a sibling std_dev dataset",
+    )
+    parser.add_argument(
+        "--max-reference-flux-std-dev-rel",
+        type=float,
+        default=None,
+        metavar="REL",
+        help="fail if max(CE flux std_dev / mean) exceeds REL",
+    )
+    parser.add_argument(
+        "--require-mg-flux-std-dev",
+        action="store_true",
+        help="fail unless the OpenMC MG flux HDF5 source has a sibling std_dev dataset",
+    )
+    parser.add_argument(
+        "--max-mg-flux-std-dev-rel",
+        type=float,
+        default=None,
+        metavar="REL",
+        help="fail if max(MG flux std_dev / mean) exceeds REL",
+    )
+    parser.add_argument(
         "--sph-kind",
         default="openmc-ce-mg",
         help="root sph_kind provenance attribute (default: openmc-ce-mg)",
@@ -974,6 +998,10 @@ def make_openmc_sph_sidecar_handler(args: argparse.Namespace) -> int:
             clip_min=args.clip_min,
             clip_max=args.clip_max,
             flux_normalization=args.flux_normalization,
+            require_reference_flux_std_dev=args.require_reference_flux_std_dev,
+            max_reference_flux_std_dev_rel=args.max_reference_flux_std_dev_rel,
+            require_mg_flux_std_dev=args.require_mg_flux_std_dev,
+            max_mg_flux_std_dev_rel=args.max_mg_flux_std_dev_rel,
             source_label=args.source_label,
             sph_kind=args.sph_kind,
             sph_real=args.sph_real == "true",

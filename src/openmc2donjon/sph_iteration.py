@@ -44,6 +44,9 @@ class LoadedMatrix:
     values: np.ndarray
     path: Path
     dataset_path: str | None = None
+    std_dev: np.ndarray | None = None
+    std_dev_dataset_path: str | None = None
+    max_relative_std_dev: float | None = None
 
 
 @dataclass(frozen=True)
@@ -69,6 +72,10 @@ class SphUpdateTableReport:
     reference_flux_dataset: str | None
     low_order_flux_source: Path
     low_order_flux_dataset: str | None
+    reference_flux_std_dev_dataset: str | None
+    reference_flux_max_relative_std_dev: float | None
+    low_order_flux_std_dev_dataset: str | None
+    low_order_flux_max_relative_std_dev: float | None
     previous_sph_source: Path | None
     previous_sph_dataset: str | None
     mixture_names: tuple[str, ...]
@@ -110,6 +117,10 @@ def create_sph_update_table(
     clip_min: float | None = None,
     clip_max: float | None = None,
     flux_normalization: str = "none",
+    require_reference_flux_std_dev: bool = False,
+    max_reference_flux_std_dev_rel: float | None = None,
+    require_low_order_flux_std_dev: bool = False,
+    max_low_order_flux_std_dev_rel: float | None = None,
     source_label: str = "external low-order SPH iteration",
     force: bool = False,
     summary_json: Path | None = None,
@@ -162,6 +173,18 @@ def create_sph_update_table(
 
     _validate_flux(reference.values, "reference flux")
     _validate_flux(low_order.values, "low-order flux")
+    _validate_flux_std_dev_gate(
+        reference,
+        "reference flux",
+        required=require_reference_flux_std_dev,
+        max_relative=max_reference_flux_std_dev_rel,
+    )
+    _validate_flux_std_dev_gate(
+        low_order,
+        "low-order flux",
+        required=require_low_order_flux_std_dev,
+        max_relative=max_low_order_flux_std_dev_rel,
+    )
     _validate_sph(previous.values, "previous SPH")
 
     normalized_low_order, normalization = _normalized_low_order_flux(
@@ -213,6 +236,10 @@ def create_sph_update_table(
         reference_flux_dataset=reference.dataset_path,
         low_order_flux_source=low_order.path,
         low_order_flux_dataset=low_order.dataset_path,
+        reference_flux_std_dev_dataset=reference.std_dev_dataset_path,
+        reference_flux_max_relative_std_dev=reference.max_relative_std_dev,
+        low_order_flux_std_dev_dataset=low_order.std_dev_dataset_path,
+        low_order_flux_max_relative_std_dev=low_order.max_relative_std_dev,
         previous_sph_source=None if previous_sph is None else previous.path,
         previous_sph_dataset=None if previous_sph is None else previous.dataset_path,
         mixture_names=mixture_names,
@@ -256,9 +283,21 @@ def print_report(report: SphUpdateTableReport) -> None:
     print(f"  reference_flux: {report.reference_flux_source}")
     if report.reference_flux_dataset is not None:
         print(f"  reference_flux_dataset: {report.reference_flux_dataset}")
+    if report.reference_flux_std_dev_dataset is not None:
+        print(
+            "  reference_flux_std_dev: "
+            f"{report.reference_flux_std_dev_dataset} "
+            f"max_rel={report.reference_flux_max_relative_std_dev:g}"
+        )
     print(f"  low_order_flux: {report.low_order_flux_source}")
     if report.low_order_flux_dataset is not None:
         print(f"  low_order_flux_dataset: {report.low_order_flux_dataset}")
+    if report.low_order_flux_std_dev_dataset is not None:
+        print(
+            "  low_order_flux_std_dev: "
+            f"{report.low_order_flux_std_dev_dataset} "
+            f"max_rel={report.low_order_flux_max_relative_std_dev:g}"
+        )
     if report.previous_sph_source is not None:
         print(f"  previous_sph: {report.previous_sph_source}")
         if report.previous_sph_dataset is not None:
@@ -301,6 +340,10 @@ def write_summary(path: Path, report: SphUpdateTableReport) -> None:
         "reference_flux_dataset": report.reference_flux_dataset,
         "low_order_flux": str(report.low_order_flux_source),
         "low_order_flux_dataset": report.low_order_flux_dataset,
+        "reference_flux_std_dev_dataset": report.reference_flux_std_dev_dataset,
+        "reference_flux_max_relative_std_dev": report.reference_flux_max_relative_std_dev,
+        "low_order_flux_std_dev_dataset": report.low_order_flux_std_dev_dataset,
+        "low_order_flux_max_relative_std_dev": report.low_order_flux_max_relative_std_dev,
         "previous_sph": None
         if report.previous_sph_source is None
         else str(report.previous_sph_source),
@@ -630,14 +673,21 @@ def _load_matrix_source(
     if not path.exists():
         raise FileNotFoundError(f"{label} source does not exist: {path}")
     if _looks_like_hdf5(path) or dataset is not None:
-        values, dataset_path = _load_hdf5_matrix(
+        values, dataset_path, std_dev, std_dev_dataset_path = _load_hdf5_matrix(
             path,
             dataset=dataset,
             mixture_names=mixture_names,
             energy_groups=energy_groups,
             label=label,
         )
-        return LoadedMatrix(values=values, path=path, dataset_path=dataset_path)
+        return LoadedMatrix(
+            values=values,
+            path=path,
+            dataset_path=dataset_path,
+            std_dev=std_dev,
+            std_dev_dataset_path=std_dev_dataset_path,
+            max_relative_std_dev=_max_relative_std_dev(values, std_dev),
+        )
     values = _load_csv_matrix(
         path,
         mixture_names=mixture_names,
@@ -673,7 +723,7 @@ def _load_previous_sph(
             )
             values = np.stack([loaded.sph[name] for name in mixture_names])
             return LoadedMatrix(values=values, path=path, dataset_path="sph")
-        values, dataset_path = _load_hdf5_matrix(
+        values, dataset_path, _std_dev, _std_dev_dataset_path = _load_hdf5_matrix(
             path,
             dataset=dataset,
             mixture_names=mixture_names,
@@ -698,7 +748,7 @@ def _load_hdf5_matrix(
     mixture_names: tuple[str, ...],
     energy_groups: int,
     label: str,
-) -> tuple[np.ndarray, str]:
+) -> tuple[np.ndarray, str, np.ndarray | None, str | None]:
     import h5py
 
     with h5py.File(path, "r") as h5:
@@ -720,7 +770,68 @@ def _load_hdf5_matrix(
         values = np.asarray(obj[:], dtype=float)
         declared = _names_from_hdf5(obj, h5, ("mixture_names", "mixtures", "domain_names"))
         _validate_hdf5_flux_mixture_names(declared, label)
-    return _normalize_matrix(values, declared, mixture_names, energy_groups, label), dataset_path
+        normalized = _normalize_matrix(
+            values,
+            declared,
+            mixture_names,
+            energy_groups,
+            label,
+        )
+        std_dev_dataset_path = _find_std_dev_dataset_path(h5, dataset_path)
+        if std_dev_dataset_path is None:
+            std_dev = None
+        else:
+            std_obj = h5[std_dev_dataset_path]
+            if hasattr(std_obj, "keys"):
+                raise ValueError(
+                    f"{label} std_dev path is a group, not a dataset: "
+                    f"/{std_dev_dataset_path}"
+                )
+            _validate_hdf5_flux_group_order(std_obj, h5, f"{label} std_dev")
+            std_declared = _names_from_hdf5(
+                std_obj,
+                h5,
+                ("mixture_names", "mixtures", "domain_names"),
+            )
+            if std_declared is None:
+                std_declared = declared
+            _validate_hdf5_flux_mixture_names(std_declared, f"{label} std_dev")
+            std_values = np.asarray(std_obj[:], dtype=float)
+            std_dev = _normalize_matrix(
+                std_values,
+                std_declared,
+                mixture_names,
+                energy_groups,
+                f"{label} std_dev",
+            )
+            _validate_std_dev(std_dev, f"{label} std_dev")
+    return normalized, dataset_path, std_dev, std_dev_dataset_path
+
+
+def _find_std_dev_dataset_path(root: Any, dataset_path: str) -> str | None:
+    candidates = (
+        f"{dataset_path}_std_dev",
+        f"{dataset_path}_stddev",
+        f"{dataset_path}_sigma",
+        f"{Path(dataset_path).name}_std_dev",
+    )
+    for candidate in candidates:
+        if candidate in root:
+            return candidate
+    target = dataset_path.strip("/")
+    for name, obj in root.items():
+        if hasattr(obj, "keys") or not name.endswith(("_std_dev", "_stddev", "_sigma")):
+            continue
+        raw = obj.attrs.get("std_dev_of")
+        if raw is None:
+            continue
+        if isinstance(raw, bytes):
+            raw_text = raw.decode("utf-8")
+        else:
+            raw_text = str(raw)
+        if raw_text.strip("/") == target:
+            return str(name)
+    return None
 
 
 def _validate_hdf5_flux_group_order(obj: Any, root: Any, label: str) -> None:
@@ -977,6 +1088,41 @@ def _validate_flux(values: np.ndarray, label: str) -> None:
         raise ValueError(f"{label} values must be finite")
     if np.any(values <= 0.0):
         raise ValueError(f"{label} values must be positive")
+
+
+def _validate_std_dev(values: np.ndarray, label: str) -> None:
+    if not np.all(np.isfinite(values)):
+        raise ValueError(f"{label} values must be finite")
+    if np.any(values < 0.0):
+        raise ValueError(f"{label} values must be non-negative")
+
+
+def _max_relative_std_dev(values: np.ndarray, std_dev: np.ndarray | None) -> float | None:
+    if std_dev is None:
+        return None
+    rel = std_dev / np.abs(values)
+    return float(np.max(rel))
+
+
+def _validate_flux_std_dev_gate(
+    matrix: LoadedMatrix,
+    label: str,
+    *,
+    required: bool,
+    max_relative: float | None,
+) -> None:
+    if max_relative is not None and (not np.isfinite(max_relative) or max_relative < 0.0):
+        raise ValueError(f"{label} std_dev threshold must be finite and non-negative")
+    if matrix.std_dev is None:
+        if required:
+            raise ValueError(f"{label} HDF5 source is missing a matching std_dev dataset")
+        return
+    max_rel = matrix.max_relative_std_dev
+    if max_relative is not None and max_rel is not None and max_rel > max_relative:
+        raise ValueError(
+            f"{label} max relative std_dev {max_rel:.6g} exceeds "
+            f"threshold {max_relative:.6g}"
+        )
 
 
 def _validate_sph(values: np.ndarray, label: str) -> None:

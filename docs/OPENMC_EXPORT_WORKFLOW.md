@@ -292,6 +292,10 @@ openmc2donjon make-openmc-sph-sidecar runs/case1/mgxs_library.h5 \
   --mg-flux runs/case1/openmc_mg_flux.h5::openmc_mg_flux \
   --table-output runs/case1/openmc_sph.csv \
   --damping 0.5 \
+  --require-reference-flux-std-dev \
+  --max-reference-flux-std-dev-rel 0.05 \
+  --require-mg-flux-std-dev \
+  --max-mg-flux-std-dev-rel 0.05 \
   --summary-json runs/case1/openmc_sph_summary.json
 
 openmc2donjon augment-sph runs/case1/mgxs_library.h5 \

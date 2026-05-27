@@ -78,6 +78,134 @@ class SphIterationTests(unittest.TestCase):
             self.assertEqual(payload["source_label"], "openmc-ce-mg-sph")
             self.assertIn("openmc_ce_reference_flux", payload["formula"])
 
+    def test_openmc_sph_sidecar_records_flux_uncertainty(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference_flux = root / "openmc_ce_flux.h5"
+            mg_flux = root / "openmc_mg_flux.h5"
+            sidecar = root / "openmc_sph.h5"
+            table = root / "openmc_sph.csv"
+            summary = root / "openmc_sph_summary.json"
+            write_mgxs(mgxs)
+            _write_flux_source(
+                reference_flux,
+                "openmc_volume_flux",
+                values=np.array([[2.0, 1.0], [4.0, 2.0]]),
+                std_dev=np.array([[0.02, 0.02], [0.08, 0.02]]),
+            )
+            _write_flux_source(
+                mg_flux,
+                "openmc_mg_flux",
+                values=np.array([[1.0, 1.0], [1.0, 1.0]]),
+                std_dev=np.array([[0.01, 0.02], [0.03, 0.04]]),
+            )
+
+            self.assertEqual(
+                cli_main(
+                    [
+                        "make-openmc-sph-sidecar",
+                        str(mgxs),
+                        "-o",
+                        str(sidecar),
+                        "--reference-flux",
+                        f"{reference_flux}::openmc_volume_flux",
+                        "--mg-flux",
+                        f"{mg_flux}::openmc_mg_flux",
+                        "--table-output",
+                        str(table),
+                        "--require-reference-flux-std-dev",
+                        "--max-reference-flux-std-dev-rel",
+                        "0.03",
+                        "--require-mg-flux-std-dev",
+                        "--max-mg-flux-std-dev-rel",
+                        "0.05",
+                        "--summary-json",
+                        str(summary),
+                    ]
+                ),
+                0,
+            )
+
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+            self.assertEqual(
+                payload["reference_flux_std_dev_dataset"],
+                "openmc_volume_flux_std_dev",
+            )
+            self.assertAlmostEqual(payload["reference_flux_max_relative_std_dev"], 0.02)
+            self.assertEqual(payload["mg_flux_std_dev_dataset"], "openmc_mg_flux_std_dev")
+            self.assertAlmostEqual(payload["mg_flux_max_relative_std_dev"], 0.04)
+
+    def test_openmc_sph_sidecar_can_require_flux_uncertainty(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference_flux = root / "openmc_ce_flux.h5"
+            mg_flux = root / "openmc_mg_flux.h5"
+            sidecar = root / "openmc_sph.h5"
+            write_mgxs(mgxs)
+            _write_flux_source(reference_flux, "openmc_volume_flux", values=np.ones((2, 2)))
+            _write_flux_source(
+                mg_flux,
+                "openmc_mg_flux",
+                values=np.ones((2, 2)),
+                std_dev=np.full((2, 2), 0.01),
+            )
+
+            with self.assertRaises(SystemExit) as ctx:
+                cli_main(
+                    [
+                        "make-openmc-sph-sidecar",
+                        str(mgxs),
+                        "-o",
+                        str(sidecar),
+                        "--reference-flux",
+                        f"{reference_flux}::openmc_volume_flux",
+                        "--mg-flux",
+                        f"{mg_flux}::openmc_mg_flux",
+                        "--require-reference-flux-std-dev",
+                    ]
+                )
+            self.assertEqual(ctx.exception.code, 1)
+
+    def test_openmc_sph_sidecar_rejects_noisy_flux_uncertainty(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference_flux = root / "openmc_ce_flux.h5"
+            mg_flux = root / "openmc_mg_flux.h5"
+            sidecar = root / "openmc_sph.h5"
+            write_mgxs(mgxs)
+            _write_flux_source(
+                reference_flux,
+                "openmc_volume_flux",
+                values=np.ones((2, 2)),
+                std_dev=np.full((2, 2), 0.20),
+            )
+            _write_flux_source(
+                mg_flux,
+                "openmc_mg_flux",
+                values=np.ones((2, 2)),
+                std_dev=np.full((2, 2), 0.01),
+            )
+
+            with self.assertRaises(SystemExit) as ctx:
+                cli_main(
+                    [
+                        "make-openmc-sph-sidecar",
+                        str(mgxs),
+                        "-o",
+                        str(sidecar),
+                        "--reference-flux",
+                        f"{reference_flux}::openmc_volume_flux",
+                        "--mg-flux",
+                        f"{mg_flux}::openmc_mg_flux",
+                        "--max-reference-flux-std-dev-rel",
+                        "0.05",
+                    ]
+                )
+            self.assertEqual(ctx.exception.code, 1)
+
     def test_cli_builds_damped_sph_update_table(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -651,6 +779,27 @@ def write_mgxs(path: Path, *, h_factor: dict[str, np.ndarray] | None = None) -> 
             group.create_dataset("scatter_matrix", data=np.zeros((1, 2, 2)))
             if h_factor and name in h_factor:
                 group.create_dataset("kappa_fission", data=np.asarray(h_factor[name], dtype=float))
+
+
+def _write_flux_source(
+    path: Path,
+    dataset_name: str,
+    *,
+    values: np.ndarray,
+    std_dev: np.ndarray | None = None,
+) -> None:
+    with h5py.File(path, "w") as h5:
+        dataset = h5.create_dataset(dataset_name, data=np.asarray(values, dtype=float))
+        dataset.attrs["group_order"] = "mgxs_donjon"
+        dataset.attrs["mixture_names"] = np.asarray(("fuel", "moderator"), dtype="S")
+        if std_dev is not None:
+            std_dataset = h5.create_dataset(
+                f"{dataset_name}_std_dev",
+                data=np.asarray(std_dev, dtype=float),
+            )
+            std_dataset.attrs["group_order"] = "mgxs_donjon"
+            std_dataset.attrs["mixture_names"] = np.asarray(("fuel", "moderator"), dtype="S")
+            std_dataset.attrs["std_dev_of"] = dataset_name
 
 
 if __name__ == "__main__":

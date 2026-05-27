@@ -13,9 +13,8 @@ import numpy as np
 from . import __version__
 from .constants import MGXS_DONJON_GROUP_ORDER
 from .donjon_sph_config import write_donjon_sph_loop_config
-from .hdf5_metadata import split_dataset_reference
 from .hdf5_names import read_mixture_names
-from .sph_iteration import LoadedMatrix, _load_hdf5_matrix, _load_matrix_source
+from .sph_iteration import LoadedMatrix, _load_matrix_source
 
 
 SCHEMA = "openmc2donjon.sph-loop-scaffold.v1"
@@ -360,36 +359,18 @@ def _load_reference_flux_std_dev(
     mixture_names: tuple[str, ...],
     energy_groups: int,
 ) -> LoadedMatrix | None:
-    if loaded_reference.dataset_path is None:
+    del reference_flux, mixture_names, energy_groups
+    if loaded_reference.std_dev is None:
         return None
-    path, _dataset = split_dataset_reference(reference_flux)
-    if not _looks_like_hdf5_path(path):
-        return None
-    dataset_path = _std_dev_dataset_path(loaded_reference.dataset_path)
-    try:
-        values, actual_dataset_path = _load_hdf5_matrix(
-            path,
-            dataset=dataset_path,
-            mixture_names=mixture_names,
-            energy_groups=energy_groups,
-            label="OpenMC reference flux std_dev",
-        )
-    except ValueError as exc:
-        if "dataset not found" in str(exc):
-            return None
-        raise
-    _validate_reference_flux_std_dev(values, mean=loaded_reference.values)
-    return LoadedMatrix(values=values, path=path, dataset_path=actual_dataset_path)
-
-
-def _looks_like_hdf5_path(path: Path) -> bool:
-    return path.suffix.lower() in {".h5", ".hdf5", ".hdf"}
-
-
-def _std_dev_dataset_path(dataset_path: str) -> str:
-    if dataset_path.endswith("_std_dev"):
-        return dataset_path
-    return f"{dataset_path}_std_dev"
+    _validate_reference_flux_std_dev(
+        loaded_reference.std_dev,
+        mean=loaded_reference.values,
+    )
+    return LoadedMatrix(
+        values=loaded_reference.std_dev,
+        path=loaded_reference.path,
+        dataset_path=loaded_reference.std_dev_dataset_path,
+    )
 
 
 def _validate_reference_flux_std_dev(values: np.ndarray, *, mean: np.ndarray) -> None:

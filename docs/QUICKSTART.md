@@ -203,7 +203,11 @@ openmc2donjon make-openmc-sph-sidecar mgxs_library.h5 \
   -o openmc_sph_sidecar.h5 \
   --reference-flux openmc_ce_flux.h5::openmc_volume_flux \
   --mg-flux openmc_mg_flux.h5::openmc_mg_flux \
-  --table-output openmc_sph.csv
+  --table-output openmc_sph.csv \
+  --require-reference-flux-std-dev \
+  --max-reference-flux-std-dev-rel 0.05 \
+  --require-mg-flux-std-dev \
+  --max-mg-flux-std-dev-rel 0.05
 
 openmc2donjon augment-sph mgxs_library.h5 \
   --sph-source openmc_sph_sidecar.h5 \

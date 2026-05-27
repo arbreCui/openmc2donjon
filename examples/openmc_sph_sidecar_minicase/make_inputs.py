@@ -19,6 +19,20 @@ REFERENCE_FLUX = np.array(
     dtype=float,
 )
 MG_FLUX = np.ones((2, 2), dtype=float)
+REFERENCE_FLUX_STD_DEV = np.array(
+    [
+        [0.0121, 0.0081],
+        [0.0064, 0.0144],
+    ],
+    dtype=float,
+)
+MG_FLUX_STD_DEV = np.array(
+    [
+        [0.010, 0.010],
+        [0.010, 0.010],
+    ],
+    dtype=float,
+)
 DAMPING = 0.5
 EXPECTED_SPH = np.power(MG_FLUX / REFERENCE_FLUX, DAMPING)
 
@@ -43,8 +57,18 @@ def main(argv: list[str] | None = None) -> int:
     reference = output_dir / "reference_expected.h5"
 
     _write_mgxs(mgxs)
-    _write_flux(ce_flux, dataset_name="openmc_volume_flux", values=REFERENCE_FLUX)
-    _write_flux(mg_flux, dataset_name="openmc_mg_flux", values=MG_FLUX)
+    _write_flux(
+        ce_flux,
+        dataset_name="openmc_volume_flux",
+        values=REFERENCE_FLUX,
+        std_dev=REFERENCE_FLUX_STD_DEV,
+    )
+    _write_flux(
+        mg_flux,
+        dataset_name="openmc_mg_flux",
+        values=MG_FLUX,
+        std_dev=MG_FLUX_STD_DEV,
+    )
     _write_reference(reference)
 
     print("OpenMC CE/MG SPH sidecar minicase inputs")
@@ -121,11 +145,22 @@ def _write_mixture(
     group.create_dataset("transport_total", data=transport)
 
 
-def _write_flux(path: Path, *, dataset_name: str, values: np.ndarray) -> None:
+def _write_flux(
+    path: Path,
+    *,
+    dataset_name: str,
+    values: np.ndarray,
+    std_dev: np.ndarray | None = None,
+) -> None:
     with h5py.File(path, "w") as h5:
         dataset = h5.create_dataset(dataset_name, data=values)
         dataset.attrs["group_order"] = "mgxs_donjon"
         dataset.attrs["mixture_names"] = np.asarray(MIXTURE_NAMES, dtype="S")
+        if std_dev is not None:
+            std_dataset = h5.create_dataset(f"{dataset_name}_std_dev", data=std_dev)
+            std_dataset.attrs["group_order"] = "mgxs_donjon"
+            std_dataset.attrs["mixture_names"] = np.asarray(MIXTURE_NAMES, dtype="S")
+            std_dataset.attrs["std_dev_of"] = dataset_name
 
 
 def _write_reference(path: Path) -> None:
