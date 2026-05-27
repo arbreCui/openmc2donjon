@@ -13,6 +13,8 @@ Endpoints (M1 scope):
   ``run-sph-loop`` JSON payloads (schema ``openmc2donjon.sph-loop.v1``).
   It is retained for compatibility but is no longer part of the primary
   OpenMC CE/MG production route.
+- ``GET /api/openmc-sph-summary?path=...`` - read-only OpenMC CE/MG
+  physics summary produced by the current OpenMC-side SPH route.
 - ``GET /api/text-preview?path=...`` - bounded UTF-8/ASCII preview for
   generated text artifacts such as ``.mcompo.txt`` and ``.macrolib.txt``.
 - ``GET /api/file-status?path=...`` - single-path existence / kind /
@@ -46,6 +48,7 @@ from .bundle import register_bundle_routes
 from .commands import register_command_routes
 from .convert import register_convert_routes
 from .openmc_workflow import register_openmc_workflow_routes
+from .openmc_sph_summary import register_openmc_sph_summary_routes
 from .pygan import register_pygan_routes
 from .text_preview import (
     TEXT_PREVIEW_SCHEMA as TEXT_PREVIEW_SCHEMA,
@@ -125,6 +128,8 @@ _MOCK_TREE: dict[str, list[tuple[str, str, int | None]]] = {
         ("openmc_sph.csv", "file", 1_500),
         ("mgxs_with_openmc_sph.h5", "file", 104_000),
         ("out.mcompo.txt", "file", 36_000),
+        ("physics_summary.json", "file", 3_800),
+        ("physics_summary.md", "file", 1_600),
     ],
     f"{_MOCK_HOME}/openmc-runs/full-core-sph": [
         # ``sph_loop_summary.json`` is what ``/api/audit`` consumes;
@@ -211,6 +216,7 @@ def create_app(
 
     register_command_routes(app)
     register_openmc_workflow_routes(app, mock_mode=mock_mode)
+    register_openmc_sph_summary_routes(app, mock_mode=mock_mode)
     register_pygan_routes(app, mock_mode=mock_mode)
 
     @app.get("/api/inspect")

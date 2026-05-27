@@ -417,6 +417,73 @@ export interface SphLoopSummary {
   workflows?: SphLoopWorkflow[];
 }
 
+export interface OpenmcSphPhysicsSummaryDecision {
+  openmc_sph: string | null;
+  sph_augment: string | null;
+}
+
+export interface OpenmcSphPhysicsSummaryNormalization {
+  method: string | null;
+  factor: number | null;
+  formula: string | null;
+}
+
+export interface OpenmcSphPhysicsSummaryFluxUncertainty {
+  ce_max_relative_std_dev: number;
+  mg_max_relative_std_dev: number;
+  ce_dataset: string | null;
+  mg_dataset: string | null;
+}
+
+export interface OpenmcSphPhysicsSummarySph {
+  kind: string | null;
+  real: boolean;
+  applied_to_xs: boolean;
+  minimum: number;
+  maximum: number;
+  mean: number;
+  max_abs_delta_from_unity: number;
+  clipped_count: number;
+}
+
+export interface OpenmcSphPhysicsSummaryHandoff {
+  augmented_hdf5_has_sph: boolean;
+  ascii_nsp_block_count: number;
+  ascii_path: string | null;
+  augmented_hdf5_path: string | null;
+}
+
+export interface OpenmcSphPhysicsSummaryMixture {
+  mixture: string;
+  ce_flux_min: number;
+  ce_flux_max: number;
+  mg_flux_min: number;
+  mg_flux_max: number;
+  normalized_mg_over_ce_min: number;
+  normalized_mg_over_ce_max: number;
+  sph_min: number;
+  sph_max: number;
+  sph_mean: number;
+  max_abs_sph_minus_1: number;
+}
+
+export interface OpenmcSphPhysicsSummary {
+  schema: string;
+  route: string;
+  requested_path?: string;
+  handoff_dir: string;
+  mixture_count: number;
+  energy_groups: number;
+  legendre_order: number;
+  mixture_names: string[];
+  decisions: OpenmcSphPhysicsSummaryDecision;
+  normalization: OpenmcSphPhysicsSummaryNormalization;
+  flux_uncertainty: OpenmcSphPhysicsSummaryFluxUncertainty;
+  sph: OpenmcSphPhysicsSummarySph;
+  handoff: OpenmcSphPhysicsSummaryHandoff;
+  per_mixture: OpenmcSphPhysicsSummaryMixture[];
+}
+
 export type ConvertFormat = "multicompo" | "macrolib";
 export type ConvertWriterBackend = "ascii" | "pygan";
 
@@ -726,4 +793,6 @@ export const api = {
   fileStatus: (path: string) =>
     getJson<FileStatus>("/api/file-status", { path }),
   audit: (path: string) => getJson<SphLoopSummary>("/api/audit", { path }),
+  openmcSphSummary: (path: string) =>
+    getJson<OpenmcSphPhysicsSummary>("/api/openmc-sph-summary", { path }),
 };

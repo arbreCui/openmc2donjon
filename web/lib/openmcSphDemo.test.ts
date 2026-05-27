@@ -30,10 +30,11 @@ describe("openmcSphDemo", () => {
 
   it("points the live minicase to the repository smoke output directory", () => {
     expect(LIVE_OPENMC_SPH_DEMO.command).toBe(
-      "bash examples/openmc_sph_sidecar_minicase/run_smoke.sh",
+      "bash examples/openmc_ce_mg_33g_sph_minicase/run_workflow.sh",
     );
     expect(LIVE_OPENMC_SPH_DEMO.mgxs).toContain(
-      "/private/tmp/openmc2donjon_openmc_sph_sidecar_minicase/inputs",
+      "/private/tmp/openmc2donjon_ce_mg_33g_sph_minicase/handoff",
     );
+    expect(LIVE_OPENMC_SPH_DEMO.physicsSummary).toContain("physics_summary.json");
   });
 });

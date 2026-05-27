@@ -15,6 +15,7 @@ import OpenmcArtifactList from "@/components/openmc/OpenmcArtifactList";
 import OpenmcCommandList from "@/components/openmc/OpenmcCommandList";
 import OpenmcEntryPoints from "@/components/openmc/OpenmcEntryPoints";
 import OpenmcProductionPathPanel from "@/components/openmc/OpenmcProductionPathPanel";
+import OpenmcSphPhysicsSummaryCard from "@/components/openmc/OpenmcSphPhysicsSummaryCard";
 import OpenmcSphQuickFillCard from "@/components/openmc/OpenmcSphQuickFillCard";
 import OpenmcWorkflowChoices from "@/components/openmc/OpenmcWorkflowChoices";
 import OpenmcWorkflowSummary from "@/components/openmc/OpenmcWorkflowSummary";
@@ -50,7 +51,8 @@ type BrowserTarget =
   | "hdf5"
   | "output"
   | "adf"
-  | "sph";
+  | "sph"
+  | "summary";
 
 interface BrowserConfig {
   initialPath: string;
@@ -101,6 +103,9 @@ function OpenmcPageContent() {
   const [keepHdf5Path, setKeepHdf5Path] = useState("");
   const [adfSource, setAdfSource] = useState("");
   const [sphSource, setSphSource] = useState("");
+  const [physicsSummaryPath, setPhysicsSummaryPath] = useState(
+    searchParams.get("summary") ?? "",
+  );
   const [loadStatepoint, setLoadStatepoint] = useState(true);
   const [check, setCheck] = useState(true);
   const [production, setProduction] = useState(
@@ -134,6 +139,7 @@ function OpenmcPageContent() {
         derivedOutput,
         adfSource,
         sphSource,
+        physicsSummaryPath,
         savedPrefix,
         format,
       })
@@ -215,6 +221,9 @@ function OpenmcPageContent() {
       case "sph":
         setSphSource(picked);
         break;
+      case "summary":
+        setPhysicsSummaryPath(picked);
+        break;
       default:
         break;
     }
@@ -246,6 +255,7 @@ function OpenmcPageContent() {
     setKeepHdf5Path(prefill.keepHdf5Path);
     setOutputPath(prefill.outputPath);
     setSphSource(prefill.sphSource);
+    setPhysicsSummaryPath(preset.physicsSummary);
     setRecipePath(prefill.recipePath);
     setStatepointPath(prefill.statepointPath);
     setLoadStatepoint(prefill.loadStatepoint);
@@ -299,7 +309,14 @@ function OpenmcPageContent() {
         />
 
         {equivalence === "sph" ? (
-          <OpenmcSphWorkflowPanel activeCommandId="export-volume-flux" />
+          <>
+            <OpenmcSphWorkflowPanel activeCommandId="export-volume-flux" />
+            <OpenmcSphPhysicsSummaryCard
+              path={physicsSummaryPath}
+              onPathChange={setPhysicsSummaryPath}
+              onBrowse={() => setBrowserTarget("summary")}
+            />
+          </>
         ) : null}
 
         <form className="glass rounded-xl p-4 space-y-4" onSubmit={plan}>
@@ -747,6 +764,7 @@ function openmcBrowserConfig(
     derivedOutput: string;
     adfSource: string;
     sphSource: string;
+    physicsSummaryPath: string;
     savedPrefix: string;
     format: ConvertFormat;
   },
@@ -809,12 +827,23 @@ function openmcBrowserConfig(
       recentScope: "openmc-adf",
     };
   }
+  if (target === "sph") {
+    return {
+      initialPath: pickBrowserStart(values.sphSource || values.savedPrefix),
+      extensions: ["h5", "hdf5"],
+      fileTypeLabel: "SPH sidecar",
+      chipLabel: "H5",
+      recentScope: "openmc-sph",
+    };
+  }
   return {
-    initialPath: pickBrowserStart(values.sphSource || values.savedPrefix),
-    extensions: ["h5", "hdf5"],
-    fileTypeLabel: "SPH sidecar",
-    chipLabel: "H5",
-    recentScope: "openmc-sph",
+    initialPath: pickBrowserStart(
+      values.physicsSummaryPath || values.runDir || values.savedPrefix,
+    ),
+    extensions: ["json"],
+    fileTypeLabel: "OpenMC SPH physics summary",
+    chipLabel: "JSON",
+    recentScope: "openmc-sph-summary",
   };
 }
 

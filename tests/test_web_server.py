@@ -162,6 +162,64 @@ def _minimal_sph_loop_summary() -> dict[str, object]:
     }
 
 
+def _minimal_openmc_sph_physics_summary() -> dict[str, object]:
+    return {
+        "schema": "openmc2donjon.openmc-ce-mg-33g-sph-physics-summary.v1",
+        "route": "OpenMC CE reference + OpenMC MG 33g same geometry -> OpenMC-side SPH",
+        "handoff_dir": "/tmp/handoff",
+        "mixture_count": 2,
+        "energy_groups": 33,
+        "legendre_order": 3,
+        "mixture_names": ["CS_FUEL", "CS_MOD"],
+        "decisions": {
+            "openmc_sph": "openmc2donjon_openmc_sph_sidecar_passed",
+            "sph_augment": "openmc2donjon_sph_augment_passed",
+        },
+        "normalization": {
+            "method": "power",
+            "factor": 1.0,
+            "formula": "sph = normalized_openmc_mg_flux / openmc_ce_reference_flux",
+        },
+        "flux_uncertainty": {
+            "ce_max_relative_std_dev": 0.01,
+            "mg_max_relative_std_dev": 0.02,
+            "ce_dataset": "openmc_volume_flux",
+            "mg_dataset": "openmc_mg_flux",
+        },
+        "sph": {
+            "kind": "openmc-ce-mg",
+            "real": True,
+            "applied_to_xs": False,
+            "minimum": 0.9,
+            "maximum": 1.1,
+            "mean": 1.0,
+            "max_abs_delta_from_unity": 0.1,
+            "clipped_count": 0,
+        },
+        "handoff": {
+            "augmented_hdf5_has_sph": True,
+            "ascii_nsp_block_count": 2,
+            "ascii_path": "/tmp/handoff/out.mcompo.txt",
+            "augmented_hdf5_path": "/tmp/handoff/mgxs_with_sph.h5",
+        },
+        "per_mixture": [
+            {
+                "mixture": "CS_FUEL",
+                "ce_flux_min": 1.0,
+                "ce_flux_max": 2.0,
+                "mg_flux_min": 1.0,
+                "mg_flux_max": 2.1,
+                "normalized_mg_over_ce_min": 0.9,
+                "normalized_mg_over_ce_max": 1.1,
+                "sph_min": 0.9,
+                "sph_max": 1.1,
+                "sph_mean": 1.0,
+                "max_abs_sph_minus_1": 0.1,
+            }
+        ],
+    }
+
+
 @unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
 class HealthEndpointTests(unittest.TestCase):
     def test_live_mode_payload(self) -> None:
@@ -874,6 +932,64 @@ class InspectEndpointTests(unittest.TestCase):
 
 
 @unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
+class OpenMCSphPhysicsSummaryEndpointTests(unittest.TestCase):
+    def test_mock_mode_returns_bundled_openmc_sph_physics_summary(self) -> None:
+        from openmc2donjon.web.openmc_sph_summary import (
+            OPENMC_SPH_PHYSICS_SUMMARY_SCHEMA,
+        )
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.get(
+            "/api/openmc-sph-summary",
+            params={"path": "/mock/home/openmc-runs/openmc-sph-minicase/physics_summary.json"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["schema"], OPENMC_SPH_PHYSICS_SUMMARY_SCHEMA)
+        self.assertEqual(payload["mixture_count"], 3)
+        self.assertEqual(payload["energy_groups"], 33)
+        self.assertEqual(payload["legendre_order"], 3)
+        self.assertEqual(payload["sph"]["kind"], "openmc-ce-mg")
+        self.assertTrue(payload["handoff"]["augmented_hdf5_has_sph"])
+        self.assertGreater(payload["handoff"]["ascii_nsp_block_count"], 0)
+
+    def test_live_mode_reads_openmc_sph_physics_summary_json(self) -> None:
+        from openmc2donjon.web.openmc_sph_summary import (
+            OPENMC_SPH_PHYSICS_SUMMARY_SCHEMA,
+        )
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "physics_summary.json"
+            path.write_text(
+                json.dumps(_minimal_openmc_sph_physics_summary()),
+                encoding="utf-8",
+            )
+            client = TestClient(create_app(mock_mode=False))
+            response = client.get("/api/openmc-sph-summary", params={"path": str(path)})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["schema"], OPENMC_SPH_PHYSICS_SUMMARY_SCHEMA)
+        self.assertEqual(payload["requested_path"], str(path.resolve()))
+        self.assertEqual(payload["mixture_names"], ["CS_FUEL", "CS_MOD"])
+
+    def test_live_mode_rejects_non_summary_json(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "not_summary.json"
+            path.write_text(json.dumps({"schema": "wrong"}), encoding="utf-8")
+            client = TestClient(create_app(mock_mode=False))
+            response = client.get("/api/openmc-sph-summary", params={"path": str(path)})
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("invalid OpenMC SPH physics summary", response.json()["detail"])
+
+
+@unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
 class FilesEndpointTests(unittest.TestCase):
     def test_live_mode_lists_real_directory(self) -> None:
         from openmc2donjon.web.server import FILES_SCHEMA, create_app
@@ -1029,6 +1145,7 @@ class FilesEndpointTests(unittest.TestCase):
         self.assertIn("openmc_ce_flux.h5", names)
         self.assertIn("openmc_mg_flux.h5", names)
         self.assertIn("mgxs_with_openmc_sph.h5", names)
+        self.assertIn("physics_summary.json", names)
 
 
 @unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")

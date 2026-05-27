@@ -61,7 +61,7 @@ export default function OpenmcSphQuickFillCard({
         </div>
       ) : null}
 
-      <div className="mt-4 grid gap-2 md:grid-cols-3">
+      <div className="mt-4 grid gap-2 md:grid-cols-4">
         <QuickLink
           label={mode === "mock" ? "CE flux export" : "CE flux file"}
           href={fluxHref(preset, "ce", mode)}
@@ -76,6 +76,13 @@ export default function OpenmcSphQuickFillCard({
           label="Corrected HDF5"
           href={`/inspect?path=${encodeURIComponent(preset.augmentedH5)}`}
           path={preset.augmentedH5}
+        />
+        <QuickLink
+          label="Physics summary"
+          href={`/openmc?workflow=two-step&equivalence=sph&summary=${encodeURIComponent(
+            preset.physicsSummary,
+          )}`}
+          path={preset.physicsSummary}
         />
       </div>
     </section>

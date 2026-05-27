@@ -14,6 +14,7 @@ export interface OpenmcSphDemoPreset {
   sphTable: string;
   augmentedH5: string;
   ascii: string;
+  physicsSummary: string;
   command: string;
 }
 
@@ -47,6 +48,7 @@ export const MOCK_OPENMC_SPH_DEMO: OpenmcSphDemoPreset = {
   sphTable: "/mock/home/openmc-runs/openmc-sph-minicase/openmc_sph.csv",
   augmentedH5: "/mock/home/openmc-runs/openmc-sph-minicase/mgxs_with_openmc_sph.h5",
   ascii: "/mock/home/openmc-runs/openmc-sph-minicase/out.mcompo.txt",
+  physicsSummary: "/mock/home/openmc-runs/openmc-sph-minicase/physics_summary.json",
   command: "openmc2donjon serve --mock",
 };
 
@@ -54,20 +56,25 @@ export const LIVE_OPENMC_SPH_DEMO: OpenmcSphDemoPreset = {
   id: "live-openmc-sph",
   label: "Live OpenMC-side SPH minicase",
   description:
-    "Run the repository smoke, then prefill the planner with the generated CE/MG SPH artifacts.",
-  runRoot: "/private/tmp/openmc2donjon_openmc_sph_sidecar_minicase",
-  mgxs: "/private/tmp/openmc2donjon_openmc_sph_sidecar_minicase/inputs/mgxs_library.h5",
+    "Run the CE/MG 33g workflow, then prefill the planner with its corrected MGXS and SPH artifacts.",
+  runRoot: "/private/tmp/openmc2donjon_ce_mg_33g_sph_minicase",
+  mgxs: "/private/tmp/openmc2donjon_ce_mg_33g_sph_minicase/handoff/mgxs_library.h5",
   ceStatepoint:
-    "/private/tmp/openmc2donjon_openmc_sph_sidecar_minicase/inputs/ce_statepoint.h5",
+    "/private/tmp/openmc2donjon_ce_mg_33g_sph_minicase/ce_case/statepoint.20.h5",
   mgStatepoint:
-    "/private/tmp/openmc2donjon_openmc_sph_sidecar_minicase/inputs/mg_statepoint.h5",
-  ceFlux: "/private/tmp/openmc2donjon_openmc_sph_sidecar_minicase/inputs/openmc_ce_flux.h5",
-  mgFlux: "/private/tmp/openmc2donjon_openmc_sph_sidecar_minicase/inputs/openmc_mg_flux.h5",
-  sphSidecar: "/private/tmp/openmc2donjon_openmc_sph_sidecar_minicase/openmc_sph_sidecar.h5",
-  sphTable: "/private/tmp/openmc2donjon_openmc_sph_sidecar_minicase/openmc_sph.csv",
-  augmentedH5: "/private/tmp/openmc2donjon_openmc_sph_sidecar_minicase/mgxs_with_openmc_sph.h5",
-  ascii: "/private/tmp/openmc2donjon_openmc_sph_sidecar_minicase/out.mcompo.txt",
-  command: "bash examples/openmc_sph_sidecar_minicase/run_smoke.sh",
+    "/private/tmp/openmc2donjon_ce_mg_33g_sph_minicase/mg_case/statepoint.20.h5",
+  ceFlux: "/private/tmp/openmc2donjon_ce_mg_33g_sph_minicase/handoff/openmc_ce_flux.h5",
+  mgFlux: "/private/tmp/openmc2donjon_ce_mg_33g_sph_minicase/handoff/openmc_mg_flux.h5",
+  sphSidecar:
+    "/private/tmp/openmc2donjon_ce_mg_33g_sph_minicase/handoff/openmc_sph_sidecar.h5",
+  sphTable: "/private/tmp/openmc2donjon_ce_mg_33g_sph_minicase/handoff/openmc_sph.csv",
+  augmentedH5:
+    "/private/tmp/openmc2donjon_ce_mg_33g_sph_minicase/handoff/mgxs_with_openmc_sph.h5",
+  ascii:
+    "/private/tmp/openmc2donjon_ce_mg_33g_sph_minicase/handoff/out_with_openmc_sph.mcompo.txt",
+  physicsSummary:
+    "/private/tmp/openmc2donjon_ce_mg_33g_sph_minicase/handoff/physics_summary.json",
+  command: "bash examples/openmc_ce_mg_33g_sph_minicase/run_workflow.sh",
 };
 
 export function openmcSphPlannerPrefill(
@@ -83,7 +90,10 @@ export function openmcSphPlannerPrefill(
     keepHdf5Path: preset.augmentedH5,
     outputPath: preset.ascii,
     sphSource: preset.sphSidecar,
-    recipePath: preset.id === "live-openmc-sph" ? "examples/openmc_sph_sidecar_minicase/run_smoke.sh" : "",
+    recipePath:
+      preset.id === "live-openmc-sph"
+        ? "examples/openmc_ce_mg_33g_sph_minicase/export_recipe.py"
+        : "",
     statepointPath: preset.id === "mock-openmc-sph" ? preset.mgStatepoint : "",
     loadStatepoint: false,
   };
