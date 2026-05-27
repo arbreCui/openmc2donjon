@@ -2,22 +2,22 @@
 
 const CHOICES = [
   {
-    title: "Direct route",
-    focus: "OpenMC MGXS -> converter",
+    title: "Direct conversion",
+    focus: "MGXS HDF5 -> DONJON ASCII",
     body:
-      "Use this when OpenMC already produces the multi-group HDF5. Inspect it, dry-run production gates, then write DONJON ASCII.",
+      "Use this when the OpenMC MGXS HDF5 already contains the homogenized macro data you want DONJON to consume.",
   },
   {
-    title: "SPH route",
-    focus: "OpenMC CE + OpenMC MG",
+    title: "OpenMC-side SPH",
+    focus: "CE reference + MG 33g same geometry",
     body:
-      "Use this when CE and 33-group MG OpenMC runs share the same geometry. Export both flux fields, compute SPH, inject it, then convert.",
+      "Use this when CE and 33-group MG OpenMC runs share geometry/output regions. Compute SPH from their flux ratio, carry NSPH, then convert.",
   },
   {
-    title: "Production guard",
-    focus: "Preflight vs Production gates",
+    title: "Review evidence",
+    focus: "physics summary + production gates",
     body:
-      "Preflight checks the HDF5 contract and paths. Production gates add stricter physics checks for mesh identity, balance, chi, uncertainty, equivalence layout, and transport consistency.",
+      "Use the physics summary to verify CE/MG/SPH semantics, then use production gates to check mesh, uncertainty, balance, chi, and equivalence layout.",
   },
 ] as const;
 
@@ -30,7 +30,9 @@ export default function OpenmcWorkflowChoices() {
             How to choose the workflow
           </h2>
           <p className="mt-1 text-sm text-[var(--fg-2)]">
-            Pick the physics route first; the form below only fills the CLI details.
+            Pick the physics route first. For SPH, the main path is: run the
+            CE/MG workflow, load the physics summary, then convert the corrected
+            HDF5.
           </p>
         </div>
         <span className="rounded border border-emerald-300/25 bg-emerald-300/[0.06] px-2 py-1 text-[11px] uppercase tracking-wider text-emerald-100">

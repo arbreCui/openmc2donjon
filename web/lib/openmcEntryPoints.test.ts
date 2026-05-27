@@ -19,7 +19,7 @@ describe("openmcEntryPoints", () => {
     expect(sph.workflow).toBe("two-step");
     expect(sph.equivalence).toBe("sph");
     expect(sph.production).toBe(true);
-    expect(sph.secondaryHref).toContain("export-volume-flux");
+    expect(sph.secondaryHref).toContain("equivalence=sph");
   });
 
   it("identifies the active entry from the planner state", () => {

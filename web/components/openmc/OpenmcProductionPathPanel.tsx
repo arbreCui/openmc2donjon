@@ -59,79 +59,140 @@ export default function OpenmcProductionPathPanel({
   const bundleHref =
     planned && plan ? openmcBundleBuilderHref(plan, format) : null;
   const object = format === "macrolib" ? "L_MACROLIB" : "L_MULTICOMPO";
-  const items = [
-    {
-      id: "source",
-      label: "01",
-      eyebrow: "OpenMC source",
-      title: loadStatepoint ? "Recipe + statepoint" : "Recipe dry-run mode",
-      body: loadStatepoint
-        ? "Select the export recipe and statepoint that define the high-fidelity OpenMC reference."
-        : "Use the recipe without loading a statepoint when you only need the generated command scaffold.",
-      status: statuses.source,
-      href: undefined,
-      hrefLabel: undefined,
-    },
-    {
-      id: "plan",
-      label: "02",
-      eyebrow: "Plan commands",
-      title: "Build the handoff plan",
-      body: "The web page checks paths and emits copyable CLI commands. It does not execute OpenMC.",
-      status: statuses.plan,
-      href: undefined,
-      hrefLabel: undefined,
-    },
-    {
-      id: "run",
-      label: "03",
-      eyebrow: workflow === "one-step" ? "Run managed CLI" : "Run staged CLI",
-      title: workflow === "one-step" ? "Export, check, convert" : "Export then convert",
-      body:
-        workflow === "one-step"
-          ? `The primary command exports MGXS, applies ${equivalenceLabel(equivalence)}, writes ${object}, and records the run.`
-          : `Run export first, inspect or augment the HDF5, then convert that handoff into ${object}.`,
-      status: statuses.run,
-      href: undefined,
-      hrefLabel: undefined,
-    },
-    {
-      id: "review",
-      label: "04",
-      eyebrow: "Review handoff",
-      title: workflow === "two-step" ? "Inspect before conversion" : "Inspect outputs",
-      body: "Review the HDF5 contract and generated ASCII before handing the result to DONJON.",
-      status: statuses.review,
-      href: inspectHref ?? undefined,
-      hrefLabel: "Inspect HDF5",
-    },
-    {
-      id: "bundle",
-      label: "05",
-      eyebrow: "Bundle",
-      title: "Package production evidence",
-      body:
-        "Use a managed run directory to keep the MGXS input, ASCII output, summaries, and manifest together.",
-      status: statuses.bundle,
-      href: bundleHref ?? undefined,
-      hrefLabel: "Open bundle builder",
-    },
-  ] as const;
+  const isOpenmcSph = equivalence === "sph";
+  const items = isOpenmcSph
+    ? [
+        {
+          id: "ce-mg",
+          label: "01",
+          eyebrow: "OpenMC physics",
+          title: "Run CE + MG 33g",
+          body:
+            "Run the CE reference and the 33-group OpenMC macro calculation with the same geometry and output regions.",
+          status: statuses.source,
+          href: undefined,
+          hrefLabel: undefined,
+        },
+        {
+          id: "sph",
+          label: "02",
+          eyebrow: "OpenMC-side SPH",
+          title: "Build NSPH sidecar",
+          body:
+            "Export CE/MG region-group fluxes, compute SPH factors, and inject them into the MGXS handoff as NSPH.",
+          status: statuses.plan,
+          href: undefined,
+          hrefLabel: undefined,
+        },
+        {
+          id: "summary",
+          label: "03",
+          eyebrow: "Physics evidence",
+          title: "Load physics summary",
+          body:
+            "Review SPH ranges, CE/MG flux uncertainty, and confirm the final ASCII carries NSPH factors.",
+          status: statuses.run,
+          href: undefined,
+          hrefLabel: undefined,
+        },
+        {
+          id: "convert",
+          label: "04",
+          eyebrow: "Converter",
+          title: `Convert corrected HDF5 to ${object}`,
+          body:
+            "Use the augmented HDF5 as the converter input. The macro XS remain unchanged; DONJON consumes NSPH as equivalence factors.",
+          status: statuses.review,
+          href: convertHref ?? inspectHref ?? undefined,
+          hrefLabel: convertHref ? "Open converter" : "Inspect HDF5",
+        },
+        {
+          id: "bundle",
+          label: "05",
+          eyebrow: "Bundle",
+          title: "Package production evidence",
+          body:
+            "Keep the corrected MGXS, ASCII handoff, physics summary, command summaries, and manifest together.",
+          status: statuses.bundle,
+          href: bundleHref ?? undefined,
+          hrefLabel: "Open bundle builder",
+        },
+      ]
+    : [
+        {
+          id: "source",
+          label: "01",
+          eyebrow: "OpenMC source",
+          title: loadStatepoint ? "Recipe + statepoint" : "Recipe dry-run mode",
+          body: loadStatepoint
+            ? "Select the export recipe and statepoint that define the OpenMC MGXS handoff."
+            : "Use the recipe without loading a statepoint when you only need the generated command scaffold.",
+          status: statuses.source,
+          href: undefined,
+          hrefLabel: undefined,
+        },
+        {
+          id: "plan",
+          label: "02",
+          eyebrow: "Plan commands",
+          title: "Build the handoff plan",
+          body: "The web page checks paths and emits copyable CLI commands. It does not execute OpenMC.",
+          status: statuses.plan,
+          href: undefined,
+          hrefLabel: undefined,
+        },
+        {
+          id: "run",
+          label: "03",
+          eyebrow: workflow === "one-step" ? "Run managed CLI" : "Run staged CLI",
+          title: workflow === "one-step" ? "Export, check, convert" : "Export then convert",
+          body:
+            workflow === "one-step"
+              ? `The primary command exports MGXS, applies ${equivalenceLabel(equivalence)}, writes ${object}, and records the run.`
+              : `Run export first, inspect or augment the HDF5, then convert that handoff into ${object}.`,
+          status: statuses.run,
+          href: undefined,
+          hrefLabel: undefined,
+        },
+        {
+          id: "review",
+          label: "04",
+          eyebrow: "Review handoff",
+          title: workflow === "two-step" ? "Inspect before conversion" : "Inspect outputs",
+          body: "Review the HDF5 contract and generated ASCII before handing the result to DONJON.",
+          status: statuses.review,
+          href: inspectHref ?? undefined,
+          hrefLabel: "Inspect HDF5",
+        },
+        {
+          id: "bundle",
+          label: "05",
+          eyebrow: "Bundle",
+          title: "Package production evidence",
+          body:
+            "Use a managed run directory to keep the MGXS input, ASCII output, summaries, and manifest together.",
+          status: statuses.bundle,
+          href: bundleHref ?? undefined,
+          hrefLabel: "Open bundle builder",
+        },
+      ];
 
   return (
     <section className="mb-5 rounded-xl border border-cyan-300/20 bg-cyan-300/[0.035] p-4">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="text-[10px] uppercase tracking-[0.14em] text-cyan-200/80">
-            OpenMC handoff planner
+            Production path
           </div>
           <h2 className="mt-1 text-base font-semibold tracking-tight">
-            Plan the OpenMC export before direct conversion
+            {isOpenmcSph
+              ? "OpenMC CE/MG SPH before DONJON conversion"
+              : "Plan the OpenMC export before direct conversion"}
           </h2>
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
-            This surface builds the shell commands for the OpenMC side of the
-            workflow. After the command runs, the produced HDF5 and ASCII
-            artifacts continue through Inspect, Convert, and Bundle.
+            {isOpenmcSph
+              ? "This route keeps the SPH equivalence calculation upstream in OpenMC. DONJON receives the corrected handoff and NSPH factors; it is not used as an SPH feedback loop."
+              : "This surface builds the shell commands for the OpenMC side of the workflow. After the command runs, the produced HDF5 and ASCII artifacts continue through Inspect, Convert, and Bundle."}
           </p>
         </div>
         <span className="rounded border border-[var(--edge)] px-2 py-1 font-mono text-[11px] uppercase tracking-wider text-[var(--fg-2)]">

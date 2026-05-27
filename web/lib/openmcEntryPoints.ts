@@ -20,10 +20,10 @@ export const OPENMC_ENTRY_POINTS: readonly OpenmcEntryPoint[] = [
   {
     id: "direct-mgxs",
     eyebrow: "Direct handoff",
-    title: "OpenMC MGXS export",
+    title: "Convert an OpenMC MGXS handoff",
     body:
-      "Use this when OpenMC already produces the multi-group HDF5 handoff. Plan export, inspect the HDF5, then convert it directly to DONJON ASCII.",
-    primaryLabel: "Use direct export",
+      "Start here when you already have an OpenMC MGXS HDF5. Inspect it, dry-run production gates, then write L_MULTICOMPO or L_MACROLIB ASCII.",
+    primaryLabel: "Use direct converter",
     secondaryHref: "/convert?intent=direct-convert&format=multicompo&check=1&production=1",
     secondaryLabel: "Open converter",
     workflow: "two-step",
@@ -34,12 +34,12 @@ export const OPENMC_ENTRY_POINTS: readonly OpenmcEntryPoint[] = [
   {
     id: "openmc-sph",
     eyebrow: "OpenMC-side equivalence",
-    title: "CE/MG SPH preparation",
+    title: "Run CE/MG 33g SPH preparation",
     body:
-      "Use this when a CE OpenMC reference and a 33-group OpenMC macro solve share the same geometry. Export both flux fields, compute SPH, inject it, then convert.",
-    primaryLabel: "Use SPH preparation",
-    secondaryHref: "/builder?command=export-volume-flux",
-    secondaryLabel: "Build flux export",
+      "Start here for Alain's route: OpenMC CE reference plus OpenMC 33-group macro solve on the same geometry, then OpenMC-side SPH and normal conversion.",
+    primaryLabel: "Use CE/MG SPH route",
+    secondaryHref: "/openmc?workflow=two-step&equivalence=sph",
+    secondaryLabel: "Open SPH summary",
     workflow: "two-step",
     equivalence: "sph",
     production: true,
