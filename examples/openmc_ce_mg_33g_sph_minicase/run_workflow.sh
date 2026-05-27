@@ -125,9 +125,15 @@ echo "== Compute OpenMC-side SPH, inject it, and convert =="
   --require-sph
 
 echo
+echo "== Summarize OpenMC-side SPH physics handoff =="
+"$PYTHON_BIN" "$REPO_ROOT/examples/openmc_ce_mg_33g_sph_minicase/summarize_outputs.py" \
+  --handoff-dir "$OUT_DIR"
+
+echo
 echo "OpenMC CE/MG 33g SPH colorset minicase complete:"
 echo "  MGXS: $MGXS_H5"
 echo "  CE flux: $CE_FLUX::openmc_volume_flux"
 echo "  MG flux: $MG_FLUX::openmc_mg_flux"
 echo "  SPH sidecar: $SPH_SIDECAR"
 echo "  DONJON ASCII: $OUT_DIR/out_with_openmc_sph.mcompo.txt"
+echo "  physics summary: $OUT_DIR/physics_summary.md"

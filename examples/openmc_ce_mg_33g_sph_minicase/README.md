@@ -81,6 +81,8 @@ handoff/openmc_sph.csv           auditable SPH table
 handoff/openmc_sph_sidecar.h5    HDF5 SPH sidecar
 handoff/mgxs_with_openmc_sph.h5  MGXS handoff after SPH augmentation
 handoff/out_with_openmc_sph.mcompo.txt
+handoff/physics_summary.json     machine-readable CE/MG/SPH audit summary
+handoff/physics_summary.md       human-readable CE/MG/SPH audit summary
 ```
 
 The SPH command gates both CE and MG flux uncertainty:
@@ -94,6 +96,11 @@ The SPH command gates both CE and MG flux uncertainty:
 
 That keeps noisy OpenMC flux ratios from being silently promoted into
 production SPH factors.
+
+The physics summary records the CE/MG flux uncertainty, SPH factor range by
+mixture, and confirms that the final ASCII handoff contains `NSPH` equivalence
+factors.  It is meant for review and demos; it is not a substitute for a
+benchmark-quality validation.
 
 ## Manual Steps
 
@@ -145,6 +152,9 @@ openmc2donjon handoff/mgxs_with_openmc_sph.h5 \
   -o handoff/out_with_openmc_sph.mcompo.txt \
   --check \
   --require-sph
+
+python examples/openmc_ce_mg_33g_sph_minicase/summarize_outputs.py \
+  --handoff-dir handoff
 ```
 
 ## What This Proves
