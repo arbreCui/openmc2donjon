@@ -20,6 +20,11 @@ from ..openmc_surface_flux import (
     DEFAULT_TALLY_NAME as DEFAULT_SURFACE_FLUX_TALLY_NAME,
     export_openmc_surface_flux,
 )
+from ..openmc_volume_flux import (
+    DATASET_NAME as DEFAULT_VOLUME_FLUX_DATASET_NAME,
+    DEFAULT_SOURCE_GROUP_ORDER as DEFAULT_VOLUME_FLUX_SOURCE_GROUP_ORDER,
+    export_openmc_volume_flux,
+)
 
 
 def command_specs() -> tuple[CommandSpec, ...]:
@@ -29,6 +34,12 @@ def command_specs() -> tuple[CommandSpec, ...]:
             build_export_surface_flux_parser,
             export_surface_flux_handler,
             "export OpenMC surface flux from a statepoint",
+        ),
+        CommandSpec(
+            "export-volume-flux",
+            build_export_volume_flux_parser,
+            export_volume_flux_handler,
+            "export OpenMC volume flux from a statepoint",
         ),
         CommandSpec(
             "check-face-flux",
@@ -284,6 +295,70 @@ def build_export_surface_flux_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help="write a machine-readable surface-flux export summary JSON",
+    )
+    parser.add_argument("--force", action="store_true", help="overwrite output if it exists")
+    return parser
+
+
+def build_export_volume_flux_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="openmc2donjon export-volume-flux",
+        description=(
+            "Export an OpenMC volume-flux tally from a statepoint into the "
+            "canonical (mixture, group) HDF5 layout consumed by "
+            "make-openmc-sph-sidecar."
+        ),
+    )
+    parser.add_argument("statepoint", type=Path, help="OpenMC statepoint containing the tally")
+    parser.add_argument("-o", "--output", type=Path, required=True, help="volume-flux HDF5 output")
+    parser.add_argument(
+        "--mgxs",
+        type=Path,
+        default=None,
+        help="MGXS HDF5 handoff used for mixture names and group count",
+    )
+    parser.add_argument(
+        "--tally-name",
+        default=DEFAULT_VOLUME_FLUX_DATASET_NAME,
+        help=f"OpenMC tally name (default: {DEFAULT_VOLUME_FLUX_DATASET_NAME})",
+    )
+    parser.add_argument(
+        "--dataset-name",
+        default=DEFAULT_VOLUME_FLUX_DATASET_NAME,
+        help=(
+            "output dataset name (default: openmc_volume_flux; use "
+            "openmc_mg_flux for the MG macro flux side of OpenMC SPH)"
+        ),
+    )
+    parser.add_argument(
+        "--std-dev-dataset-name",
+        default=None,
+        help="output std_dev dataset name (default: <dataset-name>_std_dev)",
+    )
+    parser.add_argument(
+        "--mixture-names",
+        default=None,
+        help="comma-separated mixture names when --mgxs is not supplied",
+    )
+    parser.add_argument(
+        "--energy-groups",
+        type=int,
+        default=None,
+        help="energy-group count when --mgxs is not supplied",
+    )
+    parser.add_argument(
+        "--source-group-order",
+        default=DEFAULT_VOLUME_FLUX_SOURCE_GROUP_ORDER,
+        help=(
+            "metadata label for the raw tally order before writing "
+            "MGXS/DONJON order"
+        ),
+    )
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        default=None,
+        help="write a machine-readable volume-flux export summary JSON",
     )
     parser.add_argument("--force", action="store_true", help="overwrite output if it exists")
     return parser
@@ -570,6 +645,27 @@ def export_surface_flux_handler(args: argparse.Namespace) -> int:
         )
     except USER_FACING_EXCEPTIONS as exc:
         exit_with_command_error(parser, "export-surface-flux", exc)
+    return 0
+
+
+def export_volume_flux_handler(args: argparse.Namespace) -> int:
+    parser = parser_from_args(args)
+    try:
+        export_openmc_volume_flux(
+            args.statepoint,
+            args.output,
+            mgxs_h5=args.mgxs,
+            tally_name=args.tally_name,
+            dataset_name=args.dataset_name,
+            std_dev_dataset_name=args.std_dev_dataset_name,
+            mixture_names=_parse_optional_str_tuple(args.mixture_names),
+            energy_groups=args.energy_groups,
+            source_group_order=args.source_group_order,
+            force=args.force,
+            summary_json=args.summary_json,
+        )
+    except USER_FACING_EXCEPTIONS as exc:
+        exit_with_command_error(parser, "export-volume-flux", exc)
     return 0
 
 

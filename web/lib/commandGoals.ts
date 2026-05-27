@@ -83,6 +83,7 @@ export const COMMAND_GOALS: readonly CommandGoalDefinition[] = [
       "make-low-order-driver",
       "make-adf-sidecar",
       "augment-adf",
+      "export-volume-flux",
       "make-openmc-sph-sidecar",
       "make-sph-sidecar",
       "augment-sph",
@@ -98,7 +99,12 @@ export const COMMAND_GOALS: readonly CommandGoalDefinition[] = [
     cta: "Open OpenMC SPH builder",
     actionHint:
       "Compute the SPH sidecar from CE/MG fluxes, inject it, then run the direct converter.",
-    commandIds: ["make-openmc-sph-sidecar", "augment-sph", "direct-convert"],
+    commandIds: [
+      "export-volume-flux",
+      "make-openmc-sph-sidecar",
+      "augment-sph",
+      "direct-convert",
+    ],
   },
   {
     id: "package",

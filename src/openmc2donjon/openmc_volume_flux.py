@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from os import PathLike
 from pathlib import Path
 from typing import Iterable
@@ -11,11 +12,13 @@ import numpy as np
 
 from . import __version__
 from .constants import MGXS_DONJON_GROUP_ORDER
+from .hdf5_names import read_mixture_names
 
 
 DATASET_NAME = "openmc_volume_flux"
 STD_DEV_DATASET_NAME = "openmc_volume_flux_std_dev"
 SCHEMA = "openmc2donjon.openmc-volume-flux.v1"
+PASS_DECISION = "openmc2donjon_volume_flux_export_passed"
 DEFAULT_SOURCE_GROUP_ORDER = "openmc_energy_filter_reversed"
 
 
@@ -30,6 +33,86 @@ class OpenMCVolumeFluxReport:
     maximum: float
     std_dev_dataset: str | None = None
     max_relative_std_dev: float | None = None
+    statepoint: Path | None = None
+    tally_name: str | None = None
+
+
+def export_openmc_volume_flux(
+    statepoint: str | PathLike[str],
+    output_h5: str | PathLike[str],
+    *,
+    mgxs_h5: str | PathLike[str] | None = None,
+    tally_name: str = DATASET_NAME,
+    dataset_name: str = DATASET_NAME,
+    std_dev_dataset_name: str | None = None,
+    mixture_names: Iterable[str] | None = None,
+    energy_groups: int | None = None,
+    source_group_order: str = DEFAULT_SOURCE_GROUP_ORDER,
+    force: bool = False,
+    summary_json: str | PathLike[str] | None = None,
+) -> OpenMCVolumeFluxReport:
+    """Export an OpenMC statepoint volume-flux tally as canonical HDF5.
+
+    The written dataset has shape ``(mixture, group)`` and carries the
+    ``group_order='mgxs_donjon'`` and ``mixture_names`` attributes required by
+    ``make-openmc-sph-sidecar``.  OpenMC EnergyFilter tally bins are
+    low-to-high; values are reversed along the energy axis by default.
+    """
+
+    try:
+        import openmc
+    except ImportError as exc:  # pragma: no cover - depends on user environment
+        raise RuntimeError(
+            "OpenMC is required to export a volume-flux tally from a statepoint"
+        ) from exc
+
+    statepoint_path = Path(statepoint)
+    output_path = Path(output_h5)
+    if not statepoint_path.exists():
+        raise FileNotFoundError(f"statepoint does not exist: {statepoint_path}")
+    if output_path.exists() and not force:
+        raise FileExistsError(f"output already exists; use --force to overwrite: {output_path}")
+
+    names, ngroups = _resolve_metadata(
+        mgxs_h5=None if mgxs_h5 is None else Path(mgxs_h5),
+        mixture_names=tuple(mixture_names) if mixture_names is not None else None,
+        energy_groups=energy_groups,
+    )
+    with openmc.StatePoint(str(statepoint_path)) as sp:
+        tally = sp.get_tally(name=tally_name)
+        mean = tally.get_values(scores=["flux"], value="mean")
+        std_dev = tally.get_values(scores=["flux"], value="std_dev")
+
+    flux = reverse_openmc_energy_filter_flux(
+        mean,
+        mixture_count=len(names),
+        energy_groups=ngroups,
+    )
+    flux_std_dev = reverse_openmc_energy_filter_flux(
+        std_dev,
+        mixture_count=len(names),
+        energy_groups=ngroups,
+    )
+    report = write_openmc_flux_hdf5(
+        output_path,
+        flux,
+        mixture_names=names,
+        std_dev=flux_std_dev,
+        dataset_name=dataset_name,
+        std_dev_dataset_name=(
+            std_dev_dataset_name
+            if std_dev_dataset_name is not None
+            else f"{dataset_name}_std_dev"
+        ),
+        source_group_order=source_group_order,
+        replace=True,
+        statepoint=statepoint_path,
+        tally_name=tally_name,
+    )
+    print_report(report)
+    if summary_json is not None:
+        write_summary(Path(summary_json), report)
+    return report
 
 
 def reverse_openmc_energy_filter_flux(
@@ -68,6 +151,38 @@ def write_openmc_volume_flux_hdf5(
     replace: bool = True,
 ) -> OpenMCVolumeFluxReport:
     """Append a canonical ``/openmc_volume_flux`` dataset to an MGXS HDF5 file."""
+
+    return write_openmc_flux_hdf5(
+        output_h5,
+        values,
+        mixture_names=mixture_names,
+        std_dev=std_dev,
+        dataset_name=dataset_name,
+        std_dev_dataset_name=std_dev_dataset_name,
+        source_group_order=source_group_order,
+        replace=replace,
+    )
+
+
+def write_openmc_flux_hdf5(
+    output_h5: str | PathLike[str],
+    values: np.ndarray | Iterable[Iterable[float]],
+    *,
+    mixture_names: Iterable[str],
+    std_dev: np.ndarray | Iterable[Iterable[float]] | None = None,
+    dataset_name: str = DATASET_NAME,
+    std_dev_dataset_name: str = STD_DEV_DATASET_NAME,
+    source_group_order: str = DEFAULT_SOURCE_GROUP_ORDER,
+    replace: bool = True,
+    statepoint: str | PathLike[str] | None = None,
+    tally_name: str | None = None,
+) -> OpenMCVolumeFluxReport:
+    """Append a canonical OpenMC flux matrix to an HDF5 file.
+
+    ``dataset_name`` lets the same writer produce both CE reference flux
+    (typically ``openmc_volume_flux``) and MG macro flux
+    (for example ``openmc_mg_flux``) for OpenMC-side SPH equivalence.
+    """
 
     import h5py
 
@@ -120,7 +235,59 @@ def write_openmc_volume_flux_hdf5(
             if flux_std_dev is None
             else float(np.max(flux_std_dev / np.abs(flux)))
         ),
+        statepoint=None if statepoint is None else Path(statepoint),
+        tally_name=tally_name,
     )
+
+
+def print_report(report: OpenMCVolumeFluxReport) -> None:
+    print("OpenMC-to-DONJON volume flux export")
+    print(f"  schema: {SCHEMA}")
+    if report.statepoint is not None:
+        print(f"  statepoint: {report.statepoint}")
+    if report.tally_name is not None:
+        print(f"  tally: {report.tally_name}")
+    print(f"  output: {report.output_h5}::{report.dataset}")
+    print(
+        f"  mixtures={len(report.mixture_names)} groups={report.energy_groups} "
+        f"group_order={MGXS_DONJON_GROUP_ORDER} "
+        f"source_group_order={report.source_group_order}"
+    )
+    print(
+        "  flux range: "
+        f"min={report.minimum:.6g} max={report.maximum:.6g}"
+    )
+    if report.std_dev_dataset is not None:
+        print(
+            f"  std_dev: {report.std_dev_dataset} "
+            f"max_rel={report.max_relative_std_dev:.6g}"
+        )
+    print()
+    print("Volume flux export decision")
+    print(f"  {PASS_DECISION}")
+
+
+def write_summary(path: Path, report: OpenMCVolumeFluxReport) -> None:
+    payload = {
+        "schema": SCHEMA,
+        "package_version": __version__,
+        "decision": PASS_DECISION,
+        "statepoint": None if report.statepoint is None else str(report.statepoint),
+        "tally_name": report.tally_name,
+        "output_h5": str(report.output_h5),
+        "dataset": report.dataset,
+        "std_dev_dataset": report.std_dev_dataset,
+        "mixture_count": len(report.mixture_names),
+        "mixture_names": list(report.mixture_names),
+        "energy_groups": report.energy_groups,
+        "group_order": MGXS_DONJON_GROUP_ORDER,
+        "source_group_order": report.source_group_order,
+        "min": report.minimum,
+        "max": report.maximum,
+        "max_relative_std_dev": report.max_relative_std_dev,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def _as_mixture_names(values: Iterable[str]) -> tuple[str, ...]:
@@ -132,6 +299,36 @@ def _as_mixture_names(values: Iterable[str]) -> tuple[str, ...]:
     if len(set(names)) != len(names):
         raise ValueError("mixture_names must be unique")
     return names
+
+
+def _resolve_metadata(
+    *,
+    mgxs_h5: Path | None,
+    mixture_names: tuple[str, ...] | None,
+    energy_groups: int | None,
+) -> tuple[tuple[str, ...], int]:
+    mgxs_names: tuple[str, ...] | None = None
+    mgxs_groups: int | None = None
+    if mgxs_h5 is not None:
+        import h5py
+
+        with h5py.File(mgxs_h5, "r") as h5:
+            if "mixtures" not in h5:
+                raise ValueError(f"{mgxs_h5}: missing /mixtures group")
+            mgxs_names = read_mixture_names(h5)
+            if "energy_groups" in h5.attrs:
+                mgxs_groups = int(h5.attrs["energy_groups"])
+            elif "energy_bounds" in h5:
+                mgxs_groups = int(np.asarray(h5["energy_bounds"][:]).size - 1)
+            else:
+                raise ValueError(f"{mgxs_h5}: missing energy group metadata")
+    names = mixture_names or mgxs_names
+    if not names:
+        raise ValueError("mixture names must be supplied, either via --mgxs or --mixture-names")
+    groups = int(energy_groups if energy_groups is not None else mgxs_groups or 0)
+    if groups <= 0:
+        raise ValueError("energy group count must be supplied, either via --mgxs or --energy-groups")
+    return _as_mixture_names(names), groups
 
 
 def _as_flux_array(

@@ -46,6 +46,8 @@ class CliTests(unittest.TestCase):
 
         self.assertIn("make-openmc-sph-sidecar", help_text)
         self.assertIn("compute OpenMC CE/MG SPH factors and write a sidecar", help_text)
+        self.assertIn("export-volume-flux", help_text)
+        self.assertIn("export OpenMC volume flux from a statepoint", help_text)
         self.assertIn("make-sph-update-table", help_text)
         self.assertIn("compute an OpenMC CE/MG SPH factor table", help_text)
         self.assertNotIn("run-sph-loop", help_text)

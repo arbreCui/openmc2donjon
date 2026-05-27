@@ -153,6 +153,30 @@ export const COMMAND_BUILDER_SPECS: readonly CommandBuilderSpec[] = [
     ],
   },
   {
+    id: "export-volume-flux",
+    title: "Export OpenMC volume flux",
+    summary:
+      "Build the command that extracts a region/group OpenMC flux tally for CE/MG SPH.",
+    base: ["openmc2donjon", "export-volume-flux"],
+    fields: [
+      path("statepoint", "Statepoint", "OpenMC statepoint containing the flux tally.", "<statepoint.h5>", 0, H5),
+      optionPath("output", "Flux HDF5", "Output HDF5 source for SPH.", "-o", "openmc_ce_flux.h5", H5, true),
+      optionPath("mgxs", "MGXS handoff", "MGXS file for mixture names and group count.", "--mgxs", "mgxs_library.h5", H5),
+      text("tally_name", "Tally name", "OpenMC tally name; empty keeps CLI default.", "--tally-name"),
+      text("dataset_name", "Dataset name", "Output dataset name, e.g. openmc_volume_flux or openmc_mg_flux.", "--dataset-name"),
+      text("std_dev_dataset_name", "Std-dev dataset", "Optional std_dev dataset name.", "--std-dev-dataset-name"),
+      text("mixture_names", "Mixture names", "Comma-separated names when --mgxs is not supplied.", "--mixture-names"),
+      text("energy_groups", "Energy groups", "Group count when --mgxs is not supplied.", "--energy-groups"),
+      text("source_group_order", "Source group order", "Metadata label for raw tally order.", "--source-group-order"),
+      optionPath("summary_json", "Summary JSON", "Optional export summary JSON.", "--summary-json", "volume_flux_summary.json", JSON),
+      toggle("force", "Force overwrite", "Allow replacing an existing output file.", "--force"),
+    ],
+    notes: [
+      "Run once for the CE reference flux and once for the OpenMC MG macro flux.",
+      "Use --dataset-name openmc_mg_flux for the MG macro side.",
+    ],
+  },
+  {
     id: "check-face-flux",
     title: "Validate face-flux inputs",
     summary: "Build a QA command before constructing flux-ratio ADF sidecars.",
@@ -328,6 +352,17 @@ export function commandBuilderStage(id: string): CommandBuilderStage {
     };
   }
   if (
+    id === "export-volume-flux" ||
+    id === "make-sph-update-table"
+  ) {
+    return {
+      label: "OpenMC-side SPH",
+      summary:
+        "OpenMC equivalence command: compare CE reference and MG macro flux, then write explicit SPH factors for each output region and energy group.",
+      reference: "OpenMC CE reference plus OpenMC MG 33g macro flux",
+    };
+  }
+  if (
     id === "export-surface-flux" ||
     id === "check-face-flux" ||
     id === "make-low-order-driver" ||
@@ -339,14 +374,6 @@ export function commandBuilderStage(id: string): CommandBuilderStage {
       summary:
         "One-shot equivalence command: prepare face-flux or low-order inputs before ADF sidecar generation.",
       reference: "OpenMC reference plus low-order face data",
-    };
-  }
-  if (id === "make-sph-update-table") {
-    return {
-      label: "OpenMC-side SPH",
-      summary:
-        "OpenMC equivalence command: compare CE reference and MG macro flux, then write explicit SPH factors for each output region and energy group.",
-      reference: "OpenMC CE reference plus OpenMC MG 33g macro flux",
     };
   }
   if (id === "bundle" || id === "validate-bundle") {

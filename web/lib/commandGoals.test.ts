@@ -31,6 +31,7 @@ describe("commandGoals", () => {
 
   it("keeps OpenMC visible in the SPH sidecar goal", () => {
     const goals = commandGoals([
+      command("export-volume-flux", "partial"),
       command("make-openmc-sph-sidecar", "partial"),
       command("augment-sph", "partial"),
     ]);
@@ -39,6 +40,7 @@ describe("commandGoals", () => {
     expect(sph?.body).toContain("OpenMC CE");
     expect(sph?.actionHint).toContain("sidecar");
     expect(sph?.commands.map((command) => command.id)).toEqual([
+      "export-volume-flux",
       "make-openmc-sph-sidecar",
       "augment-sph",
     ]);

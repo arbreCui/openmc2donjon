@@ -67,9 +67,14 @@ export const COMMAND_WORKFLOW_LANES: readonly WorkflowLane[] = [
       {
         id: "drivers",
         title: "Prepare OpenMC evidence",
-        body: "Export OpenMC surface currents for ADF/DF, or bring OpenMC CE/MG SPH factors for each output region and group.",
+        body: "Export OpenMC surface currents for ADF/DF, or export CE/MG volume fluxes for OpenMC-side SPH.",
         href: "/builder?command=export-surface-flux",
-        commandIds: ["export-surface-flux", "make-low-order-driver", "make-openmc-sph-sidecar"],
+        commandIds: [
+          "export-surface-flux",
+          "export-volume-flux",
+          "make-low-order-driver",
+          "make-openmc-sph-sidecar",
+        ],
       },
       {
         id: "qa",

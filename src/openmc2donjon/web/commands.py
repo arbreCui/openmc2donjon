@@ -269,6 +269,27 @@ DETAILS: dict[str, CommandDetail] = {
         cli="openmc2donjon export-surface-flux statepoint.h5 --output face_flux.h5",
         tags=("OpenMC", "ADF", "surface flux"),
     ),
+    "export-volume-flux": CommandDetail(
+        group="sph",
+        title="Export OpenMC volume flux",
+        summary=(
+            "Export a region/group OpenMC flux tally for CE/MG SPH equivalence."
+        ),
+        status="partial",
+        status_label="Command builder ready",
+        web_path="/builder?command=export-volume-flux",
+        cli=(
+            "openmc2donjon export-volume-flux statepoint.h5 --mgxs mgxs_library.h5 "
+            "--dataset-name openmc_volume_flux -o openmc_ce_flux.h5"
+        ),
+        tags=("OpenMC", "SPH", "volume flux"),
+        use_when=(
+            "You need CE reference or MG macro flux in the canonical "
+            "(mixture, group) HDF5 layout before computing OpenMC-side SPH."
+        ),
+        produces="A flux HDF5 source consumed by make-openmc-sph-sidecar.",
+        next_step="Run it once for CE and once for MG, then build the OpenMC SPH sidecar.",
+    ),
     "check-face-flux": CommandDetail(
         group="adf",
         title="Check face-flux inputs",

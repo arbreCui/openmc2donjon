@@ -146,6 +146,7 @@ echo "== CLI smoke =="
 "$PYTHON_BIN" -m openmc2donjon.cli --version
 "$PYTHON_BIN" -m openmc2donjon.cli --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli check --help >/dev/null
+"$PYTHON_BIN" -m openmc2donjon.cli export-volume-flux --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli export-surface-flux --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli check-face-flux --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli make-low-order-driver --help >/dev/null

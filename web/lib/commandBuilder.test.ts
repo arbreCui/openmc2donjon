@@ -54,6 +54,25 @@ describe("commandBuilder", () => {
     expect(cli).toContain("--net-current <net_current>");
   });
 
+  it("builds OpenMC volume-flux export commands for SPH", () => {
+    const spec = commandBuilderSpec("export-volume-flux");
+    expect(spec).not.toBeNull();
+    const values = defaultBuilderValues(spec!);
+    values.statepoint = "/runs/case/mg_statepoint.h5";
+    values.output = "/runs/case/openmc_mg_flux.h5";
+    values.mgxs = "/runs/case/mgxs_library.h5";
+    values.tally_name = "openmc_mg_volume_flux";
+    values.dataset_name = "openmc_mg_flux";
+    values.summary_json = "/runs/case/openmc_mg_flux_summary.json";
+
+    expect(buildCommandCli(spec!, values)).toBe(
+      "openmc2donjon export-volume-flux /runs/case/mg_statepoint.h5 " +
+        "-o /runs/case/openmc_mg_flux.h5 --mgxs /runs/case/mgxs_library.h5 " +
+        "--tally-name openmc_mg_volume_flux --dataset-name openmc_mg_flux " +
+        "--summary-json /runs/case/openmc_mg_flux_summary.json",
+    );
+  });
+
   it("builds serve command with mock mode and repeated CORS origins", () => {
     const spec = commandBuilderSpec("serve");
     expect(spec).not.toBeNull();
@@ -95,7 +114,7 @@ describe("commandBuilder", () => {
   });
 
   it("labels SPH builders with the OpenMC-side equivalence stage", () => {
-    const stage = commandBuilderStage("make-sph-update-table");
+    const stage = commandBuilderStage("export-volume-flux");
 
     expect(stage.label).toBe("OpenMC-side SPH");
     expect(stage.summary).toContain("CE reference");

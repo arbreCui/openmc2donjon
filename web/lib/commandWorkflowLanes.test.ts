@@ -28,7 +28,8 @@ describe("commandWorkflowLanes", () => {
     const sidecarStep = equivalenceLane!.steps.find((step) => step.id === "sidecar");
 
     expect(firstStep.title).toContain("OpenMC");
-    expect(firstStep.body).toContain("OpenMC CE/MG SPH");
+    expect(firstStep.body).toContain("CE/MG volume fluxes");
+    expect(firstStep.commandIds).toContain("export-volume-flux");
     expect(sidecarStep?.commandIds).toContain("make-openmc-sph-sidecar");
     expect(sidecarStep?.commandIds).toContain("make-sph-sidecar");
   });

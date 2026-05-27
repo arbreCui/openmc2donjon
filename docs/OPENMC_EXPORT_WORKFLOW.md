@@ -252,6 +252,64 @@ openmc2donjon-from-openmc \
   --check --require-adf
 ```
 
+## OpenMC-Side SPH From CE/MG Fluxes
+
+The production SPH route is now upstream of DONJON: compare an OpenMC
+continuous-energy reference calculation with an OpenMC multi-group macro
+calculation on the same geometry and output regions, then inject the resulting
+SPH factors before conversion.
+
+Export the region/group flux tally from each OpenMC statepoint with the same
+MGXS handoff metadata:
+
+```sh
+openmc2donjon export-volume-flux ce_statepoint.h5 \
+  --mgxs runs/case1/mgxs_library.h5 \
+  --tally-name openmc_ce_volume_flux \
+  --dataset-name openmc_volume_flux \
+  -o runs/case1/openmc_ce_flux.h5 \
+  --summary-json runs/case1/openmc_ce_flux_summary.json
+
+openmc2donjon export-volume-flux mg_statepoint.h5 \
+  --mgxs runs/case1/mgxs_library.h5 \
+  --tally-name openmc_mg_volume_flux \
+  --dataset-name openmc_mg_flux \
+  -o runs/case1/openmc_mg_flux.h5 \
+  --summary-json runs/case1/openmc_mg_flux_summary.json
+```
+
+The exporter writes datasets in `(mixture, group)` order and tags them with
+`group_order=mgxs_donjon` plus the canonical `mixture_names` list. OpenMC
+EnergyFilter tally bins are reversed to the high-to-low group order used by
+the MGXS handoff and DONJON.
+
+Then build and inject the OpenMC-side SPH factors:
+
+```sh
+openmc2donjon make-openmc-sph-sidecar runs/case1/mgxs_library.h5 \
+  -o runs/case1/openmc_sph_sidecar.h5 \
+  --reference-flux runs/case1/openmc_ce_flux.h5::openmc_volume_flux \
+  --mg-flux runs/case1/openmc_mg_flux.h5::openmc_mg_flux \
+  --table-output runs/case1/openmc_sph.csv \
+  --damping 0.5 \
+  --summary-json runs/case1/openmc_sph_summary.json
+
+openmc2donjon augment-sph runs/case1/mgxs_library.h5 \
+  --sph-source runs/case1/openmc_sph_sidecar.h5 \
+  -o runs/case1/mgxs_with_openmc_sph.h5 \
+  --summary-json runs/case1/sph_augment_summary.json
+
+openmc2donjon runs/case1/mgxs_with_openmc_sph.h5 \
+  -o runs/case1/out.mcompo.txt \
+  --check --require-sph
+```
+
+For a portable fixture-backed check of this route:
+
+```sh
+bash examples/openmc_sph_sidecar_minicase/run_smoke.sh
+```
+
 For a small workflow check before using a real OpenMC model:
 
 ```sh

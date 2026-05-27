@@ -183,6 +183,41 @@ volume flux and net current:
 bash examples/external_face_flux_adapter/run_smoke.sh
 ```
 
+For OpenMC-side SPH, export volume fluxes from the CE reference and MG macro
+OpenMC statepoints, compute the sidecar, then convert the augmented handoff:
+
+```sh
+openmc2donjon export-volume-flux ce_statepoint.h5 \
+  --mgxs mgxs_library.h5 \
+  --tally-name openmc_ce_volume_flux \
+  --dataset-name openmc_volume_flux \
+  -o openmc_ce_flux.h5
+
+openmc2donjon export-volume-flux mg_statepoint.h5 \
+  --mgxs mgxs_library.h5 \
+  --tally-name openmc_mg_volume_flux \
+  --dataset-name openmc_mg_flux \
+  -o openmc_mg_flux.h5
+
+openmc2donjon make-openmc-sph-sidecar mgxs_library.h5 \
+  -o openmc_sph_sidecar.h5 \
+  --reference-flux openmc_ce_flux.h5::openmc_volume_flux \
+  --mg-flux openmc_mg_flux.h5::openmc_mg_flux \
+  --table-output openmc_sph.csv
+
+openmc2donjon augment-sph mgxs_library.h5 \
+  --sph-source openmc_sph_sidecar.h5 \
+  -o mgxs_with_openmc_sph.h5
+
+openmc2donjon mgxs_with_openmc_sph.h5 -o out.mcompo.txt --check --require-sph
+```
+
+The small portable smoke for this route is:
+
+```sh
+bash examples/openmc_sph_sidecar_minicase/run_smoke.sh
+```
+
 To keep explicit paths instead of using a managed run directory:
 
 ```sh

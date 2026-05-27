@@ -27,6 +27,7 @@ class ReleaseCheckScriptTests(unittest.TestCase):
             default_section,
         )
         self.assertIn('RUN_REAL_DONJON="$RUN_DONJON"', default_section)
+        self.assertIn("export-volume-flux --help", default_section)
         self.assertIn("== External face-flux adapter smoke ==", default_section)
         self.assertIn("examples/external_face_flux_adapter/run_smoke.sh", default_section)
         self.assertIn("== DRAGON SPH macrolib handoff smoke ==", default_section)
