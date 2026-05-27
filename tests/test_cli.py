@@ -24,24 +24,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(cm.exception.code, 0)
         self.assertEqual(stream.getvalue().strip(), "openmc2donjon 0.1.2")
 
-    def test_sph_loop_help_separates_production_and_convergence_policy(self) -> None:
-        help_text = _parser_help(["make-donjon-sph-loop-config", "--help"])
-        normalized = " ".join(help_text.split())
-
-        self.assertIn(
-            "adds MGXS handoff/audit gates and a non-worsening "
-            "final flux-residual gate",
-            normalized,
-        )
-        self.assertIn(
-            "physics' also turns configured convergence tolerances into "
-            "acceptance gates",
-            normalized,
-        )
-        self.assertIn("production preset does not imply this", normalized)
-        self.assertIn("independent of the acceptance preset", normalized)
-
-    def test_top_level_help_hides_legacy_donjon_sph_loop_commands(self) -> None:
+    def test_top_level_help_excludes_removed_donjon_sph_loop_commands(self) -> None:
         help_text = _parser_help(["--help"])
 
         self.assertIn("make-openmc-sph-sidecar", help_text)

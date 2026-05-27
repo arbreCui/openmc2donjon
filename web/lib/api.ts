@@ -249,173 +249,11 @@ export interface FileStatus {
   detail: string | null;
 }
 
-/**
- * Legacy ``run-sph-loop`` summary JSON, schema
- * ``openmc2donjon.sph-loop.v1``. The primary production route now keeps SPH
- * upstream in OpenMC CE/MG equivalence; these types remain for old summaries.
- */
-export interface SphLoopAcceptanceCheck {
-  name: string;
-  passed: boolean;
-  actual?: number | string | boolean | null;
-  limit?: number | string | boolean | null;
-  units?: string | null;
-  message?: string | null;
-}
-
-export interface SphLoopAcceptance {
-  enabled: boolean;
-  passed: boolean;
-  decision?: string | null;
-  fail_on_violation?: boolean | null;
-  checks: SphLoopAcceptanceCheck[];
-}
-
 export type JsonScalar = string | number | boolean | null;
 export type JsonValue =
   | JsonScalar
   | JsonValue[]
   | { [key: string]: JsonValue };
-
-export interface SphLoopProductionAudit {
-  passed: boolean;
-  errors: string[];
-  checks: SphLoopAcceptanceCheck[];
-  artifact_counts?: Record<string, number> | null;
-  flux_map?: Record<string, JsonValue> | null;
-  openmc_xs_policy?: string | null;
-  reference?: Record<string, JsonValue> | null;
-}
-
-export interface SphLoopResidualBin {
-  mixture?: string | null;
-  group?: number | null;
-  residual?: number | null;
-  signed_residual?: number | null;
-  raw_update?: number | null;
-  sph?: number | null;
-  previous_sph?: number | null;
-  unclipped_sph?: number | null;
-  reference_flux?: number | null;
-  low_order_flux?: number | null;
-  clipped?: boolean | null;
-}
-
-export interface SphLoopConvergencePoint {
-  iteration: number;
-  sph_max_abs_change: number | null;
-  sph_max_rel_change: number | null;
-  flux_ratio_max_residual: number | null;
-  clipped_count: number;
-  clipped_fraction: number;
-  worst_residual_bins: SphLoopResidualBin[];
-  clipped_bins: SphLoopResidualBin[];
-  converged: boolean;
-}
-
-export interface SphLoopAuditRow {
-  stage: string;
-  iteration: number;
-  keff: number | null;
-  sph_minimum: number | null;
-  sph_maximum: number | null;
-  sph_max_abs_change: number | null;
-  sph_max_rel_change: number | null;
-  flux_ratio_max_residual: number | null;
-  worst_residual_mixture: string | null;
-  worst_residual_group: number | null;
-  worst_residual_raw_update: number | null;
-  worst_residual: number | null;
-  converged: boolean | null;
-  solve_result: string | null;
-  ascii_output: string | null;
-  postprocess_output: string | null;
-}
-
-export interface SphLoopSolve {
-  iteration: number;
-  command: string[];
-  cwd: string;
-  ascii_input: string;
-  result: string;
-  stdout: string;
-  stderr: string;
-  returncode: number;
-  result_bytes: number;
-  flux_vector_count: number;
-  flux_unknown_count: number;
-  keff: number | null;
-}
-
-export interface SphLoopPostprocess {
-  iteration: number;
-  command: string[];
-  cwd: string;
-  workflow_ascii: string;
-  output: string;
-  sph_sidecar: string;
-  stdout: string;
-  stderr: string;
-  returncode: number;
-  output_bytes: number;
-  block_count: number;
-}
-
-export interface SphLoopWorkflow {
-  iteration: number;
-  summary_json: string;
-  donjon_volume_flux_h5: string;
-  sph_sidecar: string;
-  augmented_h5: string;
-  ascii_output: string;
-  sph_minimum: number | null;
-  sph_maximum: number | null;
-  flux_normalization: string | null;
-  normalization_factor: number | null;
-}
-
-export interface SphLoopQuality {
-  initial_flux_ratio_max_residual: number | null;
-  final_flux_ratio_max_residual: number | null;
-  final_to_initial_flux_residual_ratio: number | null;
-  flux_residual_improved: boolean | null;
-  final_clipped_count: number | null;
-  final_clipped_fraction: number | null;
-  maximum_clipped_count: number | null;
-  maximum_clipped_fraction: number | null;
-  clipping_observed: boolean | null;
-  final_sph_minimum: number | null;
-  final_sph_maximum: number | null;
-  initial_worst_residual_bin: SphLoopResidualBin | null;
-  final_worst_residual_bin: SphLoopResidualBin | null;
-  final_worst_residual_bins: SphLoopResidualBin[];
-  final_clipped_bins: SphLoopResidualBin[];
-}
-
-export interface SphLoopSummary {
-  schema: string;
-  decision: string;
-  package_version: string;
-  iterations: number;
-  completed_iterations: number;
-  converged: boolean;
-  convergence_enabled: boolean;
-  stop_reason: string;
-  sph_change_tolerance: number | null;
-  flux_ratio_tolerance: number | null;
-  min_iterations?: number | null;
-  // Present in summaries written by current openmc2donjon; optional so the
-  // viewer can still inspect older archived summaries.
-  fail_on_nonconvergence?: boolean | null;
-  convergence: SphLoopConvergencePoint[];
-  acceptance: SphLoopAcceptance;
-  production_audit: SphLoopProductionAudit;
-  quality: SphLoopQuality;
-  audit_rows: SphLoopAuditRow[];
-  solves: SphLoopSolve[];
-  postprocesses?: SphLoopPostprocess[];
-  workflows?: SphLoopWorkflow[];
-}
 
 export interface OpenmcSphPhysicsSummaryDecision {
   openmc_sph: string | null;
@@ -806,7 +644,6 @@ export const api = {
   listFiles: (path: string) => getJson<FileListing>("/api/files", { path }),
   fileStatus: (path: string) =>
     getJson<FileStatus>("/api/file-status", { path }),
-  audit: (path: string) => getJson<SphLoopSummary>("/api/audit", { path }),
   openmcSphSummary: (path: string) =>
     getJson<OpenmcSphPhysicsSummary>("/api/openmc-sph-summary", { path }),
 };

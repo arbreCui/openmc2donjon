@@ -4,8 +4,9 @@ Next.js front-end for the openmc2donjon web UI. Talks to the FastAPI
 backend started by `openmc2donjon serve`.
 
 Current pages cover the command catalog, direct converter workflow, HDF5
-inspection, and SPH-loop audit viewing. Additional command families are
-added as focused workflow pages rather than as a generic shell wrapper.
+inspection, OpenMC-side SPH summaries, PyGan diagnostics, and localhost
+workflow builders. Additional command families are added as focused workflow
+pages rather than as a generic shell wrapper.
 
 ## Local development
 
@@ -81,7 +82,6 @@ web/
     commands/page.tsx /commands (CLI/web command catalog)
     convert/page.tsx  /convert (direct HDF5 -> ASCII converter workflow)
     inspect/page.tsx  /inspect (path input + summary + mixture table)
-    audit/page.tsx    /audit (legacy SPH loop summary viewer, hidden from nav)
     settings/page.tsx /settings (local browser preferences)
     globals.css       Design tokens, glass utility, grad-text, button primitives
   components/

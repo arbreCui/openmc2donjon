@@ -74,94 +74,6 @@ def _write_fake_hdf5(path: Path) -> None:
             scatter_dataset.attrs["axes"] = "moment,from,to"
 
 
-def _minimal_sph_loop_summary() -> dict[str, object]:
-    return {
-        "schema": "openmc2donjon.sph-loop.v1",
-        "decision": "openmc2donjon_sph_loop_passed",
-        "package_version": "0.1.2",
-        "iterations": 2,
-        "completed_iterations": 2,
-        "converged": True,
-        "convergence_enabled": True,
-        "stop_reason": "converged",
-        "sph_change_tolerance": 1.0e-12,
-        "flux_ratio_tolerance": 1.0e-12,
-        "min_iterations": 1,
-        "fail_on_nonconvergence": False,
-        "convergence": [
-            {
-                "iteration": 1,
-                "sph_max_abs_change": 0.4,
-                "sph_max_rel_change": 0.4,
-                "flux_ratio_max_residual": 1.0,
-                "clipped_count": 0,
-                "clipped_fraction": 0.0,
-                "worst_residual_bins": [],
-                "clipped_bins": [],
-                "converged": False,
-            },
-            {
-                "iteration": 2,
-                "sph_max_abs_change": 0.0,
-                "sph_max_rel_change": 0.0,
-                "flux_ratio_max_residual": 0.0,
-                "clipped_count": 0,
-                "clipped_fraction": 0.0,
-                "worst_residual_bins": [],
-                "clipped_bins": [],
-                "converged": True,
-            },
-        ],
-        "acceptance": {
-            "enabled": True,
-            "passed": True,
-            "checks": [
-                {
-                    "name": "require_converged",
-                    "actual": True,
-                    "limit": True,
-                    "passed": True,
-                },
-            ],
-        },
-        "production_audit": {
-            "passed": True,
-            "errors": [],
-            "flux_map": {
-                "mgxs_std_dev_datasets": 2,
-                "mgxs_std_dev_expected_datasets": 4,
-            },
-            "checks": [
-                {
-                    "name": "require_production_audit",
-                    "actual": True,
-                    "limit": True,
-                    "passed": True,
-                },
-            ],
-        },
-        "quality": {
-            "initial_flux_ratio_max_residual": 1.0,
-            "final_flux_ratio_max_residual": 0.0,
-            "final_to_initial_flux_residual_ratio": 0.0,
-            "flux_residual_improved": True,
-            "final_clipped_count": 0,
-            "final_clipped_fraction": 0.0,
-            "maximum_clipped_count": 0,
-            "maximum_clipped_fraction": 0.0,
-            "clipping_observed": False,
-            "final_sph_minimum": 1.0,
-            "final_sph_maximum": 1.0,
-            "initial_worst_residual_bin": None,
-            "final_worst_residual_bin": None,
-            "final_worst_residual_bins": [],
-            "final_clipped_bins": [],
-        },
-        "audit_rows": [],
-        "solves": [],
-    }
-
-
 def _minimal_openmc_sph_physics_summary() -> dict[str, object]:
     return {
         "schema": "openmc2donjon.openmc-ce-mg-33g-sph-physics-summary.v1",
@@ -338,28 +250,19 @@ class PyGanWebEndpointTests(unittest.TestCase):
 @unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
 class CommandCatalogEndpointTests(unittest.TestCase):
     def test_catalog_endpoint_returns_all_cli_commands_plus_direct_convert(self) -> None:
-        from openmc2donjon.commands import adf, diagnostics, openmc, sph, web
+        from openmc2donjon.commands import adf, diagnostics, sph, web
         from openmc2donjon.web.commands import COMMANDS_SCHEMA
         from openmc2donjon.web.server import create_app
 
-        hidden_legacy = {
-            "prepare-openmc-sph-loop",
-            "extract-donjon-volume-flux",
-            "run-sph-iteration",
-            "run-sph-loop",
-            "make-donjon-sph-loop-config",
-            "make-sph-loop-scaffold",
-        }
         expected_cli_names = {
             spec.name
             for spec in (
-                *openmc.command_specs(),
                 *adf.command_specs(),
                 *sph.command_specs(),
                 *diagnostics.command_specs(),
                 *web.command_specs(),
             )
-        } - hidden_legacy
+        }
 
         client = TestClient(create_app(mock_mode=False))
         response = client.get("/api/commands")
@@ -421,7 +324,6 @@ class CommandCatalogEndpointTests(unittest.TestCase):
             commands["openmc2donjon-from-openmc"]["web_path"],
             "/openmc?intent=from-openmc&workflow=one-step",
         )
-        self.assertNotIn("prepare-openmc-sph-loop", commands)
         self.assertEqual(
             commands["make-adf-sidecar"]["web_path"],
             "/equivalence?kind=adf-sidecar",
@@ -458,8 +360,6 @@ class CommandCatalogEndpointTests(unittest.TestCase):
             commands["make-low-order-driver"]["web_path"],
             "/builder?command=make-low-order-driver",
         )
-        self.assertNotIn("make-sph-loop-scaffold", commands)
-        self.assertNotIn("run-sph-loop", commands)
 
     def test_catalog_has_a_web_path_for_every_command(self) -> None:
         from openmc2donjon.web.server import create_app
@@ -1115,22 +1015,6 @@ class FilesEndpointTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["path"], "/mock/home")
 
-    def test_mock_mode_lists_full_core_sph_loop_summary(self) -> None:
-        # The audit page picks ``sph_loop_summary.json`` through the
-        # same file browser used by ``inspect``; the mock tree exposes
-        # a dedicated full-core SPH run so users hit a realistic
-        # long-iteration audit layout in mock mode.
-        from openmc2donjon.web.server import create_app
-
-        client = TestClient(create_app(mock_mode=True))
-        response = client.get(
-            "/api/files", params={"path": "/mock/home/openmc-runs/full-core-sph"},
-        )
-        self.assertEqual(response.status_code, 200)
-        names = {e["name"] for e in response.json()["entries"]}
-        self.assertIn("sph_loop_summary.json", names)
-        self.assertIn("sph_loop_summary_ref_stddev.json", names)
-
     def test_mock_mode_lists_openmc_side_sph_minicase_files(self) -> None:
         from openmc2donjon.web.server import create_app
 
@@ -1770,335 +1654,6 @@ class BundleInspectEndpointTests(unittest.TestCase):
 
 
 @unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
-class AuditEndpointTests(unittest.TestCase):
-    def test_mock_mode_returns_bundled_sph_loop_fixture(self) -> None:
-        from openmc2donjon.web.server import AUDIT_SCHEMA, create_app
-
-        client = TestClient(create_app(mock_mode=True))
-        response = client.get("/api/audit", params={"path": "/any.json"})
-
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(payload["schema"], AUDIT_SCHEMA)
-        # Top-level keys the M6-A summary header relies on; if these
-        # change the frontend breaks silently, so test them here.
-        for key in (
-            "decision",
-            "iterations",
-            "completed_iterations",
-            "acceptance",
-            "production_audit",
-            "convergence",
-            "quality",
-            "audit_rows",
-            "solves",
-        ):
-            self.assertIn(key, payload, key)
-        self.assertIn("passed", payload["acceptance"])
-        self.assertIn("passed", payload["production_audit"])
-        self.assertEqual(
-            payload["production_audit"]["flux_map"]["mgxs_std_dev_datasets"],
-            0,
-        )
-        self.assertEqual(
-            payload["production_audit"]["flux_map"]["mgxs_std_dev_expected_datasets"],
-            72,
-        )
-        self.assertEqual(
-            payload["flux_map_preflight"]["mgxs_std_dev_expected_datasets"],
-            72,
-        )
-        self.assertFalse(payload["fail_on_nonconvergence"])
-        self.assertEqual(payload["completed_iterations"], 10)
-        self.assertEqual(len(payload["convergence"]), 10)
-        self.assertEqual(len(payload["audit_rows"]), 11)
-        self.assertIsNone(
-            payload["production_audit"]["reference"]["std_dev_dataset"],
-        )
-        self.assertLess(
-            payload["quality"]["final_flux_ratio_max_residual"],
-            payload["quality"]["initial_flux_ratio_max_residual"],
-        )
-
-    def test_mock_mode_can_return_reference_flux_std_dev_pass_fixture(self) -> None:
-        from openmc2donjon.web.server import create_app
-
-        client = TestClient(create_app(mock_mode=True))
-        response = client.get(
-            "/api/audit",
-            params={
-                "path": (
-                    "/mock/home/openmc-runs/full-core-sph/"
-                    "sph_loop_summary_ref_stddev.json"
-                ),
-            },
-        )
-
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(payload["completed_iterations"], 10)
-        reference = payload["production_audit"]["reference"]
-        self.assertEqual(reference["std_dev_dataset"], "openmc_volume_flux_std_dev")
-        self.assertEqual(
-            reference["std_dev_source"],
-            (
-                "/mock/openmc_full_core_minicase/openmc2donjon_run/"
-                "mgxs_library.h5::openmc_volume_flux_std_dev"
-            ),
-        )
-        self.assertAlmostEqual(reference["std_dev_max_rel"], 1.8e-2)
-        self.assertIn("ASM_Y02_X03", reference["std_dev_worst"])
-        artifact_reference = payload["artifact_metadata"]["reference_flux"]
-        self.assertEqual(artifact_reference["std_dev_shape"], [9, 2])
-
-        checks = {item["name"]: item for item in payload["acceptance"]["checks"]}
-        self.assertTrue(checks["require_reference_flux_std_dev"]["passed"])
-        self.assertTrue(checks["max_reference_flux_std_dev_rel"]["passed"])
-        self.assertAlmostEqual(
-            checks["max_reference_flux_std_dev_rel"]["actual"],
-            1.8e-2,
-        )
-        self.assertEqual(checks["max_reference_flux_std_dev_rel"]["limit"], 5.0e-2)
-
-    def test_live_mode_reads_real_summary_from_disk(self) -> None:
-        import json
-
-        from openmc2donjon.web.server import create_app
-
-        with tempfile.TemporaryDirectory() as tmp:
-            summary_path = Path(tmp) / "sph_loop_summary.json"
-            summary_path.write_text(
-                json.dumps(_minimal_sph_loop_summary()),
-                encoding="utf-8",
-            )
-
-            client = TestClient(create_app(mock_mode=False))
-            response = client.get(
-                "/api/audit", params={"path": str(summary_path)},
-            )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            response.json()["decision"], "openmc2donjon_sph_loop_passed",
-        )
-
-    def test_live_mode_rejects_wrong_audit_schema(self) -> None:
-        import json
-
-        from openmc2donjon.web.server import create_app
-
-        with tempfile.TemporaryDirectory() as tmp:
-            summary = _minimal_sph_loop_summary()
-            summary["schema"] = "openmc2donjon.other.v1"
-            summary_path = Path(tmp) / "wrong_schema.json"
-            summary_path.write_text(json.dumps(summary), encoding="utf-8")
-
-            client = TestClient(create_app(mock_mode=False))
-            response = client.get(
-                "/api/audit", params={"path": str(summary_path)},
-            )
-
-        self.assertEqual(response.status_code, 422)
-        self.assertIn("schema must be", response.json()["detail"])
-
-    def test_live_mode_rejects_incomplete_audit_summary(self) -> None:
-        import json
-
-        from openmc2donjon.web.server import create_app
-
-        with tempfile.TemporaryDirectory() as tmp:
-            summary_path = Path(tmp) / "partial_summary.json"
-            summary_path.write_text(
-                json.dumps(
-                    {
-                        "schema": "openmc2donjon.sph-loop.v1",
-                        "decision": "openmc2donjon_sph_loop_passed",
-                        "iterations": 2,
-                    },
-                ),
-                encoding="utf-8",
-            )
-
-            client = TestClient(create_app(mock_mode=False))
-            response = client.get(
-                "/api/audit", params={"path": str(summary_path)},
-            )
-
-        self.assertEqual(response.status_code, 422)
-        detail = response.json()["detail"]
-        self.assertIn("invalid SPH loop summary", detail)
-        self.assertIn("acceptance must be an object", detail)
-        self.assertIn("production_audit must be an object", detail)
-        self.assertIn("convergence must be a list", detail)
-        self.assertIn("quality must be an object", detail)
-        self.assertIn("audit_rows must be a list", detail)
-        self.assertIn("solves must be a list", detail)
-
-    def test_live_mode_rejects_malformed_audit_convergence(self) -> None:
-        import json
-
-        from openmc2donjon.web.server import create_app
-
-        with tempfile.TemporaryDirectory() as tmp:
-            summary = _minimal_sph_loop_summary()
-            summary["convergence"] = [
-                {
-                    "iteration": 1,
-                    "sph_max_rel_change": "bad",
-                    "flux_ratio_max_residual": 1.0,
-                    "clipped_count": 0,
-                    "clipped_fraction": 0.0,
-                    "worst_residual_bins": [],
-                    "clipped_bins": [],
-                    "converged": False,
-                },
-            ]
-            summary_path = Path(tmp) / "bad_convergence.json"
-            summary_path.write_text(json.dumps(summary), encoding="utf-8")
-
-            client = TestClient(create_app(mock_mode=False))
-            response = client.get(
-                "/api/audit", params={"path": str(summary_path)},
-            )
-
-        self.assertEqual(response.status_code, 422)
-        detail = response.json()["detail"]
-        self.assertIn("convergence[0].sph_max_abs_change", detail)
-        self.assertIn("convergence[0].sph_max_rel_change", detail)
-
-    def test_live_mode_rejects_malformed_audit_quality(self) -> None:
-        import json
-
-        from openmc2donjon.web.server import create_app
-
-        with tempfile.TemporaryDirectory() as tmp:
-            summary = _minimal_sph_loop_summary()
-            quality = dict(summary["quality"])
-            quality["final_flux_ratio_max_residual"] = "bad"
-            quality["final_worst_residual_bin"] = {"mixture": "fuel", "group": "bad"}
-            quality["final_worst_residual_bins"] = "bad"
-            summary["quality"] = quality
-            summary_path = Path(tmp) / "bad_quality.json"
-            summary_path.write_text(json.dumps(summary), encoding="utf-8")
-
-            client = TestClient(create_app(mock_mode=False))
-            response = client.get(
-                "/api/audit", params={"path": str(summary_path)},
-            )
-
-        self.assertEqual(response.status_code, 422)
-        detail = response.json()["detail"]
-        self.assertIn("quality.final_flux_ratio_max_residual", detail)
-        self.assertIn("quality.final_worst_residual_bin.group", detail)
-        self.assertIn("quality.final_worst_residual_bins must be a list", detail)
-
-    def test_live_mode_rejects_malformed_audit_rows_and_solves(self) -> None:
-        import json
-
-        from openmc2donjon.web.server import create_app
-
-        with tempfile.TemporaryDirectory() as tmp:
-            summary = _minimal_sph_loop_summary()
-            summary["audit_rows"] = [
-                {
-                    "stage": "iteration",
-                    "iteration": "bad",
-                    "keff": None,
-                    "sph_minimum": None,
-                    "sph_maximum": None,
-                    "sph_max_abs_change": None,
-                    "sph_max_rel_change": None,
-                    "flux_ratio_max_residual": None,
-                    "worst_residual_mixture": None,
-                    "worst_residual_group": None,
-                    "worst_residual_raw_update": None,
-                    "worst_residual": None,
-                    "converged": None,
-                    "solve_result": None,
-                    "ascii_output": None,
-                    "postprocess_output": None,
-                },
-            ]
-            summary["solves"] = [
-                {
-                    "iteration": 0,
-                    "command": "not-a-list",
-                    "cwd": "/tmp",
-                    "ascii_input": "in.macrolib.txt",
-                    "result": "low_order_flux.result",
-                    "stdout": "stdout.txt",
-                    "stderr": "stderr.txt",
-                    "returncode": 0,
-                    "result_bytes": 1,
-                    "flux_vector_count": 1,
-                    "flux_unknown_count": 1,
-                    "keff": None,
-                },
-            ]
-            summary_path = Path(tmp) / "bad_audit_timeline.json"
-            summary_path.write_text(json.dumps(summary), encoding="utf-8")
-
-            client = TestClient(create_app(mock_mode=False))
-            response = client.get(
-                "/api/audit", params={"path": str(summary_path)},
-            )
-
-        self.assertEqual(response.status_code, 422)
-        detail = response.json()["detail"]
-        self.assertIn("audit_rows[0].iteration must be int", detail)
-        self.assertIn("solves[0].command must be a list of strings", detail)
-
-    def test_live_mode_path_not_found_returns_404(self) -> None:
-        from openmc2donjon.web.server import create_app
-
-        client = TestClient(create_app(mock_mode=False))
-        response = client.get(
-            "/api/audit", params={"path": "/nonexistent/audit.json"},
-        )
-        self.assertEqual(response.status_code, 404)
-
-    def test_live_mode_directory_returns_400(self) -> None:
-        from openmc2donjon.web.server import create_app
-
-        with tempfile.TemporaryDirectory() as tmp:
-            client = TestClient(create_app(mock_mode=False))
-            response = client.get("/api/audit", params={"path": tmp})
-
-        self.assertEqual(response.status_code, 400)
-
-    def test_live_mode_malformed_json_returns_422(self) -> None:
-        from openmc2donjon.web.server import create_app
-
-        with tempfile.TemporaryDirectory() as tmp:
-            bad = Path(tmp) / "bad.json"
-            bad.write_text("{not valid json", encoding="utf-8")
-
-            client = TestClient(create_app(mock_mode=False))
-            response = client.get("/api/audit", params={"path": str(bad)})
-
-        self.assertEqual(response.status_code, 422)
-        self.assertIn("audit read failed", response.json()["detail"])
-
-    def test_live_mode_non_object_json_returns_422(self) -> None:
-        # The frontend treats the payload as ``Record<string, ...>``;
-        # a list or scalar at the root would crash render. We catch it
-        # here with a clear error instead.
-        from openmc2donjon.web.server import create_app
-
-        with tempfile.TemporaryDirectory() as tmp:
-            list_path = Path(tmp) / "list.json"
-            list_path.write_text("[1, 2, 3]", encoding="utf-8")
-
-            client = TestClient(create_app(mock_mode=False))
-            response = client.get(
-                "/api/audit", params={"path": str(list_path)},
-            )
-
-        self.assertEqual(response.status_code, 422)
-        self.assertIn(
-            "not a JSON object", response.json()["detail"],
-        )
-
 
 class UvicornLogLevelMappingTests(unittest.TestCase):
     def _ns(self, **kwargs: object) -> object:

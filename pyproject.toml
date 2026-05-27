@@ -65,7 +65,6 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 openmc2donjon = [
-  "templates/*.x2m.in",
   "data/energy_meshes/*.json",
   "web/fixtures/*.json",
 ]

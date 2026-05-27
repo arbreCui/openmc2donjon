@@ -161,7 +161,6 @@ echo "== CLI smoke =="
 "$PYTHON_BIN" -m openmc2donjon.cli pygan-doctor --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli pygan-inspect-compo --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli compare-writers --help >/dev/null
-"$PYTHON_BIN" -m openmc2donjon.donjon_deck_runner --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.export_cli --version
 "$PYTHON_BIN" -m openmc2donjon.export_cli --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.from_openmc_cli --version
@@ -240,7 +239,6 @@ echo
 echo "== OpenMC full-core assembly-wise minicase smoke =="
 RUN_DIR="$RUN_DIR/openmc_full_core_minicase" \
 PYTHON_BIN="$PYTHON_BIN" \
-RUN_REAL_DONJON="$RUN_DONJON" \
   bash "$REPO_ROOT/scripts/run_openmc_full_core_production_smoke.sh"
 
 echo

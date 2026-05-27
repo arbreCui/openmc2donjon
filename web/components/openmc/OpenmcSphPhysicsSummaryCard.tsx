@@ -56,9 +56,8 @@ export default function OpenmcSphPhysicsSummaryCard({
           </h3>
           <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--fg-2)]">
             Load the `physics_summary.json` written by the CE/MG 33g minicase.
-            This is separate from the legacy DONJON-loop audit page: it
-            summarizes OpenMC CE reference flux, OpenMC MG flux, SPH factors,
-            and the corrected DONJON handoff.
+            It summarizes OpenMC CE reference flux, OpenMC MG flux, SPH
+            factors, and the corrected DONJON handoff.
           </p>
         </div>
       </div>

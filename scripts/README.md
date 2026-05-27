@@ -28,9 +28,6 @@ These are stable entry points used directly by the release check.
   macrolib output.
 - `run_donjon_sph_solver_response_smoke.sh` - DONJON solver responds to SPH
   perturbations.
-- `../examples/sph_loop_minicase/run_smoke.sh` - legacy fixed-OpenMC SPH loop
-  candidate; useful for reference-flux `std_dev` acceptance diagnostics but no
-  longer part of the default release gate.
 
 ## C5G7 Accepted-Baseline Gates
 
@@ -46,10 +43,6 @@ assembly-wise validation artifacts.
   flux-ratio ADF injection.
 - `run_c5g7_sph_solver_response_smoke.sh` - verifies DONJON k-eff changes when
   a C5G7 SPH table is consumed.
-- `run_c5g7_sph_iteration_from_donjon_flux_smoke.sh` - builds one SPH update
-  from OpenMC reference flux and DONJON flux.
-- `run_c5g7_fixed_openmc_sph_loop_smoke.sh` - fixed-OpenMC SPH loop smoke with
-  DONJON low-order feedback.
 
 ## C5G7 Recipes And Deck Generators
 

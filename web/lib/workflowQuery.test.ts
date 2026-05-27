@@ -35,7 +35,6 @@ describe("workflow query parsers", () => {
     expect(parseConvertIntent("direct-convert")).toBe("direct-convert");
     expect(parseConvertIntent("check")).toBe("check");
     expect(parseConvertIntent("openmc-sph")).toBe("openmc-sph");
-    expect(parseConvertIntent("sph-loop")).toBe("generic");
     expect(parseConvertIntent("bad")).toBe("generic");
   });
 

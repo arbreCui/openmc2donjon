@@ -86,39 +86,9 @@ Then open <http://localhost:3000>:
   identification, transport/H-factor coverage, scatter, and std_dev hints.
 - `Convert` -> same HDF5 plus `$RUN_DIR/out.mcompo.txt` for a dry-run or
   conversion repeat with the production gate summary visible.
-- `Commands` -> `make-sph-loop-scaffold`, `run-sph-loop`, `bundle`, and
-  `validate-bundle` to see the exact CLI builders for the follow-up workflow.
-- `Audit` -> the SPH loop `sph_loop_summary.json` when you run the loop section
-  below.
-
-The recipe also writes `openmc_volume_flux` from a real OpenMC cell/energy flux
-tally.  That lets the same statepoint prepare a fixed-OpenMC SPH loop handoff:
-
-```sh
-OPENMC2DONJON_MINICASE_DIR="$CASE_DIR" \
-openmc2donjon prepare-openmc-sph-loop \
-  --recipe examples/production_minicase/export_recipe.py \
-  --statepoint "$CASE_DIR/statepoint.12.h5" \
-  --run-dir /tmp/openmc2donjon_minicase/sph_loop_handoff \
-  --solve-template examples/sph_loop_minicase/templates/solve_lflux_dump.x2m.in \
-  --scalar-flux-map ASM_FUEL_LEFT=2,ASM_MOD_RIGHT=6 \
-  --force
-
-openmc2donjon run-sph-loop \
-  --config /tmp/openmc2donjon_minicase/sph_loop_handoff/sph_loop_inputs/loop_config.json \
-  --force
-```
-
-The scalar flux ids are the positive DONJON low-order unknowns used as the
-region flux handoff for this tiny `DUAL 1 1` demonstration solve.
-
-The SPH loop config can carry two independent policies. Convergence tolerances
-control early stopping and are reported in `sph_loop_summary.json`;
-`fail_on_nonconvergence` controls whether missing those targets makes the CLI
-return non-zero. The `production` acceptance preset checks the generated
-handoff/audit quality and can still pass a run that did not reach the numerical
-SPH target unless you explicitly add `acceptance.require_converged` or residual
-acceptance limits.
+- `Commands` -> `make-openmc-sph-sidecar`, `augment-sph`, `bundle`, and
+  `validate-bundle` to see the exact CLI builders for the current
+  OpenMC-side equivalence workflow.
 
 To exercise the ADF/DF path, provide the low-order driver volume flux and
 outward net current density in an HDF5 fixture, then let the one-step workflow

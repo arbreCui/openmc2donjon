@@ -49,21 +49,13 @@ class ProductionMinicaseExampleTests(unittest.TestCase):
         self.assertIn("--write-tallies \"$RECIPE_TALLIES\"", text)
         self.assertIn("openmc2donjon_surface_current_mu", text)
         self.assertIn("openmc2donjon_volume_flux", text)
-        self.assertIn("prepare-openmc-sph-loop", text)
-        self.assertIn("Run OpenMC SPH loop handoff through DONJON", text)
-        self.assertIn("openmc2donjon_sph_loop_passed", text)
-        self.assertIn("--acceptance-max-final-to-initial-flux-residual-ratio", text)
-        self.assertIn("--acceptance-max-final-clipped-fraction", text)
-        self.assertIn("max_final_to_initial_flux_residual_ratio", text)
-        self.assertIn("config.get(\"flux_normalization\") != \"auto\"", text)
-        self.assertIn("auto normalization did not resolve to power", text)
+        self.assertNotIn("prepare-openmc-sph-loop", text)
+        self.assertNotIn("run-sph-loop", text)
         self.assertIn("Strict production dry-run", text)
         self.assertIn("--strict-dry-run", text)
         self.assertIn("--force-run-dir", text)
         self.assertIn("--require-transport-dataset", text)
         self.assertIn("mgxs_input_contract_passed", text)
-        self.assertIn("--scalar-flux-map ASM_FUEL_LEFT=2,ASM_MOD_RIGHT=6", text)
-        self.assertIn('h5["scalar_flux_ids"][:], [2, 6]', text)
 
 
 def _repo_root() -> Path:

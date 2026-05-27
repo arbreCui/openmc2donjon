@@ -48,7 +48,6 @@ RENDER_PREFIXES = (
 REPORT_MODULES = frozenset(
     {
         "mgxs_input_report",
-        "sph_loop_report",
         "recipe_dry_run_report",
     }
 )
@@ -58,10 +57,6 @@ REPORT_MODULES = frozenset(
 # artifact confirmation. Each entry is deliberate.
 ALLOWED_RESULT_PRINTS: frozenset[tuple[str, str]] = frozenset(
     {
-        ("commands.sph", "make_donjon_sph_loop_config_handler"),
-        ("donjon_deck_runner", "_apply"),
-        ("donjon_deck_runner", "_run_donjon"),
-        ("donjon_deck_runner", "_solve"),
         ("export_cli", "main"),
         ("from_openmc_adf", "inject_adf"),
         ("from_openmc_cli", "_convert_pipeline_hdf5"),

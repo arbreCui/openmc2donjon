@@ -26,7 +26,6 @@ class ReleaseCheckScriptTests(unittest.TestCase):
             "scripts/run_openmc_full_core_production_smoke.sh",
             default_section,
         )
-        self.assertIn('RUN_REAL_DONJON="$RUN_DONJON"', default_section)
         self.assertIn("export-volume-flux --help", default_section)
         self.assertIn("== External face-flux adapter smoke ==", default_section)
         self.assertIn("examples/external_face_flux_adapter/run_smoke.sh", default_section)
@@ -38,7 +37,6 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertIn("scripts/run_donjon_sph_solver_response_smoke.sh", default_section)
         self.assertIn("make-openmc-sph-sidecar --help", default_section)
         self.assertIn("make-sph-update-table --help", default_section)
-        self.assertIn("openmc2donjon.donjon_deck_runner --help", default_section)
         self.assertNotIn("extract-donjon-volume-flux --help", default_section)
         self.assertNotIn("run-sph-iteration --help", default_section)
         self.assertNotIn("run-sph-loop --help", default_section)
@@ -47,7 +45,6 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertNotIn("prepare-openmc-sph-loop --help", default_section)
         self.assertNotIn("== OpenMC-to-SPH-loop entrypoint smoke ==", default_section)
         self.assertNotIn("examples/openmc_sph_loop_entrypoint/run_smoke.sh", default_section)
-        self.assertIn('RUN_REAL_DONJON="$RUN_DONJON"', default_section)
         self.assertNotIn("== SPH iteration loop smoke ==", default_section)
         self.assertNotIn("examples/sph_iteration_loop/run_smoke.sh", default_section)
         self.assertNotIn("== Generic DONJON SPH loop adapter smoke ==", default_section)
@@ -97,43 +94,6 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertIn("--table \"$SPH_TABLE\"", text)
         self.assertIn("source_table", text)
 
-    def test_c5g7_sph_iteration_smoke_uses_real_flux_datasets(self) -> None:
-        text = (
-            _repo_root() / "scripts/run_c5g7_sph_iteration_from_donjon_flux_smoke.sh"
-        ).read_text(encoding="utf-8")
-
-        self.assertIn("openmc_volume_flux", text)
-        self.assertIn("donjon_volume_flux", text)
-        self.assertIn("make-sph-update-table", text)
-        self.assertIn("--mode table", text)
-        self.assertIn("c5g7-donjon-flux-iteration-smoke", text)
-        self.assertIn("DSPH:", text)
-        self.assertIn("TRIVAA:", text)
-        self.assertIn("openmc2donjon_c5g7_sph_iteration_solver_response_passed", text)
-
-    def test_c5g7_fixed_openmc_sph_loop_keeps_base_xs_fixed(self) -> None:
-        text = (_repo_root() / "scripts/run_c5g7_fixed_openmc_sph_loop_smoke.sh").read_text(
-            encoding="utf-8"
-        )
-        config_writer = (
-            _repo_root() / "examples/donjon_openmc2donjon/c5g7_sph_loop/make_config.py"
-        ).read_text(encoding="utf-8")
-
-        self.assertIn("fixed OpenMC base XS", text)
-        self.assertIn("run-sph-loop", text)
-        self.assertIn("c5g7_sph_loop/make_config.py", text)
-        self.assertIn("openmc2donjon.donjon_deck_runner", config_writer)
-        self.assertIn("final_to_initial_flux_residual_ratio", text)
-        self.assertIn("max_final_clipped_count", config_writer)
-        self.assertIn("solve_lflux_dump.x2m.in", text)
-        self.assertIn('"final_solve": True', config_writer)
-        self.assertIn('"postprocess"', config_writer)
-        self.assertIn("openmc2donjon_sph_loop_passed", text)
-        self.assertIn("ITER1_SIDECAR", text)
-        self.assertIn("extract-donjon-volume-flux", text)
-        self.assertIn("mesh_donjon_volume_flux", text)
-        self.assertIn("openmc2donjon_c5g7_fixed_openmc_sph_loop_passed", text)
-
     def test_openmc_full_core_release_gate_calls_production_smoke(self) -> None:
         text = (
             _repo_root() / "scripts/run_openmc_full_core_production_smoke.sh"
@@ -143,47 +103,7 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         self.assertIn("examples/openmc_full_core_minicase/run_smoke.sh", text)
-        self.assertIn('RUN_REAL_DONJON="${RUN_REAL_DONJON:-0}"', text)
         self.assertIn("--require-openmc-volume-flux", example)
-        self.assertIn("require_production_audit", example)
-        self.assertIn("production_audit", example)
-
-    def test_legacy_minicase_keeps_reference_flux_uncertainty_contract(self) -> None:
-        release_text = _release_check().read_text(encoding="utf-8")
-        default_section = release_text.split(
-            'if [[ "$RUN_LOCAL_CANDIDATES" -eq 1 ]]; then',
-            maxsplit=1,
-        )[0]
-        smoke_text = (
-            _repo_root() / "examples/sph_loop_minicase/run_smoke.sh"
-        ).read_text(encoding="utf-8")
-
-        self.assertNotIn("== Minimal SPH loop user-case smoke ==", default_section)
-        self.assertNotIn("examples/sph_loop_minicase/run_smoke.sh", default_section)
-        self.assertIn(
-            'config["acceptance"]["require_reference_flux_std_dev"] is True',
-            smoke_text,
-        )
-        self.assertIn(
-            'config["acceptance"]["max_reference_flux_std_dev_rel"] == 1.0e-2',
-            smoke_text,
-        )
-        self.assertIn(
-            'checks["require_reference_flux_std_dev"]["passed"] is True',
-            smoke_text,
-        )
-        self.assertIn(
-            'checks["max_reference_flux_std_dev_rel"]["passed"] is True',
-            smoke_text,
-        )
-        self.assertIn(
-            'metadata["reference_flux"]["std_dev_dataset"] == "openmc_volume_flux_std_dev"',
-            smoke_text,
-        )
-        self.assertIn(
-            'metadata["reference_flux"]["std_dev_max_rel"] - 1.0e-3',
-            smoke_text,
-        )
 
     def test_release_gate_covers_energy_mesh_contract(self) -> None:
         release_text = _release_check().read_text(encoding="utf-8")

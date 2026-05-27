@@ -8,7 +8,7 @@
     "build:verify": "NEXT_DIST_DIR=.next-build next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit --incremental false",
     "test": "vitest run --cache=false"
   },
   "dependencies": {

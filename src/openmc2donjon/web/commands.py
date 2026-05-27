@@ -11,21 +11,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from ..commands import adf, diagnostics, openmc, sph, web as web_commands
+from ..commands import adf, diagnostics, sph, web as web_commands
 
 
 COMMANDS_SCHEMA = "openmc2donjon.commands.v1"
-
-_HIDDEN_LEGACY_DONJON_LOOP_COMMANDS = frozenset(
-    {
-        "prepare-openmc-sph-loop",
-        "extract-donjon-volume-flux",
-        "run-sph-iteration",
-        "run-sph-loop",
-        "make-donjon-sph-loop-config",
-        "make-sph-loop-scaffold",
-    }
-)
 
 
 @dataclass(frozen=True)
@@ -527,11 +516,7 @@ def register_command_routes(app: Any) -> None:
 def build_command_catalog() -> dict[str, Any]:
     commands = [_direct_convert_entry()]
     commands.extend(_entrypoint_entry(name) for name in _standalone_entrypoints())
-    commands.extend(
-        _cli_entry(spec)
-        for spec in _cli_specs()
-        if spec.name not in _HIDDEN_LEGACY_DONJON_LOOP_COMMANDS
-    )
+    commands.extend(_cli_entry(spec) for spec in _cli_specs())
     group_counts = _group_counts(commands)
     groups = [
         {
@@ -641,7 +626,6 @@ def _command_guidance(command_id: str, detail: CommandDetail) -> CommandGuidance
 
 def _cli_specs() -> tuple[Any, ...]:
     return (
-        *openmc.command_specs(),
         *adf.command_specs(),
         *sph.command_specs(),
         *diagnostics.command_specs(),

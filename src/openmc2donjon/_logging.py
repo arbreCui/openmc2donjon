@@ -21,7 +21,7 @@ patterns, and every ``print()`` inside them is a *result*:
 - Functions named ``print_report`` / ``_print_*`` / ``render_*`` /
   ``format_*`` (the convention for "render a frozen Report dataclass to
   stdout") and the dedicated report modules
-  (``mgxs_input_report``, ``sph_loop_report``, ``recipe_dry_run_report``).
+  (``mgxs_input_report``, ``recipe_dry_run_report``).
 - CLI handlers that announce a produced artifact, e.g.
   ``print(f"wrote {format}: {output_path}")``,
   ``print(f"exported {n} domains ...")``,

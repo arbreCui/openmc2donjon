@@ -6,7 +6,7 @@ import {
 } from "./commandWorkflowLanes";
 
 describe("commandWorkflowLanes", () => {
-  it("shows the production lanes without the legacy DONJON SPH loop", () => {
+  it("shows only the current production lanes", () => {
     expect(COMMAND_WORKFLOW_LANES.map((lane) => lane.id)).toEqual([
       "direct",
       "openmc-sph",

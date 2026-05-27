@@ -18,7 +18,7 @@ from ._logging import (
     configure_cli_logging_from_args,
     is_cli_logging_flag,
 )
-from .commands import adf, diagnostics, openmc, sph, web
+from .commands import adf, diagnostics, sph, web
 from .commands.base import CommandSpec
 from .energy_groups import MESH_RELATIVE_TOLERANCE
 from .macrolib import convert_mgxs_hdf5_to_macrolib
@@ -391,7 +391,6 @@ def build_command_parser() -> argparse.ArgumentParser:
 
 def _command_specs() -> tuple[CommandSpec, ...]:
     return (
-        *openmc.command_specs(),
         *adf.command_specs(),
         *sph.command_specs(),
         *diagnostics.command_specs(),

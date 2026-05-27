@@ -28,7 +28,6 @@ Main entries:
 - `run_acceptance.sh` - top-level C5G7 acceptance.
 - `run_handoff_smoke.sh` - DONJON consumer smoke for the accepted C5G7 path.
 - `run_production_pipeline_smoke.sh` - regenerate fresh C5G7 outputs and rerun DONJON.
-- `c5g7_sph_loop/` - reusable config-driven C5G7 SPH loop example.
 - `run_burnup_axis_smoke.sh` - experimental two-state `BURN`-axis DONJON
   consumer smoke, separate from accepted physics validation.
 - `accepted_baseline_manifest.json` - machine-readable accepted C5G7 baseline.
