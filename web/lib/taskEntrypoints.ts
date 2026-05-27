@@ -1,5 +1,5 @@
 export interface TaskEntrypoint {
-  id: "openmc-export" | "direct-convert" | "equivalence" | "sph-audit";
+  id: "openmc-export" | "direct-convert" | "equivalence" | "openmc-sph";
   eyebrow: string;
   title: string;
   body: string;
@@ -36,12 +36,12 @@ export const TASK_ENTRYPOINTS: readonly TaskEntrypoint[] = [
     cta: "Open sidecars",
   },
   {
-    id: "sph-audit",
-    eyebrow: "SPH loop finished",
-    title: "Review loop audit",
+    id: "openmc-sph",
+    eyebrow: "Need SPH factors",
+    title: "Prepare OpenMC-side SPH",
     body:
-      "Inspect convergence diagnostics, production acceptance, solve history, and delivered artifacts.",
-    href: "/audit",
-    cta: "Open audit",
+      "Generate SPH factors upstream from OpenMC CE versus OpenMC MG 33g, then inject the sidecar before conversion.",
+    href: "/equivalence?kind=sph-sidecar",
+    cta: "Open SPH sidecar",
   },
 ] as const;

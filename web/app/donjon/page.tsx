@@ -400,9 +400,9 @@ function DonjonPageContent() {
           <p className="mt-2 text-sm leading-relaxed text-[var(--fg-2)]">
             OpenMC supplies the homogenized cross sections. DONJON still needs
             the deterministic geometry, mixture assignment, tracking options,
-            boundary conditions, and solver choice. For SPH workflows, keep the
-            OpenMC reference flux fixed and let the SPH loop update factors
-            around this same low-order DONJON deck.
+            boundary conditions, and solver choice. For SPH workflows, generate
+            factors upstream from OpenMC CE versus OpenMC MG with the same
+            geometry, then deliver the corrected handoff to this DONJON deck.
           </p>
         </section>
       </div>

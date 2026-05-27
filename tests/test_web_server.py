@@ -284,6 +284,14 @@ class CommandCatalogEndpointTests(unittest.TestCase):
         from openmc2donjon.web.commands import COMMANDS_SCHEMA
         from openmc2donjon.web.server import create_app
 
+        hidden_legacy = {
+            "prepare-openmc-sph-loop",
+            "extract-donjon-volume-flux",
+            "run-sph-iteration",
+            "run-sph-loop",
+            "make-donjon-sph-loop-config",
+            "make-sph-loop-scaffold",
+        }
         expected_cli_names = {
             spec.name
             for spec in (
@@ -293,7 +301,7 @@ class CommandCatalogEndpointTests(unittest.TestCase):
                 *diagnostics.command_specs(),
                 *web.command_specs(),
             )
-        }
+        } - hidden_legacy
 
         client = TestClient(create_app(mock_mode=False))
         response = client.get("/api/commands")
@@ -355,10 +363,7 @@ class CommandCatalogEndpointTests(unittest.TestCase):
             commands["openmc2donjon-from-openmc"]["web_path"],
             "/openmc?intent=from-openmc&workflow=one-step",
         )
-        self.assertEqual(
-            commands["prepare-openmc-sph-loop"]["web_path"],
-            "/openmc?intent=sph-loop&workflow=one-step&production=1",
-        )
+        self.assertNotIn("prepare-openmc-sph-loop", commands)
         self.assertEqual(
             commands["make-adf-sidecar"]["web_path"],
             "/equivalence?kind=adf-sidecar",
@@ -370,6 +375,10 @@ class CommandCatalogEndpointTests(unittest.TestCase):
         self.assertEqual(
             commands["make-sph-sidecar"]["web_path"],
             "/equivalence?kind=sph-sidecar",
+        )
+        self.assertEqual(
+            commands["make-sph-update-table"]["web_path"],
+            "/builder?command=make-sph-update-table",
         )
         self.assertEqual(
             commands["augment-sph"]["web_path"],
@@ -387,10 +396,8 @@ class CommandCatalogEndpointTests(unittest.TestCase):
             commands["make-low-order-driver"]["web_path"],
             "/builder?command=make-low-order-driver",
         )
-        self.assertEqual(
-            commands["make-sph-loop-scaffold"]["web_path"],
-            "/builder?command=make-sph-loop-scaffold",
-        )
+        self.assertNotIn("make-sph-loop-scaffold", commands)
+        self.assertNotIn("run-sph-loop", commands)
 
     def test_catalog_has_a_web_path_for_every_command(self) -> None:
         from openmc2donjon.web.server import create_app

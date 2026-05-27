@@ -1,5 +1,5 @@
 export interface ProductionPathStep {
-  id: "direct-conversion" | "equivalence-factors" | "sph-loop-audit";
+  id: "openmc-equivalence" | "direct-conversion" | "delivery";
   label: string;
   title: string;
   body: string;
@@ -9,30 +9,30 @@ export interface ProductionPathStep {
 
 export const PRODUCTION_PATH_STEPS: readonly ProductionPathStep[] = [
   {
-    id: "direct-conversion",
+    id: "openmc-equivalence",
     label: "01",
+    title: "OpenMC-side equivalence",
+    body:
+      "Use OpenMC CE as the reference and OpenMC MG 33g with the same geometry to produce corrected MGXS or SPH factors.",
+    result: "corrected HDF5 / SPH sidecar",
+    href: "/openmc?workflow=two-step&production=1",
+  },
+  {
+    id: "direct-conversion",
+    label: "02",
     title: "Direct conversion",
     body:
-      "Start from an OpenMC MGXS HDF5 handoff, run production gates, and write DONJON-facing ASCII.",
+      "Inspect the corrected handoff, run production gates, and write DONJON-facing ASCII.",
     result: "L_MULTICOMPO / L_MACROLIB",
     href: "/convert?intent=direct-convert&format=multicompo&check=1&production=1",
   },
   {
-    id: "equivalence-factors",
-    label: "02",
-    title: "ADF / SPH sidecars",
-    body:
-      "When direct homogenization bias is too large, build or inject equivalence factors before reconverting.",
-    result: "augmented HDF5 handoff",
-    href: "/equivalence?kind=adf-sidecar",
-  },
-  {
-    id: "sph-loop-audit",
+    id: "delivery",
     label: "03",
-    title: "SPH loop audit",
+    title: "DONJON consumption",
     body:
-      "For iterative SPH, review convergence, production acceptance, solve trace, and delivered artifacts.",
-    result: "accepted production record",
-    href: "/audit",
+      "Bundle the HDF5, ASCII output, summaries, and DONJON card inputs as the production record.",
+    result: "reproducible handoff bundle",
+    href: "/builder?command=bundle",
   },
 ] as const;

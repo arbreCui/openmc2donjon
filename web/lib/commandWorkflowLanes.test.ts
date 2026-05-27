@@ -6,11 +6,10 @@ import {
 } from "./commandWorkflowLanes";
 
 describe("commandWorkflowLanes", () => {
-  it("shows the three production lanes", () => {
+  it("shows the production lanes without the legacy DONJON SPH loop", () => {
     expect(COMMAND_WORKFLOW_LANES.map((lane) => lane.id)).toEqual([
       "direct",
       "equivalence",
-      "sph-loop",
     ]);
   });
 
@@ -22,15 +21,16 @@ describe("commandWorkflowLanes", () => {
     expect(ids).toContain("validate-bundle");
   });
 
-  it("makes the SPH loop explicit about the frozen OpenMC reference", () => {
-    const sphLane = COMMAND_WORKFLOW_LANES.find((lane) => lane.id === "sph-loop");
-    expect(sphLane).toBeDefined();
-    const firstStep = sphLane!.steps[0];
+  it("keeps SPH inside the OpenMC-side equivalence lane", () => {
+    const equivalenceLane = COMMAND_WORKFLOW_LANES.find((lane) => lane.id === "equivalence");
+    expect(equivalenceLane).toBeDefined();
+    const firstStep = equivalenceLane!.steps[0];
+    const sidecarStep = equivalenceLane!.steps.find((step) => step.id === "sidecar");
 
     expect(firstStep.title).toContain("OpenMC");
-    expect(firstStep.body).toContain("does not rerun OpenMC");
-    expect(firstStep.commandIds).toContain("prepare-openmc-sph-loop");
-    expect(firstStep.commandIds).toContain("make-sph-loop-scaffold");
+    expect(firstStep.body).toContain("OpenMC CE/MG SPH");
+    expect(sidecarStep?.commandIds).toContain("make-sph-update-table");
+    expect(sidecarStep?.commandIds).toContain("make-sph-sidecar");
   });
 
   it("finds all workflow positions for commands reused across lanes", () => {

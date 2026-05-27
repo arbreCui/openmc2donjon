@@ -47,17 +47,18 @@ describe("commandWorkflowMapping", () => {
     expect(mapping.presets).toContain("Equivalence: direct");
   });
 
-  it("describes audit viewer links", () => {
+  it("describes OpenMC-side SPH sidecar links", () => {
     const mapping = commandWorkflowMapping(
       command({
-        id: "run-sph-loop",
+        id: "make-sph-sidecar",
         group: "sph",
-        web_path: "/audit",
+        web_path: "/equivalence?kind=sph-sidecar",
       }),
     );
 
-    expect(mapping.surface).toBe("Audit page");
-    expect(mapping.requiredInputs).toEqual(["SPH loop summary JSON path"]);
+    expect(mapping.surface).toBe("Equivalence page");
+    expect(mapping.presets).toContain("Builder: make OpenMC-side SPH sidecar");
+    expect(mapping.requiredInputs).toContain("OpenMC CE/MG SPH table or source options");
   });
 
   it("describes ADF/SPH equivalence command-builder links", () => {

@@ -94,11 +94,11 @@ describe("commandBuilder", () => {
     );
   });
 
-  it("labels SPH builders with the fixed-OpenMC feedback-loop stage", () => {
-    const stage = commandBuilderStage("make-sph-loop-scaffold");
+  it("labels SPH builders with the OpenMC-side equivalence stage", () => {
+    const stage = commandBuilderStage("make-sph-update-table");
 
-    expect(stage.label).toBe("SPH feedback loop");
-    expect(stage.summary).toContain("Fixed-OpenMC");
-    expect(stage.reference).toContain("OpenMC");
+    expect(stage.label).toBe("OpenMC-side SPH");
+    expect(stage.summary).toContain("CE reference");
+    expect(stage.reference).toContain("OpenMC MG");
   });
 });

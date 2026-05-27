@@ -250,9 +250,9 @@ export interface FileStatus {
 }
 
 /**
- * The ``run-sph-loop`` summary JSON, schema
- * ``openmc2donjon.sph-loop.v1``. The endpoint returns the full payload;
- * the interface grows as the audit page consumes more sections.
+ * Legacy ``run-sph-loop`` summary JSON, schema
+ * ``openmc2donjon.sph-loop.v1``. The primary production route now keeps SPH
+ * upstream in OpenMC CE/MG equivalence; these types remain for old summaries.
  */
 export interface SphLoopAcceptanceCheck {
   name: string;

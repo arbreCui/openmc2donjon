@@ -11,7 +11,7 @@ const CHOICES = [
     title: "Equivalence",
     focus: "Direct / ADF / SPH",
     body:
-      "Direct keeps the raw homogenized XS. ADF/DF carries face discontinuity corrections. SPH carries flux-normalization factors, including the iterative SPH production loop handoff.",
+      "Direct keeps the raw homogenized XS. ADF/DF carries face discontinuity corrections. SPH carries OpenMC CE/MG flux-equivalence factors as an explicit sidecar.",
   },
   {
     title: "Production guard",

@@ -23,9 +23,9 @@ export default function ProductionPathStrip({ steps }: Props) {
       </div>
 
       <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
-        Most runs start with the direct converter. Add ADF/SPH only when the
-        deterministic solve needs equivalence correction, then use the audit
-        viewer to decide whether an iterative SPH handoff is production-ready.
+        Production SPH now stays upstream in OpenMC: compare CE reference and
+        MG 33g macro calculations with the same geometry, carry the resulting
+        factors into HDF5, then use the direct converter for DONJON delivery.
       </p>
 
       <ol className="mt-4 grid gap-3 lg:grid-cols-3">

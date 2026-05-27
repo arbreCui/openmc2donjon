@@ -34,7 +34,8 @@ describe("workflow query parsers", () => {
   it("parses converter intent with a generic fallback", () => {
     expect(parseConvertIntent("direct-convert")).toBe("direct-convert");
     expect(parseConvertIntent("check")).toBe("check");
-    expect(parseConvertIntent("sph-loop")).toBe("sph-loop");
+    expect(parseConvertIntent("openmc-sph")).toBe("openmc-sph");
+    expect(parseConvertIntent("sph-loop")).toBe("generic");
     expect(parseConvertIntent("bad")).toBe("generic");
   });
 

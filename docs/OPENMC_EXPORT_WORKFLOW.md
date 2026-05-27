@@ -402,40 +402,34 @@ def postprocess_hdf5(output_path, summary):
         std_dev.attrs["std_dev_of"] = "openmc_volume_flux"
 ```
 
-`prepare-openmc-sph-loop` can scaffold the SPH loop directly from this payload.
-When the sibling `openmc_volume_flux_std_dev` dataset is present, it is copied
-into `reference_flux.h5` and recorded in the loop summary/audit metadata. Enable
-the strict production checks when the case policy requires both MGXS and
-reference-flux uncertainty to be present:
+OpenMC-side SPH tooling can use this payload as the CE reference flux. When the
+sibling `openmc_volume_flux_std_dev` dataset is present, preserve it in the SPH
+derivation record so the corrected HDF5 or sidecar can prove reference-flux
+uncertainty coverage. Enable strict production checks when the case policy
+requires both MGXS and reference-flux uncertainty to be present:
 
 ```sh
-openmc2donjon prepare-openmc-sph-loop \
-  --recipe export_recipe.py \
-  --statepoint statepoint.120.h5 \
-  --run-dir runs/case1_sph \
-  --solve-template solve_lflux_dump.x2m.in \
-  --scalar-flux-map ASM_Y01_X01=2,ASM_Y01_X02=4 \
-  --production \
-  --require-std-dev-coverage \
-  --acceptance-require-mgxs-std-dev-coverage \
-  --acceptance-require-reference-flux-std-dev \
-  --acceptance-max-reference-flux-std-dev-rel 0.01
+openmc2donjon make-sph-update-table mgxs_library.h5 \
+  --reference-flux openmc_ce_flux.h5::openmc_volume_flux \
+  --low-order-flux openmc_mg_33g_flux.h5::openmc_volume_flux \
+  -o sph_openmc_ce_mg.csv
 ```
 
 These are two different uncertainty paths. MGXS `*_std_dev` datasets audit the
 cross sections exported to DONJON; `openmc_volume_flux_std_dev` audits the
-fixed OpenMC reference flux used to compute SPH factors.
+OpenMC CE reference flux used to compute SPH factors.
 
-If the OpenMC reference flux is produced outside the recipe, pass it explicitly:
+After the SPH table is reviewed, turn it into a sidecar and inject it:
 
 ```sh
-openmc2donjon prepare-openmc-sph-loop \
-  --recipe export_recipe.py \
-  --statepoint statepoint.120.h5 \
-  --run-dir runs/case1_sph \
-  --solve-template solve_lflux_dump.x2m.in \
-  --reference-flux external_reference_flux.h5::openmc_volume_flux \
-  --scalar-flux-map ASM_Y01_X01=2,ASM_Y01_X02=4
+openmc2donjon make-sph-sidecar mgxs_library.h5 \
+  --mode table \
+  --table sph_openmc_ce_mg.csv \
+  -o sph_sidecar.h5
+
+openmc2donjon augment-sph mgxs_library.h5 \
+  --sph-source sph_sidecar.h5 \
+  -o mgxs_with_sph.h5
 ```
 
 When `external_reference_flux.h5` also contains

@@ -67,7 +67,6 @@ const SIGN_CONVENTION_OPTIONS = [
 
 const H5 = [".h5", ".hdf5"];
 const JSON = [".json"];
-const TEXT = [".txt", ".out", ".result", ".edt", ".x2m", ".mcompo.txt", ".macrolib.txt"];
 
 export const COMMAND_BUILDER_SPECS: readonly CommandBuilderSpec[] = [
   {
@@ -226,15 +225,15 @@ export const COMMAND_BUILDER_SPECS: readonly CommandBuilderSpec[] = [
   },
   {
     id: "make-sph-update-table",
-    title: "Compute next SPH update table",
+    title: "Compute OpenMC-side SPH table",
     summary:
-      "Build the command that compares reference and low-order flux and writes the next SPH CSV table.",
+      "Build the command that compares OpenMC CE reference flux and OpenMC MG macro flux, then writes an SPH CSV table.",
     base: ["openmc2donjon", "make-sph-update-table"],
     fields: [
       path("input_h5", "MGXS HDF5", "MGXS handoff used for metadata.", "<mgxs_library.h5>", 0, H5),
       optionPath("output", "SPH table CSV", "Output SPH CSV table.", "-o", "sph_update.csv", [".csv"], true),
-      text("reference_flux", "Reference flux", "OpenMC reference flux CSV/HDF5 source.", "--reference-flux", "<reference_flux>", false, true),
-      text("low_order_flux", "Low-order flux", "Low-order flux CSV/HDF5 source.", "--low-order-flux", "<low_order_flux>", false, true),
+      text("reference_flux", "OpenMC CE flux", "OpenMC CE reference flux CSV/HDF5 source.", "--reference-flux", "<openmc_ce_flux>", false, true),
+      text("low_order_flux", "OpenMC MG flux", "OpenMC MG macro flux CSV/HDF5 source.", "--low-order-flux", "<openmc_mg_flux>", false, true),
       text("previous_sph", "Previous SPH", "Previous SPH CSV or HDF5 sidecar/source.", "--previous-sph"),
       text("damping", "Damping", "Optional multiplicative damping.", "--damping"),
       text("clip_min", "Clip min", "Optional minimum SPH value.", "--clip-min"),
@@ -244,96 +243,7 @@ export const COMMAND_BUILDER_SPECS: readonly CommandBuilderSpec[] = [
       optionPath("summary_json", "Summary JSON", "Optional iteration summary JSON.", "--summary-json", "sph_update_summary.json", JSON),
       toggle("force", "Force overwrite", "Allow replacing the CSV output.", "--force"),
     ],
-    notes: ["This is the numerical core of a manual SPH iteration."],
-  },
-  {
-    id: "extract-donjon-volume-flux",
-    title: "Extract DONJON volume flux",
-    summary: "Build the adapter command from DONJON L_FLUX dumps to canonical volume-flux HDF5.",
-    base: ["openmc2donjon", "extract-donjon-volume-flux"],
-    fields: [
-      path("input_h5", "MGXS HDF5", "MGXS handoff used for metadata.", "<mgxs_library.h5>", 0, H5),
-      optionPath("flux_dump", "DONJON flux dump", "DONJON result containing a UTL L_FLUX dump.", "--flux-dump", "flux.edt", TEXT, true),
-      optionPath("output", "Volume flux HDF5", "Canonical volume-flux output.", "-o", "volume_flux.h5", H5, true),
-      optionPath("map_h5", "Flux map HDF5", "Optional HDF5 scalar flux map.", "--map-h5", "flux_map.h5", H5),
-      text("scalar_flux_map", "Scalar flux map", "Comma-separated one-based scalar IDs.", "--scalar-flux-map"),
-      text("kn_column", "KN column", "Optional one-based /kn column override.", "--kn-column"),
-      text("list_offset", "List offset", "Optional unnamed real list offset.", "--list-offset"),
-      text("source_label", "Source label", "Provenance label stored in output metadata.", "--source-label"),
-      optionPath("summary_json", "Summary JSON", "Optional extraction summary JSON.", "--summary-json", "extract_flux_summary.json", JSON),
-      toggle("force", "Force overwrite", "Allow replacing the output HDF5.", "--force"),
-    ],
-    notes: ["Use the output as low-order flux input for SPH updates."],
-  },
-  {
-    id: "run-sph-iteration",
-    title: "Run one SPH iteration",
-    summary: "Build the one-iteration workflow command from DONJON flux dump to updated ASCII.",
-    base: ["openmc2donjon", "run-sph-iteration"],
-    fields: [
-      path("input_h5", "Base MGXS HDF5", "Immutable OpenMC handoff.", "<mgxs_library.h5>", 0, H5),
-      optionPath("output_dir", "Output directory", "Directory for generated artifacts.", "--output-dir", "sph_iteration", undefined, true, "directory"),
-      text("reference_flux", "Reference flux", "OpenMC reference flux CSV/HDF5 source.", "--reference-flux", "<reference_flux>", false, true),
-      optionPath("flux_dump", "DONJON flux dump", "DONJON result containing L_FLUX.", "--flux-dump", "flux.edt", TEXT, true),
-      optionPath("map_h5", "Flux map HDF5", "Optional HDF5 scalar flux map.", "--map-h5", "flux_map.h5", H5),
-      text("scalar_flux_map", "Scalar flux map", "Comma-separated one-based scalar IDs.", "--scalar-flux-map"),
-      text("previous_sph", "Previous SPH", "Previous SPH CSV/HDF5 source.", "--previous-sph"),
-      text("damping", "Damping", "Optional update damping.", "--damping"),
-      text("clip_min", "Clip min", "Optional SPH lower clip.", "--clip-min"),
-      text("clip_max", "Clip max", "Optional SPH upper clip.", "--clip-max"),
-      select("flux_normalization", "Flux normalization", "Scale DONJON flux before ratio.", "--flux-normalization", FLUX_NORMALIZATION_OPTIONS),
-      select("format", "ASCII format", "Final DONJON ASCII output format.", "--format", FORMAT_OPTIONS),
-      optionPath("summary_json", "Summary JSON", "Optional workflow summary JSON.", "--summary-json", "sph_iteration_summary.json", JSON),
-      toggle("force", "Force overwrite", "Overwrite generated artifacts.", "--force"),
-    ],
-    notes: ["For repeated production use, prefer run-sph-loop with an explicit config."],
-  },
-  {
-    id: "make-donjon-sph-loop-config",
-    title: "Write DONJON SPH-loop config",
-    summary: "Build a generic DONJON-backed SPH loop JSON config.",
-    base: ["openmc2donjon", "make-donjon-sph-loop-config"],
-    fields: [
-      optionPath("output", "Config JSON", "Config JSON to write.", "--output", "loop.json", JSON, true),
-      optionPath("output_dir", "Loop output directory", "SPH loop run directory.", "--output-dir", "sph_loop", undefined, true, "directory"),
-      optionPath("mgxs", "MGXS HDF5", "Fixed OpenMC MGXS HDF5.", "--mgxs", "mgxs_library.h5", H5, true),
-      optionPath("solve_template", "DONJON solve template", "Case-specific solve deck template.", "--solve-template", "solve_template.c2m", TEXT, true),
-      optionPath("flux_map", "Flux map HDF5", "Scalar-flux map HDF5.", "--flux-map", "flux_map.h5", H5, true),
-      text("reference_flux", "Reference flux", "Optional reference flux source.", "--reference-flux"),
-      text("iterations", "Iterations", "Optional max iteration count.", "--iterations"),
-      text("damping", "Damping", "Optional damping.", "--damping"),
-      text("clip_min", "Clip min", "Optional SPH lower clip.", "--clip-min"),
-      text("clip_max", "Clip max", "Optional SPH upper clip.", "--clip-max"),
-      select("flux_normalization", "Flux normalization", "SPH flux normalization.", "--flux-normalization", FLUX_NORMALIZATION_OPTIONS),
-      text("sph_change_tolerance", "SPH change target", "Optional convergence target.", "--sph-change-tolerance"),
-      text("flux_ratio_tolerance", "Flux ratio target", "Optional convergence target.", "--flux-ratio-tolerance"),
-      toggle("fail_on_nonconvergence", "Fail on nonconvergence", "Make loop return error if targets are not met.", "--fail-on-nonconvergence"),
-      select("format", "ASCII format", "Loop handoff format.", "--format", FORMAT_OPTIONS),
-    ],
-    notes: ["Acceptance gates and convergence targets are independent production decisions."],
-  },
-  {
-    id: "make-sph-loop-scaffold",
-    title: "Make SPH-loop scaffold",
-    summary: "Build the OpenMC-side scaffold command for reference flux, flux map, and loop config.",
-    base: ["openmc2donjon", "make-sph-loop-scaffold"],
-    fields: [
-      path("input_h5", "MGXS HDF5", "OpenMC MGXS HDF5 handoff.", "<mgxs_library.h5>", 0, H5),
-      optionPath("output_dir", "Output directory", "Directory for scaffold artifacts.", "--output-dir", "sph_scaffold", undefined, true, "directory"),
-      text("reference_flux", "Reference flux", "OpenMC reference flux CSV/HDF5 source.", "--reference-flux", "<reference_flux>", false, true),
-      optionPath("solve_template", "DONJON solve template", "Case-specific solve deck template.", "--solve-template", "solve_template.c2m", TEXT, true),
-      text("scalar_flux_map", "Scalar flux map", "Comma-separated DONJON scalar IDs.", "--scalar-flux-map"),
-      toggle("sequential_scalar_flux_map", "Sequential scalar map", "Use scalar_flux_ids=1..N in MGXS order.", "--sequential-scalar-flux-map"),
-      text("iterations", "Iterations", "Optional max iteration count.", "--iterations"),
-      text("damping", "Damping", "Optional damping.", "--damping"),
-      text("sph_change_tolerance", "SPH change target", "Optional convergence target.", "--sph-change-tolerance"),
-      text("flux_ratio_tolerance", "Flux ratio target", "Optional convergence target.", "--flux-ratio-tolerance"),
-      toggle("fail_on_nonconvergence", "Fail on nonconvergence", "Make loop return error if targets are not met.", "--fail-on-nonconvergence"),
-      select("format", "ASCII format", "Loop handoff format.", "--format", FORMAT_OPTIONS),
-      optionPath("summary_json", "Summary JSON", "Optional scaffold summary JSON.", "--summary-json", "scaffold_summary.json", JSON),
-      toggle("force", "Force overwrite", "Overwrite generated artifacts.", "--force"),
-    ],
-    notes: ["This is a bridge from a fixed OpenMC handoff into run-sph-loop."],
+    notes: ["Use this after the CE and MG OpenMC calculations share the same geometry and output regions."],
   },
   {
     id: "bundle",
@@ -431,18 +341,12 @@ export function commandBuilderStage(id: string): CommandBuilderStage {
       reference: "OpenMC reference plus low-order face data",
     };
   }
-  if (
-    id === "make-sph-update-table" ||
-    id === "extract-donjon-volume-flux" ||
-    id === "run-sph-iteration" ||
-    id === "make-donjon-sph-loop-config" ||
-    id === "make-sph-loop-scaffold"
-  ) {
+  if (id === "make-sph-update-table") {
     return {
-      label: "SPH feedback loop",
+      label: "OpenMC-side SPH",
       summary:
-        "Fixed-OpenMC SPH command: DONJON flux is compared to the OpenMC reference, NSPH is updated, then the handoff is reconverted.",
-      reference: "Frozen OpenMC MGXS and reference flux",
+        "OpenMC equivalence command: compare CE reference and MG macro flux, then write explicit SPH factors for each output region and energy group.",
+      reference: "OpenMC CE reference plus OpenMC MG 33g macro flux",
     };
   }
   if (id === "bundle" || id === "validate-bundle") {

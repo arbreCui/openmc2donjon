@@ -192,16 +192,15 @@ openmc2donjon check mgxs_library.h5 \
   --require-std-dev-coverage
 ```
 
-The same policy is available in SPH-loop acceptance as
-`acceptance.require_mgxs_std_dev_coverage = true`. Exporter-synthesized zero
-fission placeholders in non-fissionable mixtures are excluded from the
-expected coverage count.
+OpenMC-side SPH workflows should apply the same policy before writing the final
+sidecar or corrected HDF5. Exporter-synthesized zero fission placeholders in
+non-fissionable mixtures are excluded from the expected coverage count.
 
-## Optional OpenMC Reference-Flux Uncertainty
+## Optional OpenMC CE Reference-Flux Uncertainty
 
-The SPH loop compares low-order DONJON fluxes against a fixed OpenMC reference
-flux. When that reference flux is stored in an HDF5 dataset, it may also carry
-a sibling standard-deviation dataset:
+OpenMC-side SPH compares an OpenMC CE reference flux against an OpenMC MG macro
+flux on the same geometry. When that CE reference flux is stored in an HDF5
+dataset, it may also carry a sibling standard-deviation dataset:
 
 ```text
 /openmc_volume_flux
@@ -226,11 +225,11 @@ attrs:
   std_dev_of = "openmc_volume_flux"
 ```
 
-`prepare-openmc-sph-loop` detects `<reference_dataset>_std_dev` when the
-reference flux source is HDF5, validates it, and writes matching aliases
-(`openmc_volume_flux_std_dev`, `reference_flux_std_dev`, and
-`volume_flux_std_dev`) into the scaffolded `reference_flux.h5`. SPH-loop
-acceptance can then enforce:
+OpenMC-side SPH tooling should detect `<reference_dataset>_std_dev` when the
+reference flux source is HDF5, validate it, and preserve matching aliases such
+as `openmc_volume_flux_std_dev`, `reference_flux_std_dev`, and
+`volume_flux_std_dev` in the SPH derivation record. A workflow-specific gate can
+then enforce:
 
 ```json
 {

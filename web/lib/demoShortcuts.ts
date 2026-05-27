@@ -5,16 +5,13 @@ import {
 } from "./convertDemo";
 
 export interface DemoShortcut {
-  id: "convert-c5g7" | "inspect-c5g7" | "audit-sph";
+  id: "convert-c5g7" | "inspect-c5g7" | "sph-sidecar";
   eyebrow: string;
   title: string;
   body: string;
   href: string;
   cta: string;
 }
-
-export const MOCK_AUDIT_DEMO_PATH =
-  "/mock/home/openmc-runs/full-core-sph/sph_loop_summary_ref_stddev.json";
 
 export const HOME_DEMO_SHORTCUTS: readonly DemoShortcut[] = [
   {
@@ -36,12 +33,12 @@ export const HOME_DEMO_SHORTCUTS: readonly DemoShortcut[] = [
     cta: "Inspect HDF5",
   },
   {
-    id: "audit-sph",
-    eyebrow: "SPH loop audit",
-    title: "Review a 10-iteration loop",
+    id: "sph-sidecar",
+    eyebrow: "OpenMC-side SPH",
+    title: "Build an SPH sidecar command",
     body:
-      "Load the bundled full-core SPH loop summary with production acceptance and convergence diagnostics.",
-    href: `/audit?path=${encodeURIComponent(MOCK_AUDIT_DEMO_PATH)}`,
-    cta: "Open audit demo",
+      "Open the non-mutating sidecar builder for SPH factors produced by OpenMC CE/MG equivalence.",
+    href: "/equivalence?kind=sph-sidecar",
+    cta: "Open SPH builder",
   },
 ] as const;

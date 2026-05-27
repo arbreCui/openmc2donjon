@@ -91,14 +91,15 @@ function AuditPageContent() {
       <div className="mx-auto max-w-5xl">
         <header className="mb-8">
           <h1 className="text-3xl font-bold tracking-tight">
-            <span className="grad-text">Audit SPH loop run</span>
+            <span className="grad-text">Legacy SPH loop audit</span>
           </h1>
           <p className="mt-2 text-sm text-[var(--fg-2)]">
-            Read the JSON summary produced by{" "}
+            Compatibility viewer for old JSON summaries produced by{" "}
             <code className="font-mono">openmc2donjon run-sph-loop</code>{" "}
             (schema <code className="font-mono">openmc2donjon.sph-loop.v1</code>)
-            and show the decision, quality diagnostics, convergence history,
-            production gates, and per-iteration execution trace.
+            . The primary production SPH route now runs OpenMC CE/MG
+            equivalence upstream and carries explicit factors through the
+            converter.
           </p>
         </header>
 

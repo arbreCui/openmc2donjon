@@ -88,19 +88,6 @@ export function commandWorkflowMapping(
     };
   }
 
-  if (parsed.pathname === "/audit") {
-    return {
-      available: true,
-      href: command.web_path,
-      surface: "Audit page",
-      title: "SPH loop audit viewer",
-      summary:
-        "Opens the SPH-loop audit page for convergence, acceptance, production checks, and iteration traces.",
-      presets: ["Viewer mode: SPH loop summary"],
-      requiredInputs: ["SPH loop summary JSON path"],
-    };
-  }
-
   if (parsed.pathname === "/equivalence") {
     const kind = parsed.searchParams.get("kind") ?? "adf-sidecar";
     return {
@@ -158,7 +145,7 @@ function equivalenceLabel(value: string): string {
 
 function equivalenceBuilderLabel(value: string): string {
   if (value === "augment-adf") return "inject ADF/DF";
-  if (value === "sph-sidecar") return "make SPH sidecar";
+  if (value === "sph-sidecar") return "make OpenMC-side SPH sidecar";
   if (value === "augment-sph") return "inject SPH";
   return "make ADF/DF sidecar";
 }
@@ -168,7 +155,11 @@ function equivalenceRequiredInputs(value: string): string[] {
     return ["Input MGXS HDF5 path", "ADF sidecar HDF5 path", "Augmented HDF5 output path"];
   }
   if (value === "sph-sidecar") {
-    return ["Input MGXS HDF5 path", "SPH source mode/options", "SPH sidecar output path"];
+    return [
+      "Input MGXS HDF5 path",
+      "OpenMC CE/MG SPH table or source options",
+      "SPH sidecar output path",
+    ];
   }
   if (value === "augment-sph") {
     return ["Input MGXS HDF5 path", "SPH sidecar HDF5 path", "Augmented HDF5 output path"];

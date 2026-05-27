@@ -29,7 +29,7 @@ export default function HomeDemoShortcuts({ state, shortcuts }: Props) {
 
       <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
         In mock mode, these shortcuts open prefilled localhost examples for the
-        direct converter, HDF5 inspector, and SPH loop audit viewer.
+        direct converter, HDF5 inspector, and OpenMC-side SPH sidecar builder.
       </p>
 
       {enabled ? (

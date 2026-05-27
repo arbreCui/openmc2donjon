@@ -1,4 +1,8 @@
-export type ConvertIntent = "direct-convert" | "check" | "sph-loop" | "generic";
+export type ConvertIntent =
+  | "direct-convert"
+  | "check"
+  | "openmc-sph"
+  | "generic";
 
 export interface ConvertIntentCopy {
   intent: ConvertIntent;
@@ -31,14 +35,14 @@ const COPIES: Record<ConvertIntent, ConvertIntentCopy> = {
     commandLabel: "check",
     tone: "production",
   },
-  "sph-loop": {
-    intent: "sph-loop",
-    eyebrow: "SPH feedback loop",
-    title: "Reconvert with updated equivalence factors",
+  "openmc-sph": {
+    intent: "openmc-sph",
+    eyebrow: "OpenMC-side SPH",
+    title: "Convert a corrected SPH handoff",
     body:
-      "In an SPH loop, OpenMC remains the fixed reference. DONJON solves with current factors, the loop updates NSPH, then this conversion step writes the next handoff.",
-    commandHref: "/commands/run-sph-loop",
-    commandLabel: "run-sph-loop",
+      "Use this after OpenMC CE/MG equivalence has produced SPH factors and they have been injected into the HDF5 handoff.",
+    commandHref: "/commands/augment-sph",
+    commandLabel: "augment-sph",
     tone: "sph",
   },
   generic: {
@@ -54,7 +58,7 @@ const COPIES: Record<ConvertIntent, ConvertIntentCopy> = {
 };
 
 export function parseConvertIntent(value: string | null): ConvertIntent {
-  if (value === "direct-convert" || value === "check" || value === "sph-loop") {
+  if (value === "direct-convert" || value === "check" || value === "openmc-sph") {
     return value;
   }
   return "generic";

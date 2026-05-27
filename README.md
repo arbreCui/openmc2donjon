@@ -3,29 +3,31 @@
 [![CI](https://github.com/arbreCui/openmc2donjon/actions/workflows/ci.yml/badge.svg)](https://github.com/arbreCui/openmc2donjon/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Build production handoffs from OpenMC multi-group cross sections to
-DRAGON/DONJON deterministic workflows.
+Build production handoffs from OpenMC multi-group cross sections and
+OpenMC-side equivalence factors to DRAGON/DONJON deterministic workflows.
 
-The project bridges a high-fidelity OpenMC reference and a low-order
-DRAGON/DONJON solve at the assembly / domain level:
+The production route keeps the physics equivalence on the OpenMC side, then
+uses this package as the delivery bridge into DRAGON/DONJON:
 
 ```text
-OpenMC (high-fidelity reference, full geometry)
-  -> assembly- / domain-wise homogenization (MGXS HDF5 handoff)
-  -> equivalence stage
-  -> L_MULTICOMPO or L_MACROLIB ASCII
-  -> DONJON low-order solve (diffusion / SPN)
+OpenMC CE reference
+  + OpenMC MG 33g with the same geometry
+  -> OpenMC-side SPH factors and/or ADF/DF sidecars
+  -> corrected MGXS HDF5 handoff
+  -> openmc2donjon converter
+  -> DONJON L_MULTICOMPO or L_MACROLIB consumption
 ```
 
 ## Equivalence Methods
 
-All three methods are implemented and exercised by the production smokes.
+The converter does not compute the physics correction itself. It carries
+explicit factors produced upstream, with OpenMC CE/MG equivalence as the
+production SPH route.
 
 | Method | What it does | Entry point |
 | --- | --- | --- |
 | Direct | No equivalence factors; accept the homogenization bias. | Convert without equivalence flags. |
-| One-shot equivalence | Inject ADF/DF and/or SPH factors from a sidecar before conversion. Examples include flux-ratio ADF built from OpenMC surface flux plus a low-order driver, or an SPH table from a previous run. | `make-adf-sidecar` + `augment-adf`, `make-sph-sidecar` + `augment-sph`, or `openmc2donjon-from-openmc --build-flux-ratio-adf` / `--sph-source` / `--sph-macrolib`. |
-| Iterative SPH | Fix the OpenMC reference, then iterate: DONJON solve -> extract low-order flux -> recompute SPH -> reconvert, until convergence. | `openmc2donjon run-sph-loop --config loop.json` |
+| OpenMC-side SPH / ADF | Generate SPH factors from OpenMC CE reference vs OpenMC MG 33g macro calculation with the same geometry, or build ADF/DF sidecars from OpenMC face-flux evidence. | `make-sph-sidecar` + `augment-sph`, `make-adf-sidecar` + `augment-adf`, or `openmc2donjon-from-openmc --sph-source` / `--build-flux-ratio-adf`. |
 
 ## Export And Convert Modes
 
@@ -37,7 +39,8 @@ Both invocation styles ship:
 - one-step: `openmc2donjon-from-openmc` exports, checks, converts, and bundles
   a managed run directory in a single command.
 
-Either invocation style composes with any of the equivalence methods above.
+Either invocation style composes with direct conversion or explicit OpenMC-side
+equivalence factors.
 
 ## Output Formats
 
@@ -227,16 +230,19 @@ Details:
 - [Production thresholds](docs/PRODUCTION_THRESHOLDS.md)
 - [HDF5 input contract](docs/HDF5_INPUT_CONTRACT.md)
 
-## SPH And ADF/DF
+## OpenMC-Side SPH And ADF/DF
 
 The package can carry equivalence data into DONJON handoffs:
 
 - ADF/HADF discontinuity factors, including flux-ratio ADF sidecars.
-- SPH/NSPH factors for workflows where the downstream method prefers SPH.
+- SPH/NSPH factors generated from OpenMC-side CE/MG equivalence.
 
 The converter records these factors and provenance in the HDF5/MACROLIB/MULTICOMPO
 handoff; it does not invent physics corrections on its own. Case-specific ADF
-or SPH factors should come from the chosen OpenMC/low-order/DONJON workflow.
+or SPH factors should come from the chosen OpenMC CE reference and OpenMC MG
+macro workflow. A single isolated assembly generally does not need SPH; a
+colorset or full-core macro model needs one SPH factor per homogenized output
+region and energy group.
 
 Entry points:
 
@@ -246,13 +252,11 @@ openmc2donjon augment-adf mgxs_library.h5 --adf-source adf_sidecar.h5 -o mgxs_wi
 
 openmc2donjon make-sph-sidecar mgxs_library.h5 -o sph_sidecar.h5 --value 1.0
 openmc2donjon augment-sph mgxs_library.h5 --sph-source sph_sidecar.h5 -o mgxs_with_sph.h5
-openmc2donjon run-sph-loop --config loop.json
 ```
 
 Docs and examples:
 
 - [External face-flux contract](docs/EXTERNAL_FACE_FLUX_CONTRACT.md)
-- [DONJON SPH loop adapter](examples/donjon_sph_loop_adapter/)
 - [External low-order handoff](examples/external_low_order_handoff/)
 
 ## Validation Status
@@ -328,9 +332,10 @@ and builds the `web/` Next.js project.
 
 A localhost-only Next.js + FastAPI web UI lives in [`web/`](web/), wired to
 the same Python package as the CLI. It includes a command workspace
-(`Commands`), the direct converter workflow (`Convert`), HDF5 inspection
-(`Inspect`), ADF/SPH sidecar builders (`Equivalence`), generic CLI command
-builders (`Builder`), and SPH-loop audit viewing (`Audit`).
+(`Commands`), the OpenMC production planner (`OpenMC`), the direct converter
+workflow (`Convert`), HDF5 inspection (`Inspect`), OpenMC-side ADF/SPH sidecar
+builders (`Equivalence`), PyGan integration (`PyGan`), DONJON handoff guidance
+(`DONJON`), and generic CLI command builders (`Builder`).
 
 ```sh
 python -m pip install -e ".[web]"
@@ -347,16 +352,18 @@ real package APIs — useful for frontend-only development. See
 [`web/README.md`](web/README.md) for full layout and conventions.
 
 The Web UI is intentionally localhost-first. Direct conversion can be dry-run
-or executed through `/convert`; equivalence and generic builders only assemble
-copyable CLI commands for sidecar, bundle, diagnostic, and SPH-loop support
+or executed through `/convert`; equivalence and generic builders assemble
+copyable CLI commands for OpenMC-side sidecar, bundle, and diagnostic support
 commands.
 
 ## Roadmap
 
 Near-term work:
 
-- tighten the production examples around full OpenMC -> HDF5 -> Web inspect /
-  convert -> DONJON handoff records;
+- build a two- or three-region OpenMC CE/MG colorset minicase that produces
+  one SPH factor per output region and energy group;
+- tighten the production examples around OpenMC CE/MG equivalence -> corrected
+  HDF5 -> Web inspect / convert -> DONJON handoff records;
 - keep standard energy-mesh identification and uncertainty coverage visible in
   every production audit surface;
 - broader mypy coverage for small pure helper modules.

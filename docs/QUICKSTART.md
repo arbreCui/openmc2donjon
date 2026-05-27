@@ -56,7 +56,7 @@ bash scripts/run_production_minicase_smoke.sh
 
 The CLI remains the authoritative execution path, but the localhost Web UI is
 the fastest way to inspect a handoff, dry-run conversion gates, preview command
-lines, and review SPH-loop audit summaries:
+lines, and build OpenMC-side ADF/SPH sidecar commands:
 
 ```sh
 python -m pip install -e ".[web]"
@@ -74,10 +74,8 @@ Open <http://localhost:3000>. The main surfaces are:
 - `Convert` - direct HDF5 -> MULTICOMPO/MACROLIB dry-run and conversion;
 - `Inspect` - HDF5 mixture, energy mesh, scatter, ADF/SPH, and std_dev hints;
 - `Equivalence` - copyable ADF/SPH sidecar and augmentation commands;
-- `Builder` - copyable command builders for diagnostics, bundles, and SPH
-  support commands;
-- `Audit` - SPH-loop summary viewer separating production acceptance from
-  convergence.
+- `Builder` - copyable command builders for diagnostics and bundles;
+- `DONJON` - starter handoff guidance for downstream cards.
 
 For fixture-backed UI work without local files, start the backend with
 `openmc2donjon serve --mock`.

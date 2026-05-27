@@ -41,7 +41,6 @@ You do **not** need to visit every page.
 | Builder | You want a shareable delivery bundle with manifest and hashes. | Recommended |
 | DONJON | You want a starter DONJON deck and `NCR`/`MACROLIB` loading hints. | Recommended |
 | Equivalence | You already have ADF/SPH data or want CLI commands to build sidecars. | No |
-| Audit | You have an SPH loop summary JSON and want to inspect convergence/acceptance. | No |
 | Commands | You want command reference and deep links. | No |
 
 ## Direct Conversion In The Web UI
@@ -152,8 +151,11 @@ The `/equivalence` page is currently a command builder. It helps construct
 sidecar/augmentation CLI commands, but it does not execute the physics workflow
 inside the browser.
 
-Use `/audit` only after an iterative SPH loop has produced a
-`sph_loop_summary.json`.
+For production SPH, generate factors upstream from OpenMC CE reference versus
+OpenMC MG 33g with the same geometry. A single assembly usually does not need
+SPH; colorsets and full-core macro models need one factor per output region
+and energy group. After those factors exist, use `/equivalence` to build or
+inject the SPH sidecar, then return to `/convert`.
 
 ## Hexagonal Cases
 
@@ -188,4 +190,3 @@ rev: 55b52b7ef
 The hex minicase uses standard OpenMC hex-lattice/cell-domain modeling. If a
 future workflow needs a true hex mesh tally API, the external branch may become
 useful, but the current converter and web workflow do not require it.
-

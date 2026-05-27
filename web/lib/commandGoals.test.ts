@@ -12,7 +12,7 @@ describe("commandGoals", () => {
       command("direct-convert", "ready"),
       command("check", "partial"),
       command("bundle", "planned"),
-      command("run-sph-loop", "partial"),
+      command("make-sph-sidecar", "partial"),
     ]);
 
     const direct = goals.find((goal) => goal.id === "direct-convert");
@@ -29,18 +29,18 @@ describe("commandGoals", () => {
     expect(direct?.missingCommandIds).toContain("inspect");
   });
 
-  it("keeps OpenMC visible in the SPH loop goal", () => {
+  it("keeps OpenMC visible in the SPH sidecar goal", () => {
     const goals = commandGoals([
-      command("prepare-openmc-sph-loop", "partial"),
-      command("run-sph-loop", "partial"),
+      command("make-sph-sidecar", "partial"),
+      command("augment-sph", "partial"),
     ]);
 
-    const sph = goals.find((goal) => goal.id === "sph-loop");
-    expect(sph?.body).toContain("Freeze OpenMC");
-    expect(sph?.actionHint).toContain("completed loop");
+    const sph = goals.find((goal) => goal.id === "openmc-sph");
+    expect(sph?.body).toContain("OpenMC CE");
+    expect(sph?.actionHint).toContain("sidecar");
     expect(sph?.commands.map((command) => command.id)).toEqual([
-      "prepare-openmc-sph-loop",
-      "run-sph-loop",
+      "make-sph-sidecar",
+      "augment-sph",
     ]);
   });
 

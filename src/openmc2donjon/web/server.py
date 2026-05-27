@@ -9,10 +9,10 @@ Endpoints (M1 scope):
   handoff, plus standard energy-mesh ID match when present.
 - ``GET /api/inspect/mixture?path=...&mixture=...&moment=0`` - per-mixture
   cross sections and one scatter moment.
-- ``GET /api/audit?path=...`` - returns the JSON payload written by
-  ``run-sph-loop`` (schema ``openmc2donjon.sph-loop.v1``). The
-  response is the raw parsed JSON; the frontend chooses what to
-  surface.
+- ``GET /api/audit?path=...`` - legacy endpoint for old
+  ``run-sph-loop`` JSON payloads (schema ``openmc2donjon.sph-loop.v1``).
+  It is retained for compatibility but is no longer part of the primary
+  OpenMC CE/MG production route.
 - ``GET /api/text-preview?path=...`` - bounded UTF-8/ASCII preview for
   generated text artifacts such as ``.mcompo.txt`` and ``.macrolib.txt``.
 - ``GET /api/file-status?path=...`` - single-path existence / kind /
@@ -116,8 +116,8 @@ _MOCK_TREE: dict[str, list[tuple[str, str, int | None]]] = {
     ],
     f"{_MOCK_HOME}/openmc-runs/full-core-sph": [
         # ``sph_loop_summary.json`` is what ``/api/audit`` consumes;
-        # the fixture is a sanitized real 10-iteration DONJON-backed
-        # full-core minicase, so the audit page exercises a realistic
+        # the fixture is a sanitized real 10-iteration legacy full-core
+        # minicase, so the audit page exercises a realistic
         # convergence history rather than a perfect two-step toy loop.
         ("sph_loop_summary.json", "file", 143_282),
         # Same loop history, but with reference-flux std_dev metadata
@@ -261,8 +261,8 @@ def create_app(
 
     @app.get("/api/audit")
     def api_audit(path: str = Query(..., min_length=1)) -> dict[str, Any]:
-        # Returns the raw ``run-sph-loop`` summary JSON. The frontend
-        # decides which sections to surface, but the backend still
+        # Legacy compatibility for raw ``run-sph-loop`` summary JSON. The
+        # frontend decides which sections to surface, but the backend still
         # validates the fields M6-A dereferences so an arbitrary JSON
         # object can't crash the page at render time.
         if mock_mode:

@@ -48,8 +48,9 @@ export default function Home() {
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
             Local workflow cockpit for OpenMC{" "}
             <span className="font-mono">→</span> DRAGON/DONJON handoff
-            production: export MGXS, inspect the HDF5 contract, convert to
-            ASCII, apply ADF/SPH sidecars, and review SPH loop audits.
+            production: prepare OpenMC CE/MG equivalence evidence, inspect the
+            HDF5 contract, convert to ASCII, apply ADF/SPH sidecars, and bundle
+            the DONJON handoff.
           </p>
         </header>
 

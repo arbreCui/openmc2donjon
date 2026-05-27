@@ -26,7 +26,7 @@ export function parseConvertFormat(value: string | null): ConvertFormat {
 }
 
 export function parseConvertIntent(value: string | null): ConvertIntent {
-  if (value === "direct-convert" || value === "check" || value === "sph-loop") {
+  if (value === "direct-convert" || value === "check" || value === "openmc-sph") {
     return value;
   }
   return "generic";

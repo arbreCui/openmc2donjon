@@ -60,16 +60,16 @@ export const COMMAND_WORKFLOW_LANES: readonly WorkflowLane[] = [
   },
   {
     id: "equivalence",
-    title: "One-shot ADF/SPH equivalence",
+    title: "OpenMC-side ADF/SPH equivalence",
     summary:
-      "Use this when the direct homogenized XS need one explicit correction stage before conversion.",
+      "Use this when OpenMC CE/MG evidence produces explicit ADF/DF or SPH factors before conversion.",
     steps: [
       {
         id: "drivers",
-        title: "Prepare face or flux drivers",
-        body: "Export OpenMC surface currents and/or canonicalize the low-order driver data.",
+        title: "Prepare OpenMC evidence",
+        body: "Export OpenMC surface currents for ADF/DF, or bring OpenMC CE/MG SPH factors for each output region and group.",
         href: "/builder?command=export-surface-flux",
-        commandIds: ["export-surface-flux", "make-low-order-driver"],
+        commandIds: ["export-surface-flux", "make-low-order-driver", "make-sph-sidecar"],
       },
       {
         id: "qa",
@@ -81,9 +81,9 @@ export const COMMAND_WORKFLOW_LANES: readonly WorkflowLane[] = [
       {
         id: "sidecar",
         title: "Build sidecar factors",
-        body: "Create ADF/DF or SPH sidecars as explicit artifacts, not hidden converter behavior.",
+        body: "Create ADF/DF or OpenMC-side SPH sidecars as explicit artifacts, not hidden converter behavior.",
         href: "/equivalence?kind=adf-sidecar",
-        commandIds: ["make-adf-sidecar", "make-sph-sidecar"],
+        commandIds: ["make-adf-sidecar", "make-sph-update-table", "make-sph-sidecar"],
       },
       {
         id: "augment",
@@ -91,49 +91,6 @@ export const COMMAND_WORKFLOW_LANES: readonly WorkflowLane[] = [
         body: "Inject the chosen sidecar into the HDF5, then run the same converter path.",
         href: "/equivalence?kind=augment-adf",
         commandIds: ["augment-adf", "augment-sph", "direct-convert"],
-      },
-    ],
-  },
-  {
-    id: "sph-loop",
-    title: "Iterative SPH loop",
-    summary:
-      "Use this when DONJON flux feedback should update NSPH while OpenMC remains the fixed reference.",
-    steps: [
-      {
-        id: "reference",
-        title: "Freeze OpenMC reference",
-        body: "OpenMC supplies fixed MGXS and reference flux. The loop does not rerun OpenMC each iteration.",
-        href: "/openmc?intent=sph-loop&workflow=one-step&production=1",
-        commandIds: ["prepare-openmc-sph-loop", "make-sph-loop-scaffold"],
-      },
-      {
-        id: "config",
-        title: "Configure DONJON loop",
-        body: "Point the loop at the solve template, flux map, reference flux, and convergence policy.",
-        href: "/builder?command=make-donjon-sph-loop-config",
-        commandIds: ["make-donjon-sph-loop-config"],
-      },
-      {
-        id: "iterate",
-        title: "Solve, compare, update",
-        body: "DONJON solves the current handoff; flux mismatch updates NSPH; the converter rewrites ASCII.",
-        href: "/commands/run-sph-loop",
-        commandIds: ["run-sph-loop", "run-sph-iteration"],
-      },
-      {
-        id: "manual-tools",
-        title: "Manual loop tools",
-        body: "Use the low-level adapters when you need to debug or customize a single loop step.",
-        href: "/builder?command=extract-donjon-volume-flux",
-        commandIds: ["extract-donjon-volume-flux", "make-sph-update-table", "augment-sph"],
-      },
-      {
-        id: "audit",
-        title: "Audit acceptance",
-        body: "Review convergence, production acceptance, solve history, and the final delivered artifacts.",
-        href: "/audit",
-        commandIds: ["run-sph-loop", "bundle", "validate-bundle"],
       },
     ],
   },

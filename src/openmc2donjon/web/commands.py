@@ -16,6 +16,17 @@ from ..commands import adf, diagnostics, openmc, sph, web as web_commands
 
 COMMANDS_SCHEMA = "openmc2donjon.commands.v1"
 
+_HIDDEN_LEGACY_DONJON_LOOP_COMMANDS = frozenset(
+    {
+        "prepare-openmc-sph-loop",
+        "extract-donjon-volume-flux",
+        "run-sph-iteration",
+        "run-sph-loop",
+        "make-donjon-sph-loop-config",
+        "make-sph-loop-scaffold",
+    }
+)
+
 
 @dataclass(frozen=True)
 class CommandGroup:
@@ -60,7 +71,7 @@ GROUPS: tuple[CommandGroup, ...] = (
     CommandGroup(
         "openmc",
         "OpenMC production export",
-        "Build production SPH-loop inputs from an OpenMC recipe and statepoint.",
+        "Build OpenMC CE/MG handoff inputs from a recipe and statepoint.",
     ),
     CommandGroup(
         "adf",
@@ -69,8 +80,8 @@ GROUPS: tuple[CommandGroup, ...] = (
     ),
     CommandGroup(
         "sph",
-        "SPH equivalence loop",
-        "Create, inject, and iterate SPH factors against a fixed OpenMC reference.",
+        "OpenMC-side SPH equivalence",
+        "Create and inject SPH factors produced from OpenMC CE/MG equivalence.",
     ),
     CommandGroup(
         "package",
@@ -98,7 +109,10 @@ GROUP_GUIDANCE: dict[str, CommandGuidance] = {
     ),
     "openmc": CommandGuidance(
         use_when="Your starting point is an OpenMC recipe/statepoint rather than an existing handoff HDF5.",
-        produces="An MGXS HDF5 handoff, optional equivalence sidecars, ASCII output, and run bundle.",
+        produces=(
+            "An MGXS HDF5 handoff, optional OpenMC-side equivalence sidecars, "
+            "ASCII output, and run bundle."
+        ),
         next_step="Inspect the generated HDF5 and keep the managed run directory as the production record.",
     ),
     "adf": CommandGuidance(
@@ -107,11 +121,13 @@ GROUP_GUIDANCE: dict[str, CommandGuidance] = {
         next_step="Convert the augmented HDF5 or use the OpenMC planner to include ADF in the handoff.",
     ),
     "sph": CommandGuidance(
-        use_when="You want flux-preserving equivalence factors against a fixed OpenMC reference.",
-        produces="SPH sidecars, augmented handoffs, loop configs, and SPH-loop audit summaries.",
+        use_when=(
+            "You already have SPH factors from OpenMC CE/MG equivalence "
+            "and need to carry them to DONJON."
+        ),
+        produces="SPH sidecars and SPH-augmented HDF5 handoffs.",
         next_step=(
-            "Run the loop, inspect the audit page, and decide whether "
-            "convergence/acceptance is sufficient."
+            "Inject the sidecar into the HDF5, then return to direct conversion."
         ),
     ),
     "package": CommandGuidance(
@@ -122,7 +138,7 @@ GROUP_GUIDANCE: dict[str, CommandGuidance] = {
     "web": CommandGuidance(
         use_when="You want to use the localhost web UI instead of memorizing CLI flags.",
         produces="A FastAPI backend serving the web endpoints.",
-        next_step="Open the Next.js frontend and use Convert, OpenMC, Inspect, Audit, or Commands.",
+        next_step="Open the Next.js frontend and use Convert, OpenMC, Inspect, Equivalence, or Commands.",
     ),
 }
 
@@ -161,11 +177,6 @@ COMMAND_GUIDANCE: dict[str, CommandGuidance] = {
         use_when="Use this for a two-step workflow where HDF5 is archived or inspected before conversion.",
         produces="A standalone MGXS HDF5 contract file.",
         next_step="Inspect the HDF5, optionally augment it, then run direct conversion.",
-    ),
-    "run-sph-loop": CommandGuidance(
-        use_when="Use this after the OpenMC reference handoff and DONJON loop config are ready.",
-        produces="Iteration artifacts, final ASCII, and an SPH loop summary JSON.",
-        next_step="Open the audit viewer to separate production acceptance from SPH convergence.",
     ),
     "serve": CommandGuidance(
         use_when="Use this before opening the web UI locally.",
@@ -221,19 +232,6 @@ DETAILS: dict[str, CommandDetail] = {
         web_path="/builder?command=diff",
         cli="openmc2donjon diff reference.h5 candidate.h5",
         tags=("QA", "regression"),
-    ),
-    "prepare-openmc-sph-loop": CommandDetail(
-        group="openmc",
-        title="OpenMC → SPH-loop scaffold",
-        summary=(
-            "Export an OpenMC recipe/statepoint and prepare the initial "
-            "handoff, reference flux, map, and loop config."
-        ),
-        status="partial",
-        status_label="Workflow planner ready",
-        web_path="/openmc?intent=sph-loop&workflow=one-step&production=1",
-        cli="openmc2donjon prepare-openmc-sph-loop --recipe recipe.py --run-dir run",
-        tags=("OpenMC", "recipe", "production"),
     ),
     "openmc2donjon-export": CommandDetail(
         group="openmc",
@@ -349,31 +347,31 @@ DETAILS: dict[str, CommandDetail] = {
     "make-sph-sidecar": CommandDetail(
         group="sph",
         title="Make SPH sidecar",
-        summary="Create unity, table, or macrolib-derived SPH factors as a sidecar HDF5.",
+        summary="Create a sidecar HDF5 for SPH factors produced by OpenMC CE/MG equivalence.",
         status="partial",
         status_label="Command builder ready",
         web_path="/equivalence?kind=sph-sidecar",
         cli="openmc2donjon make-sph-sidecar mgxs_library.h5 --output sph_sidecar.h5",
         tags=("SPH", "sidecar"),
         use_when=(
-            "You need a copyable make-sph-sidecar command for unity, "
-            "CSV table, or MACROLIB NSPH factors."
+            "You have OpenMC-side SPH factors in a table, unity plumbing "
+            "values, or a validated NSPH source and need a DONJON handoff sidecar."
         ),
         produces="A command that writes an SPH sidecar HDF5 when run locally.",
-        next_step="Run the CLI command, then inject the sidecar or use it in an SPH loop handoff.",
+        next_step="Run the CLI command, inject the sidecar, then convert the augmented HDF5.",
     ),
     "make-sph-update-table": CommandDetail(
         group="sph",
-        title="Compute SPH update",
-        summary="Compare reference and low-order flux to compute the next SPH update table.",
+        title="Compute OpenMC-side SPH table",
+        summary="Compare OpenMC CE reference flux and OpenMC MG macro flux to compute SPH factors.",
         status="partial",
         status_label="Command builder ready",
         web_path="/builder?command=make-sph-update-table",
         cli=(
             "openmc2donjon make-sph-update-table mgxs_library.h5 -o sph_update.csv "
-            "--reference-flux openmc_flux.h5 --low-order-flux donjon_flux.h5"
+            "--reference-flux openmc_ce_flux.h5 --low-order-flux openmc_mg_flux.h5"
         ),
-        tags=("SPH", "iteration"),
+        tags=("SPH", "OpenMC"),
     ),
     "augment-sph": CommandDetail(
         group="sph",
@@ -386,60 +384,7 @@ DETAILS: dict[str, CommandDetail] = {
         tags=("SPH", "HDF5 augment"),
         use_when="You already have an SPH sidecar and need to attach it to the MGXS handoff.",
         produces="A command that writes an SPH-augmented MGXS HDF5 when run locally.",
-        next_step="Convert the augmented HDF5 or continue the SPH feedback loop.",
-    ),
-    "extract-donjon-volume-flux": CommandDetail(
-        group="sph",
-        title="Extract DONJON volume flux",
-        summary="Adapt DONJON L_FLUX scalar unknowns into canonical low-order volume flux.",
-        status="partial",
-        status_label="Command builder ready",
-        web_path="/builder?command=extract-donjon-volume-flux",
-        cli="openmc2donjon extract-donjon-volume-flux flux.edt --output flux.h5",
-        tags=("DONJON", "SPH"),
-    ),
-    "run-sph-iteration": CommandDetail(
-        group="sph",
-        title="Run one SPH iteration",
-        summary="Run one fixed-OpenMC SPH handoff iteration from low-order flux to updated XS.",
-        status="partial",
-        status_label="Command builder ready",
-        web_path="/builder?command=run-sph-iteration",
-        cli=(
-            "openmc2donjon run-sph-iteration mgxs_library.h5 --output-dir iter1 "
-            "--reference-flux openmc_flux.h5 --flux-dump flux.edt"
-        ),
-        tags=("SPH", "one iteration"),
-    ),
-    "run-sph-loop": CommandDetail(
-        group="sph",
-        title="Run SPH loop",
-        summary="Iterate DONJON solves and SPH handoffs against a fixed OpenMC reference.",
-        status="partial",
-        status_label="Audit viewer ready",
-        web_path="/audit",
-        cli="openmc2donjon run-sph-loop --config loop.json",
-        tags=("SPH", "DONJON", "audit"),
-    ),
-    "make-donjon-sph-loop-config": CommandDetail(
-        group="sph",
-        title="Write DONJON SPH-loop config",
-        summary="Generate a generic DONJON-backed loop config from paths and solver settings.",
-        status="partial",
-        status_label="Command builder ready",
-        web_path="/builder?command=make-donjon-sph-loop-config",
-        cli="openmc2donjon make-donjon-sph-loop-config --output loop.json",
-        tags=("SPH", "config"),
-    ),
-    "make-sph-loop-scaffold": CommandDetail(
-        group="sph",
-        title="Make SPH-loop scaffold",
-        summary="Write reference flux, scalar-flux map, and loop config from a handoff.",
-        status="partial",
-        status_label="Command builder ready",
-        web_path="/builder?command=make-sph-loop-scaffold",
-        cli="openmc2donjon make-sph-loop-scaffold mgxs_library.h5 --output-dir loop",
-        tags=("SPH", "scaffold"),
+        next_step="Convert the augmented HDF5 with the direct converter page.",
     ),
     "bundle": CommandDetail(
         group="package",
@@ -532,7 +477,11 @@ def register_command_routes(app: Any) -> None:
 def build_command_catalog() -> dict[str, Any]:
     commands = [_direct_convert_entry()]
     commands.extend(_entrypoint_entry(name) for name in _standalone_entrypoints())
-    commands.extend(_cli_entry(spec) for spec in _cli_specs())
+    commands.extend(
+        _cli_entry(spec)
+        for spec in _cli_specs()
+        if spec.name not in _HIDDEN_LEGACY_DONJON_LOOP_COMMANDS
+    )
     group_counts = _group_counts(commands)
     groups = [
         {

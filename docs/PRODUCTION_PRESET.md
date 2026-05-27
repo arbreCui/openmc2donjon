@@ -1,8 +1,8 @@
 # Production Preset
 
-The production preset turns the converter preflight and SPH-loop acceptance
-checks into a handoff contract for real OpenMC-to-DONJON work. It is meant for
-files that will be consumed as physics inputs, not for early format debugging.
+The production preset turns converter preflight checks into a handoff contract
+for real OpenMC-to-DONJON work. It is meant for files that will be consumed as
+physics inputs, not for early format debugging.
 
 ## MGXS Input Preflight
 
@@ -24,81 +24,31 @@ files that will be consumed as physics inputs, not for early format debugging.
 | NU ratio | warning | Flag suspicious `nu_fission / fission` values without rejecting valid fuel variations. |
 | MGXS statistical uncertainty coverage | warning by default; optional hard fail | Keep OpenMC MGXS tally noise visible in the audit trail. |
 
-## SPH Loop Acceptance
+## OpenMC-Side SPH Evidence
 
-The SPH-loop production preset adds the same MGXS physics gates to the
-fixed-OpenMC SPH workflow. The loop still iterates only SPH/NSPH factors; the
-base OpenMC cross sections remain fixed.
+Production SPH is expected to be generated upstream from an OpenMC CE
+reference and an OpenMC MG macro calculation using the same geometry. The
+converter accepts the resulting SPH/NSPH factors as explicit sidecar data and
+checks that the corrected HDF5 handoff is self-consistent before writing
+DONJON-facing ASCII.
 
-Production acceptance requires:
+For SPH handoffs, production review should record:
 
-- artifact metadata alignment between reference flux, DONJON volume flux, and
-  SPH sidecars;
-- final solve completion;
-- explicit MGXS volumes and fissionable H-FACTOR data;
-- root energy bounds plus local mixture/state energy-bounds consistency;
-- known-mesh identification for root energy bounds, with
-  `acceptance.require_known_mesh = true` available when a case policy forbids
-  custom group structures;
-- scatter row-balance, CHI, ADF-face, and transport/P1 consistency;
-- optional full MGXS `*_std_dev` coverage when
-  `acceptance.require_mgxs_std_dev_coverage = true`;
-- optional OpenMC reference-flux standard-deviation coverage when
-  `acceptance.require_reference_flux_std_dev = true`;
-- optional reference-flux uncertainty ceiling when
-  `acceptance.max_reference_flux_std_dev_rel` is set;
-- final-to-initial flux residual ratio no worse than `1.0`;
-- final clipped SPH fraction/count within configured limits;
-- convergence checks only when explicitly requested in `acceptance`
-  (`require_converged`, `max_sph_rel_change`, or
-  `max_flux_ratio_residual`).
+- the OpenMC CE reference case and the OpenMC MG 33g macro case used to derive
+  the factors;
+- the homogenized output regions/media, because SPH is one factor per output
+  region and energy group;
+- the angular treatment used in the MG macro calculation, such as Legendre
+  `P1/P2/P3` or OpenMC histogram angular representation `Hn`;
+- whether the SPH factors were applied to cross sections upstream or carried as
+  explicit `NSPH` data in the handoff;
+- the same MGXS preflight checks listed above.
 
-## SPH Convergence Versus Acceptance
+A single isolated assembly generally does not need SPH. Colorsets and
+full-core macro models do, because the downstream deterministic problem has
+multiple homogenized output regions/media.
 
-SPH-loop convergence targets and production acceptance gates answer different
-questions:
-
-- `convergence.flux_ratio_tolerance` and
-  `convergence.sph_change_tolerance` are numerical stopping targets for the
-  iterative loop.
-- `acceptance` checks decide whether the recorded handoff is usable as a
-  production artifact.
-- `convergence.fail_on_nonconvergence` controls whether a run that reaches the
-  iteration limit without satisfying the convergence target should fail the CLI
-  command.
-
-Convergence targets are opt-in. If no `convergence.*_tolerance` values are set,
-the loop runs the requested iteration count and reports `convergence_enabled =
-false`. When targets are enabled, `fail_on_nonconvergence = false` means the
-summary can still be written and accepted by production gates even if the
-numeric stopping target was not reached; set it to `true` when nonconvergence
-should make the CLI command fail.
-
-The production preset deliberately does not copy convergence targets into
-acceptance gates. If a case policy wants both a production handoff audit and a
-hard convergence acceptance check, set the convergence policy explicitly, for
-example:
-
-```json
-{
-  "convergence": {
-    "flux_ratio_tolerance": 1.0e-4,
-    "sph_change_tolerance": 1.0e-4,
-    "fail_on_nonconvergence": true
-  },
-  "acceptance": {
-    "preset": "production",
-    "require_converged": true
-  }
-}
-```
-
-A summary can therefore show `acceptance.passed = true` while `converged =
-false`. In that case the handoff passed the configured production gates, but
-the SPH iteration did not reach its numerical convergence target before the
-configured stop condition.
-
-Statistical uncertainty coverage has the same opt-in shape, with two separate
+Statistical uncertainty coverage has an opt-in shape, with two separate
 inputs:
 
 - MGXS `*_std_dev` datasets describe uncertainty on the exported cross-section
@@ -106,11 +56,11 @@ inputs:
   default; use `--require-std-dev-coverage` or
   `acceptance.require_mgxs_std_dev_coverage = true` when the workflow policy
   requires OpenMC tally uncertainty to be present for every eligible MGXS field.
-- The SPH OpenMC reference flux may carry a sibling
+- The OpenMC CE reference flux used for SPH may carry a sibling
   `openmc_volume_flux_std_dev` (or `<reference_dataset>_std_dev`) dataset. Use
-  `acceptance.require_reference_flux_std_dev = true` when the SPH audit must
-  prove that the fixed OpenMC reference flux has uncertainty data, and use
-  `acceptance.max_reference_flux_std_dev_rel` to cap `std_dev / |mean|`.
+  workflow-specific checks when the SPH derivation must prove reference-flux
+  uncertainty coverage, and use a relative uncertainty ceiling when the case
+  policy needs one.
 
 ## What This Preset Does Not Prove
 

@@ -17,7 +17,6 @@ const ITEMS: Item[] = [
   { href: "/donjon", label: "DONJON" },
   { href: "/equivalence", label: "Equivalence" },
   { href: "/inspect", label: "Inspect" },
-  { href: "/audit", label: "Audit" },
   { href: "/settings", label: "Settings" },
 ];
 

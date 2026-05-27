@@ -81,7 +81,7 @@ web/
     commands/page.tsx /commands (CLI/web command catalog)
     convert/page.tsx  /convert (direct HDF5 -> ASCII converter workflow)
     inspect/page.tsx  /inspect (path input + summary + mixture table)
-    audit/page.tsx    /audit (SPH loop summary viewer)
+    audit/page.tsx    /audit (legacy SPH loop summary viewer, hidden from nav)
     settings/page.tsx /settings (local browser preferences)
     globals.css       Design tokens, glass utility, grad-text, button primitives
   components/

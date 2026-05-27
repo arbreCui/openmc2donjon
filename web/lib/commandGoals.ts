@@ -5,7 +5,7 @@ export type CommandGoalId =
   | "direct-convert"
   | "inspect-check"
   | "equivalence"
-  | "sph-loop"
+  | "openmc-sph"
   | "package";
 
 export interface CommandGoalDefinition {
@@ -41,7 +41,6 @@ export const COMMAND_GOALS: readonly CommandGoalDefinition[] = [
     commandIds: [
       "openmc2donjon-export",
       "openmc2donjon-from-openmc",
-      "prepare-openmc-sph-loop",
     ],
   },
   {
@@ -89,24 +88,16 @@ export const COMMAND_GOALS: readonly CommandGoalDefinition[] = [
     ],
   },
   {
-    id: "sph-loop",
-    eyebrow: "I need iterative SPH feedback",
-    title: "Run and audit the DONJON SPH loop",
+    id: "openmc-sph",
+    eyebrow: "I need SPH factors",
+    title: "Carry OpenMC-side SPH to DONJON",
     body:
-      "Freeze OpenMC as the reference, iterate DONJON flux feedback into NSPH, then review convergence and production acceptance.",
-    href: "/audit",
-    cta: "Open SPH audit",
+      "Use SPH factors generated from OpenMC CE versus OpenMC MG 33g, inject them into the HDF5 handoff, then convert.",
+    href: "/equivalence?kind=sph-sidecar",
+    cta: "Open SPH sidecar",
     actionHint:
-      "Use the audit viewer to review a completed loop; loop execution remains a CLI production workflow.",
-    commandIds: [
-      "prepare-openmc-sph-loop",
-      "make-sph-loop-scaffold",
-      "make-donjon-sph-loop-config",
-      "run-sph-loop",
-      "run-sph-iteration",
-      "extract-donjon-volume-flux",
-      "make-sph-update-table",
-    ],
+      "Build or point to the SPH sidecar first; conversion remains the same after augmentation.",
+    commandIds: ["make-sph-sidecar", "augment-sph", "direct-convert"],
   },
   {
     id: "package",

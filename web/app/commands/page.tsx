@@ -480,13 +480,13 @@ function WorkflowMap({ commands }: { commands: CommandCatalogEntry[] }) {
         <div>
           <h2 className="text-base font-semibold tracking-tight">Workflow map</h2>
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
-            Three production paths share the same converter core. Pick the lane
-            that matches your physics treatment, then open the command chips or
-            the stage card directly.
+            The production paths share the same converter core. Keep SPH
+            equivalence upstream in OpenMC, then use the converter to deliver
+            corrected handoffs to DONJON.
           </p>
         </div>
         <span className="rounded border border-cyan-300/20 bg-cyan-300/[0.06] px-2 py-1 text-[11px] text-cyan-100">
-          direct / equivalence / SPH loop
+          direct / OpenMC-side equivalence
         </span>
       </div>
       <div className="space-y-3">
@@ -495,9 +495,9 @@ function WorkflowMap({ commands }: { commands: CommandCatalogEntry[] }) {
         ))}
       </div>
       <p className="mt-3 text-[12px] leading-5 text-[var(--fg-3)]">
-        In the SPH lane, OpenMC is the frozen high-fidelity reference. DONJON is
-        the iterative low-order solve, and openmc2donjon updates the handoff
-        between solves.
+        For SPH, OpenMC CE is the high-fidelity reference and OpenMC MG 33g is
+        the macro calculation. openmc2donjon carries the resulting SPH factors;
+        it does not run a DONJON feedback loop.
       </p>
     </section>
   );
