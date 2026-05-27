@@ -38,7 +38,7 @@ export const HOME_DEMO_SHORTCUTS: readonly DemoShortcut[] = [
     title: "Build an SPH sidecar command",
     body:
       "Open the non-mutating sidecar builder for SPH factors produced by OpenMC CE/MG equivalence.",
-    href: "/equivalence?kind=sph-sidecar",
-    cta: "Open SPH builder",
+    href: "/openmc?workflow=two-step&equivalence=sph&production=1",
+    cta: "Open SPH planner",
   },
 ] as const;

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, Suspense, useId, useMemo, useRef, useState } from "react";
+import { FormEvent, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   ApiError,
@@ -15,12 +15,19 @@ import OpenmcArtifactList from "@/components/openmc/OpenmcArtifactList";
 import OpenmcCommandList from "@/components/openmc/OpenmcCommandList";
 import OpenmcEntryPoints from "@/components/openmc/OpenmcEntryPoints";
 import OpenmcProductionPathPanel from "@/components/openmc/OpenmcProductionPathPanel";
+import OpenmcSphQuickFillCard from "@/components/openmc/OpenmcSphQuickFillCard";
 import OpenmcWorkflowChoices from "@/components/openmc/OpenmcWorkflowChoices";
 import OpenmcWorkflowSummary from "@/components/openmc/OpenmcWorkflowSummary";
 import OpenmcSphWorkflowPanel from "@/components/OpenmcSphWorkflowPanel";
 import { useSettings } from "@/lib/settings";
 import type { OpenmcEntryPoint } from "@/lib/openmcEntryPoints";
 import { activeOpenmcEntryPoint } from "@/lib/openmcEntryPoints";
+import {
+  LIVE_OPENMC_SPH_DEMO,
+  MOCK_OPENMC_SPH_DEMO,
+  type OpenmcSphDemoPreset,
+  openmcSphPlannerPrefill,
+} from "@/lib/openmcSphDemo";
 import {
   parseConvertFormat,
   parseOpenmcEquivalence,
@@ -33,6 +40,8 @@ type PlanState =
   | { kind: "loading" }
   | { kind: "ok"; data: OpenmcWorkflowPlan }
   | { kind: "error"; message: string; status?: number };
+
+type BackendMode = "checking" | "mock" | "live" | "unavailable";
 
 type BrowserTarget =
   | "recipe"
@@ -101,6 +110,7 @@ function OpenmcPageContent() {
   const [strictDryRun, setStrictDryRun] = useState(false);
   const [hFactorText, setHFactorText] = useState("");
   const [state, setState] = useState<PlanState>({ kind: "idle" });
+  const [backendMode, setBackendMode] = useState<BackendMode>("checking");
   const [browserTarget, setBrowserTarget] = useState<BrowserTarget | null>(null);
   const planButtonRef = useRef<HTMLButtonElement | null>(null);
   const [settings, , , settingsHydrated] = useSettings();
@@ -128,6 +138,21 @@ function OpenmcPageContent() {
         format,
       })
     : null;
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .health()
+      .then((health) => {
+        if (!cancelled) setBackendMode(health.mock_mode ? "mock" : "live");
+      })
+      .catch(() => {
+        if (!cancelled) setBackendMode("unavailable");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function plan(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -210,6 +235,23 @@ function OpenmcPageContent() {
     }
   }
 
+  function applyOpenmcSphDemo(preset: OpenmcSphDemoPreset) {
+    const prefill = openmcSphPlannerPrefill(preset);
+    setWorkflow(prefill.workflow);
+    setEquivalence(prefill.equivalence);
+    setFormat(prefill.format);
+    setProduction(prefill.production);
+    setCheck(prefill.check);
+    setRunDir(prefill.runDir);
+    setKeepHdf5Path(prefill.keepHdf5Path);
+    setOutputPath(prefill.outputPath);
+    setSphSource(prefill.sphSource);
+    setRecipePath(prefill.recipePath);
+    setStatepointPath(prefill.statepointPath);
+    setLoadStatepoint(prefill.loadStatepoint);
+    setAdfSource("");
+  }
+
   return (
     <main className="min-h-[calc(100vh-3.5rem)] px-6 py-12">
       <div className="mx-auto max-w-5xl">
@@ -227,6 +269,20 @@ function OpenmcPageContent() {
           active={activeOpenmcEntryPoint(workflow, equivalence)}
           onSelect={applyEntryPoint}
         />
+
+        {backendMode === "mock" ? (
+          <OpenmcSphQuickFillCard
+            preset={MOCK_OPENMC_SPH_DEMO}
+            mode="mock"
+            onApply={() => applyOpenmcSphDemo(MOCK_OPENMC_SPH_DEMO)}
+          />
+        ) : backendMode === "live" ? (
+          <OpenmcSphQuickFillCard
+            preset={LIVE_OPENMC_SPH_DEMO}
+            mode="live"
+            onApply={() => applyOpenmcSphDemo(LIVE_OPENMC_SPH_DEMO)}
+          />
+        ) : null}
 
         <OpenmcWorkflowChoices />
 

@@ -1015,6 +1015,21 @@ class FilesEndpointTests(unittest.TestCase):
         self.assertIn("sph_loop_summary.json", names)
         self.assertIn("sph_loop_summary_ref_stddev.json", names)
 
+    def test_mock_mode_lists_openmc_side_sph_minicase_files(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.get(
+            "/api/files",
+            params={"path": "/mock/home/openmc-runs/openmc-sph-minicase"},
+        )
+        self.assertEqual(response.status_code, 200)
+        names = {entry["name"] for entry in response.json()["entries"]}
+        self.assertIn("mgxs_library.h5", names)
+        self.assertIn("openmc_ce_flux.h5", names)
+        self.assertIn("openmc_mg_flux.h5", names)
+        self.assertIn("mgxs_with_openmc_sph.h5", names)
+
 
 @unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
 class FileStatusEndpointTests(unittest.TestCase):

@@ -17,6 +17,6 @@ describe("home demo shortcuts", () => {
     expect(inspect.href).toBe(
       "/inspect?path=%2Fmock%2Fhome%2Fopenmc-runs%2Fc5g7%2Fhandoff.h5",
     );
-    expect(sph.href).toBe("/equivalence?kind=sph-sidecar");
+    expect(sph.href).toBe("/openmc?workflow=two-step&equivalence=sph&production=1");
   });
 });

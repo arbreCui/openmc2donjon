@@ -99,6 +99,7 @@ _MOCK_TREE: dict[str, list[tuple[str, str, int | None]]] = {
     ],
     f"{_MOCK_HOME}/openmc-runs": [
         ("c5g7", "dir", None),
+        ("openmc-sph-minicase", "dir", None),
         ("full-core-sph", "dir", None),
         ("u238_33g", "dir", None),
     ],
@@ -113,6 +114,17 @@ _MOCK_TREE: dict[str, list[tuple[str, str, int | None]]] = {
         ("handoff.h5", "file", 832_000),
         ("out.mcompo.txt", "file", 184_320),
         ("convert_summary.json", "file", 8_192),
+    ],
+    f"{_MOCK_HOME}/openmc-runs/openmc-sph-minicase": [
+        ("mgxs_library.h5", "file", 96_000),
+        ("ce_statepoint.h5", "file", 1_200_000),
+        ("mg_statepoint.h5", "file", 1_080_000),
+        ("openmc_ce_flux.h5", "file", 18_000),
+        ("openmc_mg_flux.h5", "file", 18_000),
+        ("openmc_sph_sidecar.h5", "file", 22_000),
+        ("openmc_sph.csv", "file", 1_500),
+        ("mgxs_with_openmc_sph.h5", "file", 104_000),
+        ("out.mcompo.txt", "file", 36_000),
     ],
     f"{_MOCK_HOME}/openmc-runs/full-core-sph": [
         # ``sph_loop_summary.json`` is what ``/api/audit`` consumes;
