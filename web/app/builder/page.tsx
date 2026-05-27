@@ -5,6 +5,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { CopyCliButton } from "@/components/commands/CopyCliButton";
 import FileBrowserModal from "@/components/inspect/FileBrowserModal";
+import OpenmcSphWorkflowPanel from "@/components/OpenmcSphWorkflowPanel";
 import {
   ApiError,
   CommandCatalog,
@@ -20,6 +21,7 @@ import {
   commandBuilderStage,
 } from "@/lib/commandBuilder";
 import { bundlePrefillStatus } from "@/lib/builderPrefill";
+import { isOpenmcSphWorkflowCommand } from "@/lib/openmcSphWorkflow";
 import { useSettings } from "@/lib/settings";
 
 type CatalogState =
@@ -174,6 +176,9 @@ function CommandBuilderPageContent() {
 
             {stage ? <WorkflowHint stage={stage} /> : null}
             {stage ? <CommandContextPanel command={command} stage={stage} /> : null}
+            {isOpenmcSphWorkflowCommand(spec.id) ? (
+              <OpenmcSphWorkflowPanel activeCommandId={spec.id} />
+            ) : null}
 
             {spec.id === "bundle" ? (
               <BundlePrefillPanel status={bundlePrefillStatus(values)} />

@@ -5,6 +5,7 @@ import { Suspense, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { CopyCliButton } from "@/components/commands/CopyCliButton";
 import FileBrowserModal from "@/components/inspect/FileBrowserModal";
+import OpenmcSphWorkflowPanel from "@/components/OpenmcSphWorkflowPanel";
 import {
   BooleanChoice,
   EQUIVALENCE_KINDS,
@@ -15,6 +16,7 @@ import {
   equivalenceKindInfo,
   parseEquivalenceKind,
 } from "@/lib/equivalenceCommand";
+import { isOpenmcSphEquivalenceKind } from "@/lib/openmcSphWorkflow";
 import { useSettings } from "@/lib/settings";
 
 type BrowserTarget =
@@ -127,6 +129,10 @@ function EquivalencePageContent() {
               Command guide
             </Link>
           </div>
+
+          {isOpenmcSphEquivalenceKind(kind) ? (
+            <OpenmcSphWorkflowPanel activeCommandId={info.commandId} />
+          ) : null}
 
           <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_360px]">
             <div className="space-y-4">

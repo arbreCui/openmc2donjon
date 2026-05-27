@@ -1,3 +1,5 @@
+import { OPENMC_SPH_WORKFLOW_STEPS } from "./openmcSphWorkflow";
+
 export interface WorkflowStep {
   id: string;
   title: string;
@@ -59,21 +61,35 @@ export const COMMAND_WORKFLOW_LANES: readonly WorkflowLane[] = [
     ],
   },
   {
-    id: "equivalence",
-    title: "OpenMC-side ADF/SPH equivalence",
+    id: "openmc-sph",
+    title: "OpenMC-side SPH equivalence",
     summary:
-      "Use this when OpenMC CE/MG evidence produces explicit ADF/DF or SPH factors before conversion.",
+      "Use this when OpenMC CE and OpenMC MG share the same geometry and should produce explicit SPH factors before conversion.",
+    steps: OPENMC_SPH_WORKFLOW_STEPS.map((step) => ({
+      id: step.id,
+      title: step.title,
+      body: step.body,
+      href: step.href,
+      commandIds:
+        step.id === "sph-sidecar"
+          ? [step.commandId, "make-sph-update-table"]
+          : [step.commandId],
+    })),
+  },
+  {
+    id: "adf-df",
+    title: "ADF/DF sidecar equivalence",
+    summary:
+      "Use this when face-flux evidence produces explicit ADF/DF factors before conversion.",
     steps: [
       {
         id: "drivers",
-        title: "Prepare OpenMC evidence",
-        body: "Export OpenMC surface currents for ADF/DF, or export CE/MG volume fluxes for OpenMC-side SPH.",
+        title: "Prepare face evidence",
+        body: "Export OpenMC surface currents and prepare homogeneous face-flux evidence.",
         href: "/builder?command=export-surface-flux",
         commandIds: [
           "export-surface-flux",
-          "export-volume-flux",
           "make-low-order-driver",
-          "make-openmc-sph-sidecar",
         ],
       },
       {
@@ -86,16 +102,16 @@ export const COMMAND_WORKFLOW_LANES: readonly WorkflowLane[] = [
       {
         id: "sidecar",
         title: "Build sidecar factors",
-        body: "Create ADF/DF or OpenMC-side SPH sidecars as explicit artifacts, not hidden converter behavior.",
+        body: "Create ADF/DF sidecars as explicit artifacts, not hidden converter behavior.",
         href: "/equivalence?kind=adf-sidecar",
-        commandIds: ["make-adf-sidecar", "make-openmc-sph-sidecar", "make-sph-sidecar"],
+        commandIds: ["make-adf-sidecar"],
       },
       {
         id: "augment",
         title: "Augment then convert",
         body: "Inject the chosen sidecar into the HDF5, then run the same converter path.",
         href: "/equivalence?kind=augment-adf",
-        commandIds: ["augment-adf", "augment-sph", "direct-convert"],
+        commandIds: ["augment-adf", "direct-convert"],
       },
     ],
   },
