@@ -206,6 +206,12 @@ PYTHON_BIN="$PYTHON_BIN" \
   bash "$REPO_ROOT/examples/external_low_order_handoff/run_smoke.sh"
 
 echo
+echo "== OpenMC CE/MG SPH sidecar minicase smoke =="
+RUN_DIR="$RUN_DIR/openmc_sph_sidecar_minicase" \
+PYTHON_BIN="$PYTHON_BIN" \
+  bash "$REPO_ROOT/examples/openmc_sph_sidecar_minicase/run_smoke.sh"
+
+echo
 echo "== External SPH handoff smoke =="
 RUN_DIR="$RUN_DIR/external_sph_handoff" \
 PYTHON_BIN="$PYTHON_BIN" \

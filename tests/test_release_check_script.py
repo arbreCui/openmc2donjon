@@ -53,6 +53,11 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertNotIn("examples/donjon_sph_loop_adapter/run_smoke.sh", default_section)
         self.assertNotIn("== Minimal SPH loop user-case smoke ==", default_section)
         self.assertNotIn("examples/sph_loop_minicase/run_smoke.sh", default_section)
+        self.assertIn("== OpenMC CE/MG SPH sidecar minicase smoke ==", default_section)
+        self.assertIn(
+            "examples/openmc_sph_sidecar_minicase/run_smoke.sh",
+            default_section,
+        )
         self.assertIn("== External SPH handoff smoke ==", default_section)
         self.assertIn("examples/external_sph_handoff/run_smoke.sh", default_section)
         self.assertIn("== Energy mesh contract smoke ==", default_section)
@@ -240,6 +245,40 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertIn("PyGan backend smoke skipped", smoke_text)
         self.assertIn("openmc2donjon PyGan backend smoke: PASS", smoke_text)
         self.assertIn("run_pygan_backend_smoke.sh", scripts_readme)
+
+    def test_release_gate_covers_openmc_ce_mg_sph_sidecar_minicase(self) -> None:
+        release_text = _release_check().read_text(encoding="utf-8")
+        default_section = release_text.split(
+            'if [[ "$RUN_LOCAL_CANDIDATES" -eq 1 ]];',
+            maxsplit=1,
+        )[0]
+        smoke_text = (
+            _repo_root() / "examples/openmc_sph_sidecar_minicase/run_smoke.sh"
+        ).read_text(encoding="utf-8")
+        input_writer = (
+            _repo_root() / "examples/openmc_sph_sidecar_minicase/make_inputs.py"
+        ).read_text(encoding="utf-8")
+        scripts_readme = (_repo_root() / "scripts/README.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("== OpenMC CE/MG SPH sidecar minicase smoke ==", default_section)
+        self.assertIn(
+            "examples/openmc_sph_sidecar_minicase/run_smoke.sh",
+            default_section,
+        )
+        self.assertIn("make-openmc-sph-sidecar", smoke_text)
+        self.assertIn("--reference-flux \"$CE_FLUX::openmc_volume_flux\"", smoke_text)
+        self.assertIn("--mg-flux \"$MG_FLUX::openmc_mg_flux\"", smoke_text)
+        self.assertIn("augment-sph", smoke_text)
+        self.assertIn("--require-sph", smoke_text)
+        self.assertIn("openmc2donjon_openmc_sph_sidecar_passed", smoke_text)
+        self.assertIn("openmc_ce_flux.h5", input_writer)
+        self.assertIn("openmc_mg_flux.h5", input_writer)
+        self.assertIn("group_order", input_writer)
+        self.assertNotIn("run-sph-loop", smoke_text)
+        self.assertNotIn("extract-donjon-volume-flux", smoke_text)
+        self.assertIn("openmc_sph_sidecar_minicase/run_smoke.sh", scripts_readme)
 
 
 def _repo_root() -> Path:

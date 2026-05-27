@@ -19,14 +19,18 @@ These are stable entry points used directly by the release check.
 - `run_pygan_backend_smoke.sh` - optional PyGan backend writer-comparison and
   DONJON read-only ingest smoke; skips cleanly when PyGan is not installed.
 - `run_openmc_full_core_production_smoke.sh` - full-core assembly-wise
-  OpenMC production handoff and SPH loop smoke.
+  OpenMC production handoff smoke.
+- `../examples/openmc_sph_sidecar_minicase/run_smoke.sh` - portable OpenMC
+  CE/MG SPH sidecar handoff smoke; verifies `make-openmc-sph-sidecar`,
+  `augment-sph`, and both ASCII writer formats without a DONJON feedback loop.
 - `run_dragon_sph_handoff_smoke.sh` - DRAGON NSPH extraction and handoff smoke.
 - `run_donjon_sph_consume_smoke.sh` - DONJON consumes `NSPH` from generated
   macrolib output.
 - `run_donjon_sph_solver_response_smoke.sh` - DONJON solver responds to SPH
   perturbations.
-- `../examples/sph_loop_minicase/run_smoke.sh` - minimal fixed-OpenMC SPH loop
-  user case; release-checks the reference-flux `std_dev` acceptance gates.
+- `../examples/sph_loop_minicase/run_smoke.sh` - legacy fixed-OpenMC SPH loop
+  candidate; useful for reference-flux `std_dev` acceptance diagnostics but no
+  longer part of the default release gate.
 
 ## C5G7 Accepted-Baseline Gates
 
