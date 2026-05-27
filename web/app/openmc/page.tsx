@@ -13,10 +13,14 @@ import {
 import FileBrowserModal from "@/components/inspect/FileBrowserModal";
 import OpenmcArtifactList from "@/components/openmc/OpenmcArtifactList";
 import OpenmcCommandList from "@/components/openmc/OpenmcCommandList";
+import OpenmcEntryPoints from "@/components/openmc/OpenmcEntryPoints";
 import OpenmcProductionPathPanel from "@/components/openmc/OpenmcProductionPathPanel";
 import OpenmcWorkflowChoices from "@/components/openmc/OpenmcWorkflowChoices";
 import OpenmcWorkflowSummary from "@/components/openmc/OpenmcWorkflowSummary";
+import OpenmcSphWorkflowPanel from "@/components/OpenmcSphWorkflowPanel";
 import { useSettings } from "@/lib/settings";
+import type { OpenmcEntryPoint } from "@/lib/openmcEntryPoints";
+import { activeOpenmcEntryPoint } from "@/lib/openmcEntryPoints";
 import {
   parseConvertFormat,
   parseOpenmcEquivalence,
@@ -193,6 +197,19 @@ function OpenmcPageContent() {
     planButtonRef.current?.focus();
   }
 
+  function applyEntryPoint(entry: OpenmcEntryPoint) {
+    setWorkflow(entry.workflow);
+    setEquivalence(entry.equivalence);
+    setProduction(entry.production);
+    setCheck(entry.check);
+    if (entry.equivalence !== "adf" && entry.equivalence !== "flux-ratio-adf") {
+      setAdfSource("");
+    }
+    if (entry.equivalence !== "sph") {
+      setSphSource("");
+    }
+  }
+
   return (
     <main className="min-h-[calc(100vh-3.5rem)] px-6 py-12">
       <div className="mx-auto max-w-5xl">
@@ -201,11 +218,15 @@ function OpenmcPageContent() {
             <span className="grad-text">OpenMC production workflow</span>
           </h1>
           <p className="mt-2 max-w-3xl text-sm text-[var(--fg-2)]">
-            Plan the recipe/statepoint handoff before running OpenMC export:
-            choose one-step or two-step, equivalence method, output format, and
-            managed artifact paths.
+            Choose the production route first: direct MGXS handoff, or
+            OpenMC-side CE/MG SPH preparation before conversion.
           </p>
         </header>
+
+        <OpenmcEntryPoints
+          active={activeOpenmcEntryPoint(workflow, equivalence)}
+          onSelect={applyEntryPoint}
+        />
 
         <OpenmcWorkflowChoices />
 
@@ -220,6 +241,10 @@ function OpenmcPageContent() {
           loadStatepoint={loadStatepoint}
           runDir={runDir}
         />
+
+        {equivalence === "sph" ? (
+          <OpenmcSphWorkflowPanel activeCommandId="export-volume-flux" />
+        ) : null}
 
         <form className="glass rounded-xl p-4 space-y-4" onSubmit={plan}>
           <div className="grid gap-3 lg:grid-cols-2">

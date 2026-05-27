@@ -41,7 +41,7 @@ export const TASK_ENTRYPOINTS: readonly TaskEntrypoint[] = [
     title: "Prepare OpenMC-side SPH",
     body:
       "Generate SPH factors upstream from OpenMC CE versus OpenMC MG 33g, then inject the sidecar before conversion.",
-    href: "/equivalence?kind=openmc-sph-sidecar",
-    cta: "Open OpenMC SPH builder",
+    href: "/openmc?workflow=two-step&equivalence=sph&production=1",
+    cta: "Open SPH planner",
   },
 ] as const;

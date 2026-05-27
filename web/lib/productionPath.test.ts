@@ -12,7 +12,9 @@ describe("production path steps", () => {
 
   it("links each step to the matching web workflow", () => {
     const [openmc, direct, delivery] = PRODUCTION_PATH_STEPS;
-    expect(openmc.href).toBe("/openmc?workflow=two-step&production=1");
+    expect(openmc.href).toBe(
+      "/openmc?workflow=two-step&equivalence=sph&production=1",
+    );
     expect(direct.href).toBe(
       "/convert?intent=direct-convert&format=multicompo&check=1&production=1",
     );

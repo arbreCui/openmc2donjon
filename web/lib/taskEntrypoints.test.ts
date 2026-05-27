@@ -20,6 +20,8 @@ describe("task entrypoints", () => {
       "/convert?intent=direct-convert&format=multicompo&check=1&production=1",
     );
     expect(hrefs.equivalence).toBe("/equivalence?kind=adf-sidecar");
-    expect(hrefs["openmc-sph"]).toBe("/equivalence?kind=openmc-sph-sidecar");
+    expect(hrefs["openmc-sph"]).toBe(
+      "/openmc?workflow=two-step&equivalence=sph&production=1",
+    );
   });
 });

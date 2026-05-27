@@ -2,16 +2,16 @@
 
 const CHOICES = [
   {
-    title: "Run shape",
-    focus: "One-step vs Two-step",
+    title: "Direct route",
+    focus: "OpenMC MGXS -> converter",
     body:
-      "Use one-step when you want a managed OpenMC -> HDF5 -> DONJON ASCII bundle. Use two-step when the HDF5 handoff should be inspected, archived, or augmented before conversion.",
+      "Use this when OpenMC already produces the multi-group HDF5. Inspect it, dry-run production gates, then write DONJON ASCII.",
   },
   {
-    title: "Equivalence",
-    focus: "Direct / ADF / SPH",
+    title: "SPH route",
+    focus: "OpenMC CE + OpenMC MG",
     body:
-      "Direct keeps the raw homogenized XS. ADF/DF carries face discontinuity corrections. SPH carries OpenMC CE/MG flux-equivalence factors as an explicit sidecar.",
+      "Use this when CE and 33-group MG OpenMC runs share the same geometry. Export both flux fields, compute SPH, inject it, then convert.",
   },
   {
     title: "Production guard",
@@ -30,7 +30,7 @@ export default function OpenmcWorkflowChoices() {
             How to choose the workflow
           </h2>
           <p className="mt-1 text-sm text-[var(--fg-2)]">
-            Pick the run shape, equivalence method, and gate strictness independently.
+            Pick the physics route first; the form below only fills the CLI details.
           </p>
         </div>
         <span className="rounded border border-emerald-300/25 bg-emerald-300/[0.06] px-2 py-1 text-[11px] uppercase tracking-wider text-emerald-100">

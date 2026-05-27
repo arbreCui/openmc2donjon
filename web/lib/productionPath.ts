@@ -15,7 +15,7 @@ export const PRODUCTION_PATH_STEPS: readonly ProductionPathStep[] = [
     body:
       "Use OpenMC CE as the reference and OpenMC MG 33g with the same geometry to produce corrected MGXS or SPH factors.",
     result: "corrected HDF5 / SPH sidecar",
-    href: "/openmc?workflow=two-step&production=1",
+    href: "/openmc?workflow=two-step&equivalence=sph&production=1",
   },
   {
     id: "direct-conversion",
