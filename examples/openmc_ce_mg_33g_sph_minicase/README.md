@@ -43,6 +43,7 @@ openmc2donjon.  Set `OPENMC_EXEC` if `openmc` is not on `PATH`.
 ```sh
 PYTHON_BIN=/Users/wen/miniforge3/envs/openmc-dev/bin/python \
 OPENMC_EXEC=/Users/wen/openmc-workspace/src-v0.15.3/build/bin/openmc \
+OPENMC_LIB_DIR=/Users/wen/openmc-workspace/src-v0.15.3/build/lib \
 bash examples/openmc_ce_mg_33g_sph_minicase/run_workflow.sh
 ```
 
@@ -54,7 +55,12 @@ PARTICLES=1000 BATCHES=20 INACTIVE=5
 MG_PARTICLES=1000 MG_BATCHES=20 MG_INACTIVE=5
 MAX_CE_FLUX_REL_STD=0.20
 MAX_MG_FLUX_REL_STD=0.20
+OPENMC_LIB_DIR=/path/to/openmc/build/lib
 ```
+
+`OPENMC_LIB_DIR` is optional, but useful on macOS when the OpenMC executable
+would otherwise pick up a stale `libopenmc.dylib` from another Python or conda
+environment.
 
 The default particle counts are intentionally small so the workflow can be
 tested quickly.  They are not production statistics.  If any 33-group region

@@ -67,6 +67,10 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
         self.assertIn("make-openmc-sph-sidecar", script)
         self.assertIn("--require-reference-flux-std-dev", script)
         self.assertIn("--require-mg-flux-std-dev", script)
+        self.assertIn("OPENMC_LIB_DIR", readme)
+        self.assertIn("OPENMC_LIB_DIR", script)
+        self.assertIn("DYLD_LIBRARY_PATH", script)
+        self.assertIn("LD_LIBRARY_PATH", script)
         self.assertNotIn("run-sph-loop", script)
 
 
