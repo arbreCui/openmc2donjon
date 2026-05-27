@@ -8,11 +8,14 @@ export function summaryStatus(summary: OpenmcSphPhysicsSummary): {
   const hasNsp = summary.handoff.ascii_nsp_block_count > 0;
   const hasSph = summary.handoff.augmented_hdf5_has_sph;
   if (hasNsp && hasSph) {
+    const route =
+      summary.handoff.accepted_sph_consumption_format === "macrolib"
+        ? "MACROLIB NSPH"
+        : "ASCII NSPH";
     return {
       label: "handoff carries NSPH",
       tone: "pass",
-      detail:
-        "SPH factors are present in the augmented HDF5 and exported ASCII.",
+      detail: `SPH factors are present in the augmented HDF5 and exported ${route}.`,
     };
   }
   return {

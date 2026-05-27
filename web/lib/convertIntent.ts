@@ -40,7 +40,7 @@ const COPIES: Record<ConvertIntent, ConvertIntentCopy> = {
     eyebrow: "OpenMC-side SPH",
     title: "Convert a corrected SPH handoff",
     body:
-      "Use this after OpenMC CE/MG equivalence has produced SPH factors and they have been injected into the HDF5 handoff.",
+      "Use this after OpenMC CE/MG equivalence has produced SPH factors and they have been injected into the HDF5 handoff. For DONJON SPH consumption, choose MACROLIB so NSPH is written as GROUP/*/NSPH.",
     commandHref: "/commands/augment-sph",
     commandLabel: "augment-sph",
     tone: "sph",

@@ -12,8 +12,11 @@ describe("openmcSphDemo", () => {
 
     expect(prefill.workflow).toBe("two-step");
     expect(prefill.equivalence).toBe("sph");
+    expect(prefill.format).toBe("macrolib");
     expect(prefill.production).toBe(true);
     expect(prefill.keepHdf5Path).toBe(MOCK_OPENMC_SPH_DEMO.augmentedH5);
+    expect(prefill.outputPath).toBe(MOCK_OPENMC_SPH_DEMO.ascii);
+    expect(prefill.outputPath).toContain(".macrolib.txt");
     expect(prefill.sphSource).toBe(MOCK_OPENMC_SPH_DEMO.sphSidecar);
   });
 

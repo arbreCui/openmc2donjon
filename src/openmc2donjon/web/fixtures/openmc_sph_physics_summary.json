@@ -34,7 +34,12 @@
   "handoff": {
     "augmented_hdf5_has_sph": true,
     "ascii_nsp_block_count": 3,
-    "ascii_path": "/mock/home/openmc-runs/openmc-sph-minicase/out.mcompo.txt",
+    "ascii_path": "/mock/home/openmc-runs/openmc-sph-minicase/out.macrolib.txt",
+    "accepted_sph_consumption_format": "macrolib",
+    "multicompo_ascii_nsp_block_count": 3,
+    "multicompo_ascii_path": "/mock/home/openmc-runs/openmc-sph-minicase/out.mcompo.txt",
+    "macrolib_ascii_nsp_block_count": 33,
+    "macrolib_ascii_path": "/mock/home/openmc-runs/openmc-sph-minicase/out.macrolib.txt",
     "augmented_hdf5_path": "/mock/home/openmc-runs/openmc-sph-minicase/mgxs_with_openmc_sph.h5"
   },
   "per_mixture": [

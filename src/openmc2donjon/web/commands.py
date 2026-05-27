@@ -402,7 +402,10 @@ DETAILS: dict[str, CommandDetail] = {
             "and want explicit SPH factors per output region and group."
         ),
         produces="A command that writes an SPH CSV table and sidecar HDF5 when run locally.",
-        next_step="Inject the sidecar with augment-sph, then convert the augmented HDF5.",
+        next_step=(
+            "Inject the sidecar with augment-sph, then convert the augmented HDF5 "
+            "with --format macrolib for DONJON DSPH/MAC consumption."
+        ),
     ),
     "make-sph-update-table": CommandDetail(
         group="sph",
@@ -428,7 +431,10 @@ DETAILS: dict[str, CommandDetail] = {
         tags=("SPH", "HDF5 augment"),
         use_when="You already have an SPH sidecar and need to attach it to the MGXS handoff.",
         produces="A command that writes an SPH-augmented MGXS HDF5 when run locally.",
-        next_step="Convert the augmented HDF5 with the direct converter page.",
+        next_step=(
+            "Convert the augmented HDF5 with the direct converter page. For "
+            "OpenMC-side SPH consumed by DONJON DSPH/MAC, choose MACROLIB output."
+        ),
     ),
     "bundle": CommandDetail(
         group="package",

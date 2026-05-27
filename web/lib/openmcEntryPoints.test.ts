@@ -20,6 +20,7 @@ describe("openmcEntryPoints", () => {
     expect(sph.equivalence).toBe("sph");
     expect(sph.production).toBe(true);
     expect(sph.secondaryHref).toContain("equivalence=sph");
+    expect(sph.secondaryHref).toContain("format=macrolib");
   });
 
   it("identifies the active entry from the planner state", () => {

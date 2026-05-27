@@ -8,7 +8,7 @@ OpenMC continuous-energy reference
   using the same geometry and output regions
   -> OpenMC-side SPH factors
   -> corrected MGXS HDF5 / SPH sidecar
-  -> openmc2donjon L_MULTICOMPO or L_MACROLIB ASCII
+  -> openmc2donjon L_MACROLIB ASCII for DONJON SPH consumption
 ```
 
 It deliberately does **not** use a DONJON feedback loop.  DONJON is only the
@@ -80,7 +80,8 @@ handoff/openmc_mg_flux.h5        OpenMC MG macro flux, same shape/order
 handoff/openmc_sph.csv           auditable SPH table
 handoff/openmc_sph_sidecar.h5    HDF5 SPH sidecar
 handoff/mgxs_with_openmc_sph.h5  MGXS handoff after SPH augmentation
-handoff/out_with_openmc_sph.mcompo.txt
+handoff/out_with_openmc_sph.mcompo.txt  mapped XS handoff / archival route
+handoff/out_with_openmc_sph.macrolib.txt accepted DONJON SPH consumption route
 handoff/physics_summary.json     machine-readable CE/MG/SPH audit summary
 handoff/physics_summary.md       human-readable CE/MG/SPH audit summary
 ```
@@ -97,9 +98,8 @@ The SPH command gates both CE and MG flux uncertainty:
 That keeps noisy OpenMC flux ratios from being silently promoted into
 production SPH factors.
 
-The physics summary records the CE/MG flux uncertainty, SPH factor range by
-mixture, and confirms that the final ASCII handoff contains `NSPH` equivalence
-factors.  It is meant for review and demos; it is not a substitute for a
+The physics summary records the CE/MG flux uncertainty and SPH factor range by
+mixture.  It is meant for review and demos; it is not a substitute for a
 benchmark-quality validation.
 
 ## Manual Steps
@@ -153,6 +153,12 @@ openmc2donjon handoff/mgxs_with_openmc_sph.h5 \
   --check \
   --require-sph
 
+openmc2donjon handoff/mgxs_with_openmc_sph.h5 \
+  --format macrolib \
+  -o handoff/out_with_openmc_sph.macrolib.txt \
+  --check \
+  --require-sph
+
 python examples/openmc_ce_mg_33g_sph_minicase/summarize_outputs.py \
   --handoff-dir handoff
 ```
@@ -162,11 +168,16 @@ python examples/openmc_ce_mg_33g_sph_minicase/summarize_outputs.py \
 - CE and MG calculations share geometry, output regions, and energy groups.
 - SPH factors are generated on the OpenMC side from CE/MG flux comparison.
 - The converter carries those factors as `NSPH` into DONJON ASCII.
+- The accepted DONJON downstream route is `L_MACROLIB`, where `NSPH` is written
+  as `GROUP/*/NSPH` and can be consumed by DONJON `DSPH:`/`MAC:`.
 - DONJON-side SPH iteration is not part of this route.
 
 ## What It Does Not Prove
 
 - This is not a benchmark-quality k-effective validation.
 - The default statistics are too low for production SPH.
+- `L_MULTICOMPO + NCR:` currently extracts the macroscopic XS but does not
+  promote OpenMC-side `NSPH` into non-unity `GROUP/*/NSPH`; use `L_MACROLIB`
+  for the SPH consumption smoke.
 - Hn/angular SPH factors are not implemented here; only scalar
   region-by-group SPH is generated.

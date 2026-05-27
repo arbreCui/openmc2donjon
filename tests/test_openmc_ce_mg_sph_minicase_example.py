@@ -99,8 +99,11 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
             self.assertEqual(payload["energy_groups"], 2)
             self.assertEqual(payload["legendre_order"], 3)
             self.assertEqual(payload["handoff"]["ascii_nsp_block_count"], 1)
+            self.assertEqual(payload["handoff"]["accepted_sph_consumption_format"], "macrolib")
+            self.assertEqual(payload["handoff"]["macrolib_ascii_nsp_block_count"], 1)
             self.assertTrue(payload["handoff"]["augmented_hdf5_has_sph"])
             self.assertIn("OpenMC CE/MG 33g SPH Physics Summary", markdown)
+            self.assertIn("Accepted SPH consumption format", markdown)
             self.assertIn("CS_FUEL", markdown)
 
 
@@ -175,6 +178,7 @@ def _write_summary_fixture(handoff: Path) -> None:
         encoding="utf-8",
     )
     (handoff / "out_with_openmc_sph.mcompo.txt").write_text("NSPH\n", encoding="utf-8")
+    (handoff / "out_with_openmc_sph.macrolib.txt").write_text("NSPH\n", encoding="utf-8")
 
 
 def _write_flux_h5(path: Path, dataset_name: str, values: np.ndarray) -> None:

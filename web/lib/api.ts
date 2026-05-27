@@ -450,6 +450,11 @@ export interface OpenmcSphPhysicsSummaryHandoff {
   augmented_hdf5_has_sph: boolean;
   ascii_nsp_block_count: number;
   ascii_path: string | null;
+  accepted_sph_consumption_format?: "macrolib" | "multicompo" | string;
+  multicompo_ascii_nsp_block_count?: number;
+  multicompo_ascii_path?: string | null;
+  macrolib_ascii_nsp_block_count?: number;
+  macrolib_ascii_path?: string | null;
   augmented_hdf5_path: string | null;
 }
 

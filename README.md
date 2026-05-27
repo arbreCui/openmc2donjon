@@ -18,6 +18,11 @@ OpenMC CE reference
   -> DONJON L_MULTICOMPO or L_MACROLIB consumption
 ```
 
+For OpenMC-side SPH consumed by DONJON `DSPH:`/`MAC:`, use the
+`L_MACROLIB` route: the converter writes SPH as `GROUP/*/NSPH`, which DONJON
+reads directly. `L_MULTICOMPO` remains the mapped-library route for
+domain-wise handoffs extracted through `NCR:`.
+
 ## Equivalence Methods
 
 The converter does not compute the physics correction itself. It carries
@@ -46,6 +51,9 @@ equivalence factors.
 
 - `L_MULTICOMPO` as `.mcompo.txt` for mapped domain-wise libraries.
 - `L_MACROLIB` as `.macrolib.txt` for direct one-state macrolib handoffs.
+
+If the handoff carries OpenMC-side SPH factors and the next DONJON step should
+consume them, prefer `.macrolib.txt`.
 
 Accepted validation: C5G7 assembly-wise OpenMC -> DONJON handoff with
 documented k-effective comparisons; see [Validation Status](#validation-status).
@@ -244,6 +252,11 @@ macro workflow. A single isolated assembly generally does not need SPH; a
 colorset or full-core macro model needs one SPH factor per homogenized output
 region and energy group.
 
+For the current DONJON consumption smoke, OpenMC-side SPH is accepted through
+`L_MACROLIB` because DONJON `DSPH:` reads `GROUP/*/NSPH`. `L_MULTICOMPO`
+continues to carry mapped macroscopic data, but `NCR:` does not currently
+promote these OpenMC-side SPH factors into non-unity macrolib `NSPH` values.
+
 Entry points:
 
 ```sh
@@ -255,6 +268,7 @@ openmc2donjon make-openmc-sph-sidecar mgxs_library.h5 \
   --reference-flux openmc_ce_flux.h5::openmc_volume_flux \
   --mg-flux openmc_mg_33g_flux.h5::openmc_volume_flux
 openmc2donjon augment-sph mgxs_library.h5 --sph-source sph_sidecar.h5 -o mgxs_with_sph.h5
+openmc2donjon mgxs_with_sph.h5 --format macrolib -o out.macrolib.txt --check --require-sph
 ```
 
 Docs and examples:
@@ -363,10 +377,8 @@ commands.
 
 Near-term work:
 
-- build a two- or three-region OpenMC CE/MG colorset minicase that produces
-  one SPH factor per output region and energy group;
-- tighten the production examples around OpenMC CE/MG equivalence -> corrected
-  HDF5 -> Web inspect / convert -> DONJON handoff records;
+- tighten the OpenMC CE/MG colorset minicase around corrected HDF5 ->
+  MACROLIB NSPH -> DONJON `DSPH:`/`MAC:` handoff records;
 - keep standard energy-mesh identification and uncertainty coverage visible in
   every production audit surface;
 - broader mypy coverage for small pure helper modules.

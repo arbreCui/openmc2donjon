@@ -124,6 +124,12 @@ echo "== Compute OpenMC-side SPH, inject it, and convert =="
   --check \
   --require-sph
 
+"$PYTHON_BIN" -m openmc2donjon.cli "$AUGMENTED" \
+  --format macrolib \
+  -o "$OUT_DIR/out_with_openmc_sph.macrolib.txt" \
+  --check \
+  --require-sph
+
 echo
 echo "== Summarize OpenMC-side SPH physics handoff =="
 "$PYTHON_BIN" "$REPO_ROOT/examples/openmc_ce_mg_33g_sph_minicase/summarize_outputs.py" \
@@ -135,5 +141,6 @@ echo "  MGXS: $MGXS_H5"
 echo "  CE flux: $CE_FLUX::openmc_volume_flux"
 echo "  MG flux: $MG_FLUX::openmc_mg_flux"
 echo "  SPH sidecar: $SPH_SIDECAR"
-echo "  DONJON ASCII: $OUT_DIR/out_with_openmc_sph.mcompo.txt"
+echo "  MULTICOMPO ASCII: $OUT_DIR/out_with_openmc_sph.mcompo.txt"
+echo "  MACROLIB ASCII: $OUT_DIR/out_with_openmc_sph.macrolib.txt"
 echo "  physics summary: $OUT_DIR/physics_summary.md"

@@ -62,8 +62,10 @@ You do **not** need to visit every page.
 4. Fill:
 
    - input HDF5: `mgxs_library.h5`
-   - output ASCII: usually `out.mcompo.txt`
-   - format: `L_MULTICOMPO` for mapped mixtures, `L_MACROLIB` for direct macrolib
+   - output ASCII: usually `out.mcompo.txt` for a mapped library, or
+     `out.macrolib.txt` for direct macrolib consumption
+   - format: `L_MULTICOMPO` for mapped mixtures, `L_MACROLIB` for direct
+     macrolib handoffs
    - enable production checks for real handoffs
 
 5. Click dry-run first.
@@ -137,6 +139,28 @@ The converter does not:
 - make ADF or SPH mandatory;
 - require a special OpenMC fork for hexagonal cell-domain workflows.
 
+## MULTICOMPO vs MACROLIB
+
+`L_MULTICOMPO` is not a microscopic cross-section library.  In this project it
+is a DONJON/DRAGON container for homogenized macroscopic mixtures, calculation
+states, branch metadata, ADF/DF data, and other handoff fields.  DONJON usually
+extracts a working `L_MACROLIB` from it with `NCR:`.
+
+`L_MACROLIB` is already the working macroscopic library: groups, mixtures,
+cross sections, scattering, optional ADF, and optional `GROUP/*/NSPH` factors.
+Use it when the next DONJON step expects a macrolib directly.
+
+Current SPH consumption status:
+
+- OpenMC-side SPH factors are written to the augmented HDF5 as explicit
+  `NSPH` data.
+- `L_MACROLIB` writes those factors as `GROUP/*/NSPH`; DONJON `DSPH:`/`MAC:`
+  consumes this route directly.
+- `L_MULTICOMPO` can carry the `NSPH` metadata, but DONJON `NCR:` does not
+  currently promote those OpenMC-side factors into non-unity `GROUP/*/NSPH`
+  values in the extracted macrolib.  For a DONJON SPH demonstration, choose
+  `--format macrolib`.
+
 ## ADF/SPH: When To Care
 
 Start with direct conversion first.
@@ -157,6 +181,10 @@ SPH; colorsets and full-core macro models need one factor per output region
 and energy group. Use `make-openmc-sph-sidecar` to turn the CE/MG flux
 comparison into both an auditable CSV table and an SPH sidecar, then use
 `augment-sph` to inject that sidecar before returning to `/convert`.
+
+For downstream DONJON consumption of OpenMC-side SPH today, convert the
+augmented HDF5 with `--format macrolib` so that the SPH factors appear as
+`GROUP/*/NSPH`.
 
 ## Hexagonal Cases
 

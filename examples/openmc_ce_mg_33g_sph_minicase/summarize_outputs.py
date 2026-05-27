@@ -5,7 +5,7 @@ the minicase is a benchmark; it records what happened in one run:
 
 * CE and MG flux uncertainty levels,
 * SPH factor ranges by mixture,
-* whether the augmented HDF5 and final ASCII handoff carry NSPH data.
+* whether the augmented HDF5 and ASCII handoffs carry NSPH data.
 """
 
 from __future__ import annotations
@@ -71,7 +71,8 @@ def summarize_handoff(handoff_dir: Path) -> dict[str, Any]:
         "sph_sidecar": handoff_dir / "openmc_sph_sidecar.h5",
         "sph_summary": handoff_dir / "openmc_sph_summary.json",
         "augment_summary": handoff_dir / "sph_augment_summary.json",
-        "ascii": handoff_dir / "out_with_openmc_sph.mcompo.txt",
+        "multicompo_ascii": handoff_dir / "out_with_openmc_sph.mcompo.txt",
+        "macrolib_ascii": handoff_dir / "out_with_openmc_sph.macrolib.txt",
     }
     _require_paths(paths)
 
@@ -85,7 +86,8 @@ def summarize_handoff(handoff_dir: Path) -> dict[str, Any]:
     normalization_factor = float(sph_summary.get("normalization_factor", 1.0))
     normalized_mg_flux = mg_flux * normalization_factor
     flux_ratio = normalized_mg_flux / ce_flux
-    nsp_block_count = _count_ascii_block(paths["ascii"], "NSPH")
+    multicompo_nsp_block_count = _count_ascii_block(paths["multicompo_ascii"], "NSPH")
+    macrolib_nsp_block_count = _count_ascii_block(paths["macrolib_ascii"], "NSPH")
 
     return {
         "schema": SUMMARY_SCHEMA,
@@ -122,8 +124,15 @@ def summarize_handoff(handoff_dir: Path) -> dict[str, Any]:
         },
         "handoff": {
             "augmented_hdf5_has_sph": _augmented_hdf5_has_sph(paths["augmented_mgxs"], mixture_names),
-            "ascii_nsp_block_count": nsp_block_count,
-            "ascii_path": str(paths["ascii"]),
+            "multicompo_ascii_nsp_block_count": multicompo_nsp_block_count,
+            "multicompo_ascii_path": str(paths["multicompo_ascii"]),
+            "macrolib_ascii_nsp_block_count": macrolib_nsp_block_count,
+            "macrolib_ascii_path": str(paths["macrolib_ascii"]),
+            "accepted_sph_consumption_format": "macrolib",
+            # Backward-compatible aliases used by the web summary panel.  These
+            # point at the accepted DONJON SPH consumption artifact.
+            "ascii_nsp_block_count": macrolib_nsp_block_count,
+            "ascii_path": str(paths["macrolib_ascii"]),
             "augmented_hdf5_path": str(paths["augmented_mgxs"]),
         },
         "per_mixture": _per_mixture_stats(mixture_names, ce_flux, mg_flux, flux_ratio, sph),
@@ -156,9 +165,10 @@ def render_markdown(summary: dict[str, Any]) -> str:
         f"- Clipped bins: {sph['clipped_count']}",
         f"- Applied directly to XS: `{sph['applied_to_xs']}`",
         "",
-        "The augmented HDF5 and final ASCII carry SPH as equivalence factors",
-        "(`NSPH`) for DONJON consumption; the macro cross sections are not",
-        "silently multiplied in this route.",
+        "The augmented HDF5 carries SPH as explicit equivalence factors",
+        "(`NSPH`). For DONJON `DSPH:`/`MAC:` consumption, use the MACROLIB",
+        "ASCII handoff because it writes those factors as `GROUP/*/NSPH`.",
+        "The macro cross sections are not silently multiplied in this route.",
         "",
         "## Flux Uncertainty",
         "",
@@ -168,8 +178,11 @@ def render_markdown(summary: dict[str, Any]) -> str:
         "## Handoff",
         "",
         f"- Augmented HDF5 has SPH datasets: `{handoff['augmented_hdf5_has_sph']}`",
-        f"- ASCII NSPH block count: {handoff['ascii_nsp_block_count']}",
-        f"- ASCII: `{handoff['ascii_path']}`",
+        f"- Accepted SPH consumption format: `{handoff['accepted_sph_consumption_format']}`",
+        f"- MULTICOMPO NSPH block count: {handoff['multicompo_ascii_nsp_block_count']}",
+        f"- MULTICOMPO ASCII: `{handoff['multicompo_ascii_path']}`",
+        f"- MACROLIB NSPH block count: {handoff['macrolib_ascii_nsp_block_count']}",
+        f"- MACROLIB ASCII: `{handoff['macrolib_ascii_path']}`",
         "",
         "## Per-Mixture Summary",
         "",

@@ -21,7 +21,7 @@ describe("task entrypoints", () => {
     );
     expect(hrefs.equivalence).toBe("/equivalence?kind=adf-sidecar");
     expect(hrefs["openmc-sph"]).toBe(
-      "/openmc?workflow=two-step&equivalence=sph&production=1",
+      "/openmc?workflow=two-step&equivalence=sph&format=macrolib&production=1",
     );
   });
 });

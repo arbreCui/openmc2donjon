@@ -87,14 +87,15 @@ function OpenmcLoading() {
 
 function OpenmcPageContent() {
   const searchParams = useSearchParams();
+  const initialEquivalence = parseOpenmcEquivalence(searchParams.get("equivalence"));
   const [workflow, setWorkflow] = useState<OpenmcWorkflowKind>(
     parseOpenmcWorkflow(searchParams.get("workflow")),
   );
-  const [equivalence, setEquivalence] = useState<OpenmcEquivalenceMode>(
-    parseOpenmcEquivalence(searchParams.get("equivalence")),
-  );
+  const [equivalence, setEquivalence] = useState<OpenmcEquivalenceMode>(initialEquivalence);
   const [format, setFormat] = useState<ConvertFormat>(
-    parseConvertFormat(searchParams.get("format")),
+    searchParams.get("format") == null && initialEquivalence === "sph"
+      ? "macrolib"
+      : parseConvertFormat(searchParams.get("format")),
   );
   const [recipePath, setRecipePath] = useState("");
   const [statepointPath, setStatepointPath] = useState("");
@@ -234,6 +235,9 @@ function OpenmcPageContent() {
   function applyEntryPoint(entry: OpenmcEntryPoint) {
     setWorkflow(entry.workflow);
     setEquivalence(entry.equivalence);
+    if (entry.equivalence === "sph") {
+      setFormat("macrolib");
+    }
     setProduction(entry.production);
     setCheck(entry.check);
     if (entry.equivalence !== "adf" && entry.equivalence !== "flux-ratio-adf") {

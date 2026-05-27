@@ -128,6 +128,7 @@ _MOCK_TREE: dict[str, list[tuple[str, str, int | None]]] = {
         ("openmc_sph.csv", "file", 1_500),
         ("mgxs_with_openmc_sph.h5", "file", 104_000),
         ("out.mcompo.txt", "file", 36_000),
+        ("out.macrolib.txt", "file", 42_000),
         ("physics_summary.json", "file", 3_800),
         ("physics_summary.md", "file", 1_600),
     ],

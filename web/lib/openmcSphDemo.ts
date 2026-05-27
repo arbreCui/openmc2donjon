@@ -47,7 +47,7 @@ export const MOCK_OPENMC_SPH_DEMO: OpenmcSphDemoPreset = {
   sphSidecar: "/mock/home/openmc-runs/openmc-sph-minicase/openmc_sph_sidecar.h5",
   sphTable: "/mock/home/openmc-runs/openmc-sph-minicase/openmc_sph.csv",
   augmentedH5: "/mock/home/openmc-runs/openmc-sph-minicase/mgxs_with_openmc_sph.h5",
-  ascii: "/mock/home/openmc-runs/openmc-sph-minicase/out.mcompo.txt",
+  ascii: "/mock/home/openmc-runs/openmc-sph-minicase/out.macrolib.txt",
   physicsSummary: "/mock/home/openmc-runs/openmc-sph-minicase/physics_summary.json",
   command: "openmc2donjon serve --mock",
 };
@@ -71,7 +71,7 @@ export const LIVE_OPENMC_SPH_DEMO: OpenmcSphDemoPreset = {
   augmentedH5:
     "/private/tmp/openmc2donjon_ce_mg_33g_sph_minicase/handoff/mgxs_with_openmc_sph.h5",
   ascii:
-    "/private/tmp/openmc2donjon_ce_mg_33g_sph_minicase/handoff/out_with_openmc_sph.mcompo.txt",
+    "/private/tmp/openmc2donjon_ce_mg_33g_sph_minicase/handoff/out_with_openmc_sph.macrolib.txt",
   physicsSummary:
     "/private/tmp/openmc2donjon_ce_mg_33g_sph_minicase/handoff/physics_summary.json",
   command: "bash examples/openmc_ce_mg_33g_sph_minicase/run_workflow.sh",
@@ -83,7 +83,7 @@ export function openmcSphPlannerPrefill(
   return {
     workflow: "two-step",
     equivalence: "sph",
-    format: "multicompo",
+    format: "macrolib",
     production: true,
     check: true,
     runDir: preset.runRoot,
