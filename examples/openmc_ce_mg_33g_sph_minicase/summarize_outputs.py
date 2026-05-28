@@ -99,6 +99,7 @@ def summarize_handoff(handoff_dir: Path) -> dict[str, Any]:
     multicompo_nsp_block_count = _count_ascii_block(paths["multicompo_ascii"], "NSPH")
     macrolib_nsp_block_count = _count_ascii_block(paths["macrolib_ascii"], "NSPH")
     augmented_has_sph = _augmented_hdf5_has_sph(paths["augmented_mgxs"], mixture_names)
+    sph_iterations = _read_sph_iterations(handoff_dir, sph_summary)
 
     return {
         "schema": SUMMARY_SCHEMA,
@@ -145,6 +146,7 @@ def summarize_handoff(handoff_dir: Path) -> dict[str, Any]:
             "max_abs_delta_from_unity": float(np.max(np.abs(sph - 1.0))),
             "clipped_count": int(sph_summary.get("clipped_count", 0)),
         },
+        "sph_iterations": sph_iterations,
         "handoff": {
             "augmented_hdf5_has_sph": augmented_has_sph,
             "multicompo_ascii_nsp_block_count": multicompo_nsp_block_count,
@@ -212,6 +214,7 @@ def render_markdown(summary: dict[str, Any]) -> str:
         "ASCII handoff because it writes those factors as `GROUP/*/NSPH`.",
         "The macro cross sections are not silently multiplied in this route.",
         "",
+        *_sph_iteration_lines(summary.get("sph_iterations", [])),
         "## Flux Uncertainty",
         "",
         f"- CE flux max relative std_dev: {_fmt(flux['ce_max_relative_std_dev'])}",
@@ -263,6 +266,110 @@ def _render_mg_macro_scatter(summary: dict[str, Any]) -> str:
     if scatter_format == "legendre":
         return f"P{summary.get('legendre_order')} Legendre"
     return "unknown"
+
+
+def _read_sph_iterations(
+    handoff_dir: Path,
+    final_sph_summary: dict[str, Any],
+) -> list[dict[str, Any]]:
+    iteration_paths = sorted(handoff_dir.glob("openmc_sph_summary_iter*.json"))
+    if iteration_paths:
+        summaries = [
+            (_iteration_number_from_path(path, fallback=index), _read_json(path))
+            for index, path in enumerate(iteration_paths, start=1)
+        ]
+    else:
+        summaries = [(1, final_sph_summary)]
+
+    rows: list[dict[str, Any]] = []
+    for iteration, summary in summaries:
+        apply_path = handoff_dir / f"sph_apply_summary_iter{iteration:02d}.json"
+        apply_summary = _read_json(apply_path) if apply_path.exists() else None
+        rows.append(
+            {
+                "iteration": iteration,
+                "decision": summary.get("decision"),
+                "sph_min": _optional_float(summary.get("sph_min")),
+                "sph_max": _optional_float(summary.get("sph_max")),
+                "raw_update_minimum": _optional_float(summary.get("raw_update_minimum")),
+                "raw_update_maximum": _optional_float(summary.get("raw_update_maximum")),
+                "clipped_count": int(summary.get("clipped_count", 0)),
+                "normalization_factor": _optional_float(summary.get("normalization_factor")),
+                "reference_flux_max_relative_std_dev": _optional_float(
+                    summary.get("reference_flux_max_relative_std_dev")
+                ),
+                "mg_flux_max_relative_std_dev": _optional_float(
+                    summary.get("mg_flux_max_relative_std_dev")
+                ),
+                "previous_sph": summary.get("previous_sph"),
+                "mg_flux": summary.get("mg_flux"),
+                "output_h5": summary.get("output_h5"),
+                "output_table": summary.get("output_table"),
+                "openmc_mgxs_apply": _sph_apply_iteration_payload(apply_summary),
+            }
+        )
+    return rows
+
+
+def _iteration_number_from_path(path: Path, *, fallback: int) -> int:
+    suffix = path.stem.removeprefix("openmc_sph_summary_iter")
+    return int(suffix) if suffix.isdigit() else fallback
+
+
+def _sph_apply_iteration_payload(summary: dict[str, Any] | None) -> dict[str, Any] | None:
+    if summary is None:
+        return None
+    return {
+        "decision": summary.get("decision"),
+        "input_format": summary.get("input_format"),
+        "input_h5": summary.get("input_h5"),
+        "output_h5": summary.get("output_h5"),
+        "sph_source": summary.get("sph_source"),
+        "scaled_dataset_count": int(summary.get("scaled_dataset_count", 0)),
+        "sph_min": _optional_float(summary.get("sph_min")),
+        "sph_max": _optional_float(summary.get("sph_max")),
+    }
+
+
+def _sph_iteration_lines(rows: list[dict[str, Any]]) -> list[str]:
+    if not rows:
+        return []
+    lines = [
+        "## SPH Iterations",
+        "",
+        "Each row is one OpenMC CE/MG SPH update. `OpenMC MGXS apply` means",
+        "the previous SPH sidecar was divided into an OpenMC-native `setN`",
+        "`mgxs.h5` before rerunning the OpenMC MG macro calculation.",
+        "",
+        "| iter | OpenMC MGXS apply | SPH range | update range | CE flux rel std | MG flux rel std |",
+        "| ---: | --- | ---: | ---: | ---: | ---: |",
+    ]
+    for row in rows:
+        apply_summary = row.get("openmc_mgxs_apply")
+        if isinstance(apply_summary, dict):
+            apply_text = "{fmt}, {count} datasets".format(
+                fmt=apply_summary.get("input_format", "unknown"),
+                count=apply_summary.get("scaled_dataset_count", 0),
+            )
+        else:
+            apply_text = "none"
+        lines.append(
+            (
+                "| {iteration} | {apply} | {sph_min}..{sph_max} | "
+                "{update_min}..{update_max} | {ce_std} | {mg_std} |"
+            ).format(
+                iteration=row["iteration"],
+                apply=apply_text,
+                sph_min=_fmt_optional(row.get("sph_min")),
+                sph_max=_fmt_optional(row.get("sph_max")),
+                update_min=_fmt_optional(row.get("raw_update_minimum")),
+                update_max=_fmt_optional(row.get("raw_update_maximum")),
+                ce_std=_fmt_optional(row.get("reference_flux_max_relative_std_dev")),
+                mg_std=_fmt_optional(row.get("mg_flux_max_relative_std_dev")),
+            )
+        )
+    lines.extend(["", ""])
+    return lines
 
 
 def _read_mixture_names(path: Path) -> list[str]:
@@ -401,6 +508,18 @@ def _decode_name(value: Any) -> str:
     if isinstance(value, bytes):
         return value.decode("utf-8")
     return str(value)
+
+
+def _optional_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    return float(value)
+
+
+def _fmt_optional(value: Any) -> str:
+    if value is None:
+        return "n/a"
+    return _fmt(float(value))
 
 
 def _fmt(value: float) -> str:

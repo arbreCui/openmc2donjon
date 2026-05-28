@@ -125,10 +125,60 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
             self.assertEqual(payload["quality"]["decision"], "openmc_ce_mg_sph_production_quality")
             self.assertTrue(payload["quality"]["production_ready"])
             self.assertTrue(payload["quality"]["demonstration_quality"])
+            self.assertEqual(len(payload["sph_iterations"]), 1)
             self.assertIn("OpenMC CE/MG SPH Physics Summary", markdown)
             self.assertIn("## Quality", markdown)
+            self.assertIn("## SPH Iterations", markdown)
             self.assertIn("Accepted SPH consumption format", markdown)
             self.assertIn("CS_FUEL", markdown)
+
+    def test_summary_records_sph_iteration_history(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            handoff = Path(tmp)
+            _write_summary_fixture(handoff)
+            _write_iteration_summary(handoff, 1, sph_min=0.8, sph_max=1.4)
+            _write_iteration_summary(
+                handoff,
+                2,
+                sph_min=0.7,
+                sph_max=1.6,
+                previous_sph=str(handoff / "openmc_sph_sidecar_iter01.h5"),
+            )
+            (handoff / "sph_apply_summary_iter02.json").write_text(
+                json.dumps(
+                    {
+                        "decision": "openmc2donjon_sph_apply_passed",
+                        "input_format": "openmc-mgxs",
+                        "input_h5": str(handoff / "mg_case_iter02/mgxs_unapplied.h5"),
+                        "output_h5": str(handoff / "mg_case_iter02/mgxs.h5"),
+                        "sph_source": str(handoff / "openmc_sph_sidecar_iter01.h5"),
+                        "scaled_dataset_count": 12,
+                        "sph_min": 0.8,
+                        "sph_max": 1.4,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            module = _load_summary_module()
+
+            summary = module.summarize_handoff(handoff)
+            markdown = module.render_markdown(summary)
+
+            self.assertEqual(len(summary["sph_iterations"]), 2)
+            self.assertEqual(summary["sph_iterations"][0]["iteration"], 1)
+            self.assertEqual(
+                summary["sph_iterations"][1]["previous_sph"],
+                str(handoff / "openmc_sph_sidecar_iter01.h5"),
+            )
+            self.assertEqual(
+                summary["sph_iterations"][1]["openmc_mgxs_apply"]["input_format"],
+                "openmc-mgxs",
+            )
+            self.assertEqual(
+                summary["sph_iterations"][1]["openmc_mgxs_apply"]["scaled_dataset_count"],
+                12,
+            )
+            self.assertIn("openmc-mgxs, 12 datasets", markdown)
 
     def test_summary_marks_noisy_flux_as_statistical_review(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -205,6 +255,12 @@ def _write_summary_fixture(handoff: Path, *, flux_std_scale: float = 0.01) -> No
                 "normalization_factor": 1.0,
                 "sph_kind": "openmc-ce-mg",
                 "sph_real": True,
+                "sph_min": 0.9,
+                "sph_max": 1.2,
+                "raw_update_minimum": 0.9,
+                "raw_update_maximum": 1.2,
+                "reference_flux_max_relative_std_dev": flux_std_scale,
+                "mg_flux_max_relative_std_dev": flux_std_scale,
                 "clipped_count": 0,
             }
         ),
@@ -232,6 +288,36 @@ def _write_summary_fixture(handoff: Path, *, flux_std_scale: float = 0.01) -> No
     )
     (handoff / "out_with_openmc_sph.mcompo.txt").write_text("NSPH\n", encoding="utf-8")
     (handoff / "out_with_openmc_sph.macrolib.txt").write_text("NSPH\n", encoding="utf-8")
+
+
+def _write_iteration_summary(
+    handoff: Path,
+    iteration: int,
+    *,
+    sph_min: float,
+    sph_max: float,
+    previous_sph: str | None = None,
+) -> None:
+    (handoff / f"openmc_sph_summary_iter{iteration:02d}.json").write_text(
+        json.dumps(
+            {
+                "decision": "openmc2donjon_openmc_sph_sidecar_passed",
+                "sph_min": sph_min,
+                "sph_max": sph_max,
+                "raw_update_minimum": 0.8,
+                "raw_update_maximum": 1.4,
+                "reference_flux_max_relative_std_dev": 0.02,
+                "mg_flux_max_relative_std_dev": 0.03,
+                "clipped_count": 0,
+                "normalization_factor": 1.0,
+                "previous_sph": previous_sph,
+                "mg_flux": str(handoff / f"openmc_mg_flux_iter{iteration:02d}.h5::openmc_mg_flux"),
+                "output_h5": str(handoff / f"openmc_sph_sidecar_iter{iteration:02d}.h5"),
+                "output_table": str(handoff / f"openmc_sph_iter{iteration:02d}.csv"),
+            }
+        ),
+        encoding="utf-8",
+    )
 
 
 def _write_flux_h5(
