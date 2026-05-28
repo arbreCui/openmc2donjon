@@ -295,11 +295,12 @@ openmc2donjon make-openmc-sph-sidecar mgxs_library.h5 \
   --mg-flux openmc_mg_flux.h5::openmc_mg_flux
 
 # Optional OpenMC-side SPH iteration:
-# write corrected MGXS (XS / NSPH), rerun OpenMC MG with it, then
-# recompute the SPH sidecar from the new MG flux.
-openmc2donjon apply-sph mgxs_library.h5 \
+# write corrected OpenMC-native MGXS (XS / NSPH), rerun OpenMC MG with it,
+# then recompute the SPH sidecar from the new MG flux.
+openmc2donjon apply-sph mg_case/mgxs_unapplied.h5 \
+  --input-format openmc-mgxs \
   --sph-source sph_sidecar.h5 \
-  -o mgxs_sph_applied.h5
+  -o mg_case/mgxs.h5
 
 # Final DONJON handoff path:
 openmc2donjon augment-sph mgxs_library.h5 --sph-source sph_sidecar.h5 -o mgxs_with_sph.h5

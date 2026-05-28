@@ -75,6 +75,7 @@ PARTICLES=1000 BATCHES=20 INACTIVE=5
 MG_PARTICLES=1000 MG_BATCHES=20 MG_INACTIVE=5
 MG_MACRO_SCATTER_FORMAT=histogram
 MG_MACRO_HISTOGRAM_BINS=16
+SPH_ITERATIONS=1
 MAX_CE_FLUX_REL_STD=0.20
 MAX_MG_FLUX_REL_STD=0.20
 OPENMC_LIB_DIR=/path/to/openmc/build/lib
@@ -99,9 +100,11 @@ mg_case/                         OpenMC MG XML + mgxs.h5 + statepoint
 handoff/mgxs_library.h5          converter-facing MGXS handoff from CE run
 handoff/openmc_ce_flux.h5        CE reference flux, shape (region, group)
 handoff/openmc_mg_flux.h5        OpenMC MG macro flux, same shape/order
+handoff/openmc_mg_flux_iterNN.h5 per-iteration MG flux if SPH_ITERATIONS > 1
 handoff/mg_macro_summary.json    OpenMC MG macro scatter treatment (Hn/Pn)
 handoff/openmc_sph.csv           auditable SPH table
 handoff/openmc_sph_sidecar.h5    HDF5 SPH sidecar
+handoff/openmc_sph_sidecar_iterNN.h5  per-iteration SPH factors if SPH_ITERATIONS > 1
 handoff/mgxs_with_openmc_sph.h5  MGXS handoff after SPH augmentation
 handoff/out_with_openmc_sph.mcompo.txt  mapped XS handoff / archival route
 handoff/out_with_openmc_sph.macrolib.txt accepted DONJON SPH consumption route
@@ -205,12 +208,16 @@ openmc2donjon make-openmc-sph-sidecar handoff/mgxs_library.h5 \
   --table-output handoff/openmc_sph.csv \
   --flux-normalization auto
 
-# Optional next OpenMC MG iteration: apply the current SPH factors to a
-# corrected MGXS copy, rerun OpenMC MG with that corrected XS, export the new
-# MG flux, and rebuild the sidecar.
-openmc2donjon apply-sph handoff/mgxs_library.h5 \
+# Optional next OpenMC MG iteration: apply the current SPH factors to an
+# OpenMC-native mgxs.h5 copy, rerun OpenMC MG with that corrected XS, export
+# the new MG flux, and rebuild the sidecar.
+openmc2donjon apply-sph mg_case/mgxs_unapplied.h5 \
+  --input-format openmc-mgxs \
   --sph-source handoff/openmc_sph_sidecar.h5 \
-  -o handoff/mgxs_sph_applied_next.h5
+  -o mg_case/mgxs.h5
+
+# The bundled run_workflow.sh performs that native-MGXS application
+# automatically when SPH_ITERATIONS is greater than 1.
 
 # Final DONJON handoff path: attach the final sidecar and convert.
 openmc2donjon augment-sph handoff/mgxs_library.h5 \

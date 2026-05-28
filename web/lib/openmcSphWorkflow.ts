@@ -80,8 +80,8 @@ export const OPENMC_SPH_WORKFLOW_STEPS: readonly OpenmcSphWorkflowStep[] = [
     commandId: "apply-sph",
     href: "/builder?command=apply-sph",
     cli:
-      "openmc2donjon apply-sph mgxs_library.h5 --sph-source openmc_sph.h5 " +
-      "-o mgxs_sph_applied.h5",
+      "openmc2donjon apply-sph mg_case/mgxs_unapplied.h5 --input-format openmc-mgxs " +
+      "--sph-source openmc_sph.h5 -o mg_case/mgxs.h5",
   },
   {
     id: "augment",

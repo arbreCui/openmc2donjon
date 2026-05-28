@@ -419,7 +419,11 @@ DETAILS: dict[str, CommandDetail] = {
         status="partial",
         status_label="Command builder ready",
         web_path="/builder?command=apply-sph",
-        cli="openmc2donjon apply-sph mgxs_library.h5 --sph-source openmc_sph.h5 -o mgxs_sph_applied.h5",
+        cli=(
+            "openmc2donjon apply-sph mg_case/mgxs_unapplied.h5 "
+            "--input-format openmc-mgxs --sph-source openmc_sph.h5 "
+            "-o mg_case/mgxs.h5"
+        ),
         tags=("SPH", "OpenMC", "iteration"),
         use_when=(
             "You have OpenMC CE/MG SPH factors and need a corrected MGXS "

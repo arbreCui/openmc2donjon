@@ -57,6 +57,9 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
         self.assertIn("mgxs_path = (mg_dir / args.mgxs_name).resolve()", text)
         self.assertIn("materials.cross_sections = str(mgxs_path)", text)
         self.assertIn("mgxs_file.export_to_hdf5", text)
+        self.assertIn("apply_sph_to_openmc_mgxs_hdf5", text)
+        self.assertIn("--sph-source", text)
+        self.assertIn("--raw-mgxs-name", text)
         self.assertIn("build_mg_tallies", text)
 
     def test_readme_and_workflow_keep_donjon_loop_out_of_the_route(self) -> None:
@@ -73,12 +76,17 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
         self.assertIn("does **not** use a DONJON feedback loop", readme)
         self.assertIn("H16 histogram scatter", readme)
         self.assertIn("SPH(region, group)", readme)
+        self.assertIn("SPH_ITERATIONS=1", readme)
+        self.assertIn("--input-format openmc-mgxs", readme)
 
         self.assertIn("build_ce_case.py", script)
         self.assertIn("prepare_mg_case.py", script)
         self.assertIn("MG_MACRO_SCATTER_FORMAT", script)
         self.assertIn("--scatter-format \"$MG_MACRO_SCATTER_FORMAT\"", script)
-        self.assertIn("--summary-json \"$OUT_DIR/mg_macro_summary.json\"", script)
+        self.assertIn("ITER_MG_MACRO_SUMMARY=\"$OUT_DIR/mg_macro_summary.json\"", script)
+        self.assertIn("--summary-json \"$ITER_MG_MACRO_SUMMARY\"", script)
+        self.assertIn("SPH_ITERATIONS", script)
+        self.assertIn("--previous-sph \"$PREVIOUS_SPH\"", script)
         self.assertIn("--dataset-name openmc_volume_flux", script)
         self.assertIn("--dataset-name openmc_mg_flux", script)
         self.assertIn("make-openmc-sph-sidecar", script)

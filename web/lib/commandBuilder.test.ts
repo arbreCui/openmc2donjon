@@ -77,15 +77,17 @@ describe("commandBuilder", () => {
     const spec = commandBuilderSpec("apply-sph");
     expect(spec).not.toBeNull();
     const values = defaultBuilderValues(spec!);
-    values.input_h5 = "/runs/case/mgxs_library.h5";
+    values.input_h5 = "/runs/case/mg_case/mgxs_unapplied.h5";
+    values.input_format = "openmc-mgxs";
     values.sph_source = "/runs/case/openmc_sph.h5";
-    values.output = "/runs/case/mgxs_sph_applied.h5";
+    values.output = "/runs/case/mg_case/mgxs.h5";
     values.summary_json = "/runs/case/sph_apply_summary.json";
     values.force = true;
 
     expect(buildCommandCli(spec!, values)).toBe(
-      "openmc2donjon apply-sph /runs/case/mgxs_library.h5 " +
-        "--sph-source /runs/case/openmc_sph.h5 -o /runs/case/mgxs_sph_applied.h5 " +
+      "openmc2donjon apply-sph /runs/case/mg_case/mgxs_unapplied.h5 " +
+        "--input-format openmc-mgxs --sph-source /runs/case/openmc_sph.h5 " +
+        "-o /runs/case/mg_case/mgxs.h5 " +
         "--summary-json /runs/case/sph_apply_summary.json --force",
     );
   });

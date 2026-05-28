@@ -13,6 +13,7 @@ from .base import (
 )
 from ..openmc_sph_sidecar import create_openmc_sph_sidecar
 from ..sph_apply import (
+    apply_sph_to_openmc_mgxs_hdf5,
     apply_sph_to_hdf5,
     print_report as print_sph_apply_report,
     write_summary as write_sph_apply_summary,
@@ -173,14 +174,23 @@ def build_apply_sph_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="openmc2donjon apply-sph",
         description=(
-            "Apply OpenMC CE/MG SPH factors to a converter-facing MGXS HDF5 "
-            "handoff and write a corrected copy. The command divides "
-            "macroscopic XS datasets by NSPH and removes active SPH datasets "
-            "from the output so later converter steps do not double-apply "
-            "the same factors."
+            "Apply OpenMC CE/MG SPH factors to an MGXS HDF5 file and write a "
+            "corrected copy. Use --input-format converter for the "
+            "openmc2donjon /mixtures layout, or --input-format openmc-mgxs "
+            "for OpenMC native setN mgxs.h5 files used by the next OpenMC MG "
+            "iteration. The command divides macroscopic XS datasets by NSPH."
         ),
     )
     parser.add_argument("input_h5", type=Path, help="MGXS HDF5 file to correct")
+    parser.add_argument(
+        "--input-format",
+        choices=("converter", "openmc-mgxs"),
+        default="converter",
+        help=(
+            "input HDF5 layout: converter for openmc2donjon /mixtures, "
+            "or openmc-mgxs for OpenMC native setN mgxs.h5 (default: converter)"
+        ),
+    )
     parser.add_argument(
         "--sph-source",
         type=Path,
@@ -419,12 +429,20 @@ def build_make_sph_update_table_parser() -> argparse.ArgumentParser:
 def apply_sph_handler(args: argparse.Namespace) -> int:
     parser = parser_from_args(args)
     try:
-        report = apply_sph_to_hdf5(
-            args.input_h5,
-            sph_source=args.sph_source,
-            output_h5=args.output,
-            force=args.force,
-        )
+        if args.input_format == "openmc-mgxs":
+            report = apply_sph_to_openmc_mgxs_hdf5(
+                args.input_h5,
+                sph_source=args.sph_source,
+                output_h5=args.output,
+                force=args.force,
+            )
+        else:
+            report = apply_sph_to_hdf5(
+                args.input_h5,
+                sph_source=args.sph_source,
+                output_h5=args.output,
+                force=args.force,
+            )
         print_sph_apply_report(report)
         if args.summary_json is not None:
             write_sph_apply_summary(args.summary_json, report)

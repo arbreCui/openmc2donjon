@@ -23,6 +23,10 @@ from colorset_model import (
     build_settings,
     load_statepoint,
 )
+from openmc2donjon.sph_apply import (
+    apply_sph_to_openmc_mgxs_hdf5,
+    write_summary as write_sph_apply_summary,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -53,6 +57,29 @@ def build_parser() -> argparse.ArgumentParser:
         "--mgxs-name",
         default="mgxs.h5",
         help="MG cross-section HDF5 filename inside --mg-case-dir",
+    )
+    parser.add_argument(
+        "--sph-source",
+        type=Path,
+        default=None,
+        help=(
+            "optional SPH sidecar from the previous CE/MG iteration; when "
+            "provided, write a corrected OpenMC-native MGXS file for this MG run"
+        ),
+    )
+    parser.add_argument(
+        "--raw-mgxs-name",
+        default="mgxs_unapplied.h5",
+        help=(
+            "raw OpenMC-native MGXS filename used before SPH application "
+            "(default: mgxs_unapplied.h5; only used with --sph-source)"
+        ),
+    )
+    parser.add_argument(
+        "--sph-apply-summary-json",
+        type=Path,
+        default=None,
+        help="optional JSON summary for the OpenMC-native SPH application",
     )
     parser.add_argument(
         "--scatter-format",
@@ -96,6 +123,8 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("--histogram-bins must be positive")
     if args.legendre_order < 0:
         raise SystemExit("--legendre-order must be non-negative")
+    if args.sph_source is not None and args.raw_mgxs_name == args.mgxs_name:
+        raise SystemExit("--raw-mgxs-name must differ from --mgxs-name when --sph-source is used")
 
     mg_dir = args.mg_case_dir.resolve()
     mg_dir.mkdir(parents=True, exist_ok=True)
@@ -109,6 +138,7 @@ def main(argv: list[str] | None = None) -> int:
 
     mgxs_file, materials, geometry = library.create_mg_mode()
     mgxs_path = (mg_dir / args.mgxs_name).resolve()
+    raw_mgxs_path = (mg_dir / args.raw_mgxs_name).resolve() if args.sph_source else mgxs_path
     materials.cross_sections = str(mgxs_path)
     settings = build_settings(
         RunSettings(
@@ -125,10 +155,23 @@ def main(argv: list[str] | None = None) -> int:
     geometry.export_to_xml(mg_dir / "geometry.xml")
     settings.export_to_xml(mg_dir / "settings.xml")
     tallies.export_to_xml(mg_dir / "tallies.xml")
-    mgxs_file.export_to_hdf5(mgxs_path)
+    mgxs_file.export_to_hdf5(raw_mgxs_path)
+    sph_apply_report = None
+    if args.sph_source is not None:
+        sph_apply_report = apply_sph_to_openmc_mgxs_hdf5(
+            raw_mgxs_path,
+            sph_source=args.sph_source,
+            output_h5=mgxs_path,
+            force=True,
+        )
+        if args.sph_apply_summary_json is not None:
+            write_sph_apply_summary(args.sph_apply_summary_json, sph_apply_report)
 
     print(f"wrote OpenMC MG colorset XML: {mg_dir}")
     print(f"MG cross sections: {mgxs_path}")
+    if sph_apply_report is not None:
+        print(f"raw MG cross sections: {raw_mgxs_path}")
+        print(f"SPH-applied MGXS source: {args.sph_source}")
     print(f"statepoint target: {mg_dir / f'statepoint.{args.batches}.h5'}")
     print(f"energy_mode: {settings.energy_mode}")
     if args.scatter_format == "histogram":
@@ -147,6 +190,9 @@ def main(argv: list[str] | None = None) -> int:
             if args.scatter_format == "legendre"
             else None,
             "mgxs": str(mgxs_path),
+            "raw_mgxs": str(raw_mgxs_path) if args.sph_source is not None else None,
+            "sph_source": None if args.sph_source is None else str(args.sph_source),
+            "sph_applied": args.sph_source is not None,
             "mg_case_dir": str(mg_dir),
         }
         args.summary_json.parent.mkdir(parents=True, exist_ok=True)

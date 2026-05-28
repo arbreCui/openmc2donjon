@@ -1,4 +1,4 @@
-"""Apply OpenMC-side SPH factors directly to converter-facing MGXS data."""
+"""Apply OpenMC-side SPH factors directly to MGXS HDF5 data."""
 
 from __future__ import annotations
 
@@ -31,6 +31,13 @@ VECTOR_XS_DATASETS = (
     "kappa_fission_xs",
     "kappa_fission_cross_section",
 )
+OPENMC_MGXS_VECTOR_DATASETS = (
+    "total",
+    "absorption",
+    "fission",
+    "nu-fission",
+    "kappa-fission",
+)
 SPH_DATASETS = ("sph", "SPH", "NSPH")
 
 
@@ -45,6 +52,7 @@ class SphApplyReport:
     sph_min: float
     sph_max: float
     operator: str = "divide-xs-by-nsph"
+    input_format: str = "converter"
 
 
 @dataclass(frozen=True)
@@ -61,6 +69,7 @@ def print_report(report: SphApplyReport) -> None:
     print(f"  input: {report.input_h5}")
     print(f"  sph source: {report.sph_source}")
     print(f"  output: {report.output_h5}")
+    print(f"  input format: {report.input_format}")
     print(f"  operator: {report.operator}")
     print(f"  mixtures: {len(report.mixture_names)}")
     print(f"  energy groups: {report.energy_groups}")
@@ -91,6 +100,7 @@ def summary_payload(report: SphApplyReport) -> dict[str, Any]:
         "input_h5": str(report.input_h5),
         "sph_source": str(report.sph_source),
         "output_h5": str(report.output_h5),
+        "input_format": report.input_format,
         "operator": report.operator,
         "mixtures": list(report.mixture_names),
         "energy_groups": report.energy_groups,
@@ -180,11 +190,10 @@ def apply_sph_to_hdf5(
 ) -> SphApplyReport:
     """Copy an MGXS HDF5 handoff and write SPH-corrected XS datasets.
 
-    The output is meant for a solver that should see already-corrected
-    macroscopic data, such as the next OpenMC MG iteration in the OpenMC-side
-    SPH workflow. Active ``sph`` / ``NSPH`` datasets are removed to prevent a
-    downstream converter from applying the same factors again; the values are
-    preserved as ``applied_sph`` provenance datasets.
+    This variant handles the converter-facing ``/mixtures/<name>`` layout.
+    Active ``sph`` / ``NSPH`` datasets are removed to prevent a downstream
+    converter from applying the same factors again; the values are preserved
+    as ``applied_sph`` provenance datasets.
     """
 
     import h5py
@@ -242,6 +251,82 @@ def apply_sph_to_hdf5(
     )
 
 
+def apply_sph_to_openmc_mgxs_hdf5(
+    input_h5: Path,
+    *,
+    sph_source: Path,
+    output_h5: Path,
+    force: bool = False,
+) -> SphApplyReport:
+    """Copy an OpenMC-native MGXS file and divide XS by SPH factors.
+
+    OpenMC MG-mode ``mgxs.h5`` files use macroscopic groups named ``set1``,
+    ``set2``, ... instead of the converter-facing ``/mixtures/<name>`` layout.
+    The mapping is therefore by sidecar order: first SPH mixture -> ``set1``,
+    second -> ``set2``, and so on.
+    """
+
+    import h5py
+
+    input_h5 = Path(input_h5)
+    sph_source = Path(sph_source)
+    output_h5 = Path(output_h5)
+    if not input_h5.exists():
+        raise FileNotFoundError(f"input HDF5 does not exist: {input_h5}")
+    if not sph_source.exists():
+        raise FileNotFoundError(f"SPH source does not exist: {sph_source}")
+    if input_h5.resolve() == output_h5.resolve():
+        raise ValueError("output HDF5 must be different from input HDF5")
+    if output_h5.exists() and not force:
+        raise FileExistsError(f"output already exists; use --force to overwrite: {output_h5}")
+
+    with h5py.File(input_h5, "r") as h5:
+        energy_groups = _energy_groups(h5)
+        macroscopic_names = _openmc_macroscopic_names(h5)
+    mixture_names = _sph_source_mixture_names(sph_source)
+    if len(macroscopic_names) != len(mixture_names):
+        raise ValueError(
+            "OpenMC MGXS macroscopic count does not match SPH sidecar mixture count: "
+            f"{len(macroscopic_names)} != {len(mixture_names)}"
+        )
+    loaded = load_sph_source(
+        sph_source,
+        mixture_names=mixture_names,
+        energy_groups=energy_groups,
+    )
+
+    output_h5.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(input_h5, output_h5)
+    scaled_count = 0
+    sph_matrix = np.stack([loaded.sph[name] for name in mixture_names])
+    with h5py.File(output_h5, "r+") as h5:
+        for macro_name, mixture_name in zip(macroscopic_names, mixture_names, strict=True):
+            scaled_count += _apply_to_openmc_macro_group(h5[macro_name], loaded.sph[mixture_name])
+        h5.attrs["sph_applied"] = True
+        h5.attrs["sph_apply_schema"] = SCHEMA
+        h5.attrs["sph_apply_operator"] = "divide-xs-by-nsph"
+        h5.attrs["sph_apply_input_format"] = "openmc-mgxs"
+        h5.attrs["sph_applied_source"] = str(sph_source)
+        h5.attrs["sph_package_version"] = __version__
+        h5.attrs["sph_applied_mixture_names"] = np.asarray(mixture_names, dtype="S")
+        h5.attrs["sph_applied_macroscopic_names"] = np.asarray(macroscopic_names, dtype="S")
+        if "sph_kind" in loaded.root_sph_attrs:
+            h5.attrs["sph_kind"] = loaded.root_sph_attrs["sph_kind"]
+        h5.attrs["sph_real"] = bool(loaded.root_sph_attrs.get("sph_real", True))
+
+    return SphApplyReport(
+        input_h5=input_h5,
+        sph_source=sph_source,
+        output_h5=output_h5,
+        mixture_names=mixture_names,
+        energy_groups=energy_groups,
+        scaled_dataset_count=scaled_count,
+        sph_min=float(np.min(sph_matrix)),
+        sph_max=float(np.max(sph_matrix)),
+        input_format="openmc-mgxs",
+    )
+
+
 def _apply_to_mixture_group(group: Any, sph: np.ndarray) -> int:
     scaled = 0
     if "states" in group and hasattr(group["states"], "keys"):
@@ -270,6 +355,66 @@ def _apply_to_calculation_group(group: Any, sph: np.ndarray) -> int:
     _replace_dataset(group, "applied_sph", _sph_vector(sph))
     _remove_sph_datasets(group)
     return len(applied.scaled_names)
+
+
+def _apply_to_openmc_macro_group(group: Any, sph: np.ndarray) -> int:
+    scaled = 0
+    vector = _sph_vector(sph)
+    for child_name in group:
+        child = group[child_name]
+        if hasattr(child, "keys") and "scatter_data" in child:
+            scaled += _apply_to_openmc_temperature_group(child, vector)
+    return scaled
+
+
+def _apply_to_openmc_temperature_group(group: Any, sph: np.ndarray) -> int:
+    scaled = 0
+    for name in OPENMC_MGXS_VECTOR_DATASETS:
+        if name in group:
+            _replace_dataset(
+                group,
+                name,
+                _scale_vector(np.asarray(group[name][:], dtype=float), sph, name),
+            )
+            scaled += 1
+    if "scatter_data" in group and "scatter_matrix" in group["scatter_data"]:
+        _replace_dataset(
+            group["scatter_data"],
+            "scatter_matrix",
+            _apply_sph_to_openmc_scatter_data(group["scatter_data"], sph),
+        )
+        scaled += 1
+    return scaled
+
+
+def _apply_sph_to_openmc_scatter_data(scatter_data: Any, sph: np.ndarray) -> np.ndarray:
+    g_min = np.asarray(scatter_data["g_min"][:], dtype=int)
+    g_max = np.asarray(scatter_data["g_max"][:], dtype=int)
+    matrix = np.asarray(scatter_data["scatter_matrix"][:], dtype=float)
+    if g_min.shape != (sph.size,) or g_max.shape != (sph.size,):
+        raise ValueError(
+            "OpenMC scatter g_min/g_max shape is not compatible with "
+            f"{sph.size} groups"
+        )
+    spans = g_max - g_min + 1
+    if np.any(spans < 0):
+        raise ValueError("OpenMC scatter g_min/g_max contain negative spans")
+    span_total = int(np.sum(spans))
+    if span_total <= 0:
+        return matrix.copy()
+    if matrix.size % span_total != 0:
+        raise ValueError(
+            "OpenMC scatter_matrix length is not divisible by sparse span count: "
+            f"{matrix.size} % {span_total}"
+        )
+    order = matrix.size // span_total
+    corrected = matrix.copy()
+    offset = 0
+    for group_index, span in enumerate(spans):
+        width = int(span) * order
+        corrected[offset : offset + width] /= sph[group_index]
+        offset += width
+    return corrected
 
 
 def _remove_sph_datasets(group: Any) -> None:
@@ -337,3 +482,53 @@ def _energy_groups(h5: Any) -> int:
     if groups <= 0:
         raise ValueError("energy group count must be positive")
     return groups
+
+
+def _openmc_macroscopic_names(h5: Any) -> tuple[str, ...]:
+    names = [
+        str(name)
+        for name in h5.keys()
+        if hasattr(h5[name], "keys") and _is_openmc_set_group(str(name))
+    ]
+    names.sort(key=_openmc_set_sort_key)
+    if not names:
+        raise ValueError("OpenMC MGXS HDF5 must contain setN macroscopic groups")
+    return tuple(names)
+
+
+def _is_openmc_set_group(name: str) -> bool:
+    suffix = name.removeprefix("set")
+    return name.startswith("set") and suffix.isdigit()
+
+
+def _openmc_set_sort_key(name: str) -> tuple[int, str]:
+    suffix = name.removeprefix("set")
+    if suffix.isdigit():
+        return (int(suffix), name)
+    return (10**9, name)
+
+
+def _sph_source_mixture_names(path: Path) -> tuple[str, ...]:
+    import h5py
+
+    with h5py.File(path, "r") as h5:
+        if "sph" in h5 and not hasattr(h5["sph"], "keys"):
+            raw = h5["sph"].attrs.get("mixture_names")
+            if raw is None:
+                raw = h5["sph"].attrs.get("mixtures")
+            if raw is None:
+                raise ValueError("/sph dataset must define mixture_names")
+            return tuple(_decode_name(value) for value in raw)
+        if "sph" in h5 and hasattr(h5["sph"], "keys"):
+            return tuple(str(name) for name in h5["sph"].keys())
+        if "mixtures" in h5 and hasattr(h5["mixtures"], "keys"):
+            return tuple(str(name) for name in h5["mixtures"].keys())
+    raise ValueError("SPH source must contain /sph or /mixtures")
+
+
+def _decode_name(value: Any) -> str:
+    if isinstance(value, bytes):
+        return value.decode("utf-8")
+    if isinstance(value, np.bytes_):
+        return value.decode("utf-8")
+    return str(value)

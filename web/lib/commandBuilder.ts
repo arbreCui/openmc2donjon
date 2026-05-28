@@ -68,6 +68,11 @@ const SIGN_CONVENTION_OPTIONS = [
 const H5 = [".h5", ".hdf5"];
 const JSON = [".json"];
 
+const SPH_APPLY_FORMAT_OPTIONS = [
+  { value: "openmc-mgxs", label: "OpenMC native mgxs.h5" },
+  { value: "converter", label: "converter HDF5" },
+] as const;
+
 export const COMMAND_BUILDER_SPECS: readonly CommandBuilderSpec[] = [
   {
     id: "diff",
@@ -276,9 +281,10 @@ export const COMMAND_BUILDER_SPECS: readonly CommandBuilderSpec[] = [
       "Build the command that writes an SPH-corrected MGXS HDF5 copy for the next OpenMC MG macro iteration.",
     base: ["openmc2donjon", "apply-sph"],
     fields: [
-      path("input_h5", "MGXS HDF5", "Input MGXS handoff to correct.", "<mgxs_library.h5>", 0, H5),
+      path("input_h5", "MGXS HDF5", "Input MGXS handoff to correct.", "mg_case/mgxs_unapplied.h5", 0, H5),
+      select("input_format", "Input format", "HDF5 layout to correct.", "--input-format", SPH_APPLY_FORMAT_OPTIONS),
       optionPath("sph_source", "SPH sidecar", "HDF5 sidecar containing SPH/NSPH vectors.", "--sph-source", "openmc_sph.h5", H5, true),
-      optionPath("output", "Corrected MGXS HDF5", "Output HDF5 copy with XS divided by NSPH.", "-o", "mgxs_sph_applied.h5", H5, true),
+      optionPath("output", "Corrected MGXS HDF5", "Output HDF5 copy with XS divided by NSPH.", "-o", "mg_case/mgxs.h5", H5, true),
       optionPath("summary_json", "Summary JSON", "Optional SPH application summary JSON.", "--summary-json", "sph_apply_summary.json", JSON),
       toggle("force", "Force overwrite", "Allow replacing the corrected HDF5 output.", "--force"),
     ],
