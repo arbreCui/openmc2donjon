@@ -129,10 +129,21 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
             self.assertEqual(payload["quality"]["decision"], "openmc_ce_mg_sph_production_quality")
             self.assertTrue(payload["quality"]["production_ready"])
             self.assertTrue(payload["quality"]["demonstration_quality"])
+            self.assertIn("reaction_rate_preservation", payload)
+            preservation = payload["reaction_rate_preservation"]
+            self.assertAlmostEqual(
+                preservation["current_solve"]["max_relative_residual"],
+                0.2,
+            )
+            self.assertAlmostEqual(
+                preservation["after_sph_update_frozen_flux"]["max_relative_residual"],
+                0.0,
+            )
             self.assertEqual(len(payload["sph_iterations"]), 1)
             self.assertIn("OpenMC CE/MG SPH Physics Summary", markdown)
             self.assertIn("## Quality", markdown)
             self.assertIn("## SPH Iterations", markdown)
+            self.assertIn("## Reaction-Rate Preservation", markdown)
             self.assertIn("Accepted SPH consumption format", markdown)
             self.assertIn("CS_FUEL", markdown)
 
@@ -230,6 +241,15 @@ def _write_summary_fixture(handoff: Path, *, flux_std_scale: float = 0.01) -> No
         h5.attrs["legendre_order"] = 3
         h5.create_dataset("energy_bounds", data=energy_bounds)
         h5.create_dataset("mixture_names", data=names)
+        mixtures = h5.create_group("mixtures")
+        fuel = mixtures.create_group("CS_FUEL")
+        fuel.create_dataset("absorption", data=np.array([0.5, 0.25]))
+        fuel.create_dataset("fission", data=np.array([0.2, 0.1]))
+        fuel.create_dataset("nu_fission", data=np.array([0.5, 0.25]))
+        mod = mixtures.create_group("CS_MOD")
+        mod.create_dataset("absorption", data=np.array([0.1, 0.2]))
+        mod.create_dataset("fission", data=np.array([0.0, 0.0]))
+        mod.create_dataset("nu_fission", data=np.array([0.0, 0.0]))
     with h5py.File(handoff / "mgxs_with_openmc_sph.h5", "w") as h5:
         h5.create_dataset("energy_bounds", data=energy_bounds)
         h5.create_dataset("mixture_names", data=names)

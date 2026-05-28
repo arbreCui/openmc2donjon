@@ -138,9 +138,12 @@ The SPH command gates both CE and MG flux uncertainty:
 That keeps noisy OpenMC flux ratios from being silently promoted into
 production SPH factors.
 
-The physics summary records the CE/MG flux uncertainty and SPH factor range by
-mixture.  It is meant for review and demos; it is not a substitute for a
-benchmark-quality validation.
+The physics summary records the CE/MG flux uncertainty, SPH factor range by
+mixture, and a reaction-rate preservation diagnostic.  The diagnostic compares
+`CE-tallied MGXS * CE volume flux` against the OpenMC MG rate before/after the
+new SPH update using the same `XS / NSPH` convention used by DONJON.  It is
+meant for review and demos; it is not a substitute for a benchmark-quality
+validation.
 
 The summary also separates structural success from statistical quality:
 
