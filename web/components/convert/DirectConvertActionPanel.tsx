@@ -7,7 +7,7 @@ import type {
 import {
   convertWriterBackendShortLabel,
 } from "@/lib/convertWriterBackend";
-import type { ConvertRunState } from "./ConvertReport";
+import type { ConvertRunState } from "./ConvertReportState";
 
 export default function DirectConvertActionPanel({
   state,

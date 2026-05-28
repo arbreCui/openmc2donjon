@@ -9,7 +9,7 @@ import {
   type ConvertWalkthroughRun,
   type ConvertWalkthroughStatus,
 } from "@/lib/convertWalkthrough";
-import type { ConvertRunState } from "./ConvertReport";
+import type { ConvertRunState } from "./ConvertReportState";
 
 export default function ConvertPrimer({
   state,

@@ -7,9 +7,7 @@ import {
   useState,
 } from "react";
 import { useSearchParams } from "next/navigation";
-import ConvertReport, {
-  ConvertRunState,
-} from "@/components/convert/ConvertReport";
+import ConvertReport from "@/components/convert/ConvertReport";
 import BackendModeCard from "@/components/convert/BackendModeCard";
 import ConvertForm from "@/components/convert/ConvertForm";
 import ConvertIntentBanner from "@/components/convert/ConvertIntentBanner";
@@ -18,6 +16,7 @@ import ConvertShowcase from "@/components/convert/ConvertShowcase";
 import LiveMinicaseCard from "@/components/convert/LiveMinicaseCard";
 import MockDemoCard from "@/components/convert/MockDemoCard";
 import ProductionMinicaseMissingHint from "@/components/convert/ProductionMinicaseMissingHint";
+import type { ConvertRunState } from "@/components/convert/ConvertReportState";
 import {
   ApiError,
   api,

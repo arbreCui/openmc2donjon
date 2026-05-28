@@ -16,7 +16,7 @@ import {
   outputPathInDirectory,
   pickConvertBrowserStart,
 } from "@/lib/convertPaths";
-import type { ConvertRunState } from "./ConvertReport";
+import type { ConvertRunState } from "./ConvertReportState";
 import ConvertModeReferenceStrip from "./ConvertModeReferenceStrip";
 import DirectConvertActionPanel from "./DirectConvertActionPanel";
 import MixturePicker from "./MixturePicker";
