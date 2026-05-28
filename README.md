@@ -6,8 +6,10 @@
 Build production handoffs from OpenMC multi-group cross sections and
 OpenMC-side equivalence factors to DRAGON/DONJON deterministic workflows.
 
-The production route keeps the physics equivalence on the OpenMC side, then
-uses this package as the delivery bridge into DRAGON/DONJON:
+The production SPH route uses OpenMC MG as the equivalence operator.  OpenMC CE
+is the reference calculation; OpenMC MG runs on the selected group structure
+with the same geometry and homogenization regions; the resulting SPH factors
+are then carried by this package into DRAGON/DONJON:
 
 ```text
 OpenMC CE reference
@@ -20,9 +22,11 @@ OpenMC CE reference
 ```
 
 For OpenMC-side SPH consumed by DONJON `DSPH:`/`MAC:`, use the
-`L_MACROLIB` route: the converter writes SPH as `GROUP/*/NSPH`, which DONJON
-reads directly. `L_MULTICOMPO` remains the mapped-library route for
-domain-wise handoffs extracted through `NCR:`.
+`L_MACROLIB` route: the converter writes the precomputed SPH factors as
+`GROUP/*/NSPH`, which DONJON reads directly. In this workflow DONJON is the
+consumer of the corrected handoff, not the SPH feedback operator.
+`L_MULTICOMPO` remains the mapped-library route for domain-wise handoffs
+extracted through `NCR:`.
 
 In the OpenMC CE/MG SPH route, the CE run can tally two scattering
 representations at once:
@@ -35,15 +39,15 @@ OpenMC CE run
 OpenMC CE flux vs OpenMC MG-H16 flux -> SPH(region, group)
 ```
 
-Thus Hn is used to improve the OpenMC MG macro calculation that generates SPH
-factors. It is not converted to DONJON scatter; DONJON receives the directly
-tallied Pn/Legendre MGXS plus explicit SPH factors.
+Thus Hn is used to improve the OpenMC MG macro calculation that generates the
+formal OpenMC-side SPH factors. It is not converted to DONJON scatter; DONJON
+receives the directly tallied Pn/Legendre MGXS plus explicit SPH factors.
 
 ## Equivalence Methods
 
-The converter does not compute the physics correction itself. It carries
-explicit factors produced upstream, with OpenMC CE/MG equivalence as the
-production SPH route.
+The core converter does not invent physics corrections while writing ASCII. It
+carries explicit factors produced upstream, with OpenMC CE/MG equivalence as
+the production SPH route.
 
 | Method | What it does | Entry point |
 | --- | --- | --- |

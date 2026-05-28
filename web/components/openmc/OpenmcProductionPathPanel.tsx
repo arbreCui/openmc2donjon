@@ -191,7 +191,7 @@ export default function OpenmcProductionPathPanel({
           </h2>
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
             {isOpenmcSph
-              ? "This route keeps the SPH equivalence calculation upstream in OpenMC. DONJON receives the corrected handoff and NSPH factors; it is not used as an SPH feedback loop."
+              ? "This route uses OpenMC MG as the formal SPH equivalence operator. DONJON receives the corrected handoff and precomputed NSPH factors; it is not used as an SPH feedback loop."
               : "This surface builds the shell commands for the OpenMC side of the workflow. After the command runs, the produced HDF5 and ASCII artifacts continue through Inspect, Convert, and Bundle."}
           </p>
         </div>

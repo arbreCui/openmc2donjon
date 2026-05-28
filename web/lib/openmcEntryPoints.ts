@@ -36,7 +36,7 @@ export const OPENMC_ENTRY_POINTS: readonly OpenmcEntryPoint[] = [
     eyebrow: "OpenMC-side equivalence",
     title: "Run CE/MG SPH preparation",
     body:
-      "Start here for Alain's route: OpenMC CE reference plus OpenMC MG macro solve on the selected group structure and same geometry, then OpenMC-side SPH and MACROLIB conversion for DONJON consumption.",
+      "Start here for Alain's route: OpenMC CE reference plus OpenMC MG as the formal equivalence operator on the selected group structure and same geometry, then MACROLIB conversion for DONJON consumption.",
     primaryLabel: "Use CE/MG SPH route",
     secondaryHref: "/openmc?workflow=two-step&equivalence=sph&format=macrolib",
     secondaryLabel: "Open SPH summary",

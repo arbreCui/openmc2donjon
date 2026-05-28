@@ -254,10 +254,12 @@ openmc2donjon-from-openmc \
 
 ## OpenMC-Side SPH From CE/MG Fluxes
 
-The production SPH route is now upstream of DONJON: compare an OpenMC
-continuous-energy reference calculation with an OpenMC multi-group macro
-calculation on the same geometry and output regions, then inject the resulting
-SPH factors before conversion.
+The production SPH route uses OpenMC MG as the equivalence operator upstream of
+DONJON: compare an OpenMC continuous-energy reference calculation with an
+OpenMC multi-group macro calculation on the same geometry and output regions,
+then inject the resulting SPH factors before conversion. DONJON consumes the
+precomputed `NSPH` factors or corrected handoff; it is not iterated as the SPH
+feedback operator in this route.
 
 Export the region/group flux tally from each OpenMC statepoint with the same
 MGXS handoff metadata:

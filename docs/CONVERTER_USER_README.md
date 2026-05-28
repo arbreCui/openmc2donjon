@@ -175,16 +175,17 @@ The `/equivalence` page is currently a command builder. It helps construct
 sidecar/augmentation CLI commands, but it does not execute the physics workflow
 inside the browser.
 
-For production SPH, generate factors upstream from an OpenMC CE reference
-versus an OpenMC MG macro calculation on the selected group structure with the
-same geometry. The MG macro calculation can use OpenMC
-Hn histogram angular representation to better retain anisotropic scattering
-effects while the converter-facing handoff remains ordinary Pn/Legendre for
-DONJON. A single assembly usually does not need SPH; colorsets and full-core
-macro models need one factor per output region and energy group. Use
-`make-openmc-sph-sidecar` to turn the CE/MG flux comparison into both an
-auditable CSV table and an SPH sidecar, then use `augment-sph` to inject that
-sidecar before returning to `/convert`.
+For production SPH in this project, OpenMC MG is the equivalence operator:
+generate factors upstream from an OpenMC CE reference versus an OpenMC MG macro
+calculation on the selected group structure with the same geometry and output
+regions. The MG macro calculation can use OpenMC Hn histogram angular
+representation to better retain anisotropic scattering effects while the
+converter-facing handoff remains ordinary Pn/Legendre for DONJON. A single
+assembly usually does not need SPH; colorsets and full-core macro models need
+one factor per output region and energy group. Use `make-openmc-sph-sidecar` to
+turn the CE/MG flux comparison into both an auditable CSV table and an SPH
+sidecar, then use `augment-sph` to inject that sidecar before returning to
+`/convert`.
 
 Practically, the CE run may tally both representations:
 
@@ -195,7 +196,8 @@ Hn histogram MGXS  -> OpenMC MG macro solve -> SPH factor generation
 
 There is no Hn-to-Legendre conversion step in the normal workflow. The Hn data
 improves the OpenMC MG flux used to compute SPH; DONJON receives directly
-tallied Pn/Legendre MGXS plus explicit `NSPH` factors.
+tallied Pn/Legendre MGXS plus explicit `NSPH` factors. DONJON consumes the
+precomputed equivalence data; it is not the feedback operator in this route.
 
 For downstream DONJON consumption of OpenMC-side SPH today, convert the
 augmented HDF5 with `--format macrolib` so that the SPH factors appear as
