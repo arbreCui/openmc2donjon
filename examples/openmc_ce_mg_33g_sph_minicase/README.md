@@ -140,6 +140,23 @@ closed the full route and wrote P3 handoff data plus H16 MG-macro evidence, but
 the summary correctly marked it `statistical_review_required` because the
 largest CE/MG flux relative standard deviation was about 0.65.
 
+A 24-batch / 4000-particle run with 6 inactive batches on both CE and MG
+sides reached `openmc_ce_mg_sph_demonstration_quality` on the development
+machine:
+
+```sh
+RUN_ROOT=/private/tmp/openmc2donjon_ce_mg_sph_demo_quality \
+BATCHES=24 INACTIVE=6 PARTICLES=4000 \
+MG_BATCHES=24 MG_INACTIVE=6 MG_PARTICLES=4000 \
+MAX_CE_FLUX_REL_STD=0.30 \
+MAX_MG_FLUX_REL_STD=0.30 \
+bash examples/openmc_ce_mg_33g_sph_minicase/run_workflow.sh
+```
+
+That run gave CE/MG flux relative standard deviations of 0.241 / 0.172 and an
+SPH range of 0.761 .. 1.115.  It is suitable as a live demonstration of the
+OpenMC-side SPH route, but it remains above the 5% production-quality threshold.
+
 ## Manual Steps
 
 The shell script expands to these core commands:
