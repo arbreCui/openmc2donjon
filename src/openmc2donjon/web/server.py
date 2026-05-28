@@ -43,6 +43,7 @@ from ..pygan_backend import probe_pygan
 from .bundle import register_bundle_routes
 from .commands import register_command_routes
 from .convert import register_convert_routes
+from .filesystem import FilesystemScope
 from .openmc_workflow import register_openmc_workflow_routes
 from .openmc_sph_summary import register_openmc_sph_summary_routes
 from .pygan import register_pygan_routes
@@ -137,6 +138,7 @@ def create_app(
     *,
     mock_mode: bool = False,
     extra_origins: tuple[str, ...] = (),
+    workspace_root: str | Path | None = None,
 ) -> Any:
     """Build a configured FastAPI application instance.
 
@@ -157,6 +159,8 @@ def create_app(
             "openmc2donjon web extras are not installed. "
             'Install with: pip install -e ".[web]"',
         ) from exc
+
+    filesystem_scope = FilesystemScope.from_raw_root(workspace_root)
 
     app = FastAPI(
         title="openmc2donjon",
@@ -179,18 +183,23 @@ def create_app(
             "mock_mode": mock_mode,
             "version": __version__,
             "pygan_backend": _cached_pygan_status(),
+            "filesystem_scope": filesystem_scope.as_dict(mock_mode=mock_mode),
         }
 
     register_command_routes(app)
     register_openmc_workflow_routes(app, mock_mode=mock_mode)
-    register_openmc_sph_summary_routes(app, mock_mode=mock_mode)
-    register_pygan_routes(app, mock_mode=mock_mode)
+    register_openmc_sph_summary_routes(
+        app,
+        mock_mode=mock_mode,
+        filesystem_scope=filesystem_scope,
+    )
+    register_pygan_routes(app, mock_mode=mock_mode, filesystem_scope=filesystem_scope)
 
     @app.get("/api/inspect")
     def api_inspect(path: str = Query(..., min_length=1)) -> dict[str, Any]:
         if mock_mode:
             return _load_fixture("inspect_handoff.json")
-        real_path = _validate_hdf5_path(path, HTTPException)
+        real_path = _validate_hdf5_path(path, HTTPException, filesystem_scope)
         try:
             report = inspect_file(real_path)
         except (OSError, ValueError, KeyError) as exc:
@@ -215,18 +224,22 @@ def create_app(
     def api_files(path: str = Query(..., min_length=1)) -> dict[str, Any]:
         if mock_mode:
             return _mock_list_dir(path, HTTPException)
-        return _list_dir(path, HTTPException)
+        return _list_dir(path, HTTPException, filesystem_scope)
 
     @app.get("/api/file-status")
     def api_file_status(path: str = Query(..., min_length=1)) -> dict[str, Any]:
         if mock_mode:
             return _mock_file_status(path)
-        return _file_status(path)
+        return _file_status(path, HTTPException, filesystem_scope)
 
-    register_text_preview_routes(app, mock_mode=mock_mode)
+    register_text_preview_routes(
+        app,
+        mock_mode=mock_mode,
+        filesystem_scope=filesystem_scope,
+    )
 
-    register_convert_routes(app, mock_mode=mock_mode)
-    register_bundle_routes(app, mock_mode=mock_mode)
+    register_convert_routes(app, mock_mode=mock_mode, filesystem_scope=filesystem_scope)
+    register_bundle_routes(app, mock_mode=mock_mode, filesystem_scope=filesystem_scope)
 
     @app.get("/api/inspect/mixture")
     def api_inspect_mixture(
@@ -236,7 +249,7 @@ def create_app(
     ) -> dict[str, Any]:
         if mock_mode:
             return _mock_mixture(mixture, moment, HTTPException)
-        real_path = _validate_hdf5_path(path, HTTPException)
+        real_path = _validate_hdf5_path(path, HTTPException, filesystem_scope)
         try:
             return _read_mixture_detail(real_path, mixture, moment, HTTPException)
         except (OSError, ValueError) as exc:
@@ -252,12 +265,16 @@ def create_app(
     return app
 
 
-def _validate_hdf5_path(raw: str, http_exception: Any) -> Path:
+def _validate_hdf5_path(
+    raw: str,
+    http_exception: Any,
+    filesystem_scope: FilesystemScope,
+) -> Path:
     """Resolve a user-supplied path and confirm it is a readable HDF5 file."""
 
     import h5py
 
-    real = Path(raw).expanduser().resolve()
+    real = filesystem_scope.resolve(raw, http_exception)
     if not real.exists():
         raise http_exception(status_code=404, detail=f"path not found: {raw}")
     if not real.is_file():
@@ -570,10 +587,14 @@ def _float_attr(attrs: Any, name: str) -> float | None:
         return None
 
 
-def _list_dir(raw: str, http_exception: Any) -> dict[str, Any]:
+def _list_dir(
+    raw: str,
+    http_exception: Any,
+    filesystem_scope: FilesystemScope,
+) -> dict[str, Any]:
     """Real-filesystem implementation of ``/api/files`` (live mode)."""
 
-    real = Path(raw).expanduser().resolve()
+    real = filesystem_scope.resolve(raw, http_exception)
     if not real.exists():
         raise http_exception(status_code=404, detail=f"path not found: {raw}")
     if not real.is_dir():
@@ -616,7 +637,11 @@ def _list_dir(raw: str, http_exception: Any) -> dict[str, Any]:
     return _files_payload(str(real), parent, entries)
 
 
-def _file_status(raw: str) -> dict[str, Any]:
+def _file_status(
+    raw: str,
+    http_exception: Any,
+    filesystem_scope: FilesystemScope,
+) -> dict[str, Any]:
     """Single-path status probe for live-mode workflow hints.
 
     Missing paths are a normal status, not an HTTP error: the frontend
@@ -625,7 +650,7 @@ def _file_status(raw: str) -> dict[str, Any]:
     card can show "unreadable" without breaking the whole page.
     """
 
-    real = Path(raw).expanduser().resolve()
+    real = filesystem_scope.resolve(raw, http_exception)
     try:
         if not real.exists():
             return _file_status_payload(

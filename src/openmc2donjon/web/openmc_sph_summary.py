@@ -7,6 +7,8 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
+from .filesystem import FilesystemScope
+
 
 OPENMC_SPH_PHYSICS_SUMMARY_SCHEMA = (
     "openmc2donjon.openmc-ce-mg-sph-physics-summary.v1"
@@ -16,10 +18,17 @@ _LEGACY_OPENMC_SPH_PHYSICS_SUMMARY_SCHEMAS = {
 }
 
 
-def register_openmc_sph_summary_routes(app: Any, *, mock_mode: bool) -> None:
+def register_openmc_sph_summary_routes(
+    app: Any,
+    *,
+    mock_mode: bool,
+    filesystem_scope: FilesystemScope | None = None,
+) -> None:
     """Register ``/api/openmc-sph-summary`` on a FastAPI app."""
 
     from fastapi import HTTPException, Query
+
+    scope = filesystem_scope or FilesystemScope()
 
     @app.get("/api/openmc-sph-summary")
     def api_openmc_sph_summary(path: str = Query(..., min_length=1)) -> dict[str, Any]:
@@ -30,7 +39,7 @@ def register_openmc_sph_summary_routes(app: Any, *, mock_mode: bool) -> None:
             _validate_summary_payload(payload, HTTPException)
             return payload
 
-        real_path = _validate_json_path(path, HTTPException)
+        real_path = _validate_json_path(path, HTTPException, scope)
         try:
             payload = json.loads(real_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
@@ -48,8 +57,12 @@ def register_openmc_sph_summary_routes(app: Any, *, mock_mode: bool) -> None:
         return payload
 
 
-def _validate_json_path(raw: str, http_exception: Any) -> Path:
-    real = Path(raw).expanduser().resolve()
+def _validate_json_path(
+    raw: str,
+    http_exception: Any,
+    filesystem_scope: FilesystemScope,
+) -> Path:
+    real = filesystem_scope.resolve(raw, http_exception)
     if not real.exists():
         raise http_exception(status_code=404, detail=f"path not found: {raw}")
     if not real.is_file():

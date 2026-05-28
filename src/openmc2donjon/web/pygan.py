@@ -12,16 +12,23 @@ from ..writer_compare import (
     WriterComparisonReport,
     compare_writer_backends,
 )
+from .filesystem import FilesystemScope
 
 
 PYGAN_COMPARE_WEB_SCHEMA = "openmc2donjon.web-pygan-compare.v1"
 
 
-def register_pygan_routes(app: Any, *, mock_mode: bool) -> None:
+def register_pygan_routes(
+    app: Any,
+    *,
+    mock_mode: bool,
+    filesystem_scope: FilesystemScope | None = None,
+) -> None:
     """Register read-only PyGan diagnostics and compare-writer endpoints."""
 
     from fastapi import Body, HTTPException
 
+    scope = filesystem_scope or FilesystemScope()
     compare_body = Body(...)
 
     @app.get("/api/pygan/doctor")
@@ -41,6 +48,7 @@ def register_pygan_routes(app: Any, *, mock_mode: bool) -> None:
                 request=request,
                 mock_mode=True,
             )
+        request = _apply_filesystem_scope(request, HTTPException, scope)
         try:
             report = compare_writer_backends(
                 request["input_h5"],
@@ -203,3 +211,19 @@ def _optional_mixture_list(value: Any, http_exception: Any) -> list[str] | None:
     if isinstance(value, list) and all(isinstance(item, str) and item.strip() for item in value):
         return [item.strip() for item in value]
     raise http_exception(status_code=422, detail="mixtures must be a list of non-empty strings or null")
+
+
+def _apply_filesystem_scope(
+    request: dict[str, Any],
+    http_exception: Any,
+    filesystem_scope: FilesystemScope,
+) -> dict[str, Any]:
+    if filesystem_scope.root is None:
+        return request
+    scoped = dict(request)
+    scoped["input_h5"] = str(filesystem_scope.resolve(str(scoped["input_h5"]), http_exception))
+    for key in ("summary_json", "keep_dir"):
+        value = scoped.get(key)
+        if value is not None:
+            scoped[key] = str(filesystem_scope.resolve(str(value), http_exception))
+    return scoped

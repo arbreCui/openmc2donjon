@@ -404,6 +404,11 @@ npm run dev                      # Next.js on http://localhost:3000
 real package APIs — useful for frontend-only development. See
 [`web/README.md`](web/README.md) for full layout and conventions.
 
+Live mode is localhost-first. If you bind the backend to a non-loopback host,
+constrain filesystem access with `--workspace-root /path/to/openmc-runs`;
+otherwise the server refuses to start unless `--unsafe-remote` is explicitly
+requested.
+
 The Web UI is intentionally localhost-first. Direct conversion can be dry-run
 or executed through `/convert`; equivalence and generic builders assemble
 copyable CLI commands for OpenMC-side sidecar, bundle, and diagnostic support

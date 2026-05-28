@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from .filesystem import FilesystemScope
+
 
 TEXT_PREVIEW_SCHEMA = "openmc2donjon.text-preview.v1"
 
@@ -14,10 +16,17 @@ _LIMIT_BYTES = 262_144
 _LIMIT_LINES = 2_000
 
 
-def register_text_preview_routes(app: Any, *, mock_mode: bool) -> None:
+def register_text_preview_routes(
+    app: Any,
+    *,
+    mock_mode: bool,
+    filesystem_scope: FilesystemScope | None = None,
+) -> None:
     """Register ``GET /api/text-preview`` on a FastAPI app."""
 
     from fastapi import HTTPException, Query
+
+    scope = filesystem_scope or FilesystemScope()
 
     @app.get("/api/text-preview")
     def api_text_preview(
@@ -27,7 +36,7 @@ def register_text_preview_routes(app: Any, *, mock_mode: bool) -> None:
     ) -> dict[str, Any]:
         if mock_mode:
             return _mock_text_preview(path, max_bytes=max_bytes, max_lines=max_lines)
-        real_path = _validate_text_preview_path(path, HTTPException)
+        real_path = _validate_text_preview_path(path, HTTPException, scope)
         try:
             return _read_text_preview(real_path, max_bytes=max_bytes, max_lines=max_lines)
         except ValueError as exc:
@@ -38,10 +47,14 @@ def register_text_preview_routes(app: Any, *, mock_mode: bool) -> None:
             ) from exc
 
 
-def _validate_text_preview_path(raw: str, http_exception: Any) -> Path:
+def _validate_text_preview_path(
+    raw: str,
+    http_exception: Any,
+    filesystem_scope: FilesystemScope,
+) -> Path:
     """Resolve a user-supplied path and confirm it is a regular file."""
 
-    real = Path(raw).expanduser().resolve()
+    real = filesystem_scope.resolve(raw, http_exception)
     if not real.exists():
         raise http_exception(status_code=404, detail=f"path not found: {raw}")
     if not real.is_file():

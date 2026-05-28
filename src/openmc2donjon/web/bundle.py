@@ -11,6 +11,7 @@ from typing import Any
 from .. import __version__
 from ..bundle import SCHEMA as BUNDLE_SCHEMA
 from ..bundle import VALIDATION_PASS_DECISION, validate_bundle
+from .filesystem import FilesystemScope
 
 
 BUNDLE_INSPECT_SCHEMA = "openmc2donjon.bundle-inspect.v1"
@@ -18,18 +19,32 @@ _MOCK_BUNDLE_MANIFEST = "/mock/home/openmc-runs/c5g7/bundle/manifest.json"
 _MOCK_BUNDLE_DIR = "/mock/home/openmc-runs/c5g7/bundle"
 
 
-def register_bundle_routes(app: Any, *, mock_mode: bool) -> None:
+class _ScopeViolation(Exception):
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        detail = kwargs.get("detail")
+        super().__init__(detail if isinstance(detail, str) else "path outside scope")
+
+
+def register_bundle_routes(
+    app: Any,
+    *,
+    mock_mode: bool,
+    filesystem_scope: FilesystemScope | None = None,
+) -> None:
     """Register read-only bundle manifest inspection endpoints."""
 
     from fastapi import HTTPException, Query
+
+    scope = filesystem_scope or FilesystemScope()
 
     @app.get("/api/bundle/inspect")
     def api_bundle_inspect(manifest: str = Query(..., min_length=1)) -> dict[str, Any]:
         if mock_mode:
             return _mock_bundle_inspection(manifest, HTTPException)
-        manifest_path = _validate_manifest_path(manifest, HTTPException)
+        manifest_path = _validate_manifest_path(manifest, HTTPException, scope)
+        _validate_manifest_artifact_paths(manifest_path, HTTPException, scope)
         try:
-            return inspect_bundle_manifest(manifest_path)
+            return inspect_bundle_manifest(manifest_path, filesystem_scope=scope)
         except (OSError, json.JSONDecodeError, ValueError) as exc:
             raise HTTPException(
                 status_code=422,
@@ -37,9 +52,14 @@ def register_bundle_routes(app: Any, *, mock_mode: bool) -> None:
             ) from exc
 
 
-def inspect_bundle_manifest(manifest_path: Path) -> dict[str, Any]:
+def inspect_bundle_manifest(
+    manifest_path: Path,
+    *,
+    filesystem_scope: FilesystemScope | None = None,
+) -> dict[str, Any]:
     """Inspect and validate a bundle manifest without writing any files."""
 
+    scope = filesystem_scope or FilesystemScope()
     manifest_payload = _read_json_object(manifest_path)
     # ``validate_bundle`` is the authoritative checker, but it prints a
     # CLI report by design. Capture that result stream so the web server
@@ -69,7 +89,11 @@ def inspect_bundle_manifest(manifest_path: Path) -> dict[str, Any]:
             }
         )
 
-    donjon_defaults = _donjon_defaults_from_artifacts(manifest_path, raw_artifacts)
+    donjon_defaults = _donjon_defaults_from_artifacts(
+        manifest_path,
+        raw_artifacts,
+        filesystem_scope=scope,
+    )
     return {
         "schema": BUNDLE_INSPECT_SCHEMA,
         "manifest_path": str(report.manifest_path),
@@ -86,13 +110,34 @@ def inspect_bundle_manifest(manifest_path: Path) -> dict[str, Any]:
     }
 
 
-def _validate_manifest_path(raw: str, http_exception: Any) -> Path:
-    real = Path(raw).expanduser().resolve()
+def _validate_manifest_path(
+    raw: str,
+    http_exception: Any,
+    filesystem_scope: FilesystemScope,
+) -> Path:
+    real = filesystem_scope.resolve(raw, http_exception)
     if not real.exists():
         raise http_exception(status_code=404, detail=f"path not found: {raw}")
     if not real.is_file():
         raise http_exception(status_code=400, detail=f"path is not a file: {raw}")
     return real
+
+
+def _validate_manifest_artifact_paths(
+    manifest_path: Path,
+    http_exception: Any,
+    filesystem_scope: FilesystemScope,
+) -> None:
+    if filesystem_scope.root is None:
+        return
+    manifest_payload = _read_json_object(manifest_path)
+    artifacts = manifest_payload.get("artifacts")
+    if not isinstance(artifacts, list):
+        return
+    for artifact in artifacts:
+        if not isinstance(artifact, dict):
+            continue
+        filesystem_scope.enforce(_artifact_path(manifest_path, artifact), http_exception)
 
 
 def _read_json_object(path: Path) -> dict[str, Any]:
@@ -168,12 +213,17 @@ def _bool_or_none(value: Any) -> bool | None:
 def _donjon_defaults_from_artifacts(
     manifest_path: Path,
     artifacts: list[Any],
+    *,
+    filesystem_scope: FilesystemScope,
 ) -> dict[str, Any] | None:
     for artifact in artifacts:
         if not isinstance(artifact, dict):
             continue
         artifact_path = _artifact_path(manifest_path, artifact)
-        payload = _read_optional_json_artifact(artifact_path)
+        payload = _read_optional_json_artifact(
+            artifact_path,
+            filesystem_scope=filesystem_scope,
+        )
         if not _is_convert_summary(payload):
             continue
         return {
@@ -202,11 +252,19 @@ def _artifact_path(manifest_path: Path, artifact: dict[str, Any]) -> Path:
     return manifest_path.parent / str(artifact.get("label") or "artifact")
 
 
-def _read_optional_json_artifact(path: Path) -> dict[str, Any] | None:
+def _read_optional_json_artifact(
+    path: Path,
+    *,
+    filesystem_scope: FilesystemScope,
+) -> dict[str, Any] | None:
     if path.suffix.lower() != ".json":
         return None
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        real_path = filesystem_scope.enforce(path, _ScopeViolation)
+    except _ScopeViolation:
+        return None
+    try:
+        payload = json.loads(real_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return None
     return payload if isinstance(payload, dict) else None

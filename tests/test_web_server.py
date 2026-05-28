@@ -149,6 +149,8 @@ class HealthEndpointTests(unittest.TestCase):
         self.assertIn("pygan_backend", payload)
         self.assertIn("available", payload["pygan_backend"])
         self.assertIn("missing_modules", payload["pygan_backend"])
+        self.assertEqual(payload["filesystem_scope"]["mode"], "unrestricted")
+        self.assertIsNone(payload["filesystem_scope"]["workspace_root"])
 
     def test_mock_mode_payload(self) -> None:
         from openmc2donjon.web.server import create_app
@@ -161,6 +163,155 @@ class HealthEndpointTests(unittest.TestCase):
         self.assertEqual(payload["status"], "ok")
         self.assertTrue(payload["mock_mode"])
         self.assertIn("pygan_backend", payload)
+        self.assertEqual(payload["filesystem_scope"]["mode"], "mock")
+        self.assertIsNone(payload["filesystem_scope"]["workspace_root"])
+
+    def test_workspace_root_payload(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            client = TestClient(create_app(mock_mode=False, workspace_root=root))
+            response = client.get("/api/health")
+
+        self.assertEqual(response.status_code, 200)
+        scope = response.json()["filesystem_scope"]
+        self.assertEqual(scope["mode"], "workspace")
+        self.assertEqual(scope["workspace_root"], str(root.resolve()))
+
+
+@unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
+class FilesystemScopeEndpointTests(unittest.TestCase):
+    def test_workspace_root_allows_inspect_inside_root(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            handoff = root / "handoff.h5"
+            _write_fake_hdf5(handoff)
+            client = TestClient(create_app(mock_mode=False, workspace_root=root))
+            response = client.get("/api/inspect", params={"path": str(handoff)})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["path"], str(handoff.resolve()))
+
+    def test_workspace_root_rejects_inspect_outside_root(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as root_raw, tempfile.TemporaryDirectory() as other_raw:
+            outside = Path(other_raw) / "handoff.h5"
+            _write_fake_hdf5(outside)
+            client = TestClient(create_app(mock_mode=False, workspace_root=Path(root_raw)))
+            response = client.get("/api/inspect", params={"path": str(outside)})
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("outside web workspace root", response.json()["detail"])
+
+    def test_workspace_root_rejects_directory_listing_outside_root(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as root_raw, tempfile.TemporaryDirectory() as other_raw:
+            client = TestClient(create_app(mock_mode=False, workspace_root=Path(root_raw)))
+            response = client.get("/api/files", params={"path": other_raw})
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("outside web workspace root", response.json()["detail"])
+
+    def test_workspace_root_tilde_aliases_to_root(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as root_raw:
+            root = Path(root_raw)
+            (root / "handoff.h5").write_bytes(b"not inspected here")
+            client = TestClient(create_app(mock_mode=False, workspace_root=root))
+            response = client.get("/api/files", params={"path": "~"})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["path"], str(root.resolve()))
+        self.assertIn("handoff.h5", {entry["name"] for entry in payload["entries"]})
+
+    def test_workspace_root_rejects_file_status_outside_root(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as root_raw, tempfile.TemporaryDirectory() as other_raw:
+            client = TestClient(create_app(mock_mode=False, workspace_root=Path(root_raw)))
+            response = client.get(
+                "/api/file-status",
+                params={"path": str(Path(other_raw) / "artifact.mcompo.txt")},
+            )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("outside web workspace root", response.json()["detail"])
+
+    def test_workspace_root_rejects_text_preview_outside_root(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as root_raw, tempfile.TemporaryDirectory() as other_raw:
+            outside = Path(other_raw) / "out.mcompo.txt"
+            outside.write_text("ASCII", encoding="utf-8")
+            client = TestClient(create_app(mock_mode=False, workspace_root=Path(root_raw)))
+            response = client.get("/api/text-preview", params={"path": str(outside)})
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("outside web workspace root", response.json()["detail"])
+
+    def test_workspace_root_rejects_convert_output_outside_root(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as root_raw, tempfile.TemporaryDirectory() as other_raw:
+            root = Path(root_raw)
+            input_path = root / "handoff.h5"
+            _write_fake_hdf5(input_path)
+            output_path = Path(other_raw) / "out.mcompo.txt"
+            client = TestClient(create_app(mock_mode=False, workspace_root=root))
+            response = client.post(
+                "/api/convert",
+                json={
+                    "input_path": str(input_path),
+                    "output_path": str(output_path),
+                    "format": "multicompo",
+                    "dry_run": True,
+                    "check": False,
+                    "production": False,
+                },
+            )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("outside web workspace root", response.json()["detail"])
+
+    def test_workspace_root_rejects_bundle_artifact_outside_root(self) -> None:
+        from openmc2donjon.bundle import SCHEMA as BUNDLE_SCHEMA
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as root_raw, tempfile.TemporaryDirectory() as other_raw:
+            root = Path(root_raw)
+            outside = Path(other_raw) / "convert_summary.json"
+            outside.write_text("{}", encoding="utf-8")
+            manifest = root / "manifest.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "schema": BUNDLE_SCHEMA,
+                        "artifact_count": 1,
+                        "artifacts": [
+                            {
+                                "label": "conversion-summary",
+                                "path": str(outside),
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            client = TestClient(create_app(mock_mode=False, workspace_root=root))
+            response = client.get(
+                "/api/bundle/inspect",
+                params={"manifest": str(manifest)},
+            )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("outside web workspace root", response.json()["detail"])
 
 
 @unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
@@ -1703,6 +1854,59 @@ class UvicornLogLevelMappingTests(unittest.TestCase):
                 self._ns(verbose=2, quiet=True, log_level="WARNING"),
             ),
             "warning",
+        )
+
+    def test_loopback_host_detection(self) -> None:
+        from openmc2donjon.commands.web import _is_loopback_host
+
+        self.assertTrue(_is_loopback_host("localhost"))
+        self.assertTrue(_is_loopback_host("127.0.0.1"))
+        self.assertTrue(_is_loopback_host("[::1]"))
+        self.assertFalse(_is_loopback_host("0.0.0.0"))
+        self.assertFalse(_is_loopback_host("192.168.1.10"))
+
+    def test_non_loopback_live_mode_requires_workspace_or_explicit_unsafe(self) -> None:
+        from openmc2donjon.commands.web import _requires_workspace_guard
+
+        self.assertTrue(
+            _requires_workspace_guard(
+                host="0.0.0.0",
+                mock=False,
+                workspace_root=None,
+                unsafe_remote=False,
+            )
+        )
+        self.assertFalse(
+            _requires_workspace_guard(
+                host="127.0.0.1",
+                mock=False,
+                workspace_root=None,
+                unsafe_remote=False,
+            )
+        )
+        self.assertFalse(
+            _requires_workspace_guard(
+                host="0.0.0.0",
+                mock=True,
+                workspace_root=None,
+                unsafe_remote=False,
+            )
+        )
+        self.assertFalse(
+            _requires_workspace_guard(
+                host="0.0.0.0",
+                mock=False,
+                workspace_root=Path("/tmp"),
+                unsafe_remote=False,
+            )
+        )
+        self.assertFalse(
+            _requires_workspace_guard(
+                host="0.0.0.0",
+                mock=False,
+                workspace_root=None,
+                unsafe_remote=True,
+            )
         )
 
 

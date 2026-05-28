@@ -20,6 +20,19 @@ openmc2donjon serve            # FastAPI on http://localhost:8000
 openmc2donjon serve --mock     # serve fixture data instead of real APIs
 ```
 
+The default bind address is `127.0.0.1`, so live-mode file browsing and
+conversion stay local to the current machine. If you intentionally bind the
+backend to a non-loopback address such as `0.0.0.0`, set a workspace root:
+
+```sh
+openmc2donjon serve --host 0.0.0.0 --workspace-root /path/to/openmc-runs
+```
+
+Without `--workspace-root`, non-loopback live mode refuses to start unless
+`--unsafe-remote` is passed explicitly. When a workspace root is active, the
+Web file browser treats `~` as that workspace root, not as the operating-system
+home directory.
+
 **Frontend** (from this directory):
 
 ```sh

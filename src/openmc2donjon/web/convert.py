@@ -20,16 +20,23 @@ from ..macrolib import convert_mgxs_hdf5_to_macrolib
 from ..mgxs_input_contract import run_preflight
 from ..multicompo import DEFAULT_ROOT_NAME, convert_mgxs_hdf5
 from ..pygan_writer import convert_mgxs_hdf5_with_pygan
+from .filesystem import FilesystemScope
 
 
 CONVERT_SCHEMA = "openmc2donjon.convert.v1"
 
 
-def register_convert_routes(app: Any, *, mock_mode: bool) -> None:
+def register_convert_routes(
+    app: Any,
+    *,
+    mock_mode: bool,
+    filesystem_scope: FilesystemScope | None = None,
+) -> None:
     """Register direct-conversion endpoints on a FastAPI app."""
 
     from fastapi import Body, HTTPException
 
+    scope = filesystem_scope or FilesystemScope()
     convert_body = Body(...)
 
     @app.post("/api/convert")
@@ -38,12 +45,17 @@ def register_convert_routes(app: Any, *, mock_mode: bool) -> None:
         if mock_mode:
             return _mock_convert_response(request)
 
-        input_path = _validate_hdf5_path(str(request["input_path"]), HTTPException)
+        input_path = _validate_hdf5_path(
+            str(request["input_path"]),
+            HTTPException,
+            scope,
+        )
         output_path = _resolve_convert_output_path(
             request["output_path"],
             input_path=input_path,
             output_format=str(request["format"]),
             http_exception=HTTPException,
+            filesystem_scope=scope,
         )
         _validate_convert_output_path(
             input_path,
@@ -100,12 +112,16 @@ def register_convert_routes(app: Any, *, mock_mode: bool) -> None:
         return response
 
 
-def _validate_hdf5_path(raw: str, http_exception: Any) -> Path:
+def _validate_hdf5_path(
+    raw: str,
+    http_exception: Any,
+    filesystem_scope: FilesystemScope,
+) -> Path:
     """Resolve a user-supplied path and confirm it is a readable HDF5 file."""
 
     import h5py
 
-    real = Path(raw).expanduser().resolve()
+    real = filesystem_scope.resolve(raw, http_exception)
     if not real.exists():
         raise http_exception(status_code=404, detail=f"path not found: {raw}")
     if not real.is_file():
@@ -272,12 +288,13 @@ def _resolve_convert_output_path(
     input_path: Path,
     output_format: str,
     http_exception: Any,
+    filesystem_scope: FilesystemScope,
 ) -> Path:
     if raw:
-        return Path(raw).expanduser().resolve()
+        return filesystem_scope.resolve(raw, http_exception)
     extension = ".macrolib.txt" if output_format == "macrolib" else ".mcompo.txt"
     try:
-        return input_path.with_suffix(extension)
+        return filesystem_scope.enforce(input_path.with_suffix(extension), http_exception)
     except ValueError as exc:
         raise http_exception(
             status_code=422,
