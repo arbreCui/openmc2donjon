@@ -324,13 +324,16 @@ Current accepted validation line:
 Run portable checks:
 
 ```sh
+bash scripts/portable_release_smoke.sh
 bash scripts/run_recipe_export_smoke.sh
 bash scripts/run_c5g7_demo.sh
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python -m unittest discover -s tests
 ```
 
-Run the full local release gate, including optional DONJON-dependent smokes
-when the local DRAGON/DONJON checkout is available:
+GitHub CI and `scripts/portable_release_smoke.sh` are software/fixture gates:
+they do not require OpenMC, DRAGON/DONJON, or PyGan and do not claim a physics
+benchmark by themselves. Run the full local release gate, including optional
+DONJON-dependent smokes when the local DRAGON/DONJON checkout is available:
 
 ```sh
 bash scripts/release_check.sh
@@ -340,6 +343,7 @@ bash scripts/release_check.sh --run-donjon
 More detail:
 
 - [Validation summary](docs/VALIDATION.md)
+- [Release gates](docs/RELEASE_GATES.md)
 - [Current handoff snapshot](docs/HANDOFF_SNAPSHOT.md)
 - [Release notes](RELEASE_NOTES.md)
 - [C5G7 DONJON snapshot](examples/donjon_openmc2donjon/)

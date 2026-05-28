@@ -5,6 +5,39 @@ import unittest
 
 
 class ReleaseCheckScriptTests(unittest.TestCase):
+    def test_portable_release_smoke_is_ci_friendly_and_documented(self) -> None:
+        smoke_text = (_repo_root() / "scripts/portable_release_smoke.sh").read_text(
+            encoding="utf-8"
+        )
+        ci_text = (_repo_root() / ".github/workflows/ci.yml").read_text(
+            encoding="utf-8"
+        )
+        readme = (_repo_root() / "README.md").read_text(encoding="utf-8")
+        scripts_readme = (_repo_root() / "scripts/README.md").read_text(
+            encoding="utf-8"
+        )
+        release_gates = (_repo_root() / "docs/RELEASE_GATES.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("portable_release_smoke.sh", ci_text)
+        self.assertIn("Portable smoke", ci_text)
+        self.assertIn("run_energy_mesh_contract_smoke.sh", smoke_text)
+        self.assertIn("run_recipe_export_smoke.sh", smoke_text)
+        self.assertIn("openmc_sph_sidecar_minicase/run_smoke.sh", smoke_text)
+        self.assertIn("external_sph_handoff/run_smoke.sh", smoke_text)
+        self.assertIn("external_face_flux_adapter/run_smoke.sh", smoke_text)
+        self.assertIn("run_c5g7_demo.sh", smoke_text)
+        self.assertIn("--skip-tests", smoke_text)
+        self.assertNotIn("--run-donjon", smoke_text)
+        self.assertNotIn("run_production_minicase_smoke.sh", smoke_text)
+        self.assertNotIn("run_pygan_backend_smoke.sh", smoke_text)
+        self.assertIn("portable_release_smoke.sh", readme)
+        self.assertIn("do not require OpenMC, DRAGON/DONJON, or PyGan", readme)
+        self.assertIn("portable_release_smoke.sh", scripts_readme)
+        self.assertIn("GitHub CI", release_gates)
+        self.assertIn("Local Physics Release Gate", release_gates)
+
     def test_default_release_check_runs_openmc_hex_minicase(self) -> None:
         text = _release_check().read_text(encoding="utf-8")
 

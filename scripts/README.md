@@ -10,6 +10,9 @@ These are stable entry points used directly by the release check.
 
 - `release_check.sh` - top-level release gate; runs package tests, portable
   smokes, accepted-baseline checks, and optional DONJON/local candidates.
+- `portable_release_smoke.sh` - CI-friendly fixture-backed release smoke; runs
+  converter-facing handoff checks without requiring OpenMC, DRAGON/DONJON, or
+  PyGan.
 - `run_energy_mesh_contract_smoke.sh` - CLI-level MGXS `/energy_bounds`
   known-mesh audit smoke; verifies a bundled mesh is identified and an unknown
   mesh can be promoted to hard failure.
