@@ -3,7 +3,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PACKAGE_SRC="${OPENMC2DONJON_SRC:-$REPO_ROOT/src}"
-RUN_DIR="${RUN_DIR:-/private/tmp/openmc2donjon_sph_iteration_loop}"
+RUN_DIR="${RUN_DIR:-/private/tmp/openmc2donjon_openmc_sph_update_table_example}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 
 INPUT_DIR="$RUN_DIR/inputs"
@@ -17,7 +17,7 @@ SPH_SIDECAR="$RUN_DIR/next_sph_sidecar.h5"
 AUGMENTED_H5="$RUN_DIR/mgxs_with_next_sph.h5"
 MACROLIB="$RUN_DIR/out.macrolib.txt"
 CHECK_SUMMARY="$RUN_DIR/check_summary.json"
-ITERATION_SUMMARY="$RUN_DIR/sph_iteration_summary.json"
+UPDATE_SUMMARY="$RUN_DIR/sph_update_table_summary.json"
 SPH_SIDECAR_SUMMARY="$RUN_DIR/sph_sidecar_summary.json"
 SPH_AUGMENT_SUMMARY="$RUN_DIR/sph_augment_summary.json"
 
@@ -25,14 +25,14 @@ mkdir -p "$RUN_DIR"
 export PYTHONDONTWRITEBYTECODE=1
 export PYTHONPATH="$PACKAGE_SRC${PYTHONPATH:+:$PYTHONPATH}"
 
-echo "== openmc2donjon SPH iteration loop smoke =="
+echo "== openmc2donjon OpenMC-side SPH update-table smoke =="
 echo "repo: $REPO_ROOT"
 echo "run_dir: $RUN_DIR"
 echo "python: $PYTHON_BIN"
 
 echo
 echo "== Build example inputs =="
-"$PYTHON_BIN" "$REPO_ROOT/examples/sph_iteration_loop/make_inputs.py" \
+"$PYTHON_BIN" "$REPO_ROOT/examples/openmc_sph_update_table_example/make_inputs.py" \
   --output-dir "$INPUT_DIR"
 
 echo
@@ -53,7 +53,7 @@ echo "== Build next SPH table =="
   --damping 1.0 \
   --clip-min 0.5 \
   --clip-max 2.0 \
-  --summary-json "$ITERATION_SUMMARY" \
+  --summary-json "$UPDATE_SUMMARY" \
   --force
 
 echo
@@ -62,7 +62,7 @@ echo "== Canonicalize next SPH table =="
   -o "$SPH_SIDECAR" \
   --mode table \
   --table "$NEXT_SPH_TABLE" \
-  --sph-kind sph-iteration-example \
+  --sph-kind openmc-sph-update-table-example \
   --sph-real true \
   --sph-applied false \
   --summary-json "$SPH_SIDECAR_SUMMARY" \
@@ -80,11 +80,12 @@ echo "== Inject and convert next SPH =="
   --require-volume \
   --require-transport-dataset \
   --require-sph \
+  --overwrite \
   --scatter-row-balance-fail 1e-12
 
 echo
-echo "== Validate SPH iteration payloads =="
-"$PYTHON_BIN" - "$REFERENCE" "$NEXT_SPH_TABLE" "$SPH_SIDECAR" "$AUGMENTED_H5" "$MACROLIB" "$ITERATION_SUMMARY" "$SPH_SIDECAR_SUMMARY" "$SPH_AUGMENT_SUMMARY" <<'PY'
+echo "== Validate OpenMC-side SPH update-table payloads =="
+"$PYTHON_BIN" - "$REFERENCE" "$NEXT_SPH_TABLE" "$SPH_SIDECAR" "$AUGMENTED_H5" "$MACROLIB" "$UPDATE_SUMMARY" "$SPH_SIDECAR_SUMMARY" "$SPH_AUGMENT_SUMMARY" <<'PY'
 import csv
 import json
 from pathlib import Path
@@ -101,7 +102,7 @@ from openmc2donjon.macrolib import read_macrolib_ascii
     sidecar_path,
     augmented_path,
     macrolib_path,
-    iteration_summary_path,
+    update_summary_path,
     sidecar_summary_path,
     augment_summary_path,
 ) = [Path(value) for value in sys.argv[1:]]
@@ -115,7 +116,7 @@ if len(rows) != expected.size:
 
 with h5py.File(sidecar_path, "r") as h5:
     np.testing.assert_allclose(h5["sph"][:], expected)
-    if h5.attrs["sph_kind"] != "sph-iteration-example":
+    if h5.attrs["sph_kind"] != "openmc-sph-update-table-example":
         raise SystemExit("SPH sidecar kind mismatch")
 
 with h5py.File(augmented_path, "r") as h5:
@@ -126,7 +127,7 @@ macrolib = read_macrolib_ascii(macrolib_path)
 np.testing.assert_allclose(macrolib.sph, expected)
 
 expected_decisions = {
-    iteration_summary_path: "openmc2donjon_sph_iteration_table_passed",
+    update_summary_path: "openmc2donjon_sph_iteration_table_passed",
     sidecar_summary_path: "openmc2donjon_sph_sidecar_passed",
     augment_summary_path: "openmc2donjon_sph_augment_passed",
 }
@@ -136,11 +137,11 @@ for path, decision in expected_decisions.items():
         raise SystemExit(f"{path.name}: expected {decision}, got {payload['decision']}")
 
 print(
-    "SPH iteration loop OK: "
+    "OpenMC-side SPH update-table OK: "
     f"mixtures={expected.shape[0]} groups={expected.shape[1]} "
     f"sph_range={float(np.min(expected)):.6g}..{float(np.max(expected)):.6g}"
 )
 PY
 
 echo
-echo "openmc2donjon SPH iteration loop smoke: PASS"
+echo "openmc2donjon OpenMC-side SPH update-table smoke: PASS"

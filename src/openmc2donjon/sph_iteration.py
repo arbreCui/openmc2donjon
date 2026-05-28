@@ -276,7 +276,7 @@ def create_sph_update_table(
 
 
 def print_report(report: SphUpdateTableReport) -> None:
-    print("OpenMC-to-DONJON SPH iteration table")
+    print("OpenMC-to-DONJON SPH update table")
     print(f"  schema: {SCHEMA}")
     print(f"  input: {report.input_h5}")
     print(f"  output: {report.output_table}")
@@ -325,7 +325,7 @@ def print_report(report: SphUpdateTableReport) -> None:
             f"residual={worst.residual:g}"
         )
     print()
-    print("SPH iteration table decision")
+    print("SPH update table decision")
     print(f"  {PASS_DECISION}")
 
 
@@ -1061,7 +1061,7 @@ def _mesh_values_to_mixture_order(
         if matches.size > 1:
             raise ValueError(
                 f"{label}: mesh contains mixture {mixture!r} more than once; "
-                "SPH iteration tables require one flux vector per mixture"
+                "SPH update tables require one flux vector per mixture"
             )
         ordered[mixture_index, :] = flat_values[int(matches[0]), :]
     return ordered

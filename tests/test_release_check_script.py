@@ -80,6 +80,7 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertNotIn("examples/openmc_sph_loop_entrypoint/run_smoke.sh", default_section)
         self.assertNotIn("== SPH iteration loop smoke ==", default_section)
         self.assertNotIn("examples/sph_iteration_loop/run_smoke.sh", default_section)
+        self.assertNotIn("examples/sph_iteration_loop", default_section)
         self.assertNotIn("== Generic DONJON SPH loop adapter smoke ==", default_section)
         self.assertNotIn("examples/donjon_sph_loop_adapter/run_smoke.sh", default_section)
         self.assertNotIn("== Minimal SPH loop user-case smoke ==", default_section)
@@ -233,6 +234,27 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertNotIn("run-sph-loop", smoke_text)
         self.assertNotIn("extract-donjon-volume-flux", smoke_text)
         self.assertIn("openmc_sph_sidecar_minicase/run_smoke.sh", scripts_readme)
+
+    def test_openmc_sph_update_table_example_is_not_donjon_feedback_loop(self) -> None:
+        example_dir = _repo_root() / "examples/openmc_sph_update_table_example"
+        smoke_text = (example_dir / "run_smoke.sh").read_text(encoding="utf-8")
+        readme = (example_dir / "README.md").read_text(encoding="utf-8")
+        input_writer = (example_dir / "make_inputs.py").read_text(encoding="utf-8")
+
+        self.assertIn("OpenMC-side SPH update-table", smoke_text)
+        self.assertIn("make-sph-update-table", smoke_text)
+        self.assertIn(
+            "examples/openmc_sph_update_table_example/make_inputs.py",
+            smoke_text,
+        )
+        self.assertIn("openmc_sph_update_table_example", input_writer)
+        self.assertIn("not a DONJON feedback loop", readme)
+        self.assertIn("DONJON is not run", readme)
+        self.assertNotIn("sph_iteration_loop", smoke_text)
+        self.assertNotIn("SPH iteration loop", smoke_text)
+        self.assertNotIn("examples/sph_iteration_loop", smoke_text)
+        self.assertNotIn("run-sph-loop", smoke_text)
+        self.assertNotIn("extract-donjon-volume-flux", smoke_text)
 
 
 def _repo_root() -> Path:

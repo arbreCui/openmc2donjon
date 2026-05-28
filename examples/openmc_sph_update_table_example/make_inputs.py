@@ -1,4 +1,4 @@
-"""Build deterministic inputs for the SPH iteration loop example."""
+"""Build deterministic inputs for the OpenMC-side SPH update-table example."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ EXPECTED_SPH = PREVIOUS_SPH * (LOW_ORDER_FLUX / REFERENCE_FLUX)
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Write deterministic SPH iteration inputs.")
+    parser = argparse.ArgumentParser(description="Write deterministic OpenMC-side SPH update-table inputs.")
     parser.add_argument(
         "--output-dir",
         type=Path,
@@ -41,7 +41,7 @@ def main(argv: list[str] | None = None) -> int:
     _write_low_order_flux(low_order)
     _write_reference(expected)
 
-    print("SPH iteration loop inputs")
+    print("OpenMC-side SPH update-table inputs")
     print(f"  mgxs: {mgxs}")
     print(f"  previous_sph: {previous}")
     print(f"  reference_flux: {reference}")
@@ -54,8 +54,8 @@ def _write_mgxs(path: Path) -> None:
     with h5py.File(path, "w") as h5:
         h5.attrs["energy_groups"] = 2
         h5.attrs["legendre_order"] = 0
-        h5.attrs["domain_mode"] = "sph_iteration_example"
-        h5.attrs["spatial_mapping"] = "one low-order node -> one DONJON mixture"
+        h5.attrs["domain_mode"] = "openmc_sph_update_table_example"
+        h5.attrs["spatial_mapping"] = "one OpenMC MG macro region -> one DONJON mixture"
         h5.create_dataset("energy_bounds", data=ENERGY_BOUNDS)
         mixtures = h5.create_group("mixtures")
         _write_mixture(
@@ -113,12 +113,14 @@ def _write_low_order_flux(path: Path) -> None:
     with h5py.File(path, "w") as h5:
         dataset = h5.create_dataset("volume_flux", data=LOW_ORDER_FLUX)
         dataset.attrs["mixture_names"] = np.asarray(MIXTURE_NAMES, dtype="S")
+        dataset.attrs["group_order"] = "mgxs_donjon"
+        dataset.attrs["source_group_order"] = "example_mgxs_order"
         h5.create_dataset("mixture_names", data=np.asarray(MIXTURE_NAMES, dtype="S"))
 
 
 def _write_reference(path: Path) -> None:
     with h5py.File(path, "w") as h5:
-        h5.attrs["schema"] = "openmc2donjon.sph-iteration-reference.v1"
+        h5.attrs["schema"] = "openmc2donjon.openmc-sph-update-table-reference.v1"
         h5.create_dataset("expected_sph", data=EXPECTED_SPH)
         h5.create_dataset("mixture_names", data=np.asarray(MIXTURE_NAMES, dtype="S"))
 
