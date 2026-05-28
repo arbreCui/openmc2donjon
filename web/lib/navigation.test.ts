@@ -10,8 +10,8 @@ describe("navigation", () => {
   it("keeps the top-level bar focused on the main workflow", () => {
     expect(PRIMARY_NAV_ITEMS.map((item) => item.label)).toEqual([
       "Home",
-      "OpenMC SPH",
       "Convert",
+      "OpenMC workflow",
       "Inspect",
       "Commands",
     ]);

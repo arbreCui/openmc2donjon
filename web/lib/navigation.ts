@@ -12,14 +12,14 @@ export const PRIMARY_NAV_ITEMS: readonly NavItem[] = [
     match: ["/"],
   },
   {
-    href: "/openmc?workflow=two-step&equivalence=sph&production=1",
-    label: "OpenMC SPH",
-    match: ["/openmc"],
-  },
-  {
     href: "/convert?intent=direct-convert&format=multicompo&check=1&production=1",
     label: "Convert",
     match: ["/convert"],
+  },
+  {
+    href: "/openmc?workflow=two-step&equivalence=sph&production=1",
+    label: "OpenMC workflow",
+    match: ["/openmc"],
   },
   {
     href: "/inspect",
