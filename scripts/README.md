@@ -23,11 +23,12 @@ These are stable entry points used directly by the release check.
 - `../examples/openmc_sph_sidecar_minicase/run_smoke.sh` - portable OpenMC
   CE/MG SPH sidecar handoff smoke; verifies `make-openmc-sph-sidecar`,
   `augment-sph`, and both ASCII writer formats without a DONJON feedback loop.
-- `run_dragon_sph_handoff_smoke.sh` - DRAGON NSPH extraction and handoff smoke.
-- `run_donjon_sph_consume_smoke.sh` - DONJON consumes `NSPH` from generated
-  macrolib output.
-- `run_donjon_sph_solver_response_smoke.sh` - DONJON solver responds to SPH
-  perturbations.
+- `run_dragon_sph_handoff_smoke.sh` - DRAGON reference `NSPH` extraction and
+  handoff smoke.
+- `run_donjon_sph_consume_smoke.sh` - DONJON consumes precomputed `NSPH` from
+  generated macrolib output.
+- `run_donjon_sph_solver_response_smoke.sh` - DONJON low-order solver responds
+  to a precomputed `NSPH` payload.
 
 ## C5G7 Accepted-Baseline Gates
 
@@ -42,7 +43,7 @@ assembly-wise validation artifacts.
 - `run_c5g7_from_openmc_adf_smoke.sh` - exercises statepoint export plus
   flux-ratio ADF injection.
 - `run_c5g7_sph_solver_response_smoke.sh` - verifies DONJON k-eff changes when
-  a C5G7 SPH table is consumed.
+  a C5G7 external `NSPH` table is consumed.
 
 ## C5G7 Recipes And Deck Generators
 

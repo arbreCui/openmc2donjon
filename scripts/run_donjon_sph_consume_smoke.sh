@@ -21,14 +21,14 @@ mkdir -p "$RUN_DIR"
 export PYTHONDONTWRITEBYTECODE=1
 export PYTHONPATH="$PACKAGE_SRC${PYTHONPATH:+:$PYTHONPATH}"
 
-echo "== openmc2donjon DONJON SPH consume smoke =="
+echo "== openmc2donjon DONJON precomputed NSPH consume smoke =="
 echo "repo: $REPO_ROOT"
 echo "run_dir: $RUN_DIR"
 echo "python: $PYTHON_BIN"
 echo "donjon: $DONJON_RUNNER"
 
 if [[ ! -x "$DONJON_RUNNER" ]]; then
-  echo "DONJON runner is unavailable; skipping DONJON SPH consume smoke"
+  echo "DONJON runner is unavailable; skipping DONJON precomputed NSPH consume smoke"
   exit 0
 fi
 
@@ -41,7 +41,7 @@ if [[ -z "$MACROLIB_ASCII" || ! -f "$MACROLIB_ASCII" ]]; then
 fi
 
 if [[ ! -f "$MACROLIB_ASCII" ]]; then
-  echo "SPH macrolib source is unavailable after setup; skipping DONJON SPH consume smoke"
+  echo "SPH macrolib source is unavailable after setup; skipping DONJON precomputed NSPH consume smoke"
   exit 0
 fi
 
@@ -164,4 +164,4 @@ print(
 PY
 
 echo
-echo "openmc2donjon DONJON SPH consume smoke: PASS"
+echo "openmc2donjon DONJON precomputed NSPH consume smoke: PASS"

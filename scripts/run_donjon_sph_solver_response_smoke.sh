@@ -21,14 +21,14 @@ mkdir -p "$RUN_DIR"
 export PYTHONDONTWRITEBYTECODE=1
 export PYTHONPATH="$PACKAGE_SRC${PYTHONPATH:+:$PYTHONPATH}"
 
-echo "== openmc2donjon DONJON SPH solver response smoke =="
+echo "== openmc2donjon DONJON low-order response to precomputed NSPH smoke =="
 echo "repo: $REPO_ROOT"
 echo "run_dir: $RUN_DIR"
 echo "python: $PYTHON_BIN"
 echo "donjon: $DONJON_RUNNER"
 
 if [[ ! -x "$DONJON_RUNNER" ]]; then
-  echo "DONJON runner is unavailable; skipping DONJON SPH solver response smoke"
+  echo "DONJON runner is unavailable; skipping DONJON low-order response to precomputed NSPH smoke"
   exit 0
 fi
 
@@ -41,7 +41,7 @@ if [[ -z "$MACROLIB_ASCII" || ! -f "$MACROLIB_ASCII" ]]; then
 fi
 
 if [[ ! -f "$MACROLIB_ASCII" ]]; then
-  echo "SPH macrolib source is unavailable after setup; skipping DONJON SPH solver response smoke"
+  echo "SPH macrolib source is unavailable after setup; skipping DONJON low-order response to precomputed NSPH smoke"
   exit 0
 fi
 
@@ -67,7 +67,7 @@ base_macrolib = Path(sys.argv[2])
 corrected_pn = Path(sys.argv[3])
 corrected_sn = Path(sys.argv[4])
 deck.write_text(
-    f"""* DONJON low-order solver response after DSPH/MAC update of an L_MACROLIB NSPH payload.
+    f"""* DONJON low-order solver response after DSPH/MAC application of a precomputed L_MACROLIB NSPH payload.
 MODULE DSPH: MAC: GEO: TRIVAT: TRIVAA: FLUD: GREP: END: ABORT: ;
 LINKED_LIST MACRO DMACROPN OPTIMPN DMACROSN OPTIMSN MACROPN MACROSN GEOM TRACK SYSB FLUXB SYSPN FLUXPN SYSSN FLUXSN ;
 REAL keff_base keff_pn keff_sn ;
@@ -100,7 +100,7 @@ GEOM := GEO: :: CAR2D 3 2
 ;
 
 TRACK := TRIVAT: GEOM ::
-  TITLE 'OpenMC2DONJON SPH solver response smoke'
+  TITLE 'OpenMC2DONJON precomputed NSPH response smoke'
   EDIT 0 MAXR 100 DUAL 1 1 ;
 
 SYSB := TRIVAA: MACRO TRACK :: EDIT 0 ;
@@ -149,7 +149,7 @@ for label in ("BASE", "PN", "SN"):
     pattern = rf"OPENMC2DONJON DONJON SPH SOLVER {label} K-EFFECTIVE\s+([0-9.Ee+-]+)"
     match = re.search(pattern, text)
     if match is None:
-        raise SystemExit(f"missing DONJON SPH solver {label} echo in {result}")
+        raise SystemExit(f"missing DONJON precomputed NSPH response {label} echo in {result}")
     keff[label.lower()] = float(match.group(1))
 
 for key, value in keff.items():
@@ -180,11 +180,11 @@ if abs(delta_pn_pcm) < 1.0:
     )
 
 print(
-    "DONJON SPH solver response: "
+    "DONJON precomputed NSPH response: "
     f"base={keff['base']:.9g} pn={keff['pn']:.9g} sn={keff['sn']:.9g} "
     f"delta_pn_pcm={delta_pn_pcm:.6g} delta_sn_pcm={delta_sn_pcm:.6g}"
 )
 PY
 
 echo
-echo "openmc2donjon DONJON SPH solver response smoke: PASS"
+echo "openmc2donjon DONJON low-order response to precomputed NSPH smoke: PASS"

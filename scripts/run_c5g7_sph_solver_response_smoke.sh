@@ -22,7 +22,7 @@ mkdir -p "$RUN_DIR"
 export PYTHONDONTWRITEBYTECODE=1
 export PYTHONPATH="$PACKAGE_SRC${PYTHONPATH:+:$PYTHONPATH}"
 
-echo "== openmc2donjon C5G7 SPH solver response smoke =="
+echo "== openmc2donjon C5G7 low-order response to external NSPH smoke =="
 echo "repo: $REPO_ROOT"
 echo "run_dir: $RUN_DIR"
 echo "python: $PYTHON_BIN"
@@ -30,11 +30,11 @@ echo "donjon: $DONJON_RUNNER"
 echo "mgxs: $MGXS"
 
 if [[ ! -f "$MGXS" ]]; then
-  echo "C5G7 accepted HDF5 is unavailable; skipping C5G7 SPH solver response smoke"
+  echo "C5G7 accepted HDF5 is unavailable; skipping C5G7 external NSPH response smoke"
   exit 0
 fi
 if [[ ! -x "$DONJON_RUNNER" ]]; then
-  echo "DONJON runner is unavailable; skipping C5G7 SPH solver response smoke"
+  echo "DONJON runner is unavailable; skipping C5G7 external NSPH response smoke"
   exit 0
 fi
 
@@ -224,7 +224,7 @@ base_macrolib = Path(sys.argv[2])
 corrected_pn = Path(sys.argv[3])
 corrected_sn = Path(sys.argv[4])
 deck.write_text(
-    f"""* C5G7 assembly-wise root L_MACROLIB SPH solver response after DSPH/MAC update.
+    f"""* C5G7 assembly-wise root L_MACROLIB low-order response after DSPH/MAC application of external NSPH.
 MODULE GEO: TRIVAT: TRIVAA: FLUD: GREP: END: ABORT: ;
 LINKED_LIST BASE MACROPN MACROSN GEOM TRACK SYSB FLUXB SYSPN FLUXPN SYSSN FLUXSN ;
 REAL keff_base keff_pn keff_sn ;
@@ -251,7 +251,7 @@ GEOM := GEO: :: CAR2D 3 3
 ;
 
 TRACK := TRIVAT: GEOM ::
-  TITLE 'C5G7 OpenMC assembly-wise SPH solver response smoke' EDIT 1 MAXR 109
+  TITLE 'C5G7 OpenMC assembly-wise external NSPH response smoke' EDIT 1 MAXR 109
   DUAL 1 1 ;
 
 SYSB := TRIVAA: BASE TRACK :: EDIT 0 ;
@@ -280,7 +280,7 @@ echo "== DONJON C5G7 SPH update =="
 )
 
 echo
-echo "== DONJON C5G7 SPH solver response =="
+echo "== DONJON C5G7 low-order response to external NSPH =="
 (
   cd "$DONJON_ROOT"
   ./rdonjon -q "$SOLVE_DECK_REL"
@@ -310,7 +310,7 @@ for label in ("BASE", "PN", "SN"):
     pattern = rf"OPENMC2DONJON C5G7 SPH SOLVER {label} K-EFFECTIVE\s+([0-9.Ee+-]+)"
     match = re.search(pattern, text)
     if match is None:
-        raise SystemExit(f"missing C5G7 SPH solver {label} echo in {result}")
+        raise SystemExit(f"missing C5G7 external NSPH response {label} echo in {result}")
     keff[label.lower()] = float(match.group(1))
 for label, value in keff.items():
     if not np.isfinite(value) or value <= 0.0:
@@ -342,12 +342,12 @@ delta_pn_pcm = (keff["pn"] - keff["base"]) / keff["base"] * 1.0e5
 delta_sn_pcm = (keff["sn"] - keff["base"]) / keff["base"] * 1.0e5
 if abs(delta_pn_pcm) < 1.0:
     raise SystemExit(
-        "C5G7 PN SPH correction produced no meaningful solver response: "
+        "C5G7 PN NSPH correction produced no meaningful low-order response: "
         f"delta={delta_pn_pcm:.6g} pcm"
     )
 
 print(
-    "C5G7 SPH solver response: "
+    "C5G7 external NSPH response: "
     f"base={keff['base']:.9g} pn={keff['pn']:.9g} sn={keff['sn']:.9g} "
     f"delta_pn_pcm={delta_pn_pcm:.6g} delta_sn_pcm={delta_sn_pcm:.6g} "
     f"sph_range={float(np.min(sph_source.sph)):.6g}..{float(np.max(sph_source.sph)):.6g} "
@@ -356,4 +356,4 @@ print(
 PY
 
 echo
-echo "openmc2donjon C5G7 SPH solver response smoke: PASS"
+echo "openmc2donjon C5G7 low-order response to external NSPH smoke: PASS"

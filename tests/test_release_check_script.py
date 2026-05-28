@@ -29,11 +29,11 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertIn("export-volume-flux --help", default_section)
         self.assertIn("== External face-flux adapter smoke ==", default_section)
         self.assertIn("examples/external_face_flux_adapter/run_smoke.sh", default_section)
-        self.assertIn("== DRAGON SPH macrolib handoff smoke ==", default_section)
+        self.assertIn("== DRAGON reference NSPH macrolib handoff smoke ==", default_section)
         self.assertIn("scripts/run_dragon_sph_handoff_smoke.sh", default_section)
-        self.assertIn("== DONJON SPH consume smoke ==", default_section)
+        self.assertIn("== DONJON precomputed NSPH consume smoke ==", default_section)
         self.assertIn("scripts/run_donjon_sph_consume_smoke.sh", default_section)
-        self.assertIn("== DONJON SPH solver response smoke ==", default_section)
+        self.assertIn("== DONJON low-order response to precomputed NSPH smoke ==", default_section)
         self.assertIn("scripts/run_donjon_sph_solver_response_smoke.sh", default_section)
         self.assertIn("make-openmc-sph-sidecar --help", default_section)
         self.assertIn("make-sph-update-table --help", default_section)
@@ -71,7 +71,7 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertIn("scripts/run_c5g7_donjon_face_flux_smoke.sh", accepted_section)
         self.assertIn("== C5G7 from-OpenMC flux-ratio ADF smoke ==", accepted_section)
         self.assertIn("scripts/run_c5g7_from_openmc_adf_smoke.sh", accepted_section)
-        self.assertIn("== C5G7 SPH solver response smoke ==", accepted_section)
+        self.assertIn("== C5G7 low-order response to external NSPH smoke ==", accepted_section)
         self.assertIn("scripts/run_c5g7_sph_solver_response_smoke.sh", accepted_section)
         self.assertNotIn("== C5G7 SPH iteration from DONJON flux smoke ==", accepted_section)
         self.assertNotIn(
@@ -84,7 +84,7 @@ class ReleaseCheckScriptTests(unittest.TestCase):
         self.assertIn("examples/openmc_hex_minicase/run_keff_comparison.sh", accepted_section)
         self.assertNotIn("examples/openmc_hex_minicase/run_smoke.sh", candidate_section)
 
-    def test_c5g7_sph_solver_response_uses_external_table_entrypoint(self) -> None:
+    def test_c5g7_sph_response_uses_external_table_entrypoint(self) -> None:
         text = (_repo_root() / "scripts/run_c5g7_sph_solver_response_smoke.sh").read_text(
             encoding="utf-8"
         )

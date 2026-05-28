@@ -34,9 +34,9 @@ Default:
   - package tests
   - CLI help/version smoke
   - recipe/statepoint exporter smoke
-  - DRAGON SPH macrolib handoff smoke when local DRAGON TCM38 inputs exist
-  - DONJON DSPH consume smoke when local DONJON is available
-  - DONJON SPH solver-response smoke when local DONJON is available
+  - DRAGON reference NSPH macrolib handoff smoke when local DRAGON TCM38 inputs exist
+  - DONJON precomputed NSPH consume smoke when local DONJON is available
+  - DONJON low-order response to precomputed NSPH smoke when local DONJON is available
   - OpenMC CE/MG SPH table handoff smoke
   - external SPH table handoff smoke
   - external face-flux adapter smoke
@@ -44,7 +44,7 @@ Default:
   - optional PyGan backend smoke when PyGan is available
   - C5G7 converter readback smoke
   - accepted baseline manifest validation
-  - C5G7 SPH solver-response smoke when local DONJON is available
+  - C5G7 low-order response to an external NSPH table when local DONJON is available
   - C5G7 DONJON face-flux regeneration smoke when local DONJON dumps exist
   - C5G7 production ADF source reconstruction smoke
   - C5G7 from-OpenMC flux-ratio ADF smoke when C5G7_STATEPOINT exists
@@ -179,21 +179,21 @@ PYTHON_BIN="$PYTHON_BIN" \
   bash "$REPO_ROOT/scripts/run_recipe_export_smoke.sh"
 
 echo
-echo "== DRAGON SPH macrolib handoff smoke =="
+echo "== DRAGON reference NSPH macrolib handoff smoke =="
 DRAGON_SPH_RUN_DIR="$RUN_DIR/dragon_sph_handoff"
 RUN_DIR="$DRAGON_SPH_RUN_DIR" \
 PYTHON_BIN="$PYTHON_BIN" \
   bash "$REPO_ROOT/scripts/run_dragon_sph_handoff_smoke.sh"
 
 echo
-echo "== DONJON SPH consume smoke =="
+echo "== DONJON precomputed NSPH consume smoke =="
 RUN_DIR="$RUN_DIR/donjon_sph_consume" \
 PYTHON_BIN="$PYTHON_BIN" \
 MACROLIB_ASCII="$DRAGON_SPH_RUN_DIR/from_openmc_sph/out.macrolib.txt" \
   bash "$REPO_ROOT/scripts/run_donjon_sph_consume_smoke.sh"
 
 echo
-echo "== DONJON SPH solver response smoke =="
+echo "== DONJON low-order response to precomputed NSPH smoke =="
 RUN_DIR="$RUN_DIR/donjon_sph_solver_response" \
 PYTHON_BIN="$PYTHON_BIN" \
 MACROLIB_ASCII="$DRAGON_SPH_RUN_DIR/from_openmc_sph/out.macrolib.txt" \
@@ -386,7 +386,7 @@ print("C5G7 SPH macrolib extraction OK")
 PY
 
 echo
-echo "== C5G7 SPH solver response smoke =="
+echo "== C5G7 low-order response to external NSPH smoke =="
 RUN_DIR="$RUN_DIR/c5g7_sph_solver_response" \
 PYTHON_BIN="$PYTHON_BIN" \
 C5G7_ACCEPTED_H5="$C5G7_ACCEPTED_H5" \
