@@ -20,6 +20,8 @@ import numpy as np
 
 
 SUMMARY_SCHEMA = "openmc2donjon.openmc-ce-mg-sph-physics-summary.v1"
+PRODUCTION_FLUX_REL_STD_DEV = 0.05
+DEMONSTRATION_FLUX_REL_STD_DEV = 0.30
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -88,12 +90,15 @@ def summarize_handoff(handoff_dir: Path) -> dict[str, Any]:
     energy_groups, legendre_order = _read_mgxs_shape(paths["mgxs"])
     ce_flux, ce_std = _read_flux(paths["ce_flux"], "openmc_volume_flux")
     mg_flux, mg_std = _read_flux(paths["mg_flux"], "openmc_mg_flux")
+    ce_flux_rel_std = _max_relative_std_dev(ce_flux, ce_std)
+    mg_flux_rel_std = _max_relative_std_dev(mg_flux, mg_std)
     sph = _read_sph(paths["augmented_mgxs"], mixture_names)
     normalization_factor = float(sph_summary.get("normalization_factor", 1.0))
     normalized_mg_flux = mg_flux * normalization_factor
     flux_ratio = normalized_mg_flux / ce_flux
     multicompo_nsp_block_count = _count_ascii_block(paths["multicompo_ascii"], "NSPH")
     macrolib_nsp_block_count = _count_ascii_block(paths["macrolib_ascii"], "NSPH")
+    augmented_has_sph = _augmented_hdf5_has_sph(paths["augmented_mgxs"], mixture_names)
 
     return {
         "schema": SUMMARY_SCHEMA,
@@ -118,11 +123,18 @@ def summarize_handoff(handoff_dir: Path) -> dict[str, Any]:
             "formula": sph_summary.get("formula"),
         },
         "flux_uncertainty": {
-            "ce_max_relative_std_dev": _max_relative_std_dev(ce_flux, ce_std),
-            "mg_max_relative_std_dev": _max_relative_std_dev(mg_flux, mg_std),
+            "ce_max_relative_std_dev": ce_flux_rel_std,
+            "mg_max_relative_std_dev": mg_flux_rel_std,
             "ce_dataset": "openmc_volume_flux",
             "mg_dataset": "openmc_mg_flux",
         },
+        "quality": _quality_summary(
+            ce_flux_rel_std=ce_flux_rel_std,
+            mg_flux_rel_std=mg_flux_rel_std,
+            augmented_hdf5_has_sph=augmented_has_sph,
+            multicompo_nsp_block_count=multicompo_nsp_block_count,
+            macrolib_nsp_block_count=macrolib_nsp_block_count,
+        ),
         "sph": {
             "kind": sph_summary.get("sph_kind"),
             "real": bool(sph_summary.get("sph_real")),
@@ -134,7 +146,7 @@ def summarize_handoff(handoff_dir: Path) -> dict[str, Any]:
             "clipped_count": int(sph_summary.get("clipped_count", 0)),
         },
         "handoff": {
-            "augmented_hdf5_has_sph": _augmented_hdf5_has_sph(paths["augmented_mgxs"], mixture_names),
+            "augmented_hdf5_has_sph": augmented_has_sph,
             "multicompo_ascii_nsp_block_count": multicompo_nsp_block_count,
             "multicompo_ascii_path": str(paths["multicompo_ascii"]),
             "macrolib_ascii_nsp_block_count": macrolib_nsp_block_count,
@@ -154,6 +166,13 @@ def render_markdown(summary: dict[str, Any]) -> str:
     sph = summary["sph"]
     flux = summary["flux_uncertainty"]
     handoff = summary["handoff"]
+    quality = summary.get("quality", {})
+    production_threshold = float(
+        quality.get("production_flux_relative_std_dev_threshold", PRODUCTION_FLUX_REL_STD_DEV)
+    )
+    demonstration_threshold = float(
+        quality.get("demonstration_flux_relative_std_dev_threshold", DEMONSTRATION_FLUX_REL_STD_DEV)
+    )
     lines = [
         "# OpenMC CE/MG SPH Physics Summary",
         "",
@@ -167,6 +186,17 @@ def render_markdown(summary: dict[str, Any]) -> str:
         f"- OpenMC MG macro scatter: {_render_mg_macro_scatter(summary['mg_macro_scatter'])}",
         f"- OpenMC SPH decision: `{summary['decisions']['openmc_sph']}`",
         f"- SPH augment decision: `{summary['decisions']['sph_augment']}`",
+        "",
+        "## Quality",
+        "",
+        f"- Decision: `{quality.get('decision', 'unknown')}`",
+        f"- Production-ready: `{quality.get('production_ready', False)}`",
+        f"- Demonstration-quality: `{quality.get('demonstration_quality', False)}`",
+        f"- Max flux relative std_dev: {_fmt(float(quality.get('max_flux_relative_std_dev', 0.0)))}",
+        f"- Production threshold: {_fmt(production_threshold)}",
+        f"- Demonstration threshold: {_fmt(demonstration_threshold)}",
+        "",
+        *_quality_note_lines(quality),
         "",
         "## SPH Factors",
         "",
@@ -276,6 +306,68 @@ def _max_relative_std_dev(values: np.ndarray, std_dev: np.ndarray) -> float:
         where=np.abs(values) > 0.0,
     )
     return float(np.max(relative))
+
+
+def _quality_summary(
+    *,
+    ce_flux_rel_std: float,
+    mg_flux_rel_std: float,
+    augmented_hdf5_has_sph: bool,
+    multicompo_nsp_block_count: int,
+    macrolib_nsp_block_count: int,
+) -> dict[str, Any]:
+    max_flux_rel_std = max(ce_flux_rel_std, mg_flux_rel_std)
+    structural_passed = (
+        augmented_hdf5_has_sph
+        and multicompo_nsp_block_count > 0
+        and macrolib_nsp_block_count > 0
+    )
+    production_ready = structural_passed and max_flux_rel_std <= PRODUCTION_FLUX_REL_STD_DEV
+    demonstration_quality = structural_passed and max_flux_rel_std <= DEMONSTRATION_FLUX_REL_STD_DEV
+    if not structural_passed:
+        decision = "openmc_ce_mg_sph_structural_review_required"
+    elif production_ready:
+        decision = "openmc_ce_mg_sph_production_quality"
+    elif demonstration_quality:
+        decision = "openmc_ce_mg_sph_demonstration_quality"
+    else:
+        decision = "openmc_ce_mg_sph_statistical_review_required"
+
+    notes = []
+    if not structural_passed:
+        notes.append("SPH datasets or ASCII NSPH blocks are missing.")
+    if max_flux_rel_std > PRODUCTION_FLUX_REL_STD_DEV:
+        notes.append(
+            "Flux statistical uncertainty exceeds the production-quality "
+            f"threshold {PRODUCTION_FLUX_REL_STD_DEV:g}."
+        )
+    if max_flux_rel_std > DEMONSTRATION_FLUX_REL_STD_DEV:
+        notes.append(
+            "Flux statistical uncertainty also exceeds the demonstration "
+            f"threshold {DEMONSTRATION_FLUX_REL_STD_DEV:g}; increase particles/batches."
+        )
+    if not notes:
+        notes.append("SPH handoff structure and flux uncertainty meet the production-quality threshold.")
+
+    return {
+        "decision": decision,
+        "structural_passed": structural_passed,
+        "production_ready": production_ready,
+        "demonstration_quality": demonstration_quality,
+        "max_flux_relative_std_dev": max_flux_rel_std,
+        "production_flux_relative_std_dev_threshold": PRODUCTION_FLUX_REL_STD_DEV,
+        "demonstration_flux_relative_std_dev_threshold": DEMONSTRATION_FLUX_REL_STD_DEV,
+        "notes": notes,
+    }
+
+
+def _quality_note_lines(quality: dict[str, Any]) -> list[str]:
+    notes = quality.get("notes")
+    if not isinstance(notes, list) or not notes:
+        return []
+    lines = ["Notes:"]
+    lines.extend(f"- {note}" for note in notes)
+    return lines
 
 
 def _per_mixture_stats(

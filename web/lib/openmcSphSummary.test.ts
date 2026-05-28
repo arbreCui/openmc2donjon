@@ -39,6 +39,16 @@ const SUMMARY: OpenmcSphPhysicsSummary = {
     ce_dataset: "openmc_volume_flux",
     mg_dataset: "openmc_mg_flux",
   },
+  quality: {
+    decision: "openmc_ce_mg_sph_production_quality",
+    structural_passed: true,
+    production_ready: true,
+    demonstration_quality: true,
+    max_flux_relative_std_dev: 0.02,
+    production_flux_relative_std_dev_threshold: 0.05,
+    demonstration_flux_relative_std_dev_threshold: 0.3,
+    notes: ["ok"],
+  },
   sph: {
     kind: "openmc-ce-mg",
     real: true,
@@ -90,6 +100,41 @@ describe("openmcSphSummary", () => {
     expect(summaryStatus(SUMMARY)).toMatchObject({
       tone: "pass",
       label: "handoff carries NSPH",
+    });
+  });
+
+  it("warns when SPH is present but only demonstration-quality", () => {
+    expect(
+      summaryStatus({
+        ...SUMMARY,
+        quality: {
+          ...SUMMARY.quality!,
+          decision: "openmc_ce_mg_sph_demonstration_quality",
+          production_ready: false,
+          max_flux_relative_std_dev: 0.2,
+        },
+      }),
+    ).toMatchObject({
+      tone: "warn",
+      label: "demo-quality NSPH",
+    });
+  });
+
+  it("warns when SPH is present but flux statistics need review", () => {
+    expect(
+      summaryStatus({
+        ...SUMMARY,
+        quality: {
+          ...SUMMARY.quality!,
+          decision: "openmc_ce_mg_sph_statistical_review_required",
+          production_ready: false,
+          demonstration_quality: false,
+          max_flux_relative_std_dev: 0.6,
+        },
+      }),
+    ).toMatchObject({
+      tone: "warn",
+      label: "statistics need review",
     });
   });
 

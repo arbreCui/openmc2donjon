@@ -292,6 +292,17 @@ export interface OpenmcSphPhysicsSummaryFluxUncertainty {
   mg_dataset: string | null;
 }
 
+export interface OpenmcSphPhysicsSummaryQuality {
+  decision: string;
+  structural_passed: boolean;
+  production_ready: boolean;
+  demonstration_quality: boolean;
+  max_flux_relative_std_dev: number;
+  production_flux_relative_std_dev_threshold: number;
+  demonstration_flux_relative_std_dev_threshold: number;
+  notes: string[];
+}
+
 export interface OpenmcSphPhysicsSummarySph {
   kind: string | null;
   real: boolean;
@@ -350,6 +361,7 @@ export interface OpenmcSphPhysicsSummary {
   decisions: OpenmcSphPhysicsSummaryDecision;
   normalization: OpenmcSphPhysicsSummaryNormalization;
   flux_uncertainty: OpenmcSphPhysicsSummaryFluxUncertainty;
+  quality?: OpenmcSphPhysicsSummaryQuality;
   sph: OpenmcSphPhysicsSummarySph;
   handoff: OpenmcSphPhysicsSummaryHandoff;
   per_mixture: OpenmcSphPhysicsSummaryMixture[];

@@ -33,6 +33,18 @@
     "ce_dataset": "openmc_volume_flux",
     "mg_dataset": "openmc_mg_flux"
   },
+  "quality": {
+    "decision": "openmc_ce_mg_sph_demonstration_quality",
+    "structural_passed": true,
+    "production_ready": false,
+    "demonstration_quality": true,
+    "max_flux_relative_std_dev": 0.28920678050677623,
+    "production_flux_relative_std_dev_threshold": 0.05,
+    "demonstration_flux_relative_std_dev_threshold": 0.3,
+    "notes": [
+      "Flux statistical uncertainty exceeds the production-quality threshold 0.05."
+    ]
+  },
   "sph": {
     "kind": "openmc-ce-mg",
     "real": true,

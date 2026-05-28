@@ -8,6 +8,22 @@ export function summaryStatus(summary: OpenmcSphPhysicsSummary): {
   const hasNsp = summary.handoff.ascii_nsp_block_count > 0;
   const hasSph = summary.handoff.augmented_hdf5_has_sph;
   if (hasNsp && hasSph) {
+    if (summary.quality?.decision === "openmc_ce_mg_sph_statistical_review_required") {
+      return {
+        label: "statistics need review",
+        tone: "warn",
+        detail:
+          "SPH factors are present, but CE/MG flux uncertainty is above the demonstration threshold. Increase OpenMC particles/batches before treating this as production evidence.",
+      };
+    }
+    if (summary.quality?.decision === "openmc_ce_mg_sph_demonstration_quality") {
+      return {
+        label: "demo-quality NSPH",
+        tone: "warn",
+        detail:
+          "SPH factors are present and the workflow is structurally complete, but flux uncertainty is above the production threshold.",
+      };
+    }
     const route =
       summary.handoff.accepted_sph_consumption_format === "macrolib"
         ? "MACROLIB NSPH"

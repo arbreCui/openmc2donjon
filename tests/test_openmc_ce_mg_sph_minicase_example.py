@@ -114,9 +114,29 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
             self.assertEqual(payload["handoff"]["accepted_sph_consumption_format"], "macrolib")
             self.assertEqual(payload["handoff"]["macrolib_ascii_nsp_block_count"], 1)
             self.assertTrue(payload["handoff"]["augmented_hdf5_has_sph"])
+            self.assertEqual(payload["quality"]["decision"], "openmc_ce_mg_sph_production_quality")
+            self.assertTrue(payload["quality"]["production_ready"])
+            self.assertTrue(payload["quality"]["demonstration_quality"])
             self.assertIn("OpenMC CE/MG SPH Physics Summary", markdown)
+            self.assertIn("## Quality", markdown)
             self.assertIn("Accepted SPH consumption format", markdown)
             self.assertIn("CS_FUEL", markdown)
+
+    def test_summary_marks_noisy_flux_as_statistical_review(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            handoff = Path(tmp)
+            _write_summary_fixture(handoff, flux_std_scale=0.60)
+            module = _load_summary_module()
+
+            summary = module.summarize_handoff(handoff)
+
+            self.assertEqual(
+                summary["quality"]["decision"],
+                "openmc_ce_mg_sph_statistical_review_required",
+            )
+            self.assertFalse(summary["quality"]["production_ready"])
+            self.assertFalse(summary["quality"]["demonstration_quality"])
+            self.assertGreater(summary["quality"]["max_flux_relative_std_dev"], 0.30)
 
 
 def _repo_root() -> Path:
@@ -137,7 +157,7 @@ def _load_summary_module():
     return module
 
 
-def _write_summary_fixture(handoff: Path) -> None:
+def _write_summary_fixture(handoff: Path, *, flux_std_scale: float = 0.01) -> None:
     names = np.array(["CS_FUEL", "CS_MOD"], dtype=h5py.string_dtype(encoding="utf-8"))
     energy_bounds = np.array([0.0, 1.0, 2.0])
     sph = {
@@ -158,11 +178,13 @@ def _write_summary_fixture(handoff: Path) -> None:
         handoff / "openmc_ce_flux.h5",
         "openmc_volume_flux",
         np.array([[1.0, 2.0], [3.0, 4.0]]),
+        flux_std_scale=flux_std_scale,
     )
     _write_flux_h5(
         handoff / "openmc_mg_flux.h5",
         "openmc_mg_flux",
         np.array([[0.9, 2.2], [3.0, 4.8]]),
+        flux_std_scale=flux_std_scale,
     )
     with h5py.File(handoff / "openmc_sph_sidecar.h5", "w") as h5:
         h5.create_dataset("sph", data=np.array([[0.9, 1.1], [1.0, 1.2]]))
@@ -204,10 +226,16 @@ def _write_summary_fixture(handoff: Path) -> None:
     (handoff / "out_with_openmc_sph.macrolib.txt").write_text("NSPH\n", encoding="utf-8")
 
 
-def _write_flux_h5(path: Path, dataset_name: str, values: np.ndarray) -> None:
+def _write_flux_h5(
+    path: Path,
+    dataset_name: str,
+    values: np.ndarray,
+    *,
+    flux_std_scale: float,
+) -> None:
     with h5py.File(path, "w") as h5:
         h5.create_dataset(dataset_name, data=values)
-        h5.create_dataset(f"{dataset_name}_std_dev", data=values * 0.01)
+        h5.create_dataset(f"{dataset_name}_std_dev", data=values * flux_std_scale)
 
 
 if __name__ == "__main__":

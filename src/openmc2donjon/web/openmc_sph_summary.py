@@ -116,6 +116,17 @@ def _validate_summary_payload(payload: dict[str, Any], http_exception: Any) -> N
         flux = payload["flux_uncertainty"]
         _require_number(flux, "ce_max_relative_std_dev", errors, prefix="flux_uncertainty")
         _require_number(flux, "mg_max_relative_std_dev", errors, prefix="flux_uncertainty")
+    if isinstance(payload.get("quality"), dict):
+        quality = payload["quality"]
+        _require_type(quality, "decision", str, errors, prefix="quality")
+        for key in ("structural_passed", "production_ready", "demonstration_quality"):
+            _require_type(quality, key, bool, errors, prefix="quality")
+        for key in (
+            "max_flux_relative_std_dev",
+            "production_flux_relative_std_dev_threshold",
+            "demonstration_flux_relative_std_dev_threshold",
+        ):
+            _require_number(quality, key, errors, prefix="quality")
     if isinstance(payload.get("handoff"), dict):
         handoff = payload["handoff"]
         _require_type(handoff, "augmented_hdf5_has_sph", bool, errors, prefix="handoff")

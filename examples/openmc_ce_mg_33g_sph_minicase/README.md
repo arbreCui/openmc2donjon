@@ -125,6 +125,21 @@ The physics summary records the CE/MG flux uncertainty and SPH factor range by
 mixture.  It is meant for review and demos; it is not a substitute for a
 benchmark-quality validation.
 
+The summary also separates structural success from statistical quality:
+
+- `openmc_ce_mg_sph_production_quality` means the HDF5/ASCII SPH handoff is
+  complete and both CE/MG flux relative standard deviations are at or below
+  5%.
+- `openmc_ce_mg_sph_demonstration_quality` means the route is suitable for a
+  quick demo, but flux statistics are above the production threshold.
+- `openmc_ce_mg_sph_statistical_review_required` means the route closed, but
+  the flux ratios are too noisy to present as production SPH evidence.
+
+For example, an 8-batch / 2000-particle smoke on the development machine
+closed the full route and wrote P3 handoff data plus H16 MG-macro evidence, but
+the summary correctly marked it `statistical_review_required` because the
+largest CE/MG flux relative standard deviation was about 0.65.
+
 ## Manual Steps
 
 The shell script expands to these core commands:
