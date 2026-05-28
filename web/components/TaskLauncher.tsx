@@ -14,19 +14,14 @@ export default function TaskLauncher({
 }) {
   return (
     <section className={"glass rounded-xl p-5 " + className}>
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold tracking-tight">{title}</h2>
-          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
-            {summary}
-          </p>
-        </div>
-        <Link href="/commands" className="btn btn-secondary">
-          Command map
-        </Link>
+      <div>
+        <h2 className="text-base font-semibold tracking-tight">{title}</h2>
+        <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
+          {summary}
+        </p>
       </div>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
         {entries.map((entry) => (
           <Link
             key={entry.id}

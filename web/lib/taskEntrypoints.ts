@@ -1,5 +1,5 @@
 export interface TaskEntrypoint {
-  id: "openmc-export" | "direct-convert" | "equivalence" | "openmc-sph";
+  id: "direct-convert" | "openmc-sph" | "inspect";
   eyebrow: string;
   title: string;
   body: string;
@@ -9,39 +9,30 @@ export interface TaskEntrypoint {
 
 export const TASK_ENTRYPOINTS: readonly TaskEntrypoint[] = [
   {
-    id: "openmc-export",
-    eyebrow: "Start from OpenMC",
-    title: "Plan an OpenMC export",
-    body:
-      "Use the recipe/statepoint planner when OpenMC still needs to produce the MGXS HDF5 handoff.",
-    href: "/openmc?workflow=two-step&production=1",
-    cta: "Open planner",
-  },
-  {
     id: "direct-convert",
     eyebrow: "I already have HDF5",
-    title: "Convert MGXS to ASCII",
+    title: "Convert MGXS HDF5",
     body:
-      "Dry-run production gates, write L_MULTICOMPO or L_MACROLIB ASCII, then package the handoff.",
+      "Check the OpenMC handoff, write L_MULTICOMPO or L_MACROLIB ASCII, then preview the output.",
     href: "/convert?intent=direct-convert&format=multicompo&check=1&production=1",
     cta: "Open converter",
   },
   {
-    id: "equivalence",
-    eyebrow: "Need ADF or SPH",
-    title: "Build sidecar factors",
-    body:
-      "Create or inject ADF/DF and SPH sidecars before returning to the same direct conversion path.",
-    href: "/equivalence?kind=adf-sidecar",
-    cta: "Open sidecars",
-  },
-  {
     id: "openmc-sph",
-    eyebrow: "Need SPH factors",
+    eyebrow: "Need SPH first",
     title: "Prepare OpenMC-side SPH",
     body:
-      "Generate SPH factors upstream from OpenMC CE versus OpenMC MG on the selected group structure, then inject the sidecar before MACROLIB conversion.",
+      "Use OpenMC CE as reference and OpenMC MG as the macro solve, then inject SPH into the HDF5.",
     href: "/openmc?workflow=two-step&equivalence=sph&format=macrolib&production=1",
-    cta: "Open SPH planner",
+    cta: "Open SPH workflow",
+  },
+  {
+    id: "inspect",
+    eyebrow: "Need to understand a file",
+    title: "Inspect HDF5 or output",
+    body:
+      "Look at mixtures, energy groups, ADF/SPH metadata, spectra, and generated ASCII previews.",
+    href: "/inspect",
+    cta: "Open inspector",
   },
 ] as const;

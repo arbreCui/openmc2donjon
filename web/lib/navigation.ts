@@ -7,18 +7,13 @@ export interface NavItem {
 
 export const PRIMARY_NAV_ITEMS: readonly NavItem[] = [
   {
-    href: "/",
-    label: "Home",
-    match: ["/"],
-  },
-  {
     href: "/convert?intent=direct-convert&format=multicompo&check=1&production=1",
     label: "Convert",
     match: ["/convert"],
   },
   {
     href: "/openmc?workflow=two-step&equivalence=sph&production=1",
-    label: "OpenMC workflow",
+    label: "OpenMC SPH",
     match: ["/openmc"],
   },
   {
@@ -26,14 +21,15 @@ export const PRIMARY_NAV_ITEMS: readonly NavItem[] = [
     label: "Inspect",
     match: ["/inspect"],
   },
-  {
-    href: "/commands",
-    label: "Commands",
-    match: ["/commands"],
-  },
 ] as const;
 
 export const SECONDARY_NAV_ITEMS: readonly NavItem[] = [
+  {
+    href: "/commands",
+    label: "Command catalog",
+    description: "All CLI commands and their web equivalents.",
+    match: ["/commands"],
+  },
   {
     href: "/equivalence?kind=adf-sidecar",
     label: "ADF/SPH sidecars",
