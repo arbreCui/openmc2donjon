@@ -471,6 +471,12 @@ function BrowserBody({
             {hiddenCount === 1 ? "" : "s"} hidden.)
           </div>
         ) : null}
+        {state.data.truncated ? (
+          <div className="text-[12px] text-amber-200/80">
+            Showing first {state.data.entries.length} of{" "}
+            {state.data.total_entries ?? "many"} entries.
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -502,6 +508,13 @@ function BrowserBody({
           {hiddenCount} non-{fileTypeLabel}{" "}
           {selectMode === "directory" ? "entry" : "file"}
           {hiddenCount === 1 ? "" : "s"} hidden.
+        </li>
+      ) : null}
+      {state.data.truncated ? (
+        <li className="px-3 py-2 text-[12px] text-amber-200/80">
+          Showing first {state.data.entries.length} of{" "}
+          {state.data.total_entries ?? "many"} entries. Choose a narrower
+          directory if the target is not listed.
         </li>
       ) : null}
     </ul>

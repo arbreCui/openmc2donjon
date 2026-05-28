@@ -257,6 +257,9 @@ export interface FileListing {
   path: string;
   parent: string | null;
   entries: FileEntry[];
+  total_entries?: number;
+  entry_limit?: number;
+  truncated?: boolean;
 }
 
 export interface FileStatus {

@@ -64,6 +64,7 @@ INSPECT_SCHEMA = "openmc2donjon.mgxs-inspect.v1"
 MIXTURE_SCHEMA = "openmc2donjon.mgxs-mixture.v1"
 FILES_SCHEMA = "openmc2donjon.files.v1"
 FILE_STATUS_SCHEMA = "openmc2donjon.file-status.v1"
+FILES_ENTRY_LIMIT = 500
 # Hard caps on the ``/api/inspect`` peek panel so a pathological HDF5
 # (hundreds of root attrs, thousands of top-level datasets) can't blow
 # up the response payload or the frontend layout. The totals stay
@@ -187,7 +188,11 @@ def create_app(
         }
 
     register_command_routes(app)
-    register_openmc_workflow_routes(app, mock_mode=mock_mode)
+    register_openmc_workflow_routes(
+        app,
+        mock_mode=mock_mode,
+        filesystem_scope=filesystem_scope,
+    )
     register_openmc_sph_summary_routes(
         app,
         mock_mode=mock_mode,
@@ -613,7 +618,7 @@ def _list_dir(
         ) from exc
 
     entries: list[dict[str, Any]] = []
-    for child in children:
+    for child in children[:FILES_ENTRY_LIMIT]:
         try:
             is_dir = child.is_dir()
             size: int | None = None
@@ -634,7 +639,13 @@ def _list_dir(
             }
         )
     parent = None if real.parent == real else str(real.parent)
-    return _files_payload(str(real), parent, entries)
+    return _files_payload(
+        str(real),
+        parent,
+        entries,
+        total_entries=len(children),
+        entry_limit=FILES_ENTRY_LIMIT,
+    )
 
 
 def _file_status(
@@ -762,13 +773,23 @@ def _resolve_mock_path(raw: str) -> str:
 
 
 def _files_payload(
-    path: str, parent: str | None, entries: list[dict[str, Any]]
+    path: str,
+    parent: str | None,
+    entries: list[dict[str, Any]],
+    *,
+    total_entries: int | None = None,
+    entry_limit: int | None = None,
 ) -> dict[str, Any]:
+    total = len(entries) if total_entries is None else total_entries
+    limit = len(entries) if entry_limit is None else entry_limit
     return {
         "schema": FILES_SCHEMA,
         "path": path,
         "parent": parent,
         "entries": entries,
+        "total_entries": total,
+        "entry_limit": limit,
+        "truncated": total > len(entries),
     }
 
 

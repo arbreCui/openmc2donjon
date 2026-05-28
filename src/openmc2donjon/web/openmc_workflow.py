@@ -6,6 +6,8 @@ from pathlib import Path
 import shlex
 from typing import Any
 
+from .filesystem import FilesystemScope
+
 
 OPENMC_WORKFLOW_SCHEMA = "openmc2donjon.openmc-workflow-plan.v1"
 
@@ -14,7 +16,12 @@ _WORKFLOWS = {"one-step", "two-step"}
 _EQUIVALENCE = {"direct", "adf", "sph", "flux-ratio-adf"}
 
 
-def register_openmc_workflow_routes(app: Any, *, mock_mode: bool) -> None:
+def register_openmc_workflow_routes(
+    app: Any,
+    *,
+    mock_mode: bool,
+    filesystem_scope: FilesystemScope,
+) -> None:
     """Register OpenMC workflow planning endpoints on a FastAPI app."""
 
     from fastapi import Body, HTTPException
@@ -24,7 +31,11 @@ def register_openmc_workflow_routes(app: Any, *, mock_mode: bool) -> None:
     @app.post("/api/openmc-workflow/plan")
     def api_openmc_workflow_plan(payload: dict[str, Any] = request_body) -> dict[str, Any]:
         request = _normalize_request(payload, HTTPException)
-        return _build_plan(request, mock_mode=mock_mode)
+        return _build_plan(
+            request,
+            mock_mode=mock_mode,
+            filesystem_scope=filesystem_scope,
+        )
 
 
 def _normalize_request(payload: dict[str, Any], http_exception: Any) -> dict[str, Any]:
@@ -61,8 +72,17 @@ def _normalize_request(payload: dict[str, Any], http_exception: Any) -> dict[str
     }
 
 
-def _build_plan(request: dict[str, Any], *, mock_mode: bool) -> dict[str, Any]:
-    checks = _readiness_checks(request, mock_mode=mock_mode)
+def _build_plan(
+    request: dict[str, Any],
+    *,
+    mock_mode: bool,
+    filesystem_scope: FilesystemScope,
+) -> dict[str, Any]:
+    checks = _readiness_checks(
+        request,
+        mock_mode=mock_mode,
+        filesystem_scope=filesystem_scope,
+    )
     artifacts = _artifacts(request)
     commands = _commands(request)
     return {
@@ -81,19 +101,26 @@ def _build_plan(request: dict[str, Any], *, mock_mode: bool) -> dict[str, Any]:
     }
 
 
-def _readiness_checks(request: dict[str, Any], *, mock_mode: bool) -> list[dict[str, Any]]:
+def _readiness_checks(
+    request: dict[str, Any],
+    *,
+    mock_mode: bool,
+    filesystem_scope: FilesystemScope,
+) -> list[dict[str, Any]]:
     recipe = str(request["recipe_path"]).strip()
     statepoint = str(request["statepoint_path"]).strip()
     load_statepoint = bool(request["load_statepoint"])
     run_dir = str(request["run_dir"]).strip()
     output = str(request["output_path"]).strip() or _default_output(str(request["format"]))
     hdf5 = str(request["keep_hdf5_path"]).strip() or _default_hdf5(request)
+    scope = None if mock_mode else filesystem_scope
     checks = [
         _path_check(
             "recipe",
             recipe,
             required=True,
             must_exist=not mock_mode,
+            filesystem_scope=scope,
             expected_suffix=".py",
         ),
         _path_check(
@@ -101,13 +128,31 @@ def _readiness_checks(request: dict[str, Any], *, mock_mode: bool) -> list[dict[
             statepoint,
             required=load_statepoint,
             must_exist=(not mock_mode and load_statepoint),
+            filesystem_scope=scope,
             expected_suffix=".h5",
         ),
-        _parent_check("ASCII output directory", output, must_exist=not mock_mode),
-        _parent_check("HDF5 handoff directory", hdf5, must_exist=not mock_mode),
+        _parent_check(
+            "ASCII output directory",
+            output,
+            must_exist=not mock_mode,
+            filesystem_scope=scope,
+        ),
+        _parent_check(
+            "HDF5 handoff directory",
+            hdf5,
+            must_exist=not mock_mode,
+            filesystem_scope=scope,
+        ),
     ]
     if run_dir:
-        checks.append(_directory_parent_check("run directory parent", run_dir, must_exist=not mock_mode))
+        checks.append(
+            _directory_parent_check(
+                "run directory parent",
+                run_dir,
+                must_exist=not mock_mode,
+                filesystem_scope=scope,
+            )
+        )
     else:
         checks.append(
             {
@@ -123,6 +168,7 @@ def _readiness_checks(request: dict[str, Any], *, mock_mode: bool) -> list[dict[
                 str(request["adf_source"]),
                 required=True,
                 must_exist=not mock_mode,
+                filesystem_scope=scope,
                 expected_suffix=".h5",
             )
         )
@@ -133,6 +179,7 @@ def _readiness_checks(request: dict[str, Any], *, mock_mode: bool) -> list[dict[
                 str(request["sph_source"]),
                 required=True,
                 must_exist=not mock_mode,
+                filesystem_scope=scope,
                 expected_suffix=".h5",
             )
         )
@@ -161,6 +208,7 @@ def _path_check(
     *,
     required: bool,
     must_exist: bool,
+    filesystem_scope: FilesystemScope | None,
     expected_suffix: str | None = None,
 ) -> dict[str, Any]:
     path = raw.strip()
@@ -177,7 +225,14 @@ def _path_check(
             "status": "warn",
             "message": f"Path does not end with {expected_suffix}; verify it is intentional.",
         }
-    if must_exist and not Path(path).expanduser().exists():
+    candidate, scope_error = _scoped_path(path, filesystem_scope)
+    if scope_error is not None:
+        return {
+            "name": name,
+            "status": "fail",
+            "message": scope_error,
+        }
+    if must_exist and candidate is not None and not candidate.exists():
         return {
             "name": name,
             "status": "fail",
@@ -190,11 +245,19 @@ def _path_check(
     }
 
 
-def _parent_check(name: str, raw: str, *, must_exist: bool) -> dict[str, Any]:
+def _parent_check(
+    name: str,
+    raw: str,
+    *,
+    must_exist: bool,
+    filesystem_scope: FilesystemScope | None,
+) -> dict[str, Any]:
     path = raw.strip()
     if not path:
         return {"name": name, "status": "fail", "message": "Path is missing."}
-    parent = Path(path).expanduser().parent
+    parent, scope_error = _scoped_parent(path, filesystem_scope)
+    if scope_error is not None:
+        return {"name": name, "status": "fail", "message": scope_error}
     if must_exist and not parent.exists():
         return {
             "name": name,
@@ -204,8 +267,16 @@ def _parent_check(name: str, raw: str, *, must_exist: bool) -> dict[str, Any]:
     return {"name": name, "status": "pass", "message": "Ready."}
 
 
-def _directory_parent_check(name: str, raw: str, *, must_exist: bool) -> dict[str, Any]:
-    parent = Path(raw).expanduser().parent
+def _directory_parent_check(
+    name: str,
+    raw: str,
+    *,
+    must_exist: bool,
+    filesystem_scope: FilesystemScope | None,
+) -> dict[str, Any]:
+    parent, scope_error = _scoped_parent(raw, filesystem_scope)
+    if scope_error is not None:
+        return {"name": name, "status": "fail", "message": scope_error}
     if must_exist and not parent.exists():
         return {
             "name": name,
@@ -213,6 +284,38 @@ def _directory_parent_check(name: str, raw: str, *, must_exist: bool) -> dict[st
             "message": f"Directory not found: {parent}",
         }
     return {"name": name, "status": "pass", "message": "Ready."}
+
+
+class _ScopeViolation(Exception):
+    def __init__(self, *, status_code: int, detail: str) -> None:
+        super().__init__(detail)
+        self.status_code = status_code
+        self.detail = detail
+
+
+def _scoped_path(
+    raw: str,
+    filesystem_scope: FilesystemScope | None,
+) -> tuple[Path | None, str | None]:
+    if filesystem_scope is None:
+        return Path(raw).expanduser(), None
+    try:
+        return filesystem_scope.resolve(raw, _ScopeViolation), None
+    except _ScopeViolation as exc:
+        return None, str(exc.detail)
+
+
+def _scoped_parent(
+    raw: str,
+    filesystem_scope: FilesystemScope | None,
+) -> tuple[Path, str | None]:
+    if filesystem_scope is None:
+        return Path(raw).expanduser().parent, None
+    parent = filesystem_scope.candidate(raw).parent
+    try:
+        return filesystem_scope.enforce(parent, _ScopeViolation), None
+    except _ScopeViolation as exc:
+        return parent, str(exc.detail)
 
 
 def _steps(request: dict[str, Any]) -> list[dict[str, Any]]:

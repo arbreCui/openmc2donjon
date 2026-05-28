@@ -57,6 +57,11 @@ class FilesystemScope:
             )
         return real
 
+    def candidate(self, raw: str | Path) -> Path:
+        """Return a user-facing path with workspace ``~`` aliases applied."""
+
+        return self._path(raw)
+
     def _path(self, raw: str | Path) -> Path:
         if self.root is not None and isinstance(raw, str):
             stripped = raw.strip()

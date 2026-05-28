@@ -217,6 +217,23 @@ class FilesystemScopeEndpointTests(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertIn("outside web workspace root", response.json()["detail"])
 
+    def test_directory_listing_is_capped_for_large_live_directories(self) -> None:
+        from openmc2donjon.web.server import FILES_ENTRY_LIMIT, create_app
+
+        with tempfile.TemporaryDirectory() as root_raw:
+            root = Path(root_raw)
+            for index in range(FILES_ENTRY_LIMIT + 7):
+                (root / f"artifact_{index:04d}.h5").write_bytes(b"HDF5")
+            client = TestClient(create_app(mock_mode=False, workspace_root=root))
+            response = client.get("/api/files", params={"path": "~"})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload["entries"]), FILES_ENTRY_LIMIT)
+        self.assertEqual(payload["total_entries"], FILES_ENTRY_LIMIT + 7)
+        self.assertEqual(payload["entry_limit"], FILES_ENTRY_LIMIT)
+        self.assertTrue(payload["truncated"])
+
     def test_workspace_root_tilde_aliases_to_root(self) -> None:
         from openmc2donjon.web.server import create_app
 
@@ -1624,6 +1641,70 @@ class OpenmcWorkflowEndpointTests(unittest.TestCase):
         self.assertEqual(checks["recipe"]["status"], "fail")
         self.assertIn("not found", checks["recipe"]["message"])
         self.assertEqual(checks["statepoint"]["status"], "skipped")
+
+    def test_workspace_root_rejects_openmc_workflow_paths_outside_root(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as root_raw, tempfile.TemporaryDirectory() as other_raw:
+            root = Path(root_raw)
+            outside_recipe = Path(other_raw) / "export_recipe.py"
+            outside_recipe.write_text("# outside\n", encoding="utf-8")
+            client = TestClient(create_app(mock_mode=False, workspace_root=root))
+            response = client.post(
+                "/api/openmc-workflow/plan",
+                json={
+                    "workflow": "one-step",
+                    "recipe_path": str(outside_recipe),
+                    "statepoint_path": "",
+                    "load_statepoint": False,
+                    "format": "multicompo",
+                    "output_path": str(root / "out.mcompo.txt"),
+                    "run_dir": "",
+                    "keep_hdf5_path": str(root / "mgxs_library.h5"),
+                    "check": True,
+                    "production": False,
+                    "equivalence": "direct",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload["ok"])
+        checks = {check["name"]: check for check in payload["checks"]}
+        self.assertEqual(checks["recipe"]["status"], "fail")
+        self.assertIn("outside web workspace root", checks["recipe"]["message"])
+
+    def test_workspace_root_tilde_alias_works_for_openmc_workflow_plan(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as root_raw:
+            root = Path(root_raw)
+            (root / "export_recipe.py").write_text("# recipe\n", encoding="utf-8")
+            client = TestClient(create_app(mock_mode=False, workspace_root=root))
+            response = client.post(
+                "/api/openmc-workflow/plan",
+                json={
+                    "workflow": "one-step",
+                    "recipe_path": "~/export_recipe.py",
+                    "statepoint_path": "",
+                    "load_statepoint": False,
+                    "format": "multicompo",
+                    "output_path": "~/out.mcompo.txt",
+                    "run_dir": "",
+                    "keep_hdf5_path": "~/mgxs_library.h5",
+                    "check": True,
+                    "production": False,
+                    "equivalence": "direct",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        checks = {check["name"]: check for check in payload["checks"]}
+        self.assertEqual(checks["recipe"]["status"], "pass")
+        self.assertEqual(checks["ASCII output directory"]["status"], "pass")
+        self.assertEqual(checks["HDF5 handoff directory"]["status"], "pass")
 
     def test_rejects_invalid_h_factor_default(self) -> None:
         from openmc2donjon.web.server import create_app
