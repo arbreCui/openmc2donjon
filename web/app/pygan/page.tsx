@@ -13,6 +13,10 @@ import {
   WriterComparisonResponse,
   api,
 } from "@/lib/api";
+import {
+  pyganCompareAvailability,
+  pyganMissingModulesLabel,
+} from "@/lib/pyganBackend";
 import { useSettings } from "@/lib/settings";
 
 type DoctorState =
@@ -109,6 +113,8 @@ function PyGanPageContent() {
       }),
     [inputH5, format, rootName, comment, mixtures, rtol, atol, summaryJson, keepDir],
   );
+  const doctorData = doctor.kind === "ok" ? doctor.data : null;
+  const compareAvailability = pyganCompareAvailability(doctorData);
   const canUseSavedPrefix =
     settingsHydrated && savedPrefix !== "" && !inputH5.startsWith(savedPrefix);
 
@@ -170,11 +176,13 @@ function PyGanPageContent() {
             <span className="grad-text">PyGan writer validation</span>
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
-            Check whether PyGan is importable, then compare the built-in ASCII writer
-            against the optional PyGan LCM exporter on the same MGXS handoff.
+            The production converter uses the built-in ASCII LCM writer by default.
+            PyGan is an optional DRAGON/DONJON-backed writer and validation layer
+            for teams that already have the PyGan modules in their Python environment.
           </p>
         </header>
 
+        <WriterBackendOverview status={doctorData} />
         <DoctorPanel state={doctor} onMockDemo={applyMockDemo} />
 
         <section className="glass rounded-xl p-5">
@@ -187,7 +195,8 @@ function PyGanPageContent() {
                 This runs the same semantic check as{" "}
                 <code className="font-mono">openmc2donjon compare-writers</code>:
                 generate ASCII and PyGan outputs, parse both LCM trees, then compare
-                payloads with numeric tolerances.
+                payloads with numeric tolerances. It is validation evidence, not a
+                prerequisite for normal ASCII conversion.
               </p>
             </div>
             <Link href="/builder?command=compare-writers" className="btn btn-secondary">
@@ -267,11 +276,18 @@ function PyGanPageContent() {
               <button
                 type="button"
                 onClick={() => void runCompare()}
-                disabled={!inputH5.trim() || compare.kind === "loading"}
+                disabled={
+                  !inputH5.trim() ||
+                  compare.kind === "loading" ||
+                  !compareAvailability.canRun
+                }
                 className="btn btn-primary mt-4 w-full disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {compare.kind === "loading" ? "Comparing…" : "Run compare"}
               </button>
+              <p className="mt-3 text-[12px] leading-5 text-[var(--fg-3)]">
+                {compareAvailability.hint}
+              </p>
             </aside>
           </div>
         </section>
@@ -294,6 +310,83 @@ function PyGanPageContent() {
   );
 }
 
+function WriterBackendOverview({ status }: { status: PyGanBackendStatus | null }) {
+  const pyganLabel =
+    status === null ? "checking" : status.available ? "available" : "unavailable";
+  const pyganTone =
+    status === null
+      ? "text-[var(--fg-2)]"
+      : status.available
+        ? "text-emerald-300"
+        : "text-amber-300";
+  return (
+    <section className="grid gap-3 md:grid-cols-2">
+      <div className="glass rounded-xl p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.16em] text-emerald-300">
+              default
+            </div>
+            <h2 className="mt-1 text-base font-semibold tracking-tight">
+              Built-in ASCII writer
+            </h2>
+          </div>
+          <span className="rounded border border-emerald-300/25 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-emerald-200">
+            ready
+          </span>
+        </div>
+        <p className="mt-3 text-sm leading-relaxed text-[var(--fg-2)]">
+          This is the normal production path for OpenMC MGXS handoffs. It writes
+          <code className="mx-1 font-mono">.mcompo.txt</code>
+          or <code className="mx-1 font-mono">.macrolib.txt</code> without
+          importing DRAGON, DONJON, or PyGan.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link href="/convert" className="btn btn-primary">
+            Open converter
+          </Link>
+          <Link href="/commands/direct-convert" className="btn btn-secondary">
+            CLI help
+          </Link>
+        </div>
+      </div>
+
+      <div className="glass rounded-xl p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.16em] text-[var(--accent-2)]">
+              optional
+            </div>
+            <h2 className="mt-1 text-base font-semibold tracking-tight">
+              PyGan writer backend
+            </h2>
+          </div>
+          <span
+            className={
+              "rounded border border-current/25 px-2 py-1 text-[10px] uppercase tracking-[0.14em] " +
+              pyganTone
+            }
+          >
+            {pyganLabel}
+          </span>
+        </div>
+        <p className="mt-3 text-sm leading-relaxed text-[var(--fg-2)]">
+          PyGan writes the same openmc2donjon LCM tree through the local
+          DRAGON/DONJON Python bindings. Use it for environment diagnostics,
+          alternate writer evidence, and ASCII-vs-PyGan semantic comparison.
+        </p>
+        <p className="mt-3 text-[12px] leading-5 text-[var(--fg-3)]">
+          {status === null
+            ? "Checking the backend Python environment."
+            : status.available
+              ? "PyGan is importable from the running backend."
+              : `Missing: ${pyganMissingModulesLabel(status)}.`}
+        </p>
+      </div>
+    </section>
+  );
+}
+
 function DoctorPanel({
   state,
   onMockDemo,
@@ -311,8 +404,15 @@ function DoctorPanel({
   if (state.kind === "error") {
     return (
       <section className="glass rounded-xl border-rose-400/20 p-5">
-        <div className="text-sm font-semibold text-rose-300">PyGan doctor failed</div>
+        <div className="text-sm font-semibold text-rose-300">
+          PyGan status unavailable
+        </div>
         <p className="mt-1 text-sm text-[var(--fg-1)]">{state.message}</p>
+        <p className="mt-2 text-[12px] leading-5 text-[var(--fg-2)]">
+          The default ASCII converter is still usable. Restart{" "}
+          <code className="font-mono">openmc2donjon serve</code> from the latest
+          checkout if this page was opened before the PyGan routes were added.
+        </p>
       </section>
     );
   }

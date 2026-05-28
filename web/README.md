@@ -40,13 +40,16 @@ The Web UI reflects the Python environment used to start the backend:
 
 - `/convert` calls `/api/health` and reports whether PyGan is importable.
 - If PyGan is available, the writer selector enables the PyGan backend.
-- `/pygan` shows the PyGan doctor result, module import paths, and a runnable
-  semantic writer comparison report.
+- `/pygan` shows the built-in ASCII writer as the default ready backend and
+  PyGan as an optional backend. It then reports the PyGan doctor result, module
+  import paths, and a runnable semantic writer comparison report.
 - After a successful PyGan conversion, the result panel shows `Validate PyGan`
   and opens `/pygan` with the comparison inputs prefilled.
 
 For a PyGan-focused demo, start the backend from the same Python environment
 where `openmc2donjon pygan-doctor` reports `pygan_backend=available`.
+If PyGan is unavailable, the Web UI should still make it clear that the normal
+ASCII writer path remains usable.
 
 ## Scripts
 

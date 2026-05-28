@@ -80,6 +80,11 @@ The default converter backend is the pure Python ASCII LCM writer shipped in
 this package. PyGan is treated as an optional DRAGON/DONJON integration layer
 for validation, inspection, and an alternate writer backend.
 
+These are deliberately separate statuses. The built-in ASCII writer is always
+the normal OpenMC-to-DONJON handoff path. PyGan being unavailable only disables
+PyGan-backed export and writer-comparison evidence; it does not block ordinary
+`.mcompo.txt` or `.macrolib.txt` conversion.
+
 Recommended PyGan demonstration path:
 
 1. Check whether the optional backend is available:
@@ -131,11 +136,12 @@ writer. Installing PyGan is useful when you want Python-side access to native
 DRAGON/DONJON LCM objects, want PyGan to export the ASCII file, or want to run
 CLE-2000 procedures as part of a local validation harness.
 
-In the localhost Web UI, `/pygan` shows the PyGan doctor result, module import
-paths, and a runnable ASCII-vs-PyGan writer comparison report. `/convert`
-reports whether PyGan is importable from the running backend Python environment;
-when a PyGan conversion succeeds, the result panel links directly to the
-prefilled `/pygan` comparison workflow.
+In the localhost Web UI, `/pygan` shows the default ASCII writer and optional
+PyGan writer as two separate cards, then reports the PyGan doctor result,
+module import paths, and a runnable ASCII-vs-PyGan writer comparison report.
+`/convert` reports whether PyGan is importable from the running backend Python
+environment; when a PyGan conversion succeeds, the result panel links directly
+to the prefilled `/pygan` comparison workflow.
 
 See [docs/PYGAN_BACKEND.md](docs/PYGAN_BACKEND.md) for install notes, command
 examples, and the current scope of the optional backend.
