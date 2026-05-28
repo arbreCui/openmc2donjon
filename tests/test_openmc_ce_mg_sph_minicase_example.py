@@ -17,6 +17,7 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
             "colorset_model.py",
             "export_recipe.py",
             "prepare_mg_case.py",
+            "summarize_damping_sweep.py",
             "summarize_outputs.py",
         ):
             path = _example_dir() / name
@@ -78,6 +79,7 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
         self.assertIn("SPH(region, group)", readme)
         self.assertIn("SPH_ITERATIONS=1", readme)
         self.assertIn("SPH_DAMPING=1.0", readme)
+        self.assertIn("summarize_damping_sweep.py", readme)
         self.assertIn("--input-format openmc-mgxs", readme)
 
         self.assertIn("build_ce_case.py", script)
@@ -211,6 +213,44 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
             self.assertFalse(summary["quality"]["demonstration_quality"])
             self.assertGreater(summary["quality"]["max_flux_relative_std_dev"], 0.30)
 
+    def test_damping_sweep_summary_compares_physics_summaries(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            case_10 = root / "damping_1p0"
+            case_05 = root / "damping_0p5" / "handoff"
+            case_10.mkdir(parents=True)
+            case_05.mkdir(parents=True)
+            _write_sweep_physics_summary(
+                case_10 / "physics_summary.json",
+                damping=1.0,
+                current_residual=0.24,
+                after_residual=0.09,
+            )
+            _write_sweep_physics_summary(
+                case_05 / "physics_summary.json",
+                damping=0.5,
+                current_residual=0.18,
+                after_residual=0.03,
+            )
+            module = _load_sweep_module()
+
+            summary = module.summarize_sweep(
+                [
+                    f"undamped={case_10 / 'physics_summary.json'}",
+                    f"damped={case_05.parent}",
+                ]
+            )
+            markdown = module.render_markdown(summary)
+
+            self.assertEqual(summary["schema"], "openmc2donjon.openmc-ce-mg-sph-damping-sweep.v1")
+            self.assertEqual(summary["case_count"], 2)
+            self.assertEqual(summary["best_by_after_update_residual"]["label"], "damped")
+            self.assertEqual(summary["best_by_current_solve_residual"]["label"], "damped")
+            self.assertIn("OpenMC-side SPH Damping Sweep", markdown)
+            self.assertIn("undamped", markdown)
+            self.assertIn("damped", markdown)
+            self.assertIn("Best frozen-flux residual", markdown)
+
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
@@ -223,6 +263,16 @@ def _example_dir() -> Path:
 def _load_summary_module():
     path = _example_dir() / "summarize_outputs.py"
     spec = importlib.util.spec_from_file_location("_openmc2donjon_minicase_summary", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot import {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_sweep_module():
+    path = _example_dir() / "summarize_damping_sweep.py"
+    spec = importlib.util.spec_from_file_location("_openmc2donjon_damping_sweep", path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"cannot import {path}")
     module = importlib.util.module_from_spec(spec)
@@ -355,6 +405,64 @@ def _write_flux_h5(
     with h5py.File(path, "w") as h5:
         h5.create_dataset(dataset_name, data=values)
         h5.create_dataset(f"{dataset_name}_std_dev", data=values * flux_std_scale)
+
+
+def _write_sweep_physics_summary(
+    path: Path,
+    *,
+    damping: float,
+    current_residual: float,
+    after_residual: float,
+) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "schema": "openmc2donjon.openmc-ce-mg-sph-physics-summary.v1",
+                "quality": {
+                    "decision": "openmc_ce_mg_sph_demonstration_quality",
+                    "max_flux_relative_std_dev": 0.08,
+                    "production_ready": False,
+                },
+                "sph": {
+                    "minimum": 0.8,
+                    "maximum": 1.2,
+                },
+                "sph_iterations": [
+                    {
+                        "iteration": 1,
+                        "damping": damping,
+                        "raw_update_minimum": 0.7,
+                        "raw_update_maximum": 1.3,
+                    }
+                ],
+                "reaction_rate_preservation": {
+                    "current_solve": {
+                        "max_relative_residual": current_residual,
+                        "mean_relative_residual": current_residual / 2.0,
+                        "valid_bins": 4,
+                        "worst": {
+                            "reaction": "absorption",
+                            "mixture": "CS_ABS",
+                            "group": 1,
+                            "relative_residual": current_residual,
+                        },
+                    },
+                    "after_sph_update_frozen_flux": {
+                        "max_relative_residual": after_residual,
+                        "mean_relative_residual": after_residual / 2.0,
+                        "valid_bins": 4,
+                        "worst": {
+                            "reaction": "absorption",
+                            "mixture": "CS_ABS",
+                            "group": 1,
+                            "relative_residual": after_residual,
+                        },
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
 
 
 if __name__ == "__main__":

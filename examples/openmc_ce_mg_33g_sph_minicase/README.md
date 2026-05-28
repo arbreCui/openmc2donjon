@@ -177,6 +177,32 @@ That run gave CE/MG flux relative standard deviations of 0.241 / 0.172 and an
 SPH range of 0.761 .. 1.115.  It is suitable as a live demonstration of the
 OpenMC-side SPH route, but it remains above the 5% production-quality threshold.
 
+## Damping sweep review
+
+To compare several completed damping runs, use `summarize_damping_sweep.py`.
+It reads existing `physics_summary.json` files and does not rerun OpenMC:
+
+```sh
+python examples/openmc_ce_mg_33g_sph_minicase/summarize_damping_sweep.py \
+  --case damping_1p0=/path/to/run_damping_1p0 \
+  --case damping_0p7=/path/to/run_damping_0p7 \
+  --case damping_0p5=/path/to/run_damping_0p5 \
+  --output-json /tmp/openmc_sph_damping_sweep.json \
+  --output-md /tmp/openmc_sph_damping_sweep.md
+```
+
+The sweep table compares the current-solve reaction-rate residual, the
+after-update frozen-flux residual, SPH range, update range, and flux
+statistical uncertainty.  Use it to justify a damping recommendation instead
+of selecting `SPH_DAMPING` from the SPH factor range alone.
+
+In one 60-batch / 10000-particle local sweep with three SPH iterations,
+`SPH_DAMPING=0.7` gave the smallest current-solve residual, while
+`SPH_DAMPING=0.5` gave the smallest after-update frozen-flux residual.
+That is a useful practical split: `0.7` is a reasonable first review point,
+and `0.5` is the safer exploratory choice when low-flux bins start to drive
+large updates.
+
 ## Manual Steps
 
 The shell script expands to these core commands:
