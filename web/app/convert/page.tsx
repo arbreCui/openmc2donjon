@@ -349,30 +349,13 @@ function ConvertPageContent() {
             canConvert={c5g7DemoDryRunPassed}
             converted={c5g7DemoConverted}
           />
-        ) : backendMode === "live" ? (
-          <LiveMinicaseCard onApply={applyProductionMinicaseDemo} />
-        ) : (
+        ) : backendMode === "unavailable" ? (
           <BackendModeCard
             tone="error"
             title="Backend status unavailable"
             body="Start or restart the FastAPI backend with `openmc2donjon serve`; the page will not show live minicase paths until `/api/health` responds."
           />
-        )}
-        <ConvertPrimer
-          state={state}
-          inputPath={inputPath}
-          outputPath={displayedOutput}
-          format={format}
-        />
-        <ConvertShowcase
-          format={format}
-          check={check}
-          production={production}
-          requireKnownMesh={requireKnownMesh}
-          outputPath={displayedOutput}
-          input={preflightInput}
-          defaultOpen={convertShowcaseDefaultOpen(state.kind)}
-        />
+        ) : null}
 
         <ConvertForm
           state={state}
@@ -421,6 +404,27 @@ function ConvertPageContent() {
           {showMinicaseMissingHint ? (
             <ProductionMinicaseMissingHint onApply={applyProductionMinicaseDemo} />
           ) : null}
+        </section>
+
+        <section className="mt-6 space-y-5" aria-label="Converter reference">
+          {backendMode === "live" ? (
+            <LiveMinicaseCard onApply={applyProductionMinicaseDemo} />
+          ) : null}
+          <ConvertPrimer
+            state={state}
+            inputPath={inputPath}
+            outputPath={displayedOutput}
+            format={format}
+          />
+          <ConvertShowcase
+            format={format}
+            check={check}
+            production={production}
+            requireKnownMesh={requireKnownMesh}
+            outputPath={displayedOutput}
+            input={preflightInput}
+            defaultOpen={convertShowcaseDefaultOpen(state.kind)}
+          />
         </section>
       </div>
     </main>
