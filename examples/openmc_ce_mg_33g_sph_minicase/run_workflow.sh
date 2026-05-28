@@ -21,6 +21,9 @@ MG_MACRO_SCATTER_FORMAT="${MG_MACRO_SCATTER_FORMAT:-histogram}"
 MG_MACRO_HISTOGRAM_BINS="${MG_MACRO_HISTOGRAM_BINS:-16}"
 MG_MACRO_LEGENDRE_ORDER="${MG_MACRO_LEGENDRE_ORDER:-3}"
 SPH_ITERATIONS="${SPH_ITERATIONS:-1}"
+SPH_DAMPING="${SPH_DAMPING:-1.0}"
+SPH_CLIP_MIN="${SPH_CLIP_MIN:-}"
+SPH_CLIP_MAX="${SPH_CLIP_MAX:-}"
 
 run_openmc_case() {
   local case_dir="$1"
@@ -53,6 +56,10 @@ fi
 echo "== OpenMC CE/MG SPH colorset minicase (ECCO-33 example) =="
 echo "run root: $RUN_ROOT"
 echo "SPH iterations: $SPH_ITERATIONS"
+echo "SPH damping: $SPH_DAMPING"
+if [[ -n "$SPH_CLIP_MIN" || -n "$SPH_CLIP_MAX" ]]; then
+  echo "SPH clipping: min=${SPH_CLIP_MIN:-none} max=${SPH_CLIP_MAX:-none}"
+fi
 if [[ "$MG_MACRO_SCATTER_FORMAT" == "histogram" ]]; then
   echo "OpenMC MG macro scatter treatment: H$MG_MACRO_HISTOGRAM_BINS"
 else
@@ -175,6 +182,7 @@ for ((ITER=1; ITER<=SPH_ITERATIONS; ITER++)); do
     --reference-flux "$CE_FLUX::openmc_volume_flux"
     --mg-flux "$ITER_MG_FLUX::openmc_mg_flux"
     --table-output "$ITER_SPH_TABLE"
+    --damping "$SPH_DAMPING"
     --flux-normalization auto
     --require-reference-flux-std-dev
     --max-reference-flux-std-dev-rel "${MAX_CE_FLUX_REL_STD:-0.20}"
@@ -185,6 +193,12 @@ for ((ITER=1; ITER<=SPH_ITERATIONS; ITER++)); do
   )
   if [[ -n "$PREVIOUS_SPH" ]]; then
     SPH_ARGS+=(--previous-sph "$PREVIOUS_SPH")
+  fi
+  if [[ -n "$SPH_CLIP_MIN" ]]; then
+    SPH_ARGS+=(--clip-min "$SPH_CLIP_MIN")
+  fi
+  if [[ -n "$SPH_CLIP_MAX" ]]; then
+    SPH_ARGS+=(--clip-max "$SPH_CLIP_MAX")
   fi
   "$PYTHON_BIN" -m openmc2donjon.cli make-openmc-sph-sidecar "${SPH_ARGS[@]}"
 

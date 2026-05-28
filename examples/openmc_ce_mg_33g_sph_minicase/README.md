@@ -76,6 +76,9 @@ MG_PARTICLES=1000 MG_BATCHES=20 MG_INACTIVE=5
 MG_MACRO_SCATTER_FORMAT=histogram
 MG_MACRO_HISTOGRAM_BINS=16
 SPH_ITERATIONS=1
+SPH_DAMPING=1.0
+SPH_CLIP_MIN=
+SPH_CLIP_MAX=
 MAX_CE_FLUX_REL_STD=0.20
 MAX_MG_FLUX_REL_STD=0.20
 OPENMC_LIB_DIR=/path/to/openmc/build/lib
@@ -84,6 +87,17 @@ OPENMC_LIB_DIR=/path/to/openmc/build/lib
 `OPENMC_LIB_DIR` is optional, but useful on macOS when the OpenMC executable
 would otherwise pick up a stale `libopenmc.dylib` from another Python or conda
 environment.
+
+`SPH_DAMPING` controls the multiplicative SPH update:
+
+```text
+next_sph = previous_sph * (normalized_mg_flux / ce_flux) ** SPH_DAMPING
+```
+
+The default `1.0` is the undamped update.  For noisy or low-flux colorset
+bins, use a smaller value such as `0.5` and optionally set `SPH_CLIP_MIN` /
+`SPH_CLIP_MAX` to keep exploratory runs from being dominated by a single
+statistically weak group.
 
 The default particle counts are intentionally small so the workflow can be
 tested quickly.  They are not production statistics.  If any MG region

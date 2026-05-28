@@ -77,6 +77,7 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
         self.assertIn("H16 histogram scatter", readme)
         self.assertIn("SPH(region, group)", readme)
         self.assertIn("SPH_ITERATIONS=1", readme)
+        self.assertIn("SPH_DAMPING=1.0", readme)
         self.assertIn("--input-format openmc-mgxs", readme)
 
         self.assertIn("build_ce_case.py", script)
@@ -86,6 +87,9 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
         self.assertIn("ITER_MG_MACRO_SUMMARY=\"$OUT_DIR/mg_macro_summary.json\"", script)
         self.assertIn("--summary-json \"$ITER_MG_MACRO_SUMMARY\"", script)
         self.assertIn("SPH_ITERATIONS", script)
+        self.assertIn("--damping \"$SPH_DAMPING\"", script)
+        self.assertIn("--clip-min \"$SPH_CLIP_MIN\"", script)
+        self.assertIn("--clip-max \"$SPH_CLIP_MAX\"", script)
         self.assertIn("--previous-sph \"$PREVIOUS_SPH\"", script)
         self.assertIn("--dataset-name openmc_volume_flux", script)
         self.assertIn("--dataset-name openmc_mg_flux", script)
@@ -306,6 +310,7 @@ def _write_iteration_summary(
                 "sph_max": sph_max,
                 "raw_update_minimum": 0.8,
                 "raw_update_maximum": 1.4,
+                "damping": 0.5,
                 "reference_flux_max_relative_std_dev": 0.02,
                 "mg_flux_max_relative_std_dev": 0.03,
                 "clipped_count": 0,

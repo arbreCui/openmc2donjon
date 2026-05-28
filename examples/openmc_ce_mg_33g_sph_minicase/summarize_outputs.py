@@ -293,6 +293,7 @@ def _read_sph_iterations(
                 "sph_max": _optional_float(summary.get("sph_max")),
                 "raw_update_minimum": _optional_float(summary.get("raw_update_minimum")),
                 "raw_update_maximum": _optional_float(summary.get("raw_update_maximum")),
+                "damping": _optional_float(summary.get("damping")),
                 "clipped_count": int(summary.get("clipped_count", 0)),
                 "normalization_factor": _optional_float(summary.get("normalization_factor")),
                 "reference_flux_max_relative_std_dev": _optional_float(
@@ -341,8 +342,11 @@ def _sph_iteration_lines(rows: list[dict[str, Any]]) -> list[str]:
         "the previous SPH sidecar was divided into an OpenMC-native `setN`",
         "`mgxs.h5` before rerunning the OpenMC MG macro calculation.",
         "",
-        "| iter | OpenMC MGXS apply | SPH range | update range | CE flux rel std | MG flux rel std |",
-        "| ---: | --- | ---: | ---: | ---: | ---: |",
+        (
+            "| iter | OpenMC MGXS apply | damping | clipped | SPH range | "
+            "update range | CE flux rel std | MG flux rel std |"
+        ),
+        "| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for row in rows:
         apply_summary = row.get("openmc_mgxs_apply")
@@ -355,11 +359,13 @@ def _sph_iteration_lines(rows: list[dict[str, Any]]) -> list[str]:
             apply_text = "none"
         lines.append(
             (
-                "| {iteration} | {apply} | {sph_min}..{sph_max} | "
+                "| {iteration} | {apply} | {damping} | {clipped} | {sph_min}..{sph_max} | "
                 "{update_min}..{update_max} | {ce_std} | {mg_std} |"
             ).format(
                 iteration=row["iteration"],
                 apply=apply_text,
+                damping=_fmt_optional(row.get("damping")),
+                clipped=row.get("clipped_count", 0),
                 sph_min=_fmt_optional(row.get("sph_min")),
                 sph_max=_fmt_optional(row.get("sph_max")),
                 update_min=_fmt_optional(row.get("raw_update_minimum")),
