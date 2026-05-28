@@ -270,6 +270,24 @@ export const COMMAND_BUILDER_SPECS: readonly CommandBuilderSpec[] = [
     notes: ["Use this after the CE and MG OpenMC calculations share the same geometry and output regions."],
   },
   {
+    id: "apply-sph",
+    title: "Apply SPH to MGXS for the next MG run",
+    summary:
+      "Build the command that writes an SPH-corrected MGXS HDF5 copy for the next OpenMC MG macro iteration.",
+    base: ["openmc2donjon", "apply-sph"],
+    fields: [
+      path("input_h5", "MGXS HDF5", "Input MGXS handoff to correct.", "<mgxs_library.h5>", 0, H5),
+      optionPath("sph_source", "SPH sidecar", "HDF5 sidecar containing SPH/NSPH vectors.", "--sph-source", "openmc_sph.h5", H5, true),
+      optionPath("output", "Corrected MGXS HDF5", "Output HDF5 copy with XS divided by NSPH.", "-o", "mgxs_sph_applied.h5", H5, true),
+      optionPath("summary_json", "Summary JSON", "Optional SPH application summary JSON.", "--summary-json", "sph_apply_summary.json", JSON),
+      toggle("force", "Force overwrite", "Allow replacing the corrected HDF5 output.", "--force"),
+    ],
+    notes: [
+      "This is the OpenMC-side iteration step: rerun OpenMC MG with the corrected XS, then recompute the SPH factors.",
+      "The output removes active SPH datasets and stores applied_sph provenance so the same factors are not applied twice.",
+    ],
+  },
+  {
     id: "bundle",
     title: "Bundle production artifacts",
     summary: "Build a manifest-backed delivery bundle command.",
@@ -353,7 +371,8 @@ export function commandBuilderStage(id: string): CommandBuilderStage {
   }
   if (
     id === "export-volume-flux" ||
-    id === "make-sph-update-table"
+    id === "make-sph-update-table" ||
+    id === "apply-sph"
   ) {
     return {
       label: "OpenMC-side SPH",

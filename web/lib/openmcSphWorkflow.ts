@@ -2,6 +2,7 @@ export type OpenmcSphWorkflowStepId =
   | "ce-flux"
   | "mg-flux"
   | "sph-sidecar"
+  | "apply-sph"
   | "augment"
   | "convert";
 
@@ -71,11 +72,23 @@ export const OPENMC_SPH_WORKFLOW_STEPS: readonly OpenmcSphWorkflowStep[] = [
       "--table-output openmc_sph.csv",
   },
   {
+    id: "apply-sph",
+    title: "Apply SPH for the next MG run",
+    badge: "ITER",
+    body:
+      "Write an MGXS copy with XS divided by NSPH, then rerun OpenMC MG and repeat the flux comparison until the SPH factors stabilize.",
+    commandId: "apply-sph",
+    href: "/builder?command=apply-sph",
+    cli:
+      "openmc2donjon apply-sph mgxs_library.h5 --sph-source openmc_sph.h5 " +
+      "-o mgxs_sph_applied.h5",
+  },
+  {
     id: "augment",
     title: "Inject SPH into HDF5",
     badge: "HDF5",
     body:
-      "Attach the SPH sidecar to the MGXS handoff so the converter can carry NSPH metadata.",
+      "After the OpenMC-side iteration is accepted, attach the final SPH sidecar so the converter can carry NSPH metadata.",
     commandId: "augment-sph",
     href: "/equivalence?kind=augment-sph",
     cli:

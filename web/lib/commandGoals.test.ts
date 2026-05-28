@@ -33,6 +33,7 @@ describe("commandGoals", () => {
     const goals = commandGoals([
       command("export-volume-flux", "partial"),
       command("make-openmc-sph-sidecar", "partial"),
+      command("apply-sph", "partial"),
       command("augment-sph", "partial"),
     ]);
 
@@ -42,6 +43,7 @@ describe("commandGoals", () => {
     expect(sph?.commands.map((command) => command.id)).toEqual([
       "export-volume-flux",
       "make-openmc-sph-sidecar",
+      "apply-sph",
       "augment-sph",
     ]);
   });

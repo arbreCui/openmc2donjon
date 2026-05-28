@@ -205,6 +205,14 @@ openmc2donjon make-openmc-sph-sidecar handoff/mgxs_library.h5 \
   --table-output handoff/openmc_sph.csv \
   --flux-normalization auto
 
+# Optional next OpenMC MG iteration: apply the current SPH factors to a
+# corrected MGXS copy, rerun OpenMC MG with that corrected XS, export the new
+# MG flux, and rebuild the sidecar.
+openmc2donjon apply-sph handoff/mgxs_library.h5 \
+  --sph-source handoff/openmc_sph_sidecar.h5 \
+  -o handoff/mgxs_sph_applied_next.h5
+
+# Final DONJON handoff path: attach the final sidecar and convert.
 openmc2donjon augment-sph handoff/mgxs_library.h5 \
   --sph-source handoff/openmc_sph_sidecar.h5 \
   -o handoff/mgxs_with_openmc_sph.h5

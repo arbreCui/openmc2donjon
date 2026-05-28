@@ -12,6 +12,7 @@ describe("openmcSphWorkflow", () => {
       "ce-flux",
       "mg-flux",
       "sph-sidecar",
+      "apply-sph",
       "augment",
       "convert",
     ]);
@@ -38,6 +39,7 @@ describe("openmcSphWorkflow", () => {
   it("recognizes only OpenMC-side SPH page contexts", () => {
     expect(isOpenmcSphWorkflowCommand("make-openmc-sph-sidecar")).toBe(true);
     expect(isOpenmcSphWorkflowCommand("make-sph-update-table")).toBe(true);
+    expect(isOpenmcSphWorkflowCommand("apply-sph")).toBe(true);
     expect(isOpenmcSphWorkflowCommand("export-surface-flux")).toBe(false);
     expect(isOpenmcSphEquivalenceKind("openmc-sph-sidecar")).toBe(true);
     expect(isOpenmcSphEquivalenceKind("adf-sidecar")).toBe(false);

@@ -73,6 +73,23 @@ describe("commandBuilder", () => {
     );
   });
 
+  it("builds SPH application commands for OpenMC MG reruns", () => {
+    const spec = commandBuilderSpec("apply-sph");
+    expect(spec).not.toBeNull();
+    const values = defaultBuilderValues(spec!);
+    values.input_h5 = "/runs/case/mgxs_library.h5";
+    values.sph_source = "/runs/case/openmc_sph.h5";
+    values.output = "/runs/case/mgxs_sph_applied.h5";
+    values.summary_json = "/runs/case/sph_apply_summary.json";
+    values.force = true;
+
+    expect(buildCommandCli(spec!, values)).toBe(
+      "openmc2donjon apply-sph /runs/case/mgxs_library.h5 " +
+        "--sph-source /runs/case/openmc_sph.h5 -o /runs/case/mgxs_sph_applied.h5 " +
+        "--summary-json /runs/case/sph_apply_summary.json --force",
+    );
+  });
+
   it("builds serve command with mock mode and repeated CORS origins", () => {
     const spec = commandBuilderSpec("serve");
     expect(spec).not.toBeNull();

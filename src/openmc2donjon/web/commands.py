@@ -409,6 +409,32 @@ DETAILS: dict[str, CommandDetail] = {
         ),
         tags=("SPH", "OpenMC"),
     ),
+    "apply-sph": CommandDetail(
+        group="sph",
+        title="Apply SPH to MGXS",
+        summary=(
+            "Write an SPH-corrected MGXS HDF5 copy for the next OpenMC MG "
+            "macro iteration."
+        ),
+        status="partial",
+        status_label="Command builder ready",
+        web_path="/builder?command=apply-sph",
+        cli="openmc2donjon apply-sph mgxs_library.h5 --sph-source openmc_sph.h5 -o mgxs_sph_applied.h5",
+        tags=("SPH", "OpenMC", "iteration"),
+        use_when=(
+            "You have OpenMC CE/MG SPH factors and need a corrected MGXS "
+            "copy for rerunning OpenMC MG with XS divided by NSPH."
+        ),
+        produces=(
+            "An SPH-corrected MGXS HDF5 copy with applied_sph provenance "
+            "and active SPH datasets removed to avoid double application."
+        ),
+        next_step=(
+            "Rerun OpenMC MG with the corrected XS, export the new MG flux, "
+            "and repeat until the OpenMC-side SPH factors stabilize; inject "
+            "the final sidecar before DONJON conversion."
+        ),
+    ),
     "augment-sph": CommandDetail(
         group="sph",
         title="Inject SPH factors",

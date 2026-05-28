@@ -52,7 +52,7 @@ the production SPH route.
 | Method | What it does | Entry point |
 | --- | --- | --- |
 | Direct | No equivalence factors; accept the homogenization bias. | Convert without equivalence flags. |
-| OpenMC-side SPH / ADF | Generate SPH factors from OpenMC CE reference vs an OpenMC MG macro calculation on the selected group structure with the same geometry, usually using OpenMC Hn histogram angular representation for the MG macro solve; or build ADF/DF sidecars from OpenMC face-flux evidence. | `make-openmc-sph-sidecar` + `augment-sph`, `make-adf-sidecar` + `augment-adf`, or `openmc2donjon-from-openmc --sph-source` / `--build-flux-ratio-adf`. |
+| OpenMC-side SPH / ADF | Generate SPH factors from OpenMC CE reference vs an OpenMC MG macro calculation on the selected group structure with the same geometry, usually using OpenMC Hn histogram angular representation for the MG macro solve; or build ADF/DF sidecars from OpenMC face-flux evidence. | `make-openmc-sph-sidecar` + optional `apply-sph` MG reruns + final `augment-sph`, `make-adf-sidecar` + `augment-adf`, or `openmc2donjon-from-openmc --sph-source` / `--build-flux-ratio-adf`. |
 
 ## Export And Convert Modes
 
@@ -292,7 +292,16 @@ openmc2donjon augment-adf mgxs_library.h5 --adf-source adf_sidecar.h5 -o mgxs_wi
 openmc2donjon make-openmc-sph-sidecar mgxs_library.h5 \
   -o sph_sidecar.h5 \
   --reference-flux openmc_ce_flux.h5::openmc_volume_flux \
-  --mg-flux openmc_mg_flux.h5::openmc_volume_flux
+  --mg-flux openmc_mg_flux.h5::openmc_mg_flux
+
+# Optional OpenMC-side SPH iteration:
+# write corrected MGXS (XS / NSPH), rerun OpenMC MG with it, then
+# recompute the SPH sidecar from the new MG flux.
+openmc2donjon apply-sph mgxs_library.h5 \
+  --sph-source sph_sidecar.h5 \
+  -o mgxs_sph_applied.h5
+
+# Final DONJON handoff path:
 openmc2donjon augment-sph mgxs_library.h5 --sph-source sph_sidecar.h5 -o mgxs_with_sph.h5
 openmc2donjon mgxs_with_sph.h5 --format macrolib -o out.macrolib.txt --check --require-sph
 ```

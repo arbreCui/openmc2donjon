@@ -22,7 +22,7 @@ describe("commandWorkflowLanes", () => {
     expect(ids).toContain("validate-bundle");
   });
 
-  it("shows the OpenMC-side SPH route as CE flux, MG flux, sidecar, augment, convert", () => {
+  it("shows the OpenMC-side SPH route as CE flux, MG flux, sidecar, apply, augment, convert", () => {
     const sphLane = COMMAND_WORKFLOW_LANES.find((lane) => lane.id === "openmc-sph");
     expect(sphLane).toBeDefined();
 
@@ -30,6 +30,7 @@ describe("commandWorkflowLanes", () => {
       "ce-flux",
       "mg-flux",
       "sph-sidecar",
+      "apply-sph",
       "augment",
       "convert",
     ]);
@@ -37,6 +38,7 @@ describe("commandWorkflowLanes", () => {
     expect(sphLane!.steps[1].body).toContain("selected group structure");
     expect(sphLane!.steps[2].commandIds).toContain("make-openmc-sph-sidecar");
     expect(sphLane!.steps[2].commandIds).toContain("make-sph-update-table");
+    expect(sphLane!.steps[3].commandIds).toContain("apply-sph");
   });
 
   it("finds all workflow positions for commands reused across lanes", () => {
