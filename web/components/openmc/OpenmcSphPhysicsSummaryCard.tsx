@@ -5,6 +5,7 @@ import { ApiError, OpenmcSphPhysicsSummary, api } from "@/lib/api";
 import {
   formatScatterTreatment,
   formatPhysicsNumber,
+  productionEvidenceRows,
   reactionRatePreservationRows,
   summaryStatus,
   topSphDeviationRows,
@@ -122,6 +123,8 @@ function SummaryBody({ state }: { state: SummaryState }) {
   const status = summaryStatus(summary);
   const rows = topSphDeviationRows(summary);
   const reactionRows = reactionRatePreservationRows(summary);
+  const evidenceRows = productionEvidenceRows(summary);
+  const productionReady = status.tone === "pass" && summary.quality?.production_ready;
   return (
     <div className="space-y-3">
       <div className="rounded-md border border-[var(--edge)] bg-black/15 p-3">
@@ -154,6 +157,60 @@ function SummaryBody({ state }: { state: SummaryState }) {
         <Stat label="max |SPH-1|" value={formatPhysicsNumber(summary.sph.max_abs_delta_from_unity)} />
         <Stat label="CE flux σ/μ max" value={formatPhysicsNumber(summary.flux_uncertainty.ce_max_relative_std_dev)} />
         <Stat label="MG flux σ/μ max" value={formatPhysicsNumber(summary.flux_uncertainty.mg_max_relative_std_dev)} />
+      </div>
+
+      <div className="rounded-md border border-emerald-300/20 bg-emerald-300/[0.04] p-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.14em] text-emerald-300">
+              production evidence
+            </div>
+            <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--fg-2)]">
+              These fields are the review evidence for the OpenMC CE/MG SPH
+              handoff: flux uncertainty, SPH factor size, frozen-flux
+              reaction-rate preservation, and whether the DONJON handoff
+              carries `NSPH`.
+            </p>
+          </div>
+          <span
+            className={
+              "rounded border px-2 py-1 text-[10px] uppercase tracking-[0.14em] " +
+              (productionReady
+                ? "border-emerald-300/30 text-emerald-300"
+                : "border-amber-300/30 text-amber-300")
+            }
+          >
+            {productionReady ? "production-ready" : "review"}
+          </span>
+        </div>
+        <div className="mt-3 grid gap-2 md:grid-cols-4">
+          {evidenceRows.map((row) => (
+            <div
+              key={row.id}
+              className="rounded border border-[var(--edge)] bg-black/15 p-2"
+            >
+              <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+                {row.label}
+              </div>
+              <div className="mt-1 font-mono text-[13px] text-[var(--fg-0)]">
+                {row.value}
+              </div>
+              <div className="mt-1 text-[11px] leading-4 text-[var(--fg-2)]">
+                {row.detail}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 grid gap-2 md:grid-cols-2">
+          <EvidenceNote
+            label="What it proves"
+            text="OpenMC CE reference flux and OpenMC MG macro flux on the same output regions can produce auditable SPH(region, group) factors that are carried into MACROLIB NSPH."
+          />
+          <EvidenceNote
+            label="What it does not prove"
+            text="This summary is not by itself a full-core benchmark or a DONJON k-effective validation; it is handoff evidence."
+          />
+        </div>
       </div>
 
       {reactionRows.length > 0 ? (
@@ -219,6 +276,17 @@ function SummaryBody({ state }: { state: SummaryState }) {
         `applied_to_xs = {String(summary.sph.applied_to_xs)}`, so the macro
         cross sections were not silently multiplied in the HDF5.
       </div>
+    </div>
+  );
+}
+
+function EvidenceNote({ label, text }: { label: string; text: string }) {
+  return (
+    <div className="rounded border border-[var(--edge)] bg-white/[0.02] p-2">
+      <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+        {label}
+      </div>
+      <div className="mt-1 text-[11px] leading-4 text-[var(--fg-2)]">{text}</div>
     </div>
   );
 }

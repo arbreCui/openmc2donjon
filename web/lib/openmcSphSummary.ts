@@ -115,3 +115,64 @@ export function reactionRatePreservationRows(summary: OpenmcSphPhysicsSummary): 
       validBins: row.source!.valid_bins != null ? row.source!.valid_bins : null,
     }));
 }
+
+export function productionEvidenceRows(summary: OpenmcSphPhysicsSummary): {
+  id: "flux" | "sph" | "rates" | "handoff";
+  label: string;
+  value: string;
+  detail: string;
+}[] {
+  const threshold = summary.quality?.production_flux_relative_std_dev_threshold;
+  const current = summary.reaction_rate_preservation?.current_solve;
+  const frozen = summary.reaction_rate_preservation?.after_sph_update_frozen_flux;
+  const acceptedFormat = summary.handoff.accepted_sph_consumption_format ?? "ASCII";
+  const nspBlocks =
+    summary.handoff.macrolib_ascii_nsp_block_count ??
+    summary.handoff.ascii_nsp_block_count;
+
+  return [
+    {
+      id: "flux",
+      label: "OpenMC flux uncertainty",
+      value: `${formatPhysicsNumber(summary.flux_uncertainty.ce_max_relative_std_dev)} / ${formatPhysicsNumber(
+        summary.flux_uncertainty.mg_max_relative_std_dev,
+      )}`,
+      detail:
+        threshold == null
+          ? "CE/MG max relative standard deviations."
+          : `CE/MG max relative standard deviations; production target <= ${formatPhysicsNumber(
+              threshold,
+            )}.`,
+    },
+    {
+      id: "sph",
+      label: "SPH correction size",
+      value: `${formatPhysicsNumber(summary.sph.minimum)} .. ${formatPhysicsNumber(
+        summary.sph.maximum,
+      )}`,
+      detail: `${summary.sph.clipped_count} clipped bin(s); max |SPH-1| = ${formatPhysicsNumber(
+        summary.sph.max_abs_delta_from_unity,
+      )}.`,
+    },
+    {
+      id: "rates",
+      label: "Reaction-rate preservation",
+      value:
+        frozen == null
+          ? "n/a"
+          : formatPhysicsNumber(frozen.max_relative_residual),
+      detail:
+        current == null
+          ? "Frozen-flux diagnostic after the proposed SPH update."
+          : `Frozen-flux residual after SPH update; current MG solve was ${formatPhysicsNumber(
+              current.max_relative_residual,
+            )}.`,
+    },
+    {
+      id: "handoff",
+      label: "DONJON handoff",
+      value: `${nspBlocks} NSPH block(s)`,
+      detail: `Accepted SPH consumption route: ${acceptedFormat.toUpperCase()} GROUP/*/NSPH.`,
+    },
+  ];
+}

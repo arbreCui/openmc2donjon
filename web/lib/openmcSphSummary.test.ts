@@ -3,6 +3,7 @@ import type { OpenmcSphPhysicsSummary } from "./api";
 import {
   formatScatterTreatment,
   formatPhysicsNumber,
+  productionEvidenceRows,
   reactionRatePreservationRows,
   summaryStatus,
   topSphDeviationRows,
@@ -76,6 +77,8 @@ const SUMMARY: OpenmcSphPhysicsSummary = {
   handoff: {
     augmented_hdf5_has_sph: true,
     ascii_nsp_block_count: 2,
+    accepted_sph_consumption_format: "macrolib",
+    macrolib_ascii_nsp_block_count: 33,
     ascii_path: "/mock/out.mcompo.txt",
     augmented_hdf5_path: "/mock/mgxs_with_sph.h5",
   },
@@ -179,5 +182,20 @@ describe("openmcSphSummary", () => {
       validBins: 165,
     });
     expect(rows[1].maxResidual).toBe(5.0e-12);
+  });
+
+  it("builds production evidence rows from the physics summary", () => {
+    const rows = productionEvidenceRows(SUMMARY);
+
+    expect(rows.map((row) => row.id)).toEqual(["flux", "sph", "rates", "handoff"]);
+    expect(rows[0]).toMatchObject({
+      label: "OpenMC flux uncertainty",
+      value: "0.01 / 0.02",
+    });
+    expect(rows[2]).toMatchObject({
+      label: "Reaction-rate preservation",
+      value: "5.000e-12",
+    });
+    expect(rows[3].detail).toContain("MACROLIB GROUP/*/NSPH");
   });
 });
