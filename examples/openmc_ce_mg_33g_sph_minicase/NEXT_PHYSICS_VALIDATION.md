@@ -84,6 +84,11 @@ and solver settings.
 SPH-corrected MACROLIB, and `run_donjon_solve_diagnostic.sh` consumes both
 files when they are present.
 
+For `five_region_2d`, the DONJON diagnostic now uses the matching 3 x 2
+colorset geometry and aggregates repeated DONJON cell unknowns back to OpenMC
+output regions before comparing flux shapes.  That removes the previous 1D
+slab approximation from this validation step.
+
 ## Acceptance Criteria
 
 A run is useful as production evidence when:

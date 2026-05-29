@@ -99,6 +99,13 @@ def _mesh_edges(volumes: np.ndarray) -> list[float]:
     return edges
 
 
+def _has_five_region_colorset_volumes(volumes: np.ndarray) -> bool:
+    if volumes.shape != (5,) or np.any(volumes <= 0.0):
+        return False
+    relative = volumes / float(np.min(volumes))
+    return bool(np.allclose(relative, np.array([2.0, 1.0, 1.0, 1.0, 1.0])))
+
+
 def _geometry_card() -> tuple[str, str]:
     nmixtures = macro.nmixtures
     if nmixtures == 3:
@@ -114,6 +121,21 @@ def _geometry_card() -> tuple[str, str]:
   MESHY
   0.00000000 4.00000000""",
             "3-region reflective CAR2D slab matching CS_FUEL/CS_MOD/CS_ABS widths",
+        )
+    if nmixtures == 5 and _has_five_region_colorset_volumes(np.asarray(macro.volume, dtype=float)):
+        return (
+            """CAR2D 3 2
+  EDIT 0
+  X- REFL X+ REFL
+  Y- REFL Y+ REFL
+  MIX
+  1 2 4
+  1 3 5
+  MESHX
+  0.00000000 2.00000000 4.00000000 6.00000000
+  MESHY
+  0.00000000 2.00000000 4.00000000""",
+            "5-region CAR2D 3x2 colorset",
         )
     edges = _mesh_edges(np.asarray(macro.volume, dtype=float))
     meshx = " ".join(f"{edge:.8f}" for edge in edges)
@@ -297,7 +319,14 @@ def _read_hdf5_flux(path: Path, dataset: str) -> np.ndarray:
     return values
 
 
-def _read_donjon_flux(path: Path, *, nmixtures: int, ngroups: int) -> np.ndarray:
+def _read_donjon_flux(
+    path: Path,
+    *,
+    nmixtures: int,
+    ngroups: int,
+    cell_mixture_map: tuple[int, ...],
+    cell_weights: tuple[float, ...],
+) -> np.ndarray:
     blocks = lcm_ascii.read_lcm_ascii(path)
     rows = [
         block.data
@@ -307,9 +336,25 @@ def _read_donjon_flux(path: Path, *, nmixtures: int, ngroups: int) -> np.ndarray
     if len(rows) != ngroups:
         raise SystemExit(f"{path}: expected {ngroups} FLUX records, got {len(rows)}")
     values = np.asarray(rows, dtype=float)
-    if values.shape[1] < nmixtures:
-        raise SystemExit(f"{path}: flux unknown count {values.shape[1]} < mixtures {nmixtures}")
-    return values[:, :nmixtures].T
+    if len(cell_mixture_map) != len(cell_weights):
+        raise SystemExit("internal error: cell_mixture_map and cell_weights length mismatch")
+    if values.shape[1] < len(cell_mixture_map):
+        raise SystemExit(
+            f"{path}: flux unknown count {values.shape[1]} < mapped cells {len(cell_mixture_map)}"
+        )
+    cell_flux = values[:, : len(cell_mixture_map)].T
+    mixture_flux = np.zeros((nmixtures, ngroups), dtype=float)
+    mixture_weight = np.zeros(nmixtures, dtype=float)
+    for cell_index, (mixture, weight) in enumerate(zip(cell_mixture_map, cell_weights, strict=True)):
+        if mixture < 1 or mixture > nmixtures:
+            raise SystemExit(f"invalid geometry mixture index {mixture} for {nmixtures} mixtures")
+        if weight <= 0.0:
+            raise SystemExit(f"invalid geometry cell weight {weight}")
+        mixture_flux[mixture - 1, :] += weight * cell_flux[cell_index, :]
+        mixture_weight[mixture - 1] += weight
+    if np.any(mixture_weight <= 0.0):
+        raise SystemExit(f"{path}: geometry map does not cover every mixture")
+    return mixture_flux / mixture_weight[:, None]
 
 
 def _keff(path: Path, label: str, mode: str) -> float:
@@ -352,11 +397,35 @@ def _metrics(donjon_flux: np.ndarray, reference: np.ndarray) -> dict[str, float]
     }
 
 
-def _geometry_note(macrolib: Path) -> str:
+def _has_five_region_colorset_volumes(volumes: np.ndarray) -> bool:
+    if volumes.shape != (5,) or np.any(volumes <= 0.0):
+        return False
+    relative = volumes / float(np.min(volumes))
+    return bool(np.allclose(relative, np.array([2.0, 1.0, 1.0, 1.0, 1.0])))
+
+
+def _geometry_metadata(macrolib: Path) -> dict[str, Any]:
     macro = read_macrolib_ascii(macrolib)
     if macro.nmixtures == 3:
-        return "3-region reflective CAR2D slab matching CS_FUEL/CS_MOD/CS_ABS widths"
-    return f"{macro.nmixtures}-region volume-ratio-preserving reflective CAR2D slab"
+        return {
+            "description": "3-region reflective CAR2D slab matching CS_FUEL/CS_MOD/CS_ABS widths",
+            "cell_mixture_map": (1, 2, 3),
+            "cell_weights": (1.0, 1.0, 1.0),
+        }
+    volumes = np.asarray(macro.volume, dtype=float)
+    if macro.nmixtures == 5 and _has_five_region_colorset_volumes(volumes):
+        return {
+            "description": (
+                "5-region reflective CAR2D 3x2 colorset matching OpenMC five_region_2d layout"
+            ),
+            "cell_mixture_map": (1, 2, 4, 1, 3, 5),
+            "cell_weights": (1.0, 1.0, 1.0, 1.0, 1.0, 1.0),
+        }
+    return {
+        "description": f"{macro.nmixtures}-region volume-ratio-preserving reflective CAR2D slab",
+        "cell_mixture_map": tuple(range(1, macro.nmixtures + 1)),
+        "cell_weights": tuple(1.0 for _ in range(macro.nmixtures)),
+    }
 
 
 reference = _read_hdf5_flux(reference_flux, reference_dataset)
@@ -373,12 +442,19 @@ for offset in range(0, len(case_args), 6):
     spn3_result = Path(case_args[offset + 3])
     diffusion_flux = Path(case_args[offset + 4])
     spn3_flux = Path(case_args[offset + 5])
+    geometry = _geometry_metadata(macrolib)
     modes = {}
     for mode, result, flux_path in (
         ("diffusion", diffusion_result, diffusion_flux),
         ("spn3", spn3_result, spn3_flux),
     ):
-        donjon = _read_donjon_flux(flux_path, nmixtures=nmixtures, ngroups=ngroups)
+        donjon = _read_donjon_flux(
+            flux_path,
+            nmixtures=nmixtures,
+            ngroups=ngroups,
+            cell_mixture_map=geometry["cell_mixture_map"],
+            cell_weights=geometry["cell_weights"],
+        )
         modes[mode] = {
             "k_effective": _keff(result, label, mode),
             "result_path": str(result),
@@ -388,7 +464,8 @@ for offset in range(0, len(case_args), 6):
         }
     cases[label] = {
         "macrolib_ascii": str(macrolib),
-        "geometry": _geometry_note(macrolib),
+        "geometry": geometry["description"],
+        "cell_mixture_map": list(geometry["cell_mixture_map"]),
         "modes": modes,
     }
 
@@ -428,6 +505,8 @@ payload = {
         "benchmark or an acceptance gate. Flux comparisons remove arbitrary "
         "eigenvector normalization. When an uncorrected MACROLIB is available, "
         "the same DONJON geometry and solver settings are used for both cases."
+        " For multi-cell diagnostic geometries, DONJON flux unknowns are "
+        "area-weighted back to the OpenMC output-mixture ordering before comparison."
     ),
     "cases": cases,
     "improvement": improvement,
@@ -447,6 +526,7 @@ lines = [
     f"- reference flux: `{reference_flux}::{reference_dataset}`",
     f"- mixtures: {nmixtures}",
     f"- groups: {ngroups}",
+    "- flux comparison: DONJON cell unknowns are area-weighted back to output mixtures",
     "",
     "| Case | Mode | k-effective | CE shape mean residual | CE shape max residual |",
     "| --- | --- | ---: | ---: | ---: |",

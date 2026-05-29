@@ -63,10 +63,18 @@ mixture 2: CS_MOD
 mixture 3: CS_ABS
 ```
 
-For larger variants, such as `five_region_2d`, the diagnostic builds a
-volume-ratio-preserving one-dimensional `CAR2D` slab in mixture order.  That is
-good enough to compare uncorrected and SPH-corrected DONJON responses with the
-same low-order operator; it is still not a geometry benchmark.
+For `five_region_2d`, the diagnostic builds the matching 3 x 2 `CAR2D`
+colorset:
+
+```text
+lower row:  CS_FUEL_L  CS_MOD     CS_ABS
+upper row:  CS_FUEL_L  CS_FUEL_U  CS_REF
+```
+
+The left fuel region is intentionally repeated in two DONJON cells and then
+area-weighted back to the single OpenMC output region before comparison.  This
+keeps the downstream solve geometry aligned with the OpenMC colorset without
+changing the converter contract: the MACROLIB still has five mixtures.
 
 Two low-order solves are run:
 
@@ -75,11 +83,10 @@ Two low-order solves are run:
 | diffusion | `TRIVAT` / `TRIVAA` / `FLUD` |
 | SPN3 | `TRIVAT` / `TRIVAA` / `FLUD`, with `SPN 3 SCAT 2` |
 
-The script exports the DONJON flux object and compares the first `N` flux
-unknowns, where `N` is the number of OpenMC output mixtures, against the OpenMC
-CE and OpenMC MG volume fluxes.  Because a low-order eigenvector has arbitrary
-normalization, each flux shape is compared after removing a scalar
-normalization factor.
+The script exports the DONJON flux object and compares DONJON cell unknowns,
+aggregated by output mixture when needed, against the OpenMC CE and OpenMC MG
+volume fluxes.  Because a low-order eigenvector has arbitrary normalization,
+each flux shape is compared after removing a scalar normalization factor.
 
 ## Current Result
 

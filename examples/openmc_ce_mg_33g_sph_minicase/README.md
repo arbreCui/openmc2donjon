@@ -235,8 +235,8 @@ the PN correction through `MAC:`.  The smoke also checks the SN convention used
 by DONJON: `DSPH:` consumes the same `NSPH` values, while `MAC:` leaves
 `NTOT0` unchanged for the SN path in this convention.
 
-For a slightly stronger downstream diagnostic, run a 3-region DONJON
-low-order solve with the same MACROLIB:
+For a slightly stronger downstream diagnostic, run a DONJON low-order solve
+with the same MACROLIB:
 
 ```sh
 RUN_ROOT=/private/tmp/openmc2donjon_ce_mg_sph_production_candidate2 \
@@ -248,7 +248,10 @@ This writes `donjon_solve_summary.json` and `donjon_solve_summary.md` under
 `/private/tmp/openmc_ce_mg_33g_sph_donjon_solve_diagnostic`).  It runs both a
 diffusion and an SPN3 `TRIVAT/TRIVAA/FLUD` solve, exports the DONJON flux
 object, and compares the DONJON flux unknowns against the OpenMC CE and OpenMC
-MG volume fluxes after removing arbitrary eigenvector normalization.  If
+MG volume fluxes after removing arbitrary eigenvector normalization.  For the
+`five_region_2d` variant, the script uses a matching 3 x 2 `CAR2D` colorset and
+area-weights the repeated left-fuel cells back to the single OpenMC output
+region before comparison.  If
 `handoff/out_uncorrected.macrolib.txt` is present, the script runs the same
 geometry and solver settings for both the uncorrected and SPH-corrected
 MACROLIB handoffs.  This is still a diagnostic, not a benchmark acceptance
