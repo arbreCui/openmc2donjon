@@ -314,6 +314,13 @@ def build_multicompo_history_blocks(
     _validate_histories(histories, None if burnup_values is None else np.asarray(burnup_values))
     nstates = histories[0].nstates
     maxcal = nstates
+    from .energy_groups import energy_bounds_order
+
+    if energy_bounds_order(energy_bounds) != "ascending":
+        raise ValueError(
+            "energy_bounds must be strictly ascending (low-to-high eV) per the "
+            "HDF5 input contract; the DONJON ENERGY block is derived by reversal"
+        )
     energy_desc = np.asarray(energy_bounds, dtype=float)[::-1]
 
     burnup_axis = None if burnup_values is None else np.asarray(burnup_values, dtype=float)

@@ -19,9 +19,10 @@ def write_fake_hdf5(path: Path) -> None:
     import h5py
     import numpy as np
 
-    # CASMO-7 bounds so the catalog match endpoint returns a hit.
+    # CASMO-7 bounds (ascending low-to-high per the HDF5 input contract) so the
+    # catalog match endpoint returns a hit.
     energy_bounds = np.array(
-        [10000000.0, 821000.0, 5530.0, 4.0, 0.625, 0.14, 0.058, 9.999999999999999e-06],
+        [9.999999999999999e-06, 0.058, 0.14, 0.625, 4.0, 5530.0, 821000.0, 10000000.0],
         dtype=float,
     )
     ngroups = 7

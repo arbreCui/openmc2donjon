@@ -549,6 +549,8 @@ def validate_input(
             )
     except OSError as exc:
         report.fail(f"cannot open HDF5 file: {exc}")
+    except (ValueError, TypeError) as exc:
+        report.fail(f"cannot interpret HDF5 dataset values: {exc}")
     return report
 
 

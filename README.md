@@ -3,10 +3,10 @@
 [![CI](https://github.com/arbreCui/openmc2donjon/actions/workflows/ci.yml/badge.svg)](https://github.com/arbreCui/openmc2donjon/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Build production handoffs from OpenMC multi-group cross sections and
+Build handoffs from OpenMC multi-group cross sections and
 OpenMC-side equivalence factors to DRAGON/DONJON deterministic workflows.
 
-The production SPH route uses OpenMC MG as the equivalence operator. OpenMC CE
+The primary SPH route uses OpenMC MG as the equivalence operator. OpenMC CE
 is the high-fidelity reference calculation; the CE statepoint provides the
 group-wise reference tallies, while OpenMC MG runs on the selected energy mesh
 with the same geometry and homogenization regions. The resulting SPH factors
@@ -319,7 +319,7 @@ Current accepted validation line:
 
 - C5G7 assembly-wise OpenMC-to-DONJON handoff with DONJON k-effective checks.
 - Converter round trips for `L_MULTICOMPO` and `L_MACROLIB`.
-- Production smokes for recipe export, full-core domain mapping, hex geometry
+- Mechanics smokes for recipe export, full-core domain mapping, hex geometry
   capability, ADF carry-through, and SPH handoff mechanics.
 
 Run portable checks:

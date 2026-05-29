@@ -200,6 +200,33 @@ class MacrolibParserTests(unittest.TestCase):
         np.testing.assert_allclose(macrolib.adf["FD_B"], [[11.0, 12.0], [21.0, 22.0]])
         np.testing.assert_allclose(macrolib.adf["FD_T"], [[31.0, 32.0], [41.0, 42.0]])
 
+    def test_rejects_descending_energy_bounds(self) -> None:
+        mixture = MixtureXS(
+            name="fuel",
+            total=np.array([0.5, 1.0]),
+            absorption=np.array([0.05, 0.1]),
+            fission=np.array([0.01, 0.02]),
+            nu_fission=np.array([0.025, 0.05]),
+            chi=np.array([1.0, 0.0]),
+            scatter_matrix=np.array([[[0.10, 0.20], [0.0, 0.70]]]),
+            fissionable=True,
+            volume=2.0,
+            transport_total=np.array([0.25, 0.5]),
+        )
+
+        ascending = np.array([1.0e-5, 1.0, 1.0e7])
+        descending = np.array([1.0e7, 1.0, 1.0e-5])
+
+        # Ascending (canonical contract) still works.
+        blocks = build_macrolib_blocks([mixture], ascending)
+        macrolib = parse_macrolib_blocks(blocks)
+        np.testing.assert_allclose(macrolib.energy, [1.0e7, 1.0, 1.0e-5])
+
+        # Descending input raises instead of silently producing a wrong ENERGY
+        # block and negative DELTAU.
+        with self.assertRaisesRegex(ValueError, "ascending"):
+            build_macrolib_blocks([mixture], descending)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -128,6 +128,13 @@ def build_macrolib_blocks(
     ngroups = mixtures[0].ngroups
     if energy_bounds.shape != (ngroups + 1,):
         raise ValueError("energy_bounds length must be ngroups + 1")
+    from .energy_groups import energy_bounds_order
+
+    if energy_bounds_order(energy_bounds) != "ascending":
+        raise ValueError(
+            "energy_bounds must be strictly ascending (low-to-high eV) per the "
+            "HDF5 input contract; the DONJON ENERGY block is derived by reversal"
+        )
     for mix in mixtures:
         _validate_mixture(mix, ngroups)
         _validate_macrolib_vectors(mix, ngroups)

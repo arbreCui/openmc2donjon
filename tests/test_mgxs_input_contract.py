@@ -38,6 +38,28 @@ class MgxsInputContractTests(unittest.TestCase):
         self.assertEqual(report.fissionable_mixtures, 1)
         self.assertEqual(report.scatter_axes, ["moment,from,to"])
 
+    def test_wrong_type_dataset_reports_fail_without_crashing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "wrong_type.h5"
+            write_single_state_fixture(path, total=[0.3, 0.4])
+            with h5py.File(path, "a") as h5:
+                fuel = h5["mixtures"]["fuel"]
+                del fuel["scatter_matrix"]
+                fuel.create_dataset(
+                    "scatter_matrix", data=np.array([b"not", b"a", b"matrix"])
+                )
+
+            report = validator.validate_input(path)
+
+        self.assertFalse(report.ok, report.issues)
+        self.assertTrue(
+            any(
+                "cannot interpret HDF5 dataset values" in issue
+                for issue in report.issues
+            ),
+            report.issues,
+        )
+
     def test_multistate_requires_burnup_axis(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "missing_burn.h5"

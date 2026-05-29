@@ -232,9 +232,11 @@ class InspectEndpointTests(unittest.TestCase):
             self.assertEqual(payload["mesh_match"]["id"], "casmo_7")
             mixture_names = sorted(m["name"] for m in payload["mixtures"])
             self.assertEqual(mixture_names, ["M1_UO2", "M2_MOD"])
-            # energy_bounds is read from the same h5 open as the mesh ID.
+            # energy_bounds is read from the same h5 open as the mesh ID
+            # (ascending low-to-high per the HDF5 input contract).
             self.assertEqual(len(payload["energy_bounds"]), 8)
-            self.assertAlmostEqual(payload["energy_bounds"][0], 10000000.0)
+            self.assertAlmostEqual(payload["energy_bounds"][0], 9.999999999999999e-06)
+            self.assertAlmostEqual(payload["energy_bounds"][-1], 10000000.0)
 
     def test_live_mode_mixture_endpoint_returns_arrays(self) -> None:
         from openmc2donjon.web.server import MIXTURE_SCHEMA, create_app

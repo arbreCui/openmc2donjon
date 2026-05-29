@@ -629,6 +629,37 @@ class MultiCompoSmokeTests(unittest.TestCase):
 
         np.testing.assert_allclose(defaulted[0].h_factor, [99.0, 99.0])
 
+    def test_rejects_descending_energy_bounds(self) -> None:
+        mixture = MixtureXS(
+            name="fuel",
+            total=np.array([0.5, 1.0]),
+            absorption=np.array([0.05, 0.1]),
+            fission=np.array([0.01, 0.02]),
+            nu_fission=np.array([0.025, 0.05]),
+            chi=np.array([1.0, 0.0]),
+            scatter_matrix=np.array([[[0.1, 0.2], [0.0, 0.7]]]),
+            fissionable=True,
+        )
+
+        # Ascending (canonical contract) still works.
+        blocks = build_multicompo_blocks(
+            [mixture],
+            np.array([1.0e-5, 1.0, 1.0e7]),
+            root_name="CPO",
+            comment="ascending",
+        )
+        by_name = {block.name: block for block in blocks if block.name}
+        self.assertEqual(by_name["ENERGY"].data, (1.0e7, 1.0, 1.0e-5))
+
+        # Descending input raises a clear ValueError.
+        with self.assertRaisesRegex(ValueError, "ascending"):
+            build_multicompo_blocks(
+                [mixture],
+                np.array([1.0e7, 1.0, 1.0e-5]),
+                root_name="CPO",
+                comment="descending",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

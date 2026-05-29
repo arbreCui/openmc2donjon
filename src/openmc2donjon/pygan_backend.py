@@ -20,7 +20,7 @@ from typing import Any
 PYGAN_MODULES = ("lcm", "lifo", "cle2000")
 PYGAN_INSTALL_HINT = (
     "Install PyGan from the DRAGON/DONJON source tree, for example: "
-    "cd /Users/wen/dragon-5.1/PyGan && make pip=1 donjon"
+    "cd <dragon-root>/PyGan && make pip=1 donjon"
 )
 PYGAN_ROLE = (
     "optional DRAGON/DONJON validation and integration backend; "

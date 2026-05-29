@@ -19,7 +19,7 @@ change list (SPH sidecar/augmentation, external face-flux contracts,
 
 OpenMC end-to-end workflow release. Adds the recipe-based statepoint
 exporter, the one-step `openmc2donjon-from-openmc` entry point, ADF and
-SPH equivalence carry-through, DONJON-backed SPH loop orchestration, and
+SPH equivalence carry-through, and
 the accepted C5G7 production handoff with flux-ratio ADF and SPH factors.
 
 See [`RELEASE_NOTES.md`](RELEASE_NOTES.md) for the full narrative.
