@@ -15,6 +15,7 @@ import {
   convertDeliveryChecklist,
   type ConvertDeliveryItem,
 } from "@/lib/convertDeliveryChecklist";
+import { convertBlockedGuidance } from "@/lib/convertBlockedGuidance";
 import {
   convertBundleHref,
   convertDonjonGuideHref,
@@ -96,6 +97,19 @@ export default function OutputActions({
     );
   }
 
+  if (mode === "blocked") {
+    return (
+      <BlockedOutputActions
+        data={data}
+        input={input}
+        statuses={statuses}
+        deliveryItems={deliveryItems}
+        actions={actions}
+        onRefresh={() => setRefreshToken((value) => value + 1)}
+      />
+    );
+  }
+
   return (
     <section className="glass rounded-xl p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
@@ -162,6 +176,129 @@ export default function OutputActions({
       </div>
 
       <RunSummaryCard data={data} input={input} statuses={statuses} />
+    </section>
+  );
+}
+
+function BlockedOutputActions({
+  data,
+  input,
+  statuses,
+  deliveryItems,
+  actions,
+  onRefresh,
+}: {
+  data: ConvertResponse;
+  input: ConvertPreflightInput | null;
+  statuses: ConvertArtifactStatusMap;
+  deliveryItems: readonly ConvertDeliveryItem[];
+  actions: readonly HandoffAction[];
+  onRefresh: () => void;
+}) {
+  const guidance = convertBlockedGuidance(data, input);
+  const cardClass =
+    guidance.tone === "fail"
+      ? "border-rose-300/25 bg-rose-300/[0.07] text-rose-100"
+      : "border-amber-300/25 bg-amber-300/[0.07] text-amber-100";
+  return (
+    <section className="glass rounded-xl p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <div>
+          <h3 className="text-base font-semibold tracking-tight">
+            Conversion needs attention
+          </h3>
+          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
+            Preview and bundle stay locked until the request reaches a confirmed
+            ASCII handoff state.
+          </p>
+        </div>
+        <span
+          className={
+            "rounded border px-2 py-1 font-mono text-[11px] uppercase tracking-wider " +
+            (guidance.tone === "fail"
+              ? "border-rose-300/25 text-rose-200"
+              : "border-amber-300/25 text-amber-200")
+          }
+        >
+          {guidance.badge}
+        </span>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-3 text-[12px] text-[var(--fg-3)]">
+        <span>{convertArtifactStatusSummary(statuses)}</span>
+        <button
+          type="button"
+          onClick={onRefresh}
+          className="text-[var(--accent-2)] hover:underline"
+        >
+          Refresh file status
+        </button>
+      </div>
+
+      <section className={"mt-4 rounded-lg border p-4 " + cardClass}>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase tracking-[0.14em] opacity-70">
+              first fix
+            </div>
+            <h4 className="mt-1 text-sm font-semibold tracking-tight">
+              {guidance.title}
+            </h4>
+            <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--fg-1)]">
+              {guidance.body}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-3 rounded border border-current/15 bg-black/15 px-3 py-2 text-[12px] leading-5">
+          <div className="text-[10px] uppercase tracking-[0.14em] opacity-70">
+            recommended next step
+          </div>
+          <div className="mt-1 text-[var(--fg-1)]">{guidance.primaryFix}</div>
+        </div>
+
+        <ul className="mt-3 grid gap-1.5 text-[12px] leading-5 text-[var(--fg-1)] md:grid-cols-2">
+          {guidance.facts.map((fact) => (
+            <li key={fact} className="flex gap-2">
+              <span className="mt-[0.45rem] h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-60" />
+              <span>{fact}</span>
+            </li>
+          ))}
+        </ul>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Link
+            href={`/inspect?path=${encodeURIComponent(data.input_path)}`}
+            className="btn btn-primary"
+          >
+            Inspect HDF5
+          </Link>
+          <CopyCliButton
+            value={data.cli_command_text}
+            label="Copy CLI"
+            ariaLabel="Copy CLI command"
+          />
+          <CopyCliButton
+            value={data.output_path}
+            label="Copy target path"
+            ariaLabel="Copy target path"
+          />
+        </div>
+      </section>
+
+      <details className="mt-3 rounded-lg border border-[var(--edge)] bg-black/10 p-3">
+        <summary className="cursor-pointer select-none text-sm font-semibold tracking-tight text-[var(--fg-0)]">
+          Technical evidence
+        </summary>
+        <DeliveryPathStrip items={deliveryItems} />
+        <AsciiReadinessPanel data={data} outputStatus={statuses.output} />
+        <DeliveryCommandPanel data={data} statuses={statuses} />
+        <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+          {actions.map((action) => (
+            <ActionCard key={action.id} action={action} />
+          ))}
+        </div>
+        <RunSummaryCard data={data} input={input} statuses={statuses} />
+      </details>
     </section>
   );
 }
