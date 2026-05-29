@@ -533,6 +533,8 @@ def _write_convert_summary(path: Path, payload: dict[str, Any]) -> None:
 
 
 def _mock_preflight_input(path: str) -> dict[str, Any]:
+    if _is_mock_openmc_sph_handoff(path):
+        return _mock_openmc_sph_preflight_input(path)
     return {
         "path": path,
         "ok": True,
@@ -568,6 +570,52 @@ def _mock_preflight_input(path: str) -> dict[str, Any]:
             "datasets": 72,
             "missing_datasets": 0,
             "max_rel": 1.9e-2,
+        },
+        "issues": [],
+        "warnings": [],
+    }
+
+
+def _is_mock_openmc_sph_handoff(path: str) -> bool:
+    return "openmc-sph-minicase" in path or "mgxs_with_openmc_sph" in path
+
+
+def _mock_openmc_sph_preflight_input(path: str) -> dict[str, Any]:
+    return {
+        "path": path,
+        "ok": True,
+        "energy_groups": 33,
+        "legendre_order": 3,
+        "energy_group_structure": "33-group OpenMC SPH minicase",
+        "energy_bounds_sha256": "mock-openmc-sph-33g",
+        "energy_mesh_id": None,
+        "energy_mesh_name": "OpenMC SPH 33-group minicase",
+        "energy_mesh_tolerance": 1.0e-6,
+        "mixtures": 2,
+        "calculations": 2,
+        "state_points": 1,
+        "fissionable_mixtures": 1,
+        "adf_mixtures": 0,
+        "adf_faces": [],
+        "sph_calculations": 2,
+        "scatter_row_balance": {
+            "checked": True,
+            "max_rel": 1.8e-3,
+            "max_abs": 9.0e-5,
+            "worst": "mixture=CS_FUEL group=12",
+        },
+        "physics_checks": {
+            "chi_checked": 1,
+            "chi_sum_max_abs_error": 1.0e-12,
+            "nu_ratio_warning_count": 0,
+            "transport_p1_checked": 2,
+        },
+        "uncertainty": {
+            "checked": True,
+            "expected_datasets": 24,
+            "datasets": 24,
+            "missing_datasets": 0,
+            "max_rel": 4.13e-2,
         },
         "issues": [],
         "warnings": [],

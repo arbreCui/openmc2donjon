@@ -8,6 +8,7 @@ import ConvertRunDetails from "./ConvertRunDetails";
 import type { ConvertRunState } from "./ConvertReportState";
 import ConvertValidationSummary from "./ConvertValidationSummary";
 import OutputActions from "./OutputActions";
+import SphHandoffCard from "./SphHandoffCard";
 
 export type { ConvertRunState } from "./ConvertReportState";
 
@@ -92,6 +93,8 @@ function ConvertSummary({
       <ConvertOutcomeSummary data={data} input={input} onConvert={onConvert} />
 
       {input ? <ConvertValidationSummary data={data} input={input} /> : null}
+
+      <SphHandoffCard data={data} input={input} />
 
       <OutputActions data={data} onConvert={onConvert} />
 

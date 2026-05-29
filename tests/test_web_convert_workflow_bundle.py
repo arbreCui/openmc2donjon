@@ -58,6 +58,41 @@ class ConvertEndpointTests(unittest.TestCase):
         )
         self.assertEqual(payload["preflight"]["inputs"][0]["energy_mesh_id"], "casmo_7")
 
+    def test_mock_mode_openmc_sph_handoff_reports_33g_sph_shape(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.post(
+            "/api/convert",
+            json={
+                "input_path": "/mock/home/openmc-runs/openmc-sph-minicase/handoff/mgxs_with_openmc_sph.h5",
+                "output_path": (
+                    "/mock/home/openmc-runs/openmc-sph-minicase/handoff/"
+                    "out_with_openmc_sph.macrolib.txt"
+                ),
+                "format": "macrolib",
+                "dry_run": True,
+                "overwrite": False,
+                "check": True,
+                "production": True,
+                "warn_unknown_energy_mesh": True,
+                "require_known_energy_mesh": False,
+                "comment": "OpenMC-side SPH corrected handoff",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["format"], "macrolib")
+        self.assertIn("--production", payload["cli_command"])
+        preflight_input = payload["preflight"]["inputs"][0]
+        self.assertEqual(preflight_input["energy_groups"], 33)
+        self.assertEqual(preflight_input["legendre_order"], 3)
+        self.assertEqual(preflight_input["mixtures"], 2)
+        self.assertEqual(preflight_input["sph_calculations"], 2)
+        self.assertEqual(preflight_input["uncertainty"]["max_rel"], 4.13e-2)
+
     def test_live_mode_dry_run_runs_preflight_without_writing(self) -> None:
         from openmc2donjon.web.server import create_app
 
