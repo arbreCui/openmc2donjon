@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { ApiError, OpenmcSphPhysicsSummary, api } from "@/lib/api";
 import {
   formatScatterTreatment,
   formatPhysicsNumber,
+  openmcSphConvertHref,
   productionEvidenceRows,
   reactionRatePreservationRows,
   summaryStatus,
@@ -124,6 +126,7 @@ function SummaryBody({ state }: { state: SummaryState }) {
   const rows = topSphDeviationRows(summary);
   const reactionRows = reactionRatePreservationRows(summary);
   const evidenceRows = productionEvidenceRows(summary);
+  const convertHref = openmcSphConvertHref(summary);
   const productionReady = status.tone === "pass" && summary.quality?.production_ready;
   return (
     <div className="space-y-3">
@@ -149,7 +152,20 @@ function SummaryBody({ state }: { state: SummaryState }) {
             {status.label}
           </span>
         </div>
-        <p className="mt-2 text-[12px] text-[var(--fg-2)]">{status.detail}</p>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+          <p className="max-w-3xl text-[12px] text-[var(--fg-2)]">
+            {status.detail}
+          </p>
+          {convertHref ? (
+            <Link href={convertHref} className="btn btn-primary text-[12px]">
+              Send corrected MGXS to Convert
+            </Link>
+          ) : (
+            <span className="rounded border border-amber-300/25 px-2 py-1 text-[11px] text-amber-200">
+              corrected HDF5/output path missing
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-2 md:grid-cols-4">

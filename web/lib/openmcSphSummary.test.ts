@@ -3,6 +3,7 @@ import type { OpenmcSphPhysicsSummary } from "./api";
 import {
   formatScatterTreatment,
   formatPhysicsNumber,
+  openmcSphConvertHref,
   productionEvidenceRows,
   reactionRatePreservationRows,
   summaryStatus,
@@ -79,7 +80,8 @@ const SUMMARY: OpenmcSphPhysicsSummary = {
     ascii_nsp_block_count: 2,
     accepted_sph_consumption_format: "macrolib",
     macrolib_ascii_nsp_block_count: 33,
-    ascii_path: "/mock/out.mcompo.txt",
+    ascii_path: "/mock/out.macrolib.txt",
+    macrolib_ascii_path: "/mock/out.macrolib.txt",
     augmented_hdf5_path: "/mock/mgxs_with_sph.h5",
   },
   donjon_consumption: {
@@ -251,5 +253,42 @@ describe("openmcSphSummary", () => {
       value: "SPN3 k=0.9085",
     });
     expect(rows[5].detail).toContain("CE flux-shape residual mean 0.05152");
+  });
+
+  it("builds a converter deep link for the corrected SPH handoff", () => {
+    const href = openmcSphConvertHref(SUMMARY);
+
+    expect(href).not.toBeNull();
+    const url = new URL(href!, "http://localhost:3000");
+    expect(url.pathname).toBe("/convert");
+    expect(url.searchParams.get("intent")).toBe("openmc-sph");
+    expect(url.searchParams.get("input")).toBe("/mock/mgxs_with_sph.h5");
+    expect(url.searchParams.get("output")).toBe("/mock/out.macrolib.txt");
+    expect(url.searchParams.get("format")).toBe("macrolib");
+    expect(url.searchParams.get("writer_backend")).toBe("ascii");
+    expect(url.searchParams.get("check")).toBe("1");
+    expect(url.searchParams.get("production")).toBe("1");
+  });
+
+  it("does not build a converter deep link without corrected handoff paths", () => {
+    expect(
+      openmcSphConvertHref({
+        ...SUMMARY,
+        handoff: {
+          ...SUMMARY.handoff,
+          augmented_hdf5_path: null,
+        },
+      }),
+    ).toBeNull();
+    expect(
+      openmcSphConvertHref({
+        ...SUMMARY,
+        handoff: {
+          ...SUMMARY.handoff,
+          ascii_path: null,
+          macrolib_ascii_path: null,
+        },
+      }),
+    ).toBeNull();
   });
 });

@@ -77,6 +77,52 @@ export function topSphDeviationRows(
     .slice(0, limit);
 }
 
+export function openmcSphConvertHref(
+  summary: OpenmcSphPhysicsSummary,
+): string | null {
+  const input = summary.handoff.augmented_hdf5_path?.trim();
+  const output = openmcSphOutputPath(summary)?.trim();
+  if (!input || !output) return null;
+
+  const format = openmcSphOutputFormat(summary);
+  const params = new URLSearchParams({
+    intent: "openmc-sph",
+    input,
+    output,
+    format,
+    writer_backend: "ascii",
+    check: "1",
+    production: "1",
+    require_known_mesh: "0",
+    comment: "OpenMC-side SPH corrected handoff",
+  });
+  return `/convert?${params.toString()}`;
+}
+
+function openmcSphOutputPath(summary: OpenmcSphPhysicsSummary): string | null {
+  const accepted = normalizedAcceptedFormat(summary);
+  if (accepted === "macrolib") {
+    return summary.handoff.macrolib_ascii_path ?? summary.handoff.ascii_path;
+  }
+  if (accepted === "multicompo") {
+    return summary.handoff.multicompo_ascii_path ?? summary.handoff.ascii_path;
+  }
+  return summary.handoff.ascii_path;
+}
+
+function openmcSphOutputFormat(summary: OpenmcSphPhysicsSummary) {
+  const accepted = normalizedAcceptedFormat(summary);
+  if (accepted === "macrolib" || accepted === "multicompo") return accepted;
+  const output = summary.handoff.ascii_path ?? "";
+  return output.includes(".macrolib.") ? "macrolib" : "multicompo";
+}
+
+function normalizedAcceptedFormat(
+  summary: OpenmcSphPhysicsSummary,
+): string | null {
+  return summary.handoff.accepted_sph_consumption_format?.toLowerCase() ?? null;
+}
+
 export function reactionRatePreservationRows(summary: OpenmcSphPhysicsSummary): {
   id: "current" | "frozen";
   label: string;
