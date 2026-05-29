@@ -93,6 +93,29 @@ const SUMMARY: OpenmcSphPhysicsSummary = {
     pn_ntot0_ratio: 1.05946786,
     sn_ntot0_ratio: 0.999999982,
   },
+  donjon_solve_diagnostic: {
+    status: "recorded",
+    decision: "donjon_solve_diagnostic_recorded",
+    script: "examples/openmc_ce_mg_33g_sph_minicase/run_donjon_solve_diagnostic.sh",
+    geometry: "3-region reflective CAR2D slab",
+    note: "diagnostic only",
+    modes: {
+      diffusion: {
+        k_effective: 0.8899511,
+        vs_openmc_ce: {
+          flux_shape_mean_relative_residual: 0.0755294,
+          flux_shape_max_relative_residual: 0.761238,
+        },
+      },
+      spn3: {
+        k_effective: 0.9084644,
+        vs_openmc_ce: {
+          flux_shape_mean_relative_residual: 0.0515226,
+          flux_shape_max_relative_residual: 0.767714,
+        },
+      },
+    },
+  },
   per_mixture: [
     {
       mixture: "A",
@@ -204,6 +227,7 @@ describe("openmcSphSummary", () => {
       "rates",
       "handoff",
       "donjon",
+      "donjon-solve",
     ]);
     expect(rows[0]).toMatchObject({
       label: "OpenMC flux uncertainty",
@@ -219,5 +243,10 @@ describe("openmcSphSummary", () => {
       value: "passed",
     });
     expect(rows[4].detail).toContain("PN NTOT0 ratio 1.059");
+    expect(rows[5]).toMatchObject({
+      label: "DONJON solve diagnostic",
+      value: "SPN3 k=0.9085",
+    });
+    expect(rows[5].detail).toContain("CE flux-shape residual mean 0.05152");
   });
 });

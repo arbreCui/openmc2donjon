@@ -130,6 +130,28 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
         self.assertIn("DSPH:", evidence)
         self.assertIn("MAC:", evidence)
 
+    def test_donjon_solve_diagnostic_is_documented_as_review_evidence(self) -> None:
+        readme = (_example_dir() / "README.md").read_text(encoding="utf-8")
+        evidence = (_example_dir() / "PRODUCTION_EVIDENCE.md").read_text(encoding="utf-8")
+        script = (_example_dir() / "run_donjon_solve_diagnostic.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("run_donjon_solve_diagnostic.sh", readme)
+        self.assertIn("donjon_solve_summary.json", readme)
+        self.assertIn("not a benchmark acceptance gate", readme)
+        self.assertIn("TRIVAT/TRIVAA/FLUD", readme)
+
+        self.assertIn("DONJON solve diagnostic", evidence)
+        self.assertIn("diffusion k=0.8899511", evidence)
+        self.assertIn("spn3 k=0.9084644", evidence)
+        self.assertIn("not as a\nk-effective benchmark", evidence)
+
+        self.assertIn("donjon_solve_diagnostic_recorded", script)
+        self.assertIn("DUAL 1 1 SPN 3 SCAT 2", script)
+        self.assertIn("KEYFLX", script)
+        self.assertIn("flux_shape_mean_relative_residual", script)
+
     def test_production_evidence_fixture_records_openmc_sph_handoff_quality(self) -> None:
         evidence = (_example_dir() / "PRODUCTION_EVIDENCE.md").read_text(encoding="utf-8")
         fixture = _repo_root() / "src/openmc2donjon/web/fixtures/openmc_sph_physics_summary.json"
@@ -173,6 +195,20 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
         self.assertAlmostEqual(
             payload["donjon_consumption"]["pn_ntot0_ratio"],
             1.05946786,
+        )
+        self.assertEqual(
+            payload["donjon_solve_diagnostic"]["decision"],
+            "donjon_solve_diagnostic_recorded",
+        )
+        self.assertAlmostEqual(
+            payload["donjon_solve_diagnostic"]["modes"]["spn3"]["k_effective"],
+            0.9084644,
+        )
+        self.assertAlmostEqual(
+            payload["donjon_solve_diagnostic"]["modes"]["spn3"]["vs_openmc_ce"][
+                "flux_shape_mean_relative_residual"
+            ],
+            0.051522574886527395,
         )
         self.assertLess(
             payload["reaction_rate_preservation"]["after_sph_update_frozen_flux"][

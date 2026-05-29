@@ -85,6 +85,8 @@ this minicase is a simple colorset slab.
 | Frozen-flux residual after applying the new SPH update | 4.65e-12 |
 | MACROLIB `NSPH` block count | 33 |
 | DONJON consume smoke | passed |
+| DONJON diffusion solve diagnostic | k = 0.8899511 |
+| DONJON SPN3 solve diagnostic | k = 0.9084644 |
 
 Interpretation:
 
@@ -138,6 +140,20 @@ The listing was written to:
 /Users/wen/dragon-5.1/Donjon/Darwin_arm64/openmc_ce_mg_33g_sph_macrolib_donjon_smoke.result
 ```
 
+A separate DONJON solve diagnostic was also run with the same MACROLIB on a
+3-region reflective `CAR2D` slab matching the colorset ordering.  It uses
+`TRIVAT/TRIVAA/FLUD`, exports the DONJON flux object, and compares the first
+three `KEYFLX` unknowns against the OpenMC CE and OpenMC MG volume fluxes after
+removing arbitrary eigenvector normalization:
+
+```text
+DONJON solve diagnostic: diffusion k=0.8899511 ce_shape_mean=0.0755294 ce_shape_max=0.761238
+DONJON solve diagnostic: spn3 k=0.9084644 ce_shape_mean=0.0515226 ce_shape_max=0.767714
+```
+
+This diagnostic is deliberately reported as review evidence, not as a
+k-effective benchmark or a hard acceptance gate.
+
 ## What This Proves
 
 - OpenMC CE can provide converter-facing Pn MGXS and reference volume fluxes.
@@ -146,6 +162,8 @@ The listing was written to:
 - openmc2donjon can augment the MGXS HDF5 and carry NSPH into ASCII LCM.
 - DONJON can consume the exported MACROLIB `GROUP/*/NSPH` payload through
   `DSPH:`/`MAC:` in the checked smoke route.
+- DONJON can run diffusion/SPN3 low-order solves with the exported MACROLIB;
+  the resulting flux-shape residuals are recorded for review.
 - The web demo fixture now reflects production-quality statistics, not only a
   smoke-test run.
 

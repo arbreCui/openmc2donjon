@@ -117,7 +117,7 @@ export function reactionRatePreservationRows(summary: OpenmcSphPhysicsSummary): 
 }
 
 export function productionEvidenceRows(summary: OpenmcSphPhysicsSummary): {
-  id: "flux" | "sph" | "rates" | "handoff" | "donjon";
+  id: "flux" | "sph" | "rates" | "handoff" | "donjon" | "donjon-solve";
   label: string;
   value: string;
   detail: string;
@@ -130,9 +130,10 @@ export function productionEvidenceRows(summary: OpenmcSphPhysicsSummary): {
     summary.handoff.macrolib_ascii_nsp_block_count ??
     summary.handoff.ascii_nsp_block_count;
   const donjon = summary.donjon_consumption;
+  const solve = summary.donjon_solve_diagnostic;
 
   const rows: {
-    id: "flux" | "sph" | "rates" | "handoff" | "donjon";
+    id: "flux" | "sph" | "rates" | "handoff" | "donjon" | "donjon-solve";
     label: string;
     value: string;
     detail: string;
@@ -190,6 +191,22 @@ export function productionEvidenceRows(summary: OpenmcSphPhysicsSummary): {
       label: "DONJON consume smoke",
       value: status,
       detail: `DSPH/MAC checked exported NSPH; PN NTOT0 ratio ${pn}, SN NTOT0 ratio ${sn}.`,
+    });
+  }
+  const spn3 = solve?.modes?.spn3;
+  if (solve && spn3) {
+    const k = formatPhysicsNumber(spn3.k_effective);
+    const mean = formatPhysicsNumber(
+      spn3.vs_openmc_ce?.flux_shape_mean_relative_residual,
+    );
+    const max = formatPhysicsNumber(
+      spn3.vs_openmc_ce?.flux_shape_max_relative_residual,
+    );
+    rows.push({
+      id: "donjon-solve",
+      label: "DONJON solve diagnostic",
+      value: `SPN3 k=${k}`,
+      detail: `Low-order solve recorded; CE flux-shape residual mean ${mean}, max ${max}.`,
     });
   }
   return rows;

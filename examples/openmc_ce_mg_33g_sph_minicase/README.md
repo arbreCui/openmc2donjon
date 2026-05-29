@@ -208,6 +208,24 @@ the PN correction through `MAC:`.  The smoke also checks the SN convention used
 by DONJON: `DSPH:` consumes the same `NSPH` values, while `MAC:` leaves
 `NTOT0` unchanged for the SN path in this convention.
 
+For a slightly stronger downstream diagnostic, run a 3-region DONJON
+low-order solve with the same MACROLIB:
+
+```sh
+RUN_ROOT=/private/tmp/openmc2donjon_ce_mg_sph_production_candidate2 \
+bash examples/openmc_ce_mg_33g_sph_minicase/run_donjon_solve_diagnostic.sh
+```
+
+This writes `donjon_solve_summary.json` and `donjon_solve_summary.md` under
+`RUN_DIR` (default:
+`/private/tmp/openmc_ce_mg_33g_sph_donjon_solve_diagnostic`).  It runs both a
+diffusion and an SPN3 `TRIVAT/TRIVAA/FLUD` solve, exports the DONJON flux
+object, and compares the first three `KEYFLX` unknowns against the OpenMC CE
+and OpenMC MG volume fluxes after removing arbitrary eigenvector
+normalization.  This is still a diagnostic, not a benchmark acceptance gate:
+the residual is reported for review rather than forced to pass a tight
+threshold.
+
 For a shorter presentation-ready summary of that high-statistics run, see
 `PRODUCTION_EVIDENCE.md`.
 

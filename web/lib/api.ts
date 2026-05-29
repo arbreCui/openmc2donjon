@@ -380,6 +380,28 @@ export interface OpenmcSphDonjonConsumption {
   sn_ntot0_ratio?: number | null;
 }
 
+export interface OpenmcSphDonjonSolveMode {
+  k_effective?: number | null;
+  vs_openmc_ce?: {
+    flux_shape_max_relative_residual?: number | null;
+    flux_shape_mean_relative_residual?: number | null;
+    scaled_flux_max_relative_residual?: number | null;
+    scaled_flux_mean_relative_residual?: number | null;
+  } | null;
+}
+
+export interface OpenmcSphDonjonSolveDiagnostic {
+  status?: "recorded" | "not_run" | "failed" | string;
+  decision?: string | null;
+  script?: string | null;
+  geometry?: string | null;
+  note?: string | null;
+  modes?: {
+    diffusion?: OpenmcSphDonjonSolveMode | null;
+    spn3?: OpenmcSphDonjonSolveMode | null;
+  } | null;
+}
+
 export interface OpenmcSphPhysicsSummary {
   schema: string;
   route: string;
@@ -399,6 +421,7 @@ export interface OpenmcSphPhysicsSummary {
   reaction_rate_preservation?: OpenmcSphReactionRatePreservation;
   handoff: OpenmcSphPhysicsSummaryHandoff;
   donjon_consumption?: OpenmcSphDonjonConsumption | null;
+  donjon_solve_diagnostic?: OpenmcSphDonjonSolveDiagnostic | null;
   per_mixture: OpenmcSphPhysicsSummaryMixture[];
 }
 

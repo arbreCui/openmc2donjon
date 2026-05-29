@@ -32,6 +32,33 @@
     "sn_var_value": 1.05946791,
     "status": "passed"
   },
+  "donjon_solve_diagnostic": {
+    "decision": "donjon_solve_diagnostic_recorded",
+    "geometry": "3-region reflective CAR2D slab matching CS_FUEL/CS_MOD/CS_ABS widths",
+    "modes": {
+      "diffusion": {
+        "k_effective": 0.8899511,
+        "vs_openmc_ce": {
+          "flux_shape_max_relative_residual": 0.7612378535640061,
+          "flux_shape_mean_relative_residual": 0.07552937831739205,
+          "scaled_flux_max_relative_residual": 1.4888443738221628,
+          "scaled_flux_mean_relative_residual": 0.07939128451614481
+        }
+      },
+      "spn3": {
+        "k_effective": 0.9084644,
+        "vs_openmc_ce": {
+          "flux_shape_max_relative_residual": 0.7677136745161097,
+          "flux_shape_mean_relative_residual": 0.051522574886527395,
+          "scaled_flux_max_relative_residual": 1.7570682840750496,
+          "scaled_flux_mean_relative_residual": 0.14849639115972807
+        }
+      }
+    },
+    "note": "DONJON low-order solve diagnostic, not a k-effective benchmark or acceptance gate.",
+    "script": "examples/openmc_ce_mg_33g_sph_minicase/run_donjon_solve_diagnostic.sh",
+    "status": "recorded"
+  },
   "handoff_dir": "/mock/home/openmc-runs/openmc-sph-minicase/handoff",
   "handoff_scatter": {
     "format": "legendre",
