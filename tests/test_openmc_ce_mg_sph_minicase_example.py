@@ -147,8 +147,8 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
         self.assertIn("out_with_openmc_sph.macrolib.txt", wrapper)
 
         self.assertIn("DONJON consume smoke", evidence)
-        self.assertIn("Two-Region SPH Smoke", evidence)
-        self.assertIn("target_mix=2 expected_g1=1.22116014", evidence)
+        self.assertIn("Two-Region SPH Production Probe", evidence)
+        self.assertIn("target_mix=2 expected_g1=0.970759749", evidence)
         self.assertIn("expected_mix3_g1=1.05946788", evidence)
         self.assertIn("pn_ntot0_ratio=1.05946786", evidence)
         self.assertIn("DSPH:", evidence)
