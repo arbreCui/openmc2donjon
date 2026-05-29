@@ -3,6 +3,7 @@ import type { OpenmcSphPhysicsSummary } from "./api";
 import {
   formatScatterTreatment,
   formatPhysicsNumber,
+  reactionRatePreservationRows,
   summaryStatus,
   topSphDeviationRows,
 } from "./openmcSphSummary";
@@ -58,6 +59,19 @@ const SUMMARY: OpenmcSphPhysicsSummary = {
     mean: 1.0,
     max_abs_delta_from_unity: 0.2,
     clipped_count: 0,
+  },
+  reaction_rate_preservation: {
+    reference: "CE-tallied MGXS * CE volume flux",
+    current_solve: {
+      max_relative_residual: 0.24,
+      mean_relative_residual: 0.03,
+      valid_bins: 165,
+    },
+    after_sph_update_frozen_flux: {
+      max_relative_residual: 5.0e-12,
+      mean_relative_residual: 1.5e-12,
+      valid_bins: 165,
+    },
   },
   handoff: {
     augmented_hdf5_has_sph: true,
@@ -153,5 +167,17 @@ describe("openmcSphSummary", () => {
 
   it("describes the Pn handoff and Hn MG macro treatments separately", () => {
     expect(formatScatterTreatment(SUMMARY)).toBe("P3 handoff · H16 MG macro");
+  });
+
+  it("extracts current and frozen-flux reaction-rate preservation diagnostics", () => {
+    const rows = reactionRatePreservationRows(SUMMARY);
+
+    expect(rows.map((row) => row.id)).toEqual(["current", "frozen"]);
+    expect(rows[0]).toMatchObject({
+      label: "Current OpenMC MG solve",
+      maxResidual: 0.24,
+      validBins: 165,
+    });
+    expect(rows[1].maxResidual).toBe(5.0e-12);
   });
 });

@@ -15,7 +15,10 @@
     "histogram_bins": 16,
     "legendre_order": null,
     "mgxs": "/mock/home/openmc-runs/openmc-sph-minicase/mg_case/mgxs.h5",
-    "mg_case_dir": "/mock/home/openmc-runs/openmc-sph-minicase/mg_case"
+    "mg_case_dir": "/mock/home/openmc-runs/openmc-sph-minicase/mg_case",
+    "raw_mgxs": null,
+    "sph_applied": false,
+    "sph_source": null
   },
   "mixture_names": ["CS_FUEL", "CS_MOD", "CS_ABS"],
   "decisions": {
@@ -24,12 +27,12 @@
   },
   "normalization": {
     "method": "power",
-    "factor": 1.0033924463177784,
+    "factor": 1.0026056582869036,
     "formula": "sph = previous_sph * (normalized_openmc_mg_flux / openmc_ce_reference_flux) ** damping"
   },
   "flux_uncertainty": {
-    "ce_max_relative_std_dev": 0.28920678050677623,
-    "mg_max_relative_std_dev": 0.25555122865787505,
+    "ce_max_relative_std_dev": 0.2411931266134365,
+    "mg_max_relative_std_dev": 0.1719159748086548,
     "ce_dataset": "openmc_volume_flux",
     "mg_dataset": "openmc_mg_flux"
   },
@@ -38,7 +41,7 @@
     "structural_passed": true,
     "production_ready": false,
     "demonstration_quality": true,
-    "max_flux_relative_std_dev": 0.28920678050677623,
+    "max_flux_relative_std_dev": 0.2411931266134365,
     "production_flux_relative_std_dev_threshold": 0.05,
     "demonstration_flux_relative_std_dev_threshold": 0.3,
     "notes": [
@@ -49,15 +52,44 @@
     "kind": "openmc-ce-mg",
     "real": true,
     "applied_to_xs": false,
-    "minimum": 0.626997271802,
-    "maximum": 1.18511110371,
-    "mean": 0.993581,
-    "max_abs_delta_from_unity": 0.373003,
+    "minimum": 0.761355112067,
+    "maximum": 1.11456515366,
+    "mean": 0.9966864551782826,
+    "max_abs_delta_from_unity": 0.23864488793299998,
     "clipped_count": 0
+  },
+  "reaction_rate_preservation": {
+    "reference": "CE-tallied MGXS * CE volume flux",
+    "current_solve": {
+      "operator": "CE MGXS / previous SPH * normalized OpenMC MG flux",
+      "max_relative_residual": 0.23864488793318298,
+      "mean_relative_residual": 0.029091868838528427,
+      "valid_bins": 165,
+      "skipped_zero_reference_bins": 132,
+      "worst": {
+        "reaction": "absorption",
+        "mixture": "CS_ABS",
+        "group": 1,
+        "relative_residual": 0.23864488793318298
+      }
+    },
+    "after_sph_update_frozen_flux": {
+      "operator": "CE MGXS / proposed SPH * normalized OpenMC MG flux",
+      "max_relative_residual": 4.926581934719012e-12,
+      "mean_relative_residual": 1.5334220974458999e-12,
+      "valid_bins": 165,
+      "skipped_zero_reference_bins": 132,
+      "worst": {
+        "reaction": "absorption",
+        "mixture": "CS_ABS",
+        "group": 19,
+        "relative_residual": 4.926581934719012e-12
+      }
+    }
   },
   "handoff": {
     "augmented_hdf5_has_sph": true,
-    "ascii_nsp_block_count": 3,
+    "ascii_nsp_block_count": 33,
     "ascii_path": "/mock/home/openmc-runs/openmc-sph-minicase/out.macrolib.txt",
     "accepted_sph_consumption_format": "macrolib",
     "multicompo_ascii_nsp_block_count": 3,
@@ -69,42 +101,42 @@
   "per_mixture": [
     {
       "mixture": "CS_FUEL",
-      "ce_flux_min": 0.0058041,
-      "ce_flux_max": 1.20469,
-      "mg_flux_min": 0.00464273,
-      "mg_flux_max": 1.2287,
-      "normalized_mg_over_ce_min": 0.802618,
-      "normalized_mg_over_ce_max": 1.185111,
-      "sph_min": 0.802618,
-      "sph_max": 1.185111,
-      "sph_mean": 1.021,
-      "max_abs_sph_minus_1": 0.197382
+      "ce_flux_min": 0.007282561775109806,
+      "ce_flux_max": 1.2195520263906179,
+      "mg_flux_min": 0.0057973789526966305,
+      "mg_flux_max": 1.2331473265288215,
+      "normalized_mg_over_ce_min": 0.7981374028398688,
+      "normalized_mg_over_ce_max": 1.1145651536616137,
+      "sph_min": 0.79813740284,
+      "sph_max": 1.11456515366,
+      "sph_mean": 0.9889295249514243,
+      "max_abs_sph_minus_1": 0.20186259716
     },
     {
       "mixture": "CS_MOD",
-      "ce_flux_min": 0.00417452,
-      "ce_flux_max": 0.741943,
-      "mg_flux_min": 0.00360489,
-      "mg_flux_max": 0.749451,
-      "normalized_mg_over_ce_min": 0.866476,
-      "normalized_mg_over_ce_max": 1.09076,
-      "sph_min": 0.866476,
-      "sph_max": 1.09076,
-      "sph_mean": 0.994,
-      "max_abs_sph_minus_1": 0.133524
+      "ce_flux_min": 0.004858659647948183,
+      "ce_flux_max": 0.7297641626708394,
+      "mg_flux_min": 0.00502046150210843,
+      "mg_flux_max": 0.7324016248522409,
+      "normalized_mg_over_ce_min": 0.9732254571338375,
+      "normalized_mg_over_ce_max": 1.035994178219738,
+      "sph_min": 0.973225457134,
+      "sph_max": 1.03599417822,
+      "sph_mean": 1.0004526774091516,
+      "max_abs_sph_minus_1": 0.03599417821999995
     },
     {
       "mixture": "CS_ABS",
-      "ce_flux_min": 0.00374323,
-      "ce_flux_max": 0.525802,
-      "mg_flux_min": 0.00233906,
-      "mg_flux_max": 0.5067,
-      "normalized_mg_over_ce_min": 0.626997,
-      "normalized_mg_over_ce_max": 1.03266,
-      "sph_min": 0.626997,
-      "sph_max": 1.03266,
-      "sph_mean": 0.966,
-      "max_abs_sph_minus_1": 0.373003
+      "ce_flux_min": 0.004565467119486101,
+      "ce_flux_max": 0.5181904478620337,
+      "mg_flux_min": 0.003466908152436379,
+      "mg_flux_max": 0.5176899308718232,
+      "normalized_mg_over_ce_min": 0.7613551120671902,
+      "normalized_mg_over_ce_max": 1.0433982083080593,
+      "sph_min": 0.761355112067,
+      "sph_max": 1.04339820831,
+      "sph_mean": 1.0006771631742722,
+      "max_abs_sph_minus_1": 0.23864488793299998
     }
   ]
 }

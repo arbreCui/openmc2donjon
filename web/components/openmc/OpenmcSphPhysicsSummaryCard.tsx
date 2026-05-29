@@ -5,6 +5,7 @@ import { ApiError, OpenmcSphPhysicsSummary, api } from "@/lib/api";
 import {
   formatScatterTreatment,
   formatPhysicsNumber,
+  reactionRatePreservationRows,
   summaryStatus,
   topSphDeviationRows,
 } from "@/lib/openmcSphSummary";
@@ -120,6 +121,7 @@ function SummaryBody({ state }: { state: SummaryState }) {
   const summary = state.data;
   const status = summaryStatus(summary);
   const rows = topSphDeviationRows(summary);
+  const reactionRows = reactionRatePreservationRows(summary);
   return (
     <div className="space-y-3">
       <div className="rounded-md border border-[var(--edge)] bg-black/15 p-3">
@@ -153,6 +155,43 @@ function SummaryBody({ state }: { state: SummaryState }) {
         <Stat label="CE flux σ/μ max" value={formatPhysicsNumber(summary.flux_uncertainty.ce_max_relative_std_dev)} />
         <Stat label="MG flux σ/μ max" value={formatPhysicsNumber(summary.flux_uncertainty.mg_max_relative_std_dev)} />
       </div>
+
+      {reactionRows.length > 0 ? (
+        <div className="rounded-md border border-[var(--edge)] bg-black/15 p-3">
+          <div className="mb-2 text-[11px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+            reaction-rate preservation
+          </div>
+          <div className="grid gap-2 md:grid-cols-2">
+            {reactionRows.map((row) => (
+              <div
+                key={row.id}
+                className="rounded border border-[var(--edge)] bg-white/[0.02] p-2"
+              >
+                <div className="text-[12px] font-semibold text-[var(--fg-1)]">
+                  {row.label}
+                </div>
+                <div className="mt-1 text-[11px] leading-4 text-[var(--fg-2)]">
+                  {row.detail}
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
+                  <span className="text-[var(--fg-3)]">max residual</span>
+                  <span className="text-right font-mono text-[var(--fg-0)]">
+                    {formatPhysicsNumber(row.maxResidual)}
+                  </span>
+                  <span className="text-[var(--fg-3)]">mean residual</span>
+                  <span className="text-right font-mono text-[var(--fg-0)]">
+                    {formatPhysicsNumber(row.meanResidual)}
+                  </span>
+                  <span className="text-[var(--fg-3)]">valid bins</span>
+                  <span className="text-right font-mono text-[var(--fg-0)]">
+                    {row.validBins ?? "n/a"}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div className="rounded-md border border-[var(--edge)] bg-black/15 p-3">
         <div className="mb-2 text-[11px] uppercase tracking-[0.14em] text-[var(--fg-3)]">

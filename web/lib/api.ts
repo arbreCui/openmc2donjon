@@ -329,6 +329,24 @@ export interface OpenmcSphPhysicsSummaryHandoff {
   augmented_hdf5_path: string | null;
 }
 
+export interface OpenmcSphReactionRateResidual {
+  max_relative_residual: number;
+  mean_relative_residual?: number | null;
+  valid_bins?: number | null;
+  worst?: {
+    reaction?: string | null;
+    mixture?: string | null;
+    group?: number | null;
+    relative_residual?: number | null;
+  } | null;
+}
+
+export interface OpenmcSphReactionRatePreservation {
+  reference?: string | null;
+  current_solve?: OpenmcSphReactionRateResidual | null;
+  after_sph_update_frozen_flux?: OpenmcSphReactionRateResidual | null;
+}
+
 export interface OpenmcSphPhysicsSummaryMixture {
   mixture: string;
   ce_flux_min: number;
@@ -366,6 +384,7 @@ export interface OpenmcSphPhysicsSummary {
   flux_uncertainty: OpenmcSphPhysicsSummaryFluxUncertainty;
   quality?: OpenmcSphPhysicsSummaryQuality;
   sph: OpenmcSphPhysicsSummarySph;
+  reaction_rate_preservation?: OpenmcSphReactionRatePreservation;
   handoff: OpenmcSphPhysicsSummaryHandoff;
   per_mixture: OpenmcSphPhysicsSummaryMixture[];
 }

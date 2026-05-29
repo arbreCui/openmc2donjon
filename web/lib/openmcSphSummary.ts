@@ -76,3 +76,42 @@ export function topSphDeviationRows(
     .sort((a, b) => b.max_abs_sph_minus_1 - a.max_abs_sph_minus_1)
     .slice(0, limit);
 }
+
+export function reactionRatePreservationRows(summary: OpenmcSphPhysicsSummary): {
+  id: "current" | "frozen";
+  label: string;
+  detail: string;
+  maxResidual: number;
+  meanResidual: number | null;
+  validBins: number | null;
+}[] {
+  const preservation = summary.reaction_rate_preservation;
+  if (!preservation) return [];
+  const rows = [
+    {
+      id: "current" as const,
+      label: "Current OpenMC MG solve",
+      detail: "Before applying the newly generated SPH factors.",
+      source: preservation.current_solve,
+    },
+    {
+      id: "frozen" as const,
+      label: "After SPH update, frozen MG flux",
+      detail: "Diagnostic using CE MGXS / NSPH with the latest MG flux.",
+      source: preservation.after_sph_update_frozen_flux,
+    },
+  ];
+  return rows
+    .filter((row) => row.source && Number.isFinite(row.source.max_relative_residual))
+    .map((row) => ({
+      id: row.id,
+      label: row.label,
+      detail: row.detail,
+      maxResidual: row.source!.max_relative_residual,
+      meanResidual:
+        row.source!.mean_relative_residual != null
+          ? row.source!.mean_relative_residual
+          : null,
+      validBins: row.source!.valid_bins != null ? row.source!.valid_bins : null,
+    }));
+}
