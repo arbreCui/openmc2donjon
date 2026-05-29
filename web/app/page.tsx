@@ -45,15 +45,16 @@ export default function Home() {
         <header className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
-              Local production handoff
+              Converter-first production handoff
             </p>
             <h1 className="mt-2 text-4xl font-bold tracking-tight">
-              <span className="grad-text">OpenMC to DONJON, one step at a time</span>
+              <span className="grad-text">OpenMC MGXS to DONJON ASCII</span>
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
-              Start with the artifact you already have. The main path is:
-              inspect an OpenMC MGXS HDF5, run production checks, write
-              L_MULTICOMPO or L_MACROLIB ASCII, then package the DONJON handoff.
+              The product center is the direct converter: take an OpenMC MGXS
+              HDF5 handoff, run a no-write production check, write
+              L_MULTICOMPO or L_MACROLIB ASCII, then hand that file to DONJON.
+              If SPH is needed, prepare it upstream with OpenMC CE/MG first.
             </p>
           </div>
           <Link
@@ -100,8 +101,9 @@ function StartHere({ entries }: { entries: readonly TaskEntrypoint[] }) {
             Start here
           </h2>
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
-            Pick exactly one entry. Advanced command builders stay available
-            under More, but these are the normal user paths.
+            Most users start with Convert. Use OpenMC SPH only when the HDF5
+            still needs equivalence factors, and Inspect when you only need to
+            understand a file before converting.
           </p>
         </div>
         <span className="rounded border border-[var(--edge)] px-2 py-1 text-[11px] uppercase tracking-wider text-[var(--fg-2)]">
@@ -145,8 +147,9 @@ function WorkflowSummary({ steps }: { steps: readonly ProductionPathStep[] }) {
     <section className="glass rounded-xl p-5">
       <h2 className="text-base font-semibold tracking-tight">What happens next</h2>
       <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
-        SPH is prepared upstream with OpenMC CE/MG when needed. The converter
-        itself stays a direct HDF5-to-DONJON handoff writer.
+        The converter does not solve reactor physics. It serializes the
+        homogenized data and optional equivalence factors that already exist in
+        the HDF5 handoff.
       </p>
       <ol className="mt-4 grid gap-3 md:grid-cols-3">
         {steps.map((step) => (
@@ -178,12 +181,12 @@ function AdvancedTools() {
     {
       href: "/commands",
       title: "Command catalog",
-      body: "All CLI commands and their web equivalents.",
+      body: "Reference map for every CLI command. Use it after the main flow is clear.",
     },
     {
       href: "/equivalence?kind=adf-sidecar",
       title: "ADF/SPH sidecar builders",
-      body: "Build or inject sidecar commands without mutating files in the UI.",
+      body: "Command builders for sidecars. They do not replace the converter path.",
     },
     {
       href: "/builder?command=bundle",
