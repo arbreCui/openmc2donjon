@@ -13,8 +13,7 @@ describe("convertActionGuideSteps", () => {
     expect(statuses(steps)).toEqual({
       "dry-run": "ready",
       convert: "waiting",
-      preview: "waiting",
-      bundle: "waiting",
+      review: "waiting",
     });
   });
 
@@ -36,12 +35,11 @@ describe("convertActionGuideSteps", () => {
     expect(statuses(steps)).toMatchObject({
       "dry-run": "done",
       convert: "ready",
-      preview: "waiting",
-      bundle: "waiting",
+      review: "waiting",
     });
   });
 
-  it("links preview and bundle only after conversion writes an output", () => {
+  it("links preview and bundle actions only after conversion writes an output", () => {
     const steps = convertActionGuideSteps({
       inputPath: "/runs/case/mgxs.h5",
       outputPath: "/runs/case/out.macrolib.txt",
@@ -59,11 +57,11 @@ describe("convertActionGuideSteps", () => {
     expect(statuses(steps)).toMatchObject({
       "dry-run": "done",
       convert: "done",
-      preview: "ready",
-      bundle: "ready",
+      review: "ready",
     });
-    expect(steps.find((step) => step.id === "preview")?.href).toBe("#ascii-output-preview");
-    expect(steps.find((step) => step.id === "bundle")?.href).toContain(
+    const reviewLinks = steps.find((step) => step.id === "review")?.links ?? [];
+    expect(reviewLinks.map((link) => link.href)).toContain("#ascii-output-preview");
+    expect(reviewLinks.find((link) => link.label === "Bundle handoff")?.href).toContain(
       "macrolib=%2Fruns%2Fcase%2Fout.macrolib.txt",
     );
   });
@@ -86,8 +84,7 @@ describe("convertActionGuideSteps", () => {
     expect(statuses(steps)).toEqual({
       "dry-run": "blocked",
       convert: "blocked",
-      preview: "blocked",
-      bundle: "blocked",
+      review: "blocked",
     });
   });
 });

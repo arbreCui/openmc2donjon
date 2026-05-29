@@ -51,8 +51,7 @@ describe("mock converter user flow", () => {
     ).toEqual([
       ["dry-run", "done"],
       ["convert", "ready"],
-      ["preview", "waiting"],
-      ["bundle", "waiting"],
+      ["review", "waiting"],
     ]);
 
     expect(
@@ -72,8 +71,7 @@ describe("mock converter user flow", () => {
     ).toEqual([
       ["dry-run", "done"],
       ["convert", "done"],
-      ["preview", "ready"],
-      ["bundle", "ready"],
+      ["review", "ready"],
     ]);
 
     expect(convertDemoInspectHref(C5G7_PRODUCTION_DEMO)).toContain("/inspect?");

@@ -4,8 +4,13 @@ import {
   type ConvertWalkthroughRun,
 } from "./convertWalkthrough";
 
-export type ConvertActionGuideStepId = "dry-run" | "convert" | "preview" | "bundle";
+export type ConvertActionGuideStepId = "dry-run" | "convert" | "review";
 export type ConvertActionGuideStatus = "waiting" | "ready" | "running" | "done" | "blocked";
+
+export interface ConvertActionGuideLink {
+  href: string;
+  label: string;
+}
 
 export interface ConvertActionGuideStep {
   id: ConvertActionGuideStepId;
@@ -13,8 +18,7 @@ export interface ConvertActionGuideStep {
   title: string;
   body: string;
   status: ConvertActionGuideStatus;
-  href?: string;
-  hrefLabel?: string;
+  links?: ConvertActionGuideLink[];
 }
 
 export interface ConvertActionGuideInput {
@@ -48,13 +52,11 @@ export function convertActionGuideSteps({
     run.ok === true &&
     run.converted === true &&
     run.outputExists === true;
-  const previewHref = converted ? "#ascii-output-preview" : undefined;
-  const bundleHref = converted
-    ? convertBundleBuilderHrefFromPaths({
-        inputPath: input,
-        outputPath: output,
-        format,
-      }) ?? undefined
+  const reviewLinks = converted
+    ? [
+        { href: "#ascii-output-preview", label: "Preview ASCII" },
+        ...bundleLinks({ inputPath: input, outputPath: output, format }),
+      ]
     : undefined;
 
   return [
@@ -89,22 +91,29 @@ export function convertActionGuideSteps({
               : "waiting",
     },
     {
-      id: "preview",
+      id: "review",
       label: "03",
-      title: "Preview ASCII",
-      body: "Read the generated LCM blocks before handing the file downstream.",
+      title: "Preview / bundle",
+      body: "Inspect the generated LCM blocks and package the delivery record.",
       status: failed ? "blocked" : converted ? "ready" : "waiting",
-      href: previewHref,
-      hrefLabel: previewHref ? "Open preview" : undefined,
-    },
-    {
-      id: "bundle",
-      label: "04",
-      title: "Bundle handoff",
-      body: "Package the input, ASCII output, summaries, and logs into a delivery record.",
-      status: failed ? "blocked" : converted ? "ready" : "waiting",
-      href: bundleHref,
-      hrefLabel: bundleHref ? "Open bundle builder" : undefined,
+      links: reviewLinks,
     },
   ];
+}
+
+function bundleLinks({
+  inputPath,
+  outputPath,
+  format,
+}: {
+  inputPath: string;
+  outputPath: string;
+  format: ConvertFormat;
+}): ConvertActionGuideLink[] {
+  const href = convertBundleBuilderHrefFromPaths({
+    inputPath,
+    outputPath,
+    format,
+  });
+  return href ? [{ href, label: "Bundle handoff" }] : [];
 }
