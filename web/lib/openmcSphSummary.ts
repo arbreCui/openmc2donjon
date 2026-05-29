@@ -117,7 +117,7 @@ export function reactionRatePreservationRows(summary: OpenmcSphPhysicsSummary): 
 }
 
 export function productionEvidenceRows(summary: OpenmcSphPhysicsSummary): {
-  id: "flux" | "sph" | "rates" | "handoff";
+  id: "flux" | "sph" | "rates" | "handoff" | "donjon";
   label: string;
   value: string;
   detail: string;
@@ -129,8 +129,14 @@ export function productionEvidenceRows(summary: OpenmcSphPhysicsSummary): {
   const nspBlocks =
     summary.handoff.macrolib_ascii_nsp_block_count ??
     summary.handoff.ascii_nsp_block_count;
+  const donjon = summary.donjon_consumption;
 
-  return [
+  const rows: {
+    id: "flux" | "sph" | "rates" | "handoff" | "donjon";
+    label: string;
+    value: string;
+    detail: string;
+  }[] = [
     {
       id: "flux",
       label: "OpenMC flux uncertainty",
@@ -175,4 +181,16 @@ export function productionEvidenceRows(summary: OpenmcSphPhysicsSummary): {
       detail: `Accepted SPH consumption route: ${acceptedFormat.toUpperCase()} GROUP/*/NSPH.`,
     },
   ];
+  if (donjon) {
+    const status = donjon.status ?? "not run";
+    const pn = formatPhysicsNumber(donjon.pn_ntot0_ratio);
+    const sn = formatPhysicsNumber(donjon.sn_ntot0_ratio);
+    rows.push({
+      id: "donjon",
+      label: "DONJON consume smoke",
+      value: status,
+      detail: `DSPH/MAC checked exported NSPH; PN NTOT0 ratio ${pn}, SN NTOT0 ratio ${sn}.`,
+    });
+  }
+  return rows;
 }

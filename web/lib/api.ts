@@ -368,6 +368,18 @@ export interface OpenmcSphPhysicsSummaryScatter {
   histogram_bins?: number | null;
 }
 
+export interface OpenmcSphDonjonConsumption {
+  status: "passed" | "failed" | "not_run" | string;
+  mode?: string | null;
+  script?: string | null;
+  result_path?: string | null;
+  expected_mix3_g1?: number | null;
+  pn_var_value?: number | null;
+  sn_var_value?: number | null;
+  pn_ntot0_ratio?: number | null;
+  sn_ntot0_ratio?: number | null;
+}
+
 export interface OpenmcSphPhysicsSummary {
   schema: string;
   route: string;
@@ -386,6 +398,7 @@ export interface OpenmcSphPhysicsSummary {
   sph: OpenmcSphPhysicsSummarySph;
   reaction_rate_preservation?: OpenmcSphReactionRatePreservation;
   handoff: OpenmcSphPhysicsSummaryHandoff;
+  donjon_consumption?: OpenmcSphDonjonConsumption | null;
   per_mixture: OpenmcSphPhysicsSummaryMixture[];
 }
 

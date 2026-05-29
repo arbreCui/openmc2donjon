@@ -104,6 +104,32 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
         self.assertIn("LD_LIBRARY_PATH", script)
         self.assertNotIn("run-sph-loop", script)
 
+    def test_donjon_consume_smoke_is_documented_as_downstream_handoff(self) -> None:
+        readme = (_example_dir() / "README.md").read_text(encoding="utf-8")
+        evidence = (_example_dir() / "PRODUCTION_EVIDENCE.md").read_text(encoding="utf-8")
+        wrapper = (_example_dir() / "run_donjon_consume_smoke.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("run_donjon_consume_smoke.sh", readme)
+        self.assertIn("DSPH:", readme)
+        self.assertIn("MAC:", readme)
+        self.assertIn("GROUP/*/NSPH", readme)
+        self.assertIn("not a k-effective benchmark", readme)
+
+        self.assertIn("scripts/run_donjon_sph_consume_smoke.sh", wrapper)
+        self.assertIn(
+            'RUN_TAG="${RUN_TAG:-openmc_ce_mg_33g_sph_macrolib_donjon_smoke}"',
+            wrapper,
+        )
+        self.assertIn("out_with_openmc_sph.macrolib.txt", wrapper)
+
+        self.assertIn("DONJON consume smoke", evidence)
+        self.assertIn("expected_mix3_g1=1.05946788", evidence)
+        self.assertIn("pn_ntot0_ratio=1.05946786", evidence)
+        self.assertIn("DSPH:", evidence)
+        self.assertIn("MAC:", evidence)
+
     def test_production_evidence_fixture_records_openmc_sph_handoff_quality(self) -> None:
         evidence = (_example_dir() / "PRODUCTION_EVIDENCE.md").read_text(encoding="utf-8")
         fixture = _repo_root() / "src/openmc2donjon/web/fixtures/openmc_sph_physics_summary.json"
@@ -139,6 +165,15 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
         self.assertEqual(payload["handoff"]["accepted_sph_consumption_format"], "macrolib")
         self.assertEqual(payload["handoff"]["macrolib_ascii_nsp_block_count"], 33)
         self.assertTrue(payload["handoff"]["augmented_hdf5_has_sph"])
+        self.assertEqual(payload["donjon_consumption"]["status"], "passed")
+        self.assertAlmostEqual(
+            payload["donjon_consumption"]["expected_mix3_g1"],
+            1.05946788,
+        )
+        self.assertAlmostEqual(
+            payload["donjon_consumption"]["pn_ntot0_ratio"],
+            1.05946786,
+        )
         self.assertLess(
             payload["reaction_rate_preservation"]["after_sph_update_frozen_flux"][
                 "max_relative_residual"

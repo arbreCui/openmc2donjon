@@ -84,6 +84,7 @@ this minicase is a simple colorset slab.
 | Current OpenMC MG reaction-rate residual | 0.059468 |
 | Frozen-flux residual after applying the new SPH update | 4.65e-12 |
 | MACROLIB `NSPH` block count | 33 |
+| DONJON consume smoke | passed |
 
 Interpretation:
 
@@ -123,12 +124,28 @@ It writes SPH factors as `GROUP/*/NSPH`, matching the downstream DONJON
 mapped/archival library, but MACROLIB is the accepted route for this SPH
 minicase.
 
+The DONJON consume smoke was run on this MACROLIB and confirmed that `DSPH:`
+reads the precomputed `NSPH` factors and that `MAC:` applies the PN correction:
+
+```text
+DONJON DSPH consumed NSPH: expected_mix3_g1=1.05946788 pn=1.05946791 sn=1.05946791
+DONJON MAC applied SPH: pn_ntot0_ratio=1.05946786 sn_ntot0_ratio=0.999999982
+```
+
+The listing was written to:
+
+```text
+/Users/wen/dragon-5.1/Donjon/Darwin_arm64/openmc_ce_mg_33g_sph_macrolib_donjon_smoke.result
+```
+
 ## What This Proves
 
 - OpenMC CE can provide converter-facing Pn MGXS and reference volume fluxes.
 - OpenMC MG can provide the macro flux on the same geometry/output regions.
 - openmc2donjon can build OpenMC-side SPH factors from those fluxes.
 - openmc2donjon can augment the MGXS HDF5 and carry NSPH into ASCII LCM.
+- DONJON can consume the exported MACROLIB `GROUP/*/NSPH` payload through
+  `DSPH:`/`MAC:` in the checked smoke route.
 - The web demo fixture now reflects production-quality statistics, not only a
   smoke-test run.
 

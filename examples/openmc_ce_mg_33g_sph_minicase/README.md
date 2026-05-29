@@ -194,6 +194,20 @@ an SPH range of 0.96344 .. 1.05947, and a frozen-flux reaction-rate residual
 of about 4.7e-12 after applying the newly generated SPH factors.  The summary
 decision was `openmc_ce_mg_sph_production_quality`.
 
+To close the downstream handoff, run the DONJON consumption smoke on the
+produced MACROLIB:
+
+```sh
+RUN_ROOT=/private/tmp/openmc2donjon_ce_mg_sph_production_candidate2 \
+bash examples/openmc_ce_mg_33g_sph_minicase/run_donjon_consume_smoke.sh
+```
+
+This is not a k-effective benchmark.  It verifies that DONJON can read the
+exported `L_MACROLIB` ASCII, consume `GROUP/*/NSPH` through `DSPH:`, and apply
+the PN correction through `MAC:`.  The smoke also checks the SN convention used
+by DONJON: `DSPH:` consumes the same `NSPH` values, while `MAC:` leaves
+`NTOT0` unchanged for the SN path in this convention.
+
 For a shorter presentation-ready summary of that high-statistics run, see
 `PRODUCTION_EVIDENCE.md`.
 

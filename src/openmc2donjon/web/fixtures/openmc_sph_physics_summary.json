@@ -21,6 +21,17 @@
     "multicompo_ascii_nsp_block_count": 3,
     "multicompo_ascii_path": "/mock/home/openmc-runs/openmc-sph-minicase/handoff/out_with_openmc_sph.mcompo.txt"
   },
+  "donjon_consumption": {
+    "expected_mix3_g1": 1.05946788,
+    "mode": "DSPH/MAC PN+SN consume smoke",
+    "pn_ntot0_ratio": 1.05946786,
+    "pn_var_value": 1.05946791,
+    "result_path": "/mock/home/openmc-runs/openmc-sph-minicase/donjon/openmc_ce_mg_33g_sph_macrolib_donjon_smoke.result",
+    "script": "examples/openmc_ce_mg_33g_sph_minicase/run_donjon_consume_smoke.sh",
+    "sn_ntot0_ratio": 0.999999982,
+    "sn_var_value": 1.05946791,
+    "status": "passed"
+  },
   "handoff_dir": "/mock/home/openmc-runs/openmc-sph-minicase/handoff",
   "handoff_scatter": {
     "format": "legendre",

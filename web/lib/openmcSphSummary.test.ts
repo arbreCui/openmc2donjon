@@ -82,6 +82,17 @@ const SUMMARY: OpenmcSphPhysicsSummary = {
     ascii_path: "/mock/out.mcompo.txt",
     augmented_hdf5_path: "/mock/mgxs_with_sph.h5",
   },
+  donjon_consumption: {
+    status: "passed",
+    mode: "DSPH/MAC PN+SN consume smoke",
+    script: "examples/openmc_ce_mg_33g_sph_minicase/run_donjon_consume_smoke.sh",
+    result_path: "/mock/donjon.result",
+    expected_mix3_g1: 1.05946788,
+    pn_var_value: 1.05946791,
+    sn_var_value: 1.05946791,
+    pn_ntot0_ratio: 1.05946786,
+    sn_ntot0_ratio: 0.999999982,
+  },
   per_mixture: [
     {
       mixture: "A",
@@ -187,7 +198,13 @@ describe("openmcSphSummary", () => {
   it("builds production evidence rows from the physics summary", () => {
     const rows = productionEvidenceRows(SUMMARY);
 
-    expect(rows.map((row) => row.id)).toEqual(["flux", "sph", "rates", "handoff"]);
+    expect(rows.map((row) => row.id)).toEqual([
+      "flux",
+      "sph",
+      "rates",
+      "handoff",
+      "donjon",
+    ]);
     expect(rows[0]).toMatchObject({
       label: "OpenMC flux uncertainty",
       value: "0.01 / 0.02",
@@ -197,5 +214,10 @@ describe("openmcSphSummary", () => {
       value: "5.000e-12",
     });
     expect(rows[3].detail).toContain("MACROLIB GROUP/*/NSPH");
+    expect(rows[4]).toMatchObject({
+      label: "DONJON consume smoke",
+      value: "passed",
+    });
+    expect(rows[4].detail).toContain("PN NTOT0 ratio 1.059");
   });
 });
