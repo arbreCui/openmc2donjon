@@ -53,9 +53,10 @@ export const MOCK_OPENMC_SPH_DEMO: OpenmcSphDemoPreset = {
 };
 
 const LIVE_OPENMC_SPH_PRODUCTION_COMMAND = [
-  "RUN_ROOT=/private/tmp/openmc2donjon_ce_mg_sph_production_candidate2",
-  "BATCHES=80 INACTIVE=20 PARTICLES=20000",
-  "MG_BATCHES=100 MG_INACTIVE=20 MG_PARTICLES=30000",
+  "OPENMC2DONJON_COLORSET_VARIANT=five_region_2d",
+  "RUN_ROOT=/private/tmp/openmc2donjon_five_region_2d_production_20260529",
+  "BATCHES=80 INACTIVE=20 PARTICLES=30000",
+  "MG_BATCHES=80 MG_INACTIVE=20 MG_PARTICLES=30000",
   "MAX_CE_FLUX_REL_STD=0.05",
   "MAX_MG_FLUX_REL_STD=0.05",
   "bash examples/openmc_ce_mg_33g_sph_minicase/run_workflow.sh",
@@ -63,26 +64,26 @@ const LIVE_OPENMC_SPH_PRODUCTION_COMMAND = [
 
 export const LIVE_OPENMC_SPH_DEMO: OpenmcSphDemoPreset = {
   id: "live-openmc-sph",
-  label: "Production OpenMC-side SPH minicase",
+  label: "Five-region OpenMC-side SPH production minicase",
   description:
-    "Run the high-statistics CE/MG SPH workflow, then prefill the planner with production-quality corrected MGXS and SPH artifacts.",
-  runRoot: "/private/tmp/openmc2donjon_ce_mg_sph_production_candidate2",
-  mgxs: "/private/tmp/openmc2donjon_ce_mg_sph_production_candidate2/handoff/mgxs_library.h5",
+    "Run the five-region CE/MG SPH workflow, then prefill the planner with production-quality corrected MGXS and SPH artifacts.",
+  runRoot: "/private/tmp/openmc2donjon_five_region_2d_production_20260529",
+  mgxs: "/private/tmp/openmc2donjon_five_region_2d_production_20260529/handoff/mgxs_library.h5",
   ceStatepoint:
-    "/private/tmp/openmc2donjon_ce_mg_sph_production_candidate2/ce_case/statepoint.100.h5",
+    "/private/tmp/openmc2donjon_five_region_2d_production_20260529/ce_case/statepoint.80.h5",
   mgStatepoint:
-    "/private/tmp/openmc2donjon_ce_mg_sph_production_candidate2/mg_case/statepoint.120.h5",
-  ceFlux: "/private/tmp/openmc2donjon_ce_mg_sph_production_candidate2/handoff/openmc_ce_flux.h5",
-  mgFlux: "/private/tmp/openmc2donjon_ce_mg_sph_production_candidate2/handoff/openmc_mg_flux.h5",
+    "/private/tmp/openmc2donjon_five_region_2d_production_20260529/mg_case/statepoint.80.h5",
+  ceFlux: "/private/tmp/openmc2donjon_five_region_2d_production_20260529/handoff/openmc_ce_flux.h5",
+  mgFlux: "/private/tmp/openmc2donjon_five_region_2d_production_20260529/handoff/openmc_mg_flux.h5",
   sphSidecar:
-    "/private/tmp/openmc2donjon_ce_mg_sph_production_candidate2/handoff/openmc_sph_sidecar.h5",
-  sphTable: "/private/tmp/openmc2donjon_ce_mg_sph_production_candidate2/handoff/openmc_sph.csv",
+    "/private/tmp/openmc2donjon_five_region_2d_production_20260529/handoff/openmc_sph_sidecar.h5",
+  sphTable: "/private/tmp/openmc2donjon_five_region_2d_production_20260529/handoff/openmc_sph.csv",
   augmentedH5:
-    "/private/tmp/openmc2donjon_ce_mg_sph_production_candidate2/handoff/mgxs_with_openmc_sph.h5",
+    "/private/tmp/openmc2donjon_five_region_2d_production_20260529/handoff/mgxs_with_openmc_sph.h5",
   ascii:
-    "/private/tmp/openmc2donjon_ce_mg_sph_production_candidate2/handoff/out_with_openmc_sph.macrolib.txt",
+    "/private/tmp/openmc2donjon_five_region_2d_production_20260529/handoff/out_with_openmc_sph.macrolib.txt",
   physicsSummary:
-    "/private/tmp/openmc2donjon_ce_mg_sph_production_candidate2/handoff/physics_summary.json",
+    "/private/tmp/openmc2donjon_five_region_2d_production_20260529/handoff/physics_summary.json",
   command: LIVE_OPENMC_SPH_PRODUCTION_COMMAND,
 };
 

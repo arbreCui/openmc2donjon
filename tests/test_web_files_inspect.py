@@ -384,10 +384,15 @@ class OpenMCSphPhysicsSummaryEndpointTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["schema"], OPENMC_SPH_PHYSICS_SUMMARY_SCHEMA)
-        self.assertEqual(payload["mixture_count"], 3)
+        self.assertEqual(payload["mixture_count"], 5)
         self.assertEqual(payload["energy_groups"], 33)
         self.assertEqual(payload["legendre_order"], 3)
+        self.assertEqual(
+            payload["quality"]["decision"],
+            "openmc_ce_mg_sph_production_quality",
+        )
         self.assertEqual(payload["sph"]["kind"], "openmc-ce-mg")
+        self.assertEqual(payload["sph"]["clipped_count"], 0)
         self.assertTrue(payload["handoff"]["augmented_hdf5_has_sph"])
         self.assertGreater(payload["handoff"]["ascii_nsp_block_count"], 0)
 

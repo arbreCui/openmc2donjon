@@ -1,9 +1,9 @@
 # OpenMC CE/MG SPH Production Evidence
 
 This note is the short, presentation-ready evidence package for the
-OpenMC-side SPH minicase.  It summarizes the high-statistics run whose
-machine-readable summary is mirrored in the web fixture
-`src/openmc2donjon/web/fixtures/openmc_sph_physics_summary.json`.
+OpenMC-side SPH minicase.  The bundled web fixture
+`src/openmc2donjon/web/fixtures/openmc_sph_physics_summary.json` mirrors the
+five-region 2D production run summarized below.
 
 ## Claim
 
