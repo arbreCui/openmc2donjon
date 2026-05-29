@@ -222,27 +222,26 @@ of about 4.7e-12 after applying the newly generated SPH factors.  The summary
 decision was `openmc_ce_mg_sph_production_quality`.
 
 The larger `five_region_2d` variant has also closed the complete route at
-demonstration quality:
+production quality:
 
 ```sh
 OPENMC2DONJON_COLORSET_VARIANT=five_region_2d \
-RUN_ROOT=/private/tmp/openmc2donjon_five_region_2d_evidence_20260529 \
-BATCHES=32 INACTIVE=8 PARTICLES=12000 \
-MG_BATCHES=32 MG_INACTIVE=8 MG_PARTICLES=12000 \
-MAX_CE_FLUX_REL_STD=0.15 \
-MAX_MG_FLUX_REL_STD=0.15 \
+RUN_ROOT=/private/tmp/openmc2donjon_five_region_2d_production_20260529 \
+BATCHES=80 INACTIVE=20 PARTICLES=30000 \
+MG_BATCHES=80 MG_INACTIVE=20 MG_PARTICLES=30000 \
+MAX_CE_FLUX_REL_STD=0.05 \
+MAX_MG_FLUX_REL_STD=0.05 \
 bash examples/openmc_ce_mg_33g_sph_minicase/run_workflow.sh
 ```
 
 That five-region run gave CE/MG flux relative standard deviations of
-0.12063 / 0.11007, an SPH range of 0.80786 .. 1.04225, no clipped SPH bins,
-and a frozen-flux reaction-rate residual of about 4.85e-12 after applying the
+0.04062 / 0.04079, an SPH range of 0.92263 .. 1.01804, no clipped SPH bins,
+and a frozen-flux reaction-rate residual of about 4.99e-12 after applying the
 new SPH update.  The summary decision was
-`openmc_ce_mg_sph_demonstration_quality`, not production quality, because the
-flux uncertainty is still above the 5% production threshold.  A matching 2D
-DONJON diagnostic consumed the uncorrected and SPH-corrected MACROLIB handoffs
-and showed a small improvement in CE flux-shape residual for both diffusion
-and SPN3.  The detailed table is in `NEXT_PHYSICS_VALIDATION.md`.
+`openmc_ce_mg_sph_production_quality`.  A matching 2D DONJON diagnostic
+consumed the uncorrected and SPH-corrected MACROLIB handoffs and showed a
+small improvement in CE flux-shape residual for both diffusion and SPN3.  The
+detailed table is in `NEXT_PHYSICS_VALIDATION.md`.
 
 To close the downstream handoff, run the DONJON consumption smoke on the
 produced MACROLIB:

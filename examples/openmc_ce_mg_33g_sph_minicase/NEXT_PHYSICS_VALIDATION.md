@@ -89,18 +89,18 @@ colorset geometry and aggregates repeated DONJON cell unknowns back to OpenMC
 output regions before comparing flux shapes.  That removes the previous 1D
 slab approximation from this validation step.
 
-## Current Five-Region Evidence Snapshot
+## Current Five-Region Production Snapshot
 
-A 32-batch / 12000-particle local run of `five_region_2d` has closed the
-complete route at demonstration quality:
+A local `five_region_2d` run has closed the complete route at production
+quality:
 
 ```sh
 OPENMC2DONJON_COLORSET_VARIANT=five_region_2d \
-RUN_ROOT=/private/tmp/openmc2donjon_five_region_2d_evidence_20260529 \
-BATCHES=32 INACTIVE=8 PARTICLES=12000 \
-MG_BATCHES=32 MG_INACTIVE=8 MG_PARTICLES=12000 \
-MAX_CE_FLUX_REL_STD=0.15 \
-MAX_MG_FLUX_REL_STD=0.15 \
+RUN_ROOT=/private/tmp/openmc2donjon_five_region_2d_production_20260529 \
+BATCHES=80 INACTIVE=20 PARTICLES=30000 \
+MG_BATCHES=80 MG_INACTIVE=20 MG_PARTICLES=30000 \
+MAX_CE_FLUX_REL_STD=0.05 \
+MAX_MG_FLUX_REL_STD=0.05 \
 bash examples/openmc_ce_mg_33g_sph_minicase/run_workflow.sh
 ```
 
@@ -110,40 +110,40 @@ macro solve used to generate SPH factors.
 
 | Quantity | Result |
 | --- | ---: |
-| Summary decision | `openmc_ce_mg_sph_demonstration_quality` |
-| CE flux max relative std dev | 0.120625 |
-| MG flux max relative std dev | 0.110066 |
+| Summary decision | `openmc_ce_mg_sph_production_quality` |
+| CE flux max relative std dev | 0.0406169 |
+| MG flux max relative std dev | 0.0407901 |
 | Production flux uncertainty threshold | 0.05 |
-| SPH minimum | 0.807862 |
-| SPH maximum | 1.04225 |
-| Max `abs(SPH - 1)` | 0.192138 |
+| SPH minimum | 0.92263 |
+| SPH maximum | 1.01804 |
+| Max `abs(SPH - 1)` | 0.0773705 |
 | Clipped SPH bins | 0 |
-| Current OpenMC MG reaction-rate residual | 0.192138 |
-| Frozen-flux residual after applying the new SPH update | 4.85e-12 |
+| Current OpenMC MG reaction-rate residual | 0.0773705 |
+| Frozen-flux residual after applying the new SPH update | 4.99e-12 |
 
 The matching 2D DONJON diagnostic consumed both the uncorrected and
 SPH-corrected MACROLIB handoffs:
 
 ```sh
-RUN_ROOT=/private/tmp/openmc2donjon_five_region_2d_evidence_20260529 \
-RUN_DIR=/private/tmp/openmc2donjon_five_region_2d_evidence_20260529_donjon_2d \
-RUN_TAG=openmc_ce_mg_sph_five_region_evidence_2d \
+RUN_ROOT=/private/tmp/openmc2donjon_five_region_2d_production_20260529 \
+RUN_DIR=/private/tmp/openmc2donjon_five_region_2d_production_20260529_donjon_2d \
+RUN_TAG=openmc_ce_mg_sph_five_region_production_2d \
 bash examples/openmc_ce_mg_33g_sph_minicase/run_donjon_solve_diagnostic.sh
 ```
 
 | Case | Mode | k-effective | CE shape mean residual | CE shape max residual |
 | --- | --- | ---: | ---: | ---: |
-| uncorrected | diffusion | 1.292515 | 0.233592 | 0.905586 |
-| SPH-corrected | diffusion | 1.293929 | 0.233178 | 0.904914 |
-| uncorrected | SPN3 | 1.295588 | 0.227125 | 0.907617 |
-| SPH-corrected | SPN3 | 1.296532 | 0.226648 | 0.907073 |
+| uncorrected | diffusion | 1.295644 | 0.232018 | 0.908086 |
+| SPH-corrected | diffusion | 1.297504 | 0.231839 | 0.90773 |
+| uncorrected | SPN3 | 1.298612 | 0.225032 | 0.910189 |
+| SPH-corrected | SPN3 | 1.300365 | 0.224902 | 0.909797 |
 
 This is useful evidence for the new route: the OpenMC-side SPH factors close
 the frozen-flux reaction-rate diagnostic, DONJON consumes the corrected
 MACROLIB, and the matching 2D low-order diagnostic moves in the right direction
-for both diffusion and SPN3.  It is still not production evidence because the
-flux uncertainty is about 11-12%, above the 5% target, and the low-order
-flux-shape residual remains large in this small colorset.
+for both diffusion and SPN3.  The low-order flux-shape residual remains large
+in this small colorset, so this is production-quality handoff evidence rather
+than a final benchmark-quality deterministic validation.
 
 ## Acceptance Criteria
 

@@ -98,6 +98,63 @@ Interpretation:
   flux uncertainty gates are below 5%, the SPH factors are finite/positive, no
   clipping was needed, and the ASCII handoff carries `GROUP/*/NSPH`.
 
+## Five-Region 2D Production Run
+
+The larger five-region two-dimensional colorset has also reached the
+production-quality flux uncertainty gate:
+
+```sh
+OPENMC2DONJON_COLORSET_VARIANT=five_region_2d \
+RUN_ROOT=/private/tmp/openmc2donjon_five_region_2d_production_20260529 \
+BATCHES=80 INACTIVE=20 PARTICLES=30000 \
+MG_BATCHES=80 MG_INACTIVE=20 MG_PARTICLES=30000 \
+MAX_CE_FLUX_REL_STD=0.05 \
+MAX_MG_FLUX_REL_STD=0.05 \
+bash examples/openmc_ce_mg_33g_sph_minicase/run_workflow.sh
+```
+
+| Quantity | Result |
+| --- | ---: |
+| Summary decision | `openmc_ce_mg_sph_production_quality` |
+| CE flux max relative std dev | 0.0406169 |
+| MG flux max relative std dev | 0.0407901 |
+| Production flux uncertainty threshold | 0.05 |
+| SPH minimum | 0.92263 |
+| SPH maximum | 1.01804 |
+| Max `abs(SPH - 1)` | 0.0773705 |
+| Clipped SPH bins | 0 |
+| Current OpenMC MG reaction-rate residual | 0.0773705 |
+| Frozen-flux residual after applying the new SPH update | 4.99e-12 |
+
+A matching 2D DONJON diagnostic consumed both the uncorrected and
+SPH-corrected MACROLIB handoffs:
+
+```sh
+RUN_ROOT=/private/tmp/openmc2donjon_five_region_2d_production_20260529 \
+RUN_DIR=/private/tmp/openmc2donjon_five_region_2d_production_20260529_donjon_2d \
+RUN_TAG=openmc_ce_mg_sph_five_region_production_2d \
+bash examples/openmc_ce_mg_33g_sph_minicase/run_donjon_solve_diagnostic.sh
+```
+
+| Case | Mode | k-effective | CE shape mean residual | CE shape max residual |
+| --- | --- | ---: | ---: | ---: |
+| uncorrected | diffusion | 1.295644 | 0.232018 | 0.908086 |
+| SPH-corrected | diffusion | 1.297504 | 0.231839 | 0.90773 |
+| uncorrected | SPN3 | 1.298612 | 0.225032 | 0.910189 |
+| SPH-corrected | SPN3 | 1.300365 | 0.224902 | 0.909797 |
+
+Interpretation:
+
+- The five-region case is a stronger converter/SPH handoff check than the
+  three-region slab because it uses repeated cells, five output regions, and a
+  matching 2D DONJON colorset diagnostic.
+- The OpenMC-side SPH update closes the frozen-flux reaction-rate diagnostic
+  while keeping all SPH factors finite, positive, and unclipped.
+- The SPH-corrected DONJON diagnostic moves the CE flux-shape residual in the
+  right direction for both diffusion and SPN3, but the residual remains large.
+  This is production-quality handoff evidence, not a final deterministic
+  benchmark.
+
 ## Produced Artifacts
 
 The high-statistics run produced:
