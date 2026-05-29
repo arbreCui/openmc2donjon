@@ -16,7 +16,7 @@ downstream consumer of the corrected handoff.
 
 ## Geometry
 
-The model is a tiny three-region slab colorset with reflective outer
+The default model is a tiny three-region slab colorset with reflective outer
 boundaries:
 
 ```text
@@ -26,8 +26,23 @@ CS_ABS   -> DONJON mixture 3 / SPH region 3
 ```
 
 This remains the default because it runs quickly and is useful as a
-development smoke.  A larger five-region two-dimensional variant is available
-for the next physics validation step:
+development smoke.  A minimal two-region colorset is also available for the
+Alain/Siggi case where two output regions require two `SPH(region, group)`
+factors per energy group:
+
+```sh
+OPENMC2DONJON_COLORSET_VARIANT=two_region \
+RUN_ROOT=/private/tmp/openmc2donjon_ce_mg_sph_two_region \
+bash examples/openmc_ce_mg_33g_sph_minicase/run_workflow.sh
+```
+
+```text
+CS_FUEL -> fuel-like output region
+CS_MOD  -> moderator-like output region
+```
+
+A larger five-region two-dimensional variant is available for the next physics
+validation step:
 
 ```sh
 OPENMC2DONJON_COLORSET_VARIANT=five_region_2d \
@@ -46,9 +61,10 @@ CS_ABS    -> absorber/control-like output region
 CS_REF    -> reflector-like output region
 ```
 
-Use the three-region variant for fast interface checks.  Use
-`five_region_2d` when reviewing whether the OpenMC-side SPH route improves a
-larger low-order colorset diagnostic.
+Use `two_region` to demonstrate the minimum multi-region SPH semantics.  Use
+the three-region variant for fast interface checks.  Use `five_region_2d` when
+reviewing whether the OpenMC-side SPH route improves a larger low-order
+colorset diagnostic.
 
 This concrete minicase uses the ECCO-33 energy mesh, but the workflow is not
 limited to 33 groups: any valid OpenMC MG group structure can be used as long
@@ -107,7 +123,7 @@ SPH_CLIP_MAX=
 MAX_CE_FLUX_REL_STD=0.20
 MAX_MG_FLUX_REL_STD=0.20
 OPENMC_LIB_DIR=/path/to/openmc/build/lib
-OPENMC2DONJON_COLORSET_VARIANT=three_region   # or five_region_2d
+OPENMC2DONJON_COLORSET_VARIANT=three_region   # or two_region / five_region_2d
 ```
 
 `OPENMC_LIB_DIR` is optional, but useful on macOS when the OpenMC executable

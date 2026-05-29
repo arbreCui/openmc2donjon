@@ -8,6 +8,10 @@ The default variant keeps the original three-region smoke:
 
 ``CS_FUEL`` -> ``CS_MOD`` -> ``CS_ABS``
 
+Set ``OPENMC2DONJON_COLORSET_VARIANT=two_region`` to exercise the
+minimal Alain/Siggi-style colorset with two output regions and therefore two
+SPH factors per energy group.
+
 Set ``OPENMC2DONJON_COLORSET_VARIANT=five_region_2d`` to exercise a larger
 two-dimensional colorset with five output regions.  Both variants use the same
 workflow: OpenMC CE reference, OpenMC MG macro solve on the same geometry, then
@@ -91,6 +95,10 @@ COLORSET_VARIANT = os.environ.get(
     DEFAULT_COLORSET_VARIANT,
 ).strip()
 REGION_SPECS_BY_VARIANT = {
+    "two_region": (
+        RegionSpec(FUEL_CELL_ID, "CS_FUEL", "colorset fuel", -3.0, 0.0, -2.0, 2.0),
+        RegionSpec(MODERATOR_CELL_ID, "CS_MOD", "colorset moderator", 0.0, 3.0, -2.0, 2.0),
+    ),
     "three_region": (
         RegionSpec(FUEL_CELL_ID, "CS_FUEL", "colorset fuel", -3.0, -1.0, -2.0, 2.0),
         RegionSpec(MODERATOR_CELL_ID, "CS_MOD", "colorset moderator", -1.0, 1.0, -2.0, 2.0),

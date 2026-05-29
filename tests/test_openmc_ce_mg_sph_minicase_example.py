@@ -31,6 +31,7 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
         self.assertIn('MG_MACRO_SCATTER_FORMAT = "histogram"', text)
         self.assertIn("MG_MACRO_HISTOGRAM_BINS = 16", text)
         self.assertIn("OPENMC2DONJON_COLORSET_VARIANT", text)
+        self.assertIn("two_region", text)
         self.assertIn("five_region_2d", text)
         self.assertIn("REGION_SPECS_BY_VARIANT", text)
         self.assertIn("DOMAIN_IDS = tuple(spec.cell_id for spec in REGION_SPECS)", text)
@@ -79,6 +80,9 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
         self.assertIn("CS_FUEL  -> DONJON mixture 1", readme)
         self.assertIn("CS_MOD   -> DONJON mixture 2", readme)
         self.assertIn("CS_ABS   -> DONJON mixture 3", readme)
+        self.assertIn("OPENMC2DONJON_COLORSET_VARIANT=two_region", readme)
+        self.assertIn("two `SPH(region, group)`", readme)
+        self.assertIn("CS_FUEL -> fuel-like output region", readme)
         self.assertIn("OPENMC2DONJON_COLORSET_VARIANT=five_region_2d", readme)
         self.assertIn("CS_FUEL_L -> fuel-like output region", readme)
         self.assertIn("CS_REF    -> reflector-like output region", readme)
@@ -143,10 +147,22 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
         self.assertIn("out_with_openmc_sph.macrolib.txt", wrapper)
 
         self.assertIn("DONJON consume smoke", evidence)
+        self.assertIn("Two-Region SPH Smoke", evidence)
+        self.assertIn("target_mix=2 expected_g1=1.22116014", evidence)
         self.assertIn("expected_mix3_g1=1.05946788", evidence)
         self.assertIn("pn_ntot0_ratio=1.05946786", evidence)
         self.assertIn("DSPH:", evidence)
         self.assertIn("MAC:", evidence)
+
+    def test_donjon_consume_smoke_selects_available_nonunity_sph_target(self) -> None:
+        script = (_repo_root() / "scripts/run_donjon_sph_consume_smoke.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("target_index = int(np.argmax(np.abs(expected[:, 0] - 1.0))) + 1", script)
+        self.assertIn("expected at least one mixture and one group", script)
+        self.assertIn("target_mix={target_index}", script)
+        self.assertNotIn("expected at least three mixtures", script)
 
     def test_donjon_solve_diagnostic_is_documented_as_review_evidence(self) -> None:
         readme = (_example_dir() / "README.md").read_text(encoding="utf-8")

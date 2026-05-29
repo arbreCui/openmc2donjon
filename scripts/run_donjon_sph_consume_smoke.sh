@@ -62,10 +62,21 @@ rm -f "$CORRECTED_PN" "$CORRECTED_SN"
 from pathlib import Path
 import sys
 
+import numpy as np
+
+from openmc2donjon.macrolib import extract_sph_from_macrolib_ascii
+
 deck = Path(sys.argv[1])
 macrolib = Path(sys.argv[2])
 corrected_pn = Path(sys.argv[3])
 corrected_sn = Path(sys.argv[4])
+expected = extract_sph_from_macrolib_ascii(macrolib)
+if expected.shape[0] < 1 or expected.shape[1] < 1:
+    raise SystemExit(f"expected at least one mixture and one group, got {expected.shape}")
+target_index = int(np.argmax(np.abs(expected[:, 0] - 1.0))) + 1
+target = float(expected[target_index - 1, 0])
+if np.isclose(target, 1.0):
+    raise SystemExit("selected NSPH value is unity; smoke needs a non-unity SPH factor")
 deck.write_text(
     f"""* DONJON DSPH consumption and MAC update of an L_MACROLIB NSPH payload.
 MODULE DSPH: MAC: GREP: END: ABORT: ;
@@ -77,14 +88,14 @@ SEQ_ASCII CORRSN_ASC :: FILE '{corrected_sn}' ;
 
 MACRO := MACRO_ASC ;
 DMACROPN OPTIMPN := DSPH: MACRO :: EDIT 1 SPH PN ;
-GREP: OPTIMPN :: GETVAL 'VAR-VALUE' 3 NVAL 1 >>sph3pn<< ;
-ECHO 'OPENMC2DONJON DONJON DSPH PN NSPH VAR-VALUE 3' sph3pn ;
+GREP: OPTIMPN :: GETVAL 'VAR-VALUE' {target_index} NVAL 1 >>sph3pn<< ;
+ECHO 'OPENMC2DONJON DONJON DSPH PN NSPH VAR-VALUE {target_index}' sph3pn ;
 CORRPN := MACRO ;
 CORRPN := MAC: CORRPN OPTIMPN ;
 CORRPN_ASC := CORRPN ;
 DMACROSN OPTIMSN := DSPH: MACRO :: EDIT 1 SPH SN ;
-GREP: OPTIMSN :: GETVAL 'VAR-VALUE' 3 NVAL 1 >>sph3sn<< ;
-ECHO 'OPENMC2DONJON DONJON DSPH SN NSPH VAR-VALUE 3' sph3sn ;
+GREP: OPTIMSN :: GETVAL 'VAR-VALUE' {target_index} NVAL 1 >>sph3sn<< ;
+ECHO 'OPENMC2DONJON DONJON DSPH SN NSPH VAR-VALUE {target_index}' sph3sn ;
 CORRSN := MACRO ;
 CORRSN := MAC: CORRSN OPTIMSN ;
 CORRSN_ASC := CORRSN ;
@@ -113,9 +124,10 @@ result = Path(sys.argv[2])
 corrected_pn_path = Path(sys.argv[3])
 corrected_sn_path = Path(sys.argv[4])
 expected = extract_sph_from_macrolib_ascii(macrolib)
-if expected.shape[0] < 3 or expected.shape[1] < 1:
-    raise SystemExit(f"expected at least three mixtures and one group, got {expected.shape}")
-target = float(expected[2, 0])
+if expected.shape[0] < 1 or expected.shape[1] < 1:
+    raise SystemExit(f"expected at least one mixture and one group, got {expected.shape}")
+target_index = int(np.argmax(np.abs(expected[:, 0] - 1.0))) + 1
+target = float(expected[target_index - 1, 0])
 if np.isclose(target, 1.0):
     raise SystemExit("selected NSPH value is unity; smoke needs a non-unity SPH factor")
 
@@ -127,7 +139,10 @@ if "IDELTA       3" not in text or "IDELTA       4" not in text:
 
 values = {}
 for label in ("PN", "SN"):
-    pattern = rf"OPENMC2DONJON DONJON DSPH {label} NSPH VAR-VALUE 3\s+([0-9.Ee+-]+)"
+    pattern = (
+        rf"OPENMC2DONJON DONJON DSPH {label} NSPH VAR-VALUE "
+        rf"{target_index}\s+([0-9.Ee+-]+)"
+    )
     match = re.search(pattern, text)
     if match is None:
         raise SystemExit(f"missing DONJON DSPH {label} echo in {result}")
@@ -143,18 +158,29 @@ if corrected_sn.state_vector[13] != 1:
     raise SystemExit("SN-corrected macrolib SPH state-vector flag is not set")
 if corrected_pn.sph is None or corrected_sn.sph is None:
     raise SystemExit("corrected macrolib is missing GROUP/*/NSPH payload")
-np.testing.assert_allclose(corrected_pn.sph[2, 0], target, rtol=1.0e-7, atol=1.0e-7)
-np.testing.assert_allclose(corrected_sn.sph[2, 0], target, rtol=1.0e-7, atol=1.0e-7)
+np.testing.assert_allclose(
+    corrected_pn.sph[target_index - 1, 0],
+    target,
+    rtol=1.0e-7,
+    atol=1.0e-7,
+)
+np.testing.assert_allclose(
+    corrected_sn.sph[target_index - 1, 0],
+    target,
+    rtol=1.0e-7,
+    atol=1.0e-7,
+)
 
-base_ntot0 = float(base.ntot0[2, 0])
-pn_ntot0 = float(corrected_pn.ntot0[2, 0])
-sn_ntot0 = float(corrected_sn.ntot0[2, 0])
+base_ntot0 = float(base.ntot0[target_index - 1, 0])
+pn_ntot0 = float(corrected_pn.ntot0[target_index - 1, 0])
+sn_ntot0 = float(corrected_sn.ntot0[target_index - 1, 0])
 np.testing.assert_allclose(pn_ntot0, base_ntot0 * target, rtol=1.0e-6, atol=1.0e-7)
 np.testing.assert_allclose(sn_ntot0, base_ntot0, rtol=1.0e-6, atol=1.0e-7)
 
 print(
     "DONJON DSPH consumed NSPH: "
-    f"expected_mix3_g1={target:.9g} pn={values['PN']:.9g} sn={values['SN']:.9g}"
+    f"target_mix={target_index} expected_g1={target:.9g} "
+    f"pn={values['PN']:.9g} sn={values['SN']:.9g}"
 )
 print(
     "DONJON MAC applied SPH: "

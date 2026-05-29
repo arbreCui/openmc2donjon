@@ -46,6 +46,47 @@ Scatter treatment is intentionally split:
 The H16 histogram data is not written to DONJON as scatter data.  It is used
 inside OpenMC MG to obtain the macro flux used in the SPH update.
 
+## Two-Region SPH Smoke
+
+The minimal Alain/Siggi-style colorset is now wired through the same route.
+It has two output regions, so the OpenMC-side equivalence produces two
+`SPH(region, group)` factors per energy group:
+
+```sh
+OPENMC2DONJON_COLORSET_VARIANT=two_region \
+RUN_ROOT=/private/tmp/openmc2donjon_two_region_smoke_20260529 \
+BATCHES=20 INACTIVE=5 PARTICLES=5000 \
+MG_BATCHES=20 MG_INACTIVE=5 MG_PARTICLES=5000 \
+MAX_CE_FLUX_REL_STD=0.50 \
+MAX_MG_FLUX_REL_STD=0.50 \
+bash examples/openmc_ce_mg_33g_sph_minicase/run_workflow.sh
+```
+
+This is a smoke/statistical demonstration, not a production-quality run:
+
+| Quantity | Result |
+| --- | ---: |
+| Summary decision | `openmc_ce_mg_sph_demonstration_quality` |
+| Mixtures | 2 (`CS_FUEL`, `CS_MOD`) |
+| Energy groups | 33 |
+| CE flux max relative std dev | 0.213729 |
+| MG flux max relative std dev | 0.1509 |
+| SPH minimum | 0.892747 |
+| SPH maximum | 1.22116 |
+| Max `abs(SPH - 1)` | 0.22116 |
+| Clipped SPH bins | 0 |
+| Current OpenMC MG reaction-rate residual | 0.22116 |
+| Frozen-flux residual after applying the new SPH update | 4.77e-12 |
+| MACROLIB `NSPH` block count | 33 |
+
+The same DONJON `DSPH:` / `MAC:` consume smoke now auto-selects a non-unity
+target mixture, so it works for two-, three-, and five-region handoffs:
+
+```text
+DONJON DSPH consumed NSPH: target_mix=2 expected_g1=1.22116014 pn=1.22116017 sn=1.22116017
+DONJON MAC applied SPH: pn_ntot0_ratio=1.22116016 sn_ntot0_ratio=0.99999998
+```
+
 ## Production Run
 
 Command used on the development machine:
