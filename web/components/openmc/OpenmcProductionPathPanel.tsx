@@ -63,67 +63,45 @@ export default function OpenmcProductionPathPanel({
   const items = isOpenmcSph
     ? [
         {
-          id: "ce-mg",
+          id: "run-openmc",
           label: "01",
-          eyebrow: "OpenMC physics",
-          title: "Run CE + MG",
+          eyebrow: "Run physics",
+          title: "Run OpenMC CE/MG SPH",
           body:
-            "Run CE as the high-fidelity reference, then run OpenMC MG on the selected energy mesh with the same geometry and output regions.",
-          status: statuses.source,
-          href: undefined,
-          hrefLabel: undefined,
-        },
-        {
-          id: "sph",
-          label: "02",
-          eyebrow: "OpenMC-side SPH",
-          title: "Build NSPH sidecar",
-          body:
-            "Export CE/MG region-group fluxes, compute SPH factors, and inject them into the MGXS handoff as NSPH.",
+            "Run OpenMC CE as the reference and OpenMC MG on the same geometry/output regions. Export CE/MG fluxes, build SPH(region, group), and inject NSPH into the MGXS handoff.",
           status: statuses.plan,
           href: undefined,
           hrefLabel: undefined,
         },
         {
           id: "summary",
-          label: "03",
-          eyebrow: "Physics evidence",
-          title: "Load physics summary",
+          label: "02",
+          eyebrow: "Review evidence",
+          title: "Review production evidence",
           body:
-            "Review SPH ranges, CE/MG flux uncertainty, and confirm the final ASCII carries NSPH factors.",
+            "Load physics_summary.json and check CE/MG flux uncertainty, SPH factor range, reaction-rate preservation, and NSPH handoff status.",
           status: statuses.run,
           href: undefined,
           hrefLabel: undefined,
         },
         {
           id: "convert",
-          label: "04",
+          label: "03",
           eyebrow: "Converter",
-          title: `Convert corrected HDF5 to ${object}`,
+          title: "Convert to DONJON MACROLIB",
           body:
-            "Use the augmented HDF5 as the converter input. The macro XS remain unchanged; DONJON consumes NSPH as equivalence factors, usually through MACROLIB.",
+            `Use the corrected HDF5 as converter input and write ${object}. For this SPH route, MACROLIB is the DONJON consumption path because NSPH is carried as GROUP/*/NSPH.`,
           status: statuses.review,
           href: convertHref ?? inspectHref ?? undefined,
           hrefLabel: convertHref ? "Open converter" : "Inspect HDF5",
-        },
-        {
-          id: "bundle",
-          label: "05",
-          eyebrow: "Bundle",
-          title: "Package production evidence",
-          body:
-            "Keep the corrected MGXS, ASCII handoff, physics summary, command summaries, and manifest together.",
-          status: statuses.bundle,
-          href: bundleHref ?? undefined,
-          hrefLabel: "Open bundle builder",
         },
       ]
     : [
         {
           id: "source",
           label: "01",
-          eyebrow: "OpenMC source",
-          title: loadStatepoint ? "Recipe + statepoint" : "Recipe dry-run mode",
+          eyebrow: "Export source",
+          title: loadStatepoint ? "Export OpenMC MGXS" : "Prepare export command",
           body: loadStatepoint
             ? "Select the export recipe and statepoint that define the OpenMC MGXS handoff."
             : "Use the recipe without loading a statepoint when you only need the generated command scaffold.",
@@ -132,43 +110,23 @@ export default function OpenmcProductionPathPanel({
           hrefLabel: undefined,
         },
         {
-          id: "plan",
+          id: "convert",
           label: "02",
-          eyebrow: "Plan commands",
-          title: "Build the handoff plan",
-          body: "The web page checks paths and emits copyable CLI commands. It does not execute OpenMC.",
-          status: statuses.plan,
-          href: undefined,
-          hrefLabel: undefined,
-        },
-        {
-          id: "run",
-          label: "03",
-          eyebrow: workflow === "one-step" ? "Run managed CLI" : "Run staged CLI",
-          title: workflow === "one-step" ? "Export, check, convert" : "Export then convert",
+          eyebrow: "Converter",
+          title: workflow === "one-step" ? `Write ${object}` : `Convert HDF5 to ${object}`,
           body:
             workflow === "one-step"
               ? `The primary command exports MGXS, applies ${equivalenceLabel(equivalence)}, writes ${object}, and records the run.`
               : `Run export first, inspect or augment the HDF5, then convert that handoff into ${object}.`,
-          status: statuses.run,
-          href: undefined,
-          hrefLabel: undefined,
-        },
-        {
-          id: "review",
-          label: "04",
-          eyebrow: "Review handoff",
-          title: workflow === "two-step" ? "Inspect before conversion" : "Inspect outputs",
-          body: "Review the HDF5 contract and generated ASCII before handing the result to DONJON.",
           status: statuses.review,
-          href: inspectHref ?? undefined,
-          hrefLabel: "Inspect HDF5",
+          href: convertHref ?? inspectHref ?? undefined,
+          hrefLabel: convertHref ? "Open converter" : "Inspect HDF5",
         },
         {
           id: "bundle",
-          label: "05",
+          label: "03",
           eyebrow: "Bundle",
-          title: "Package production evidence",
+          title: "Package DONJON handoff",
           body:
             "Use a managed run directory to keep the MGXS input, ASCII output, summaries, and manifest together.",
           status: statuses.bundle,
@@ -182,17 +140,17 @@ export default function OpenmcProductionPathPanel({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="text-[10px] uppercase tracking-[0.14em] text-cyan-200/80">
-            Production path
+            Main line
           </div>
           <h2 className="mt-1 text-base font-semibold tracking-tight">
             {isOpenmcSph
-              ? "OpenMC CE/MG SPH before DONJON conversion"
-              : "Plan the OpenMC export before direct conversion"}
+              ? "Three steps from OpenMC SPH to DONJON"
+              : "Three steps from OpenMC MGXS to DONJON"}
           </h2>
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
             {isOpenmcSph
-              ? "This route uses OpenMC MG as the formal SPH equivalence operator. DONJON receives the corrected handoff and precomputed NSPH factors; it is not used as an SPH feedback loop."
-              : "This surface builds the shell commands for the OpenMC side of the workflow. After the command runs, the produced HDF5 and ASCII artifacts continue through Inspect, Convert, and Bundle."}
+              ? "This route uses OpenMC MG as the SPH equivalence operator. DONJON receives the corrected handoff and precomputed NSPH factors; it is not used as an SPH feedback loop."
+              : "This route exports or receives OpenMC MGXS, writes the requested DONJON ASCII object, then packages the evidence."}
           </p>
         </div>
         <span className="rounded border border-[var(--edge)] px-2 py-1 font-mono text-[11px] uppercase tracking-wider text-[var(--fg-2)]">
@@ -201,7 +159,7 @@ export default function OpenmcProductionPathPanel({
         </span>
       </div>
 
-      <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+      <div className="mt-4 grid gap-2 lg:grid-cols-3">
         {items.map((item) => (
           <article
             key={item.id}

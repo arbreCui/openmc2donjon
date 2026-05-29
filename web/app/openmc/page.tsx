@@ -17,7 +17,6 @@ import OpenmcEntryPoints from "@/components/openmc/OpenmcEntryPoints";
 import OpenmcProductionPathPanel from "@/components/openmc/OpenmcProductionPathPanel";
 import OpenmcSphPhysicsSummaryCard from "@/components/openmc/OpenmcSphPhysicsSummaryCard";
 import OpenmcSphQuickFillCard from "@/components/openmc/OpenmcSphQuickFillCard";
-import OpenmcWorkflowChoices from "@/components/openmc/OpenmcWorkflowChoices";
 import OpenmcWorkflowSummary from "@/components/openmc/OpenmcWorkflowSummary";
 import OpenmcSphWorkflowPanel from "@/components/OpenmcSphWorkflowPanel";
 import { useSettings } from "@/lib/settings";
@@ -298,8 +297,6 @@ function OpenmcPageContent() {
           />
         ) : null}
 
-        <OpenmcWorkflowChoices />
-
         <OpenmcProductionPathPanel
           state={state}
           workflow={workflow}
@@ -314,12 +311,19 @@ function OpenmcPageContent() {
 
         {equivalence === "sph" ? (
           <>
-            <OpenmcSphWorkflowPanel activeCommandId="export-volume-flux" />
             <OpenmcSphPhysicsSummaryCard
               path={physicsSummaryPath}
               onPathChange={setPhysicsSummaryPath}
               onBrowse={() => setBrowserTarget("summary")}
             />
+            <details className="mb-5 mt-4 rounded-xl border border-[var(--edge)] bg-black/15 p-4">
+              <summary className="cursor-pointer text-sm font-semibold tracking-tight text-[var(--fg-1)]">
+                Detailed OpenMC SPH command map
+              </summary>
+              <div className="mt-4">
+                <OpenmcSphWorkflowPanel activeCommandId="export-volume-flux" />
+              </div>
+            </details>
           </>
         ) : null}
 
