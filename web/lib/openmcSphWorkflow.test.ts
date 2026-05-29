@@ -52,4 +52,12 @@ describe("openmcSphWorkflow", () => {
 
     expect(active.map((step) => step.id)).toEqual(["sph-sidecar"]);
   });
+
+  it("labels the MG rerun as optional and damping-sensitive", () => {
+    const apply = OPENMC_SPH_WORKFLOW_STEPS.find((step) => step.id === "apply-sph");
+
+    expect(apply?.badge).toBe("OPT");
+    expect(apply?.body).toContain("damping-sensitive");
+    expect(apply?.body).toContain("not the default production claim");
+  });
 });

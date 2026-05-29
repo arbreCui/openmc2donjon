@@ -64,7 +64,7 @@ export const COMMAND_WORKFLOW_LANES: readonly WorkflowLane[] = [
     id: "openmc-sph",
     title: "OpenMC-side SPH equivalence",
     summary:
-      "Use this when OpenMC CE reference tallies and OpenMC MG macro fluxes on the same geometry/output regions should produce explicit NSPH factors before conversion.",
+      "Use this when OpenMC CE reference tallies and OpenMC MG macro fluxes on the same geometry/output regions should produce explicit NSPH factors before conversion. The accepted demo is one-shot SPH; extra MG reruns are optional review steps.",
     steps: OPENMC_SPH_WORKFLOW_STEPS.map((step) => ({
       id: step.id,
       title: step.title,

@@ -95,11 +95,11 @@ export const COMMAND_GOALS: readonly CommandGoalDefinition[] = [
     eyebrow: "I need SPH factors",
     title: "Carry OpenMC-side SPH to DONJON",
     body:
-      "Use SPH factors generated from OpenMC CE reference tallies versus OpenMC MG macro fluxes on the same geometry/output regions, apply them to the next MG run until stable, then inject the final factors for DONJON consumption.",
+      "Use SPH factors generated from OpenMC CE reference tallies versus OpenMC MG macro fluxes on the same geometry/output regions, then inject the accepted factors for DONJON consumption. MG reruns are optional and damping-sensitive.",
     href: "/equivalence?kind=openmc-sph-sidecar",
     cta: "Open OpenMC SPH builder",
     actionHint:
-      "Compute the SPH sidecar from CE/MG fluxes, apply it to the next OpenMC MG run, then inject the final sidecar before conversion.",
+      "Compute the one-shot SPH sidecar from CE/MG fluxes, review the physics summary, and only run apply-sph when an explicit damping study justifies another MG iteration.",
     commandIds: [
       "export-volume-flux",
       "make-openmc-sph-sidecar",

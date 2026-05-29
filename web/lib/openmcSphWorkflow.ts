@@ -73,10 +73,10 @@ export const OPENMC_SPH_WORKFLOW_STEPS: readonly OpenmcSphWorkflowStep[] = [
   },
   {
     id: "apply-sph",
-    title: "Apply SPH for the next MG run",
-    badge: "ITER",
+    title: "Optional damped MG rerun",
+    badge: "OPT",
     body:
-      "Write an MGXS copy with XS divided by NSPH, then rerun OpenMC MG and repeat the flux comparison until the SPH factors stabilize.",
+      "If one-shot SPH is not enough, write an MGXS copy with XS divided by NSPH and rerun OpenMC MG. Treat this as a damping-sensitive review step, not the default production claim.",
     commandId: "apply-sph",
     href: "/builder?command=apply-sph",
     cli:
@@ -88,7 +88,7 @@ export const OPENMC_SPH_WORKFLOW_STEPS: readonly OpenmcSphWorkflowStep[] = [
     title: "Inject SPH into HDF5",
     badge: "HDF5",
     body:
-      "After the OpenMC-side iteration is accepted, attach the final SPH sidecar so the converter can carry NSPH metadata.",
+      "Attach the accepted SPH sidecar to the converter-facing HDF5. The current production demo uses the one-shot sidecar unless a damped rerun has been explicitly reviewed.",
     commandId: "augment-sph",
     href: "/equivalence?kind=augment-sph",
     cli:

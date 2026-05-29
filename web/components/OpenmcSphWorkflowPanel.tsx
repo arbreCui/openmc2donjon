@@ -23,6 +23,11 @@ export default function OpenmcSphWorkflowPanel({
             same geometry, compute SPH from the two OpenMC flux fields, inject the
             factors into the MGXS HDF5, then use the normal converter.
           </p>
+          <p className="mt-2 max-w-3xl text-[12px] leading-5 text-amber-200/85">
+            Current accepted evidence is the one-shot five-region production run.
+            Additional OpenMC MG reruns are available for review, but they are
+            damping-sensitive and should not be treated as the default path.
+          </p>
         </div>
         <Link href="/commands/export-volume-flux" className="btn btn-secondary">
           Flux export guide

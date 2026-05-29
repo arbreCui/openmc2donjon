@@ -149,7 +149,7 @@ export default function OpenmcProductionPathPanel({
           </h2>
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
             {isOpenmcSph
-              ? "This route uses OpenMC MG as the SPH equivalence operator. DONJON receives the corrected handoff and precomputed NSPH factors; it is not used as an SPH feedback loop."
+              ? "This route uses OpenMC MG as the SPH equivalence operator. DONJON receives the corrected handoff and precomputed NSPH factors; it is not used as an SPH feedback loop. The current production demo is one-shot SPH; extra MG reruns are a damping-sensitive review path."
               : "This route exports or receives OpenMC MGXS, writes the requested DONJON ASCII object, then packages the evidence."}
           </p>
         </div>

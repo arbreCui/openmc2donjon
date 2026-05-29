@@ -40,6 +40,8 @@ describe("commandWorkflowLanes", () => {
     expect(sphLane!.steps[2].commandIds).toContain("make-openmc-sph-sidecar");
     expect(sphLane!.steps[2].commandIds).toContain("make-sph-update-table");
     expect(sphLane!.steps[3].commandIds).toContain("apply-sph");
+    expect(sphLane!.summary).toContain("one-shot SPH");
+    expect(sphLane!.steps[3].body).toContain("damping-sensitive");
   });
 
   it("finds all workflow positions for commands reused across lanes", () => {
