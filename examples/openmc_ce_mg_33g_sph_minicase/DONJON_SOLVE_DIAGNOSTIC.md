@@ -23,6 +23,16 @@ handoff/openmc_ce_flux.h5
 handoff/openmc_mg_flux.h5
 ```
 
+Optional comparison file:
+
+```text
+handoff/out_uncorrected.macrolib.txt
+```
+
+When the uncorrected MACROLIB exists, the diagnostic runs the same DONJON
+geometry and solver settings for both the uncorrected and SPH-corrected
+handoffs.
+
 The MACROLIB is the accepted SPH consumption route for this minicase because it
 writes `GROUP/*/NSPH` directly.  DONJON reads those factors through `DSPH:` and
 applies them through `MAC:`.
@@ -43,14 +53,20 @@ By default the script writes:
 
 ## What It Runs
 
-The generated DONJON decks use a three-region reflective `CAR2D` model matching
-the colorset ordering:
+The generated DONJON decks use a reflective `CAR2D` model inferred from the
+MACROLIB mixture count.  For the original three-region case this reproduces the
+hand-tuned slab:
 
 ```text
 mixture 1: CS_FUEL
 mixture 2: CS_MOD
 mixture 3: CS_ABS
 ```
+
+For larger variants, such as `five_region_2d`, the diagnostic builds a
+volume-ratio-preserving one-dimensional `CAR2D` slab in mixture order.  That is
+good enough to compare uncorrected and SPH-corrected DONJON responses with the
+same low-order operator; it is still not a geometry benchmark.
 
 Two low-order solves are run:
 
@@ -59,10 +75,11 @@ Two low-order solves are run:
 | diffusion | `TRIVAT` / `TRIVAA` / `FLUD` |
 | SPN3 | `TRIVAT` / `TRIVAA` / `FLUD`, with `SPN 3 SCAT 2` |
 
-The script exports the DONJON flux object and compares the first three
-`KEYFLX` unknowns against the OpenMC CE and OpenMC MG volume fluxes.  Because a
-low-order eigenvector has arbitrary normalization, each flux shape is compared
-after removing a scalar normalization factor.
+The script exports the DONJON flux object and compares the first `N` flux
+unknowns, where `N` is the number of OpenMC output mixtures, against the OpenMC
+CE and OpenMC MG volume fluxes.  Because a low-order eigenvector has arbitrary
+normalization, each flux shape is compared after removing a scalar
+normalization factor.
 
 ## Current Result
 

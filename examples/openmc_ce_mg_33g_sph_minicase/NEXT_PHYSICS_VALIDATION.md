@@ -80,6 +80,10 @@ donjon_sph_corrected_summary.json
 The uncorrected and SPH-corrected DONJON summaries should use the same geometry
 and solver settings.
 
+`run_workflow.sh` now writes `out_uncorrected.macrolib.txt` alongside the
+SPH-corrected MACROLIB, and `run_donjon_solve_diagnostic.sh` consumes both
+files when they are present.
+
 ## Acceptance Criteria
 
 A run is useful as production evidence when:

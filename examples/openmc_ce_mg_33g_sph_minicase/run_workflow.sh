@@ -17,6 +17,7 @@ MG_FLUX="$OUT_DIR/openmc_mg_flux.h5"
 SPH_SIDECAR="$OUT_DIR/openmc_sph_sidecar.h5"
 SPH_TABLE="$OUT_DIR/openmc_sph.csv"
 AUGMENTED="$OUT_DIR/mgxs_with_openmc_sph.h5"
+UNCORRECTED_MACROLIB="$OUT_DIR/out_uncorrected.macrolib.txt"
 MG_MACRO_SCATTER_FORMAT="${MG_MACRO_SCATTER_FORMAT:-histogram}"
 MG_MACRO_HISTOGRAM_BINS="${MG_MACRO_HISTOGRAM_BINS:-16}"
 MG_MACRO_LEGENDRE_ORDER="${MG_MACRO_LEGENDRE_ORDER:-3}"
@@ -110,6 +111,13 @@ echo "== Export CE reference region/group flux map =="
   --dataset-name openmc_volume_flux \
   -o "$CE_FLUX" \
   --force
+
+echo
+echo "== Write uncorrected DONJON MACROLIB baseline =="
+"$PYTHON_BIN" -m openmc2donjon.cli "$MGXS_H5" \
+  --format macrolib \
+  -o "$UNCORRECTED_MACROLIB" \
+  --check
 
 echo
 echo "== Iterate OpenMC MG macro calculation and OpenMC-side SPH factors =="
@@ -249,6 +257,7 @@ echo "  MG flux: $MG_FLUX::openmc_mg_flux"
 echo "  final MG case: $FINAL_MG_CASE_DIR"
 echo "  MG macro scatter summary: $OUT_DIR/mg_macro_summary.json"
 echo "  SPH sidecar: $SPH_SIDECAR"
+echo "  uncorrected MACROLIB ASCII: $UNCORRECTED_MACROLIB"
 echo "  MULTICOMPO ASCII: $OUT_DIR/out_with_openmc_sph.mcompo.txt"
 echo "  MACROLIB ASCII: $OUT_DIR/out_with_openmc_sph.macrolib.txt"
 echo "  physics summary: $OUT_DIR/physics_summary.md"

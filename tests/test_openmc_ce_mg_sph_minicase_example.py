@@ -157,7 +157,8 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
 
         self.assertIn("run_donjon_solve_diagnostic.sh", readme)
         self.assertIn("donjon_solve_summary.json", readme)
-        self.assertIn("not a benchmark acceptance gate", readme)
+        self.assertIn("not a benchmark acceptance\ngate", readme)
+        self.assertIn("uncorrected and SPH-corrected", readme)
         self.assertIn("TRIVAT/TRIVAA/FLUD", readme)
 
         self.assertIn("DONJON solve diagnostic", evidence)
@@ -167,7 +168,8 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
 
         self.assertIn("donjon_solve_diagnostic_recorded", script)
         self.assertIn("DUAL 1 1 SPN 3 SCAT 2", script)
-        self.assertIn("KEYFLX", script)
+        self.assertIn("out_uncorrected.macrolib.txt", script)
+        self.assertIn("sph_corrected", script)
         self.assertIn("flux_shape_mean_relative_residual", script)
 
     def test_production_evidence_fixture_records_openmc_sph_handoff_quality(self) -> None:

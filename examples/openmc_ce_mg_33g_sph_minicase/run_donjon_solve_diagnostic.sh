@@ -9,6 +9,7 @@ PYTHON_BIN="${PYTHON_BIN:-}"
 DONJON_ROOT="${DONJON_ROOT:-/Users/wen/dragon-5.1/Donjon}"
 DONJON_RUNNER="${DONJON_RUNNER:-$DONJON_ROOT/rdonjon}"
 MACROLIB_ASCII="${MACROLIB_ASCII:-$RUN_ROOT/handoff/out_with_openmc_sph.macrolib.txt}"
+UNCORRECTED_MACROLIB_ASCII="${UNCORRECTED_MACROLIB_ASCII:-$RUN_ROOT/handoff/out_uncorrected.macrolib.txt}"
 REFERENCE_FLUX="${REFERENCE_FLUX:-$RUN_ROOT/handoff/openmc_ce_flux.h5}"
 REFERENCE_DATASET="${REFERENCE_DATASET:-openmc_volume_flux}"
 MG_FLUX="${MG_FLUX:-$RUN_ROOT/handoff/openmc_mg_flux.h5}"
@@ -49,43 +50,60 @@ export PYTHONPATH="$REPO_ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
 DATA_CASE_DIR="$DONJON_ROOT/data/openmc2donjon/case_runs/openmc_ce_mg_sph_colorset"
 mkdir -p "$RUN_DIR" "$DATA_CASE_DIR"
 
-SHORT_MACROLIB="/tmp/${RUN_TAG}.macrolib.txt"
-cp "$MACROLIB_ASCII" "$SHORT_MACROLIB"
-
 SUMMARY_JSON="$RUN_DIR/donjon_solve_summary.json"
 SUMMARY_MD="$RUN_DIR/donjon_solve_summary.md"
+SCRIPT_PID="$$"
 
 echo "== OpenMC CE/MG SPH -> DONJON solve diagnostic =="
-echo "run_root:   $RUN_ROOT"
-echo "macrolib:   $MACROLIB_ASCII"
-echo "reference:  $REFERENCE_FLUX::$REFERENCE_DATASET"
-echo "mg flux:    $MG_FLUX::$MG_DATASET"
-echo "run_dir:    $RUN_DIR"
-echo "donjon:     $DONJON_RUNNER"
+echo "run_root:      $RUN_ROOT"
+echo "corrected:     $MACROLIB_ASCII"
+if [[ -f "$UNCORRECTED_MACROLIB_ASCII" ]]; then
+  echo "uncorrected:   $UNCORRECTED_MACROLIB_ASCII"
+else
+  echo "uncorrected:   not available; running corrected-only diagnostic"
+fi
+echo "reference:     $REFERENCE_FLUX::$REFERENCE_DATASET"
+echo "mg flux:       $MG_FLUX::$MG_DATASET"
+echo "run_dir:       $RUN_DIR"
+echo "donjon:        $DONJON_RUNNER"
 echo
 
 make_deck() {
-  local mode="$1"
-  local track_options="$2"
-  local deck_path="$3"
-  local flux_path="$4"
-  "$PYTHON_BIN" - "$mode" "$track_options" "$SHORT_MACROLIB" "$deck_path" "$flux_path" <<'PY'
+  local label="$1"
+  local mode="$2"
+  local track_options="$3"
+  local macrolib="$4"
+  local deck_path="$5"
+  local flux_path="$6"
+  local apply_sph="$7"
+  "$PYTHON_BIN" - "$label" "$mode" "$track_options" "$macrolib" "$deck_path" "$flux_path" "$apply_sph" <<'PY'
 from pathlib import Path
 import sys
 
-mode, track_options, macrolib, deck, flux = sys.argv[1:]
-deck_path = Path(deck)
-flux_path = Path(flux)
-deck_path.write_text(
-    f"""* OpenMC CE/MG SPH colorset 3-region DONJON {mode} solve diagnostic.
-MODULE GEO: TRIVAT: TRIVAA: FLUD: GREP: END: ABORT: ;
-LINKED_LIST MACRO GEOM TRACK SYS FLUX ;
-REAL keff ;
-SEQ_ASCII MACRO_ASC :: FILE '{macrolib}' ;
-SEQ_ASCII FLUX_ASC :: FILE '{flux_path}' ;
+import numpy as np
 
-MACRO := MACRO_ASC ;
-GEOM := GEO: :: CAR2D 3 1
+from openmc2donjon.macrolib import read_macrolib_ascii
+
+
+label, mode, track_options, macrolib, deck, flux, apply_sph_raw = sys.argv[1:]
+macro = read_macrolib_ascii(macrolib)
+apply_sph = apply_sph_raw == "1"
+
+
+def _mesh_edges(volumes: np.ndarray) -> list[float]:
+    base = float(np.min(volumes[volumes > 0.0]))
+    widths = volumes / base
+    edges = [0.0]
+    for width in widths:
+        edges.append(edges[-1] + float(width))
+    return edges
+
+
+def _geometry_card() -> tuple[str, str]:
+    nmixtures = macro.nmixtures
+    if nmixtures == 3:
+        return (
+            """CAR2D 3 1
   EDIT 0
   X- REFL X+ REFL
   Y- REFL Y+ REFL
@@ -94,17 +112,60 @@ GEOM := GEO: :: CAR2D 3 1
   MESHX
   0.00000000 2.00000000 4.00000000 6.00000000
   MESHY
-  0.00000000 4.00000000
-;
+  0.00000000 4.00000000""",
+            "3-region reflective CAR2D slab matching CS_FUEL/CS_MOD/CS_ABS widths",
+        )
+    edges = _mesh_edges(np.asarray(macro.volume, dtype=float))
+    meshx = " ".join(f"{edge:.8f}" for edge in edges)
+    mix = " ".join(str(index) for index in range(1, nmixtures + 1))
+    return (
+        f"""CAR2D {nmixtures} 1
+  EDIT 0
+  X- REFL X+ REFL
+  Y- REFL Y+ REFL
+  MIX
+  {mix}
+  MESHX
+  {meshx}
+  MESHY
+  0.00000000 4.00000000""",
+        f"{nmixtures}-region volume-ratio-preserving reflective CAR2D slab",
+    )
 
+
+geometry_card, geometry_note = _geometry_card()
+deck_path = Path(deck)
+flux_path = Path(flux)
+echo_label = label.upper().replace("-", "_")
+echo_mode = mode.upper().replace("-", "_")
+if apply_sph:
+    macro_setup = f"""DMACRO OPTIM := DSPH: MACRO :: EDIT 1 SPH PN ;
+SOLVE_MACRO := MACRO ;
+SOLVE_MACRO := MAC: SOLVE_MACRO OPTIM ;
+ECHO 'OPENMC2DONJON OPENMC SPH COLORSET {echo_label} {echo_mode} NSPH APPLIED PN' ;"""
+else:
+    macro_setup = "SOLVE_MACRO := MACRO ;"
+deck_path.write_text(
+    f"""* OpenMC CE/MG SPH colorset DONJON {label} {mode} solve diagnostic.
+MODULE GEO: TRIVAT: TRIVAA: FLUD: DSPH: MAC: GREP: END: ABORT: ;
+LINKED_LIST MACRO SOLVE_MACRO GEOM TRACK SYS FLUX DMACRO OPTIM ;
+REAL keff ;
+SEQ_ASCII MACRO_ASC :: FILE '{macrolib}' ;
+SEQ_ASCII FLUX_ASC :: FILE '{flux_path}' ;
+
+MACRO := MACRO_ASC ;
+{macro_setup}
+GEOM := GEO: :: {geometry_card}
+;
 TRACK := TRIVAT: GEOM ::
-  TITLE 'OpenMC2DONJON OpenMC-side SPH colorset {mode} diagnostic'
+  TITLE 'OpenMC2DONJON OpenMC-side SPH colorset {label} {mode} diagnostic'
   EDIT 1 MAXR 64
   {track_options} ;
-SYS := TRIVAA: MACRO TRACK :: EDIT 0 ;
+SYS := TRIVAA: SOLVE_MACRO TRACK :: EDIT 0 ;
 FLUX := FLUD: SYS TRACK :: EDIT 1 ADI 4 ACCE 5 3 EXTE 700 1.E-6 ;
 GREP: FLUX :: GETVAL 'K-EFFECTIVE ' 1 >>keff<< ;
-ECHO 'OPENMC2DONJON OPENMC SPH COLORSET {mode.upper()} K-EFFECTIVE' keff ;
+ECHO 'OPENMC2DONJON OPENMC SPH COLORSET {echo_label} {echo_mode} K-EFFECTIVE' keff ;
+ECHO 'OPENMC2DONJON OPENMC SPH COLORSET GEOMETRY {geometry_note}' ;
 FLUX_ASC := FLUX ;
 END: ;
 """,
@@ -114,17 +175,22 @@ PY
 }
 
 run_mode() {
-  local mode="$1"
-  local track_options="$2"
-  local deck_rel="openmc2donjon/case_runs/openmc_ce_mg_sph_colorset/${RUN_TAG}_${mode}.x2m"
+  local label="$1"
+  local mode="$2"
+  local track_options="$3"
+  local macrolib="$4"
+  local apply_sph="$5"
+  local safe_label="${label//-/_}"
+  local deck_rel="openmc2donjon/case_runs/openmc_ce_mg_sph_colorset/${RUN_TAG}_${safe_label}_${mode}.x2m"
   local deck_path="$DONJON_ROOT/data/$deck_rel"
-  local flux_path="/tmp/${RUN_TAG}_${mode}_flux.txt"
-  local result_path="$DONJON_ROOT/Darwin_arm64/${RUN_TAG}_${mode}.result"
+  local flux_path
+  flux_path="$(tmp_flux_path "$label" "$mode")"
+  local result_path="$DONJON_ROOT/Darwin_arm64/${RUN_TAG}_${safe_label}_${mode}.result"
 
   rm -f "$flux_path" "$result_path"
-  make_deck "$mode" "$track_options" "$deck_path" "$flux_path"
+  make_deck "$label" "$mode" "$track_options" "$macrolib" "$deck_path" "$flux_path" "$apply_sph"
 
-  echo "== DONJON $mode solve =="
+  echo "== DONJON $label $mode solve =="
   (
     cd "$DONJON_ROOT"
     ./rdonjon -q "$deck_rel"
@@ -137,11 +203,44 @@ run_mode() {
     echo "DONJON listing did not reach normal end: $result_path" >&2
     exit 1
   fi
-  grep -E "OPENMC2DONJON|normal end" "$result_path" | tail -n 4 || true
+  grep -E "OPENMC2DONJON|normal end" "$result_path" | tail -n 5 || true
 }
 
-run_mode diffusion "DUAL 1 1"
-run_mode spn3 "DUAL 1 1 SPN 3 SCAT 2"
+tmp_flux_path() {
+  local label="$1"
+  local mode="$2"
+  local safe_label="${label//-/_}"
+  echo "/tmp/o2d_${safe_label}_${mode}_${SCRIPT_PID}_flux.txt"
+}
+
+CASE_ARGS=()
+if [[ -f "$UNCORRECTED_MACROLIB_ASCII" ]]; then
+  SHORT_UNCORRECTED="/tmp/o2d_uncorrected_${SCRIPT_PID}.macrolib.txt"
+  cp "$UNCORRECTED_MACROLIB_ASCII" "$SHORT_UNCORRECTED"
+  run_mode uncorrected diffusion "DUAL 1 1" "$SHORT_UNCORRECTED" 0
+  run_mode uncorrected spn3 "DUAL 1 1 SPN 3 SCAT 2" "$SHORT_UNCORRECTED" 0
+  CASE_ARGS+=(
+    uncorrected
+    "$UNCORRECTED_MACROLIB_ASCII"
+    "$DONJON_ROOT/Darwin_arm64/${RUN_TAG}_uncorrected_diffusion.result"
+    "$DONJON_ROOT/Darwin_arm64/${RUN_TAG}_uncorrected_spn3.result"
+    "$(tmp_flux_path uncorrected diffusion)"
+    "$(tmp_flux_path uncorrected spn3)"
+  )
+fi
+
+SHORT_CORRECTED="/tmp/o2d_sph_corrected_${SCRIPT_PID}.macrolib.txt"
+cp "$MACROLIB_ASCII" "$SHORT_CORRECTED"
+run_mode sph_corrected diffusion "DUAL 1 1" "$SHORT_CORRECTED" 1
+run_mode sph_corrected spn3 "DUAL 1 1 SPN 3 SCAT 2" "$SHORT_CORRECTED" 1
+CASE_ARGS+=(
+  sph_corrected
+  "$MACROLIB_ASCII"
+  "$DONJON_ROOT/Darwin_arm64/${RUN_TAG}_sph_corrected_diffusion.result"
+  "$DONJON_ROOT/Darwin_arm64/${RUN_TAG}_sph_corrected_spn3.result"
+  "$(tmp_flux_path sph_corrected diffusion)"
+  "$(tmp_flux_path sph_corrected spn3)"
+)
 
 "$PYTHON_BIN" - \
   "$RUN_TAG" \
@@ -152,11 +251,7 @@ run_mode spn3 "DUAL 1 1 SPN 3 SCAT 2"
   "$REFERENCE_DATASET" \
   "$MG_FLUX" \
   "$MG_DATASET" \
-  "$MACROLIB_ASCII" \
-  "$DONJON_ROOT/Darwin_arm64/${RUN_TAG}_diffusion.result" \
-  "$DONJON_ROOT/Darwin_arm64/${RUN_TAG}_spn3.result" \
-  "/tmp/${RUN_TAG}_diffusion_flux.txt" \
-  "/tmp/${RUN_TAG}_spn3_flux.txt" <<'PY'
+  "${CASE_ARGS[@]}" <<'PY'
 from __future__ import annotations
 
 import json
@@ -169,6 +264,7 @@ import h5py
 import numpy as np
 
 from openmc2donjon import lcm_ascii
+from openmc2donjon.macrolib import read_macrolib_ascii
 
 
 (
@@ -180,19 +276,17 @@ from openmc2donjon import lcm_ascii
     reference_dataset,
     mg_flux_raw,
     mg_dataset,
-    macrolib_raw,
-    diffusion_result_raw,
-    spn3_result_raw,
-    diffusion_flux_raw,
-    spn3_flux_raw,
+    *case_args,
 ) = sys.argv[1:]
+
+if len(case_args) % 6 != 0:
+    raise SystemExit("internal error: case arguments must be groups of six")
 
 run_dir = Path(run_dir_raw)
 summary_json = Path(summary_json_raw)
 summary_md = Path(summary_md_raw)
 reference_flux = Path(reference_flux_raw)
 mg_flux = Path(mg_flux_raw)
-macrolib = Path(macrolib_raw)
 
 
 def _read_hdf5_flux(path: Path, dataset: str) -> np.ndarray:
@@ -218,17 +312,19 @@ def _read_donjon_flux(path: Path, *, nmixtures: int, ngroups: int) -> np.ndarray
     return values[:, :nmixtures].T
 
 
-def _keff(path: Path, mode: str) -> float:
+def _keff(path: Path, label: str, mode: str) -> float:
     text = path.read_text(encoding="utf-8", errors="replace")
     if "normal end of execution" not in text:
         raise SystemExit(f"DONJON did not end normally: {path}")
-    pattern = rf"OPENMC2DONJON OPENMC SPH COLORSET {mode.upper()} K-EFFECTIVE\s+([0-9.Ee+-]+)"
+    echo_label = label.upper().replace("-", "_")
+    echo_mode = mode.upper().replace("-", "_")
+    pattern = rf"OPENMC2DONJON OPENMC SPH COLORSET {echo_label} {echo_mode} K-EFFECTIVE\s+([0-9.Ee+-]+)"
     match = re.search(pattern, text)
     if match is None:
-        raise SystemExit(f"missing {mode} k-effective echo in {path}")
+        raise SystemExit(f"missing {label} {mode} k-effective echo in {path}")
     value = float(match.group(1))
     if not np.isfinite(value) or value <= 0.0:
-        raise SystemExit(f"invalid {mode} k-effective: {value}")
+        raise SystemExit(f"invalid {label} {mode} k-effective: {value}")
     return value
 
 
@@ -256,72 +352,133 @@ def _metrics(donjon_flux: np.ndarray, reference: np.ndarray) -> dict[str, float]
     }
 
 
+def _geometry_note(macrolib: Path) -> str:
+    macro = read_macrolib_ascii(macrolib)
+    if macro.nmixtures == 3:
+        return "3-region reflective CAR2D slab matching CS_FUEL/CS_MOD/CS_ABS widths"
+    return f"{macro.nmixtures}-region volume-ratio-preserving reflective CAR2D slab"
+
+
 reference = _read_hdf5_flux(reference_flux, reference_dataset)
 mg = _read_hdf5_flux(mg_flux, mg_dataset)
 nmixtures, ngroups = reference.shape
 if mg.shape != reference.shape:
     raise SystemExit(f"MG flux shape {mg.shape} != reference flux shape {reference.shape}")
 
-summaries: dict[str, Any] = {}
-for mode, result_raw, flux_raw in (
-    ("diffusion", diffusion_result_raw, diffusion_flux_raw),
-    ("spn3", spn3_result_raw, spn3_flux_raw),
-):
-    result = Path(result_raw)
-    flux_path = Path(flux_raw)
-    donjon = _read_donjon_flux(flux_path, nmixtures=nmixtures, ngroups=ngroups)
-    summaries[mode] = {
-        "k_effective": _keff(result, mode),
-        "result_path": str(result),
-        "flux_ascii_path": str(flux_path),
-        "vs_openmc_ce": _metrics(donjon, reference),
-        "vs_openmc_mg": _metrics(donjon, mg),
+cases: dict[str, Any] = {}
+for offset in range(0, len(case_args), 6):
+    label = case_args[offset]
+    macrolib = Path(case_args[offset + 1])
+    diffusion_result = Path(case_args[offset + 2])
+    spn3_result = Path(case_args[offset + 3])
+    diffusion_flux = Path(case_args[offset + 4])
+    spn3_flux = Path(case_args[offset + 5])
+    modes = {}
+    for mode, result, flux_path in (
+        ("diffusion", diffusion_result, diffusion_flux),
+        ("spn3", spn3_result, spn3_flux),
+    ):
+        donjon = _read_donjon_flux(flux_path, nmixtures=nmixtures, ngroups=ngroups)
+        modes[mode] = {
+            "k_effective": _keff(result, label, mode),
+            "result_path": str(result),
+            "flux_ascii_path": str(flux_path),
+            "vs_openmc_ce": _metrics(donjon, reference),
+            "vs_openmc_mg": _metrics(donjon, mg),
+        }
+    cases[label] = {
+        "macrolib_ascii": str(macrolib),
+        "geometry": _geometry_note(macrolib),
+        "modes": modes,
     }
 
+improvement = {}
+if "uncorrected" in cases and "sph_corrected" in cases:
+    for mode in ("diffusion", "spn3"):
+        before_metrics = cases["uncorrected"]["modes"][mode]["vs_openmc_ce"]
+        after_metrics = cases["sph_corrected"]["modes"][mode]["vs_openmc_ce"]
+        before_mean = before_metrics["flux_shape_mean_relative_residual"]
+        after_mean = after_metrics["flux_shape_mean_relative_residual"]
+        before_max = before_metrics["flux_shape_max_relative_residual"]
+        after_max = after_metrics["flux_shape_max_relative_residual"]
+        improvement[mode] = {
+            "ce_shape_mean_before": before_mean,
+            "ce_shape_mean_after": after_mean,
+            "ce_shape_mean_delta": before_mean - after_mean,
+            "ce_shape_mean_ratio": after_mean / before_mean if before_mean else None,
+            "ce_shape_max_before": before_max,
+            "ce_shape_max_after": after_max,
+            "ce_shape_max_delta": before_max - after_max,
+            "ce_shape_max_ratio": after_max / before_max if before_max else None,
+        }
+
 payload = {
-    "schema": "openmc2donjon.openmc-ce-mg-sph-donjon-solve-diagnostic.v1",
+    "schema": "openmc2donjon.openmc-ce-mg-sph-donjon-solve-diagnostic.v2",
     "decision": "donjon_solve_diagnostic_recorded",
     "run_tag": run_tag,
     "run_dir": str(run_dir),
-    "macrolib_ascii": str(macrolib),
     "reference_flux": str(reference_flux),
     "reference_flux_dataset": reference_dataset,
     "mg_flux": str(mg_flux),
     "mg_flux_dataset": mg_dataset,
     "mixtures": nmixtures,
     "energy_groups": ngroups,
-    "geometry": "3-region reflective CAR2D slab matching CS_FUEL/CS_MOD/CS_ABS widths",
     "note": (
         "This is a DONJON low-order solve diagnostic, not a k-effective "
-        "benchmark or an acceptance gate. Flux comparisons use the first "
-        "three KEYFLX unknowns and remove arbitrary eigenvector normalization."
+        "benchmark or an acceptance gate. Flux comparisons remove arbitrary "
+        "eigenvector normalization. When an uncorrected MACROLIB is available, "
+        "the same DONJON geometry and solver settings are used for both cases."
     ),
-    "modes": summaries,
+    "cases": cases,
+    "improvement": improvement,
 }
+if "sph_corrected" in cases:
+    payload["modes"] = cases["sph_corrected"]["modes"]
+    payload["macrolib_ascii"] = cases["sph_corrected"]["macrolib_ascii"]
+    payload["geometry"] = cases["sph_corrected"]["geometry"]
 summary_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 lines = [
     "# DONJON Solve Diagnostic",
     "",
-    "This diagnostic proves that DONJON can run a low-order solve with the",
-    "OpenMC-side SPH MACROLIB.  It is not a benchmark acceptance test.",
+    "This diagnostic runs DONJON low-order solves with the OpenMC-side SPH",
+    "MACROLIB handoff.  It is not a benchmark acceptance test.",
     "",
-    f"- MACROLIB: `{macrolib}`",
     f"- reference flux: `{reference_flux}::{reference_dataset}`",
     f"- mixtures: {nmixtures}",
     f"- groups: {ngroups}",
     "",
-    "| Mode | k-effective | CE shape mean residual | CE shape max residual |",
-    "| --- | ---: | ---: | ---: |",
+    "| Case | Mode | k-effective | CE shape mean residual | CE shape max residual |",
+    "| --- | --- | ---: | ---: | ---: |",
 ]
-for mode in ("diffusion", "spn3"):
-    row = summaries[mode]
-    metrics = row["vs_openmc_ce"]
-    lines.append(
-        f"| {mode} | {row['k_effective']:.9g} | "
-        f"{metrics['flux_shape_mean_relative_residual']:.6g} | "
-        f"{metrics['flux_shape_max_relative_residual']:.6g} |"
+for label, case in cases.items():
+    for mode in ("diffusion", "spn3"):
+        row = case["modes"][mode]
+        metrics = row["vs_openmc_ce"]
+        lines.append(
+            f"| {label} | {mode} | {row['k_effective']:.9g} | "
+            f"{metrics['flux_shape_mean_relative_residual']:.6g} | "
+            f"{metrics['flux_shape_max_relative_residual']:.6g} |"
+        )
+if improvement:
+    lines.extend(
+        [
+            "",
+            "## SPH-Corrected vs Uncorrected",
+            "",
+            "| Mode | mean before | mean after | mean delta | max before | max after | max delta |",
+            "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ]
     )
+    for mode, row in improvement.items():
+        lines.append(
+            f"| {mode} | {row['ce_shape_mean_before']:.6g} | "
+            f"{row['ce_shape_mean_after']:.6g} | "
+            f"{row['ce_shape_mean_delta']:.6g} | "
+            f"{row['ce_shape_max_before']:.6g} | "
+            f"{row['ce_shape_max_after']:.6g} | "
+            f"{row['ce_shape_max_delta']:.6g} |"
+        )
 lines.extend(
     [
         "",
@@ -334,15 +491,16 @@ summary_md.write_text("\n".join(lines), encoding="utf-8")
 
 print(f"wrote DONJON solve diagnostic JSON: {summary_json}")
 print(f"wrote DONJON solve diagnostic Markdown: {summary_md}")
-for mode in ("diffusion", "spn3"):
-    row = summaries[mode]
-    metrics = row["vs_openmc_ce"]
-    print(
-        "DONJON solve diagnostic: "
-        f"{mode} k={row['k_effective']:.9g} "
-        f"ce_shape_mean={metrics['flux_shape_mean_relative_residual']:.6g} "
-        f"ce_shape_max={metrics['flux_shape_max_relative_residual']:.6g}"
-    )
+for label, case in cases.items():
+    for mode in ("diffusion", "spn3"):
+        row = case["modes"][mode]
+        metrics = row["vs_openmc_ce"]
+        print(
+            "DONJON solve diagnostic: "
+            f"{label} {mode} k={row['k_effective']:.9g} "
+            f"ce_shape_mean={metrics['flux_shape_mean_relative_residual']:.6g} "
+            f"ce_shape_max={metrics['flux_shape_max_relative_residual']:.6g}"
+        )
 PY
 
 echo

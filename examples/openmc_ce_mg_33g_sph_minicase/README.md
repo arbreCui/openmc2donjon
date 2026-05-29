@@ -147,6 +147,7 @@ handoff/openmc_sph_sidecar.h5    HDF5 SPH sidecar
 handoff/openmc_sph_sidecar_iterNN.h5  per-iteration SPH factors if SPH_ITERATIONS > 1
 handoff/mgxs_with_openmc_sph.h5  MGXS handoff after SPH augmentation
 handoff/out_with_openmc_sph.mcompo.txt  mapped XS handoff / archival route
+handoff/out_uncorrected.macrolib.txt  uncorrected DONJON MACROLIB baseline
 handoff/out_with_openmc_sph.macrolib.txt accepted DONJON SPH consumption route
 handoff/physics_summary.json     machine-readable CE/MG/SPH audit summary
 handoff/physics_summary.md       human-readable CE/MG/SPH audit summary
@@ -246,10 +247,12 @@ This writes `donjon_solve_summary.json` and `donjon_solve_summary.md` under
 `RUN_DIR` (default:
 `/private/tmp/openmc_ce_mg_33g_sph_donjon_solve_diagnostic`).  It runs both a
 diffusion and an SPN3 `TRIVAT/TRIVAA/FLUD` solve, exports the DONJON flux
-object, and compares the first three `KEYFLX` unknowns against the OpenMC CE
-and OpenMC MG volume fluxes after removing arbitrary eigenvector
-normalization.  This is still a diagnostic, not a benchmark acceptance gate:
-the residual is reported for review rather than forced to pass a tight
+object, and compares the DONJON flux unknowns against the OpenMC CE and OpenMC
+MG volume fluxes after removing arbitrary eigenvector normalization.  If
+`handoff/out_uncorrected.macrolib.txt` is present, the script runs the same
+geometry and solver settings for both the uncorrected and SPH-corrected
+MACROLIB handoffs.  This is still a diagnostic, not a benchmark acceptance
+gate: the residual is reported for review rather than forced to pass a tight
 threshold.
 
 For the exact interpretation of the diffusion/SPN3 diagnostic, see
@@ -359,6 +362,11 @@ openmc2donjon handoff/mgxs_with_openmc_sph.h5 \
   -o handoff/out_with_openmc_sph.macrolib.txt \
   --check \
   --require-sph
+
+openmc2donjon handoff/mgxs_library.h5 \
+  --format macrolib \
+  -o handoff/out_uncorrected.macrolib.txt \
+  --check
 
 python examples/openmc_ce_mg_33g_sph_minicase/summarize_outputs.py \
   --handoff-dir handoff

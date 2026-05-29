@@ -77,9 +77,16 @@ def summarize_handoff(handoff_dir: Path) -> dict[str, Any]:
         "augment_summary": handoff_dir / "sph_augment_summary.json",
         "mg_macro_summary": handoff_dir / "mg_macro_summary.json",
         "multicompo_ascii": handoff_dir / "out_with_openmc_sph.mcompo.txt",
+        "uncorrected_macrolib_ascii": handoff_dir / "out_uncorrected.macrolib.txt",
         "macrolib_ascii": handoff_dir / "out_with_openmc_sph.macrolib.txt",
     }
-    _require_paths({name: path for name, path in paths.items() if name != "mg_macro_summary"})
+    _require_paths(
+        {
+            name: path
+            for name, path in paths.items()
+            if name not in {"mg_macro_summary", "uncorrected_macrolib_ascii"}
+        }
+    )
 
     sph_summary = _read_json(paths["sph_summary"])
     augment_summary = _read_json(paths["augment_summary"])
@@ -164,6 +171,9 @@ def summarize_handoff(handoff_dir: Path) -> dict[str, Any]:
             "augmented_hdf5_has_sph": augmented_has_sph,
             "multicompo_ascii_nsp_block_count": multicompo_nsp_block_count,
             "multicompo_ascii_path": str(paths["multicompo_ascii"]),
+            "uncorrected_macrolib_ascii_path": str(paths["uncorrected_macrolib_ascii"])
+            if paths["uncorrected_macrolib_ascii"].exists()
+            else None,
             "macrolib_ascii_nsp_block_count": macrolib_nsp_block_count,
             "macrolib_ascii_path": str(paths["macrolib_ascii"]),
             "accepted_sph_consumption_format": "macrolib",
@@ -240,6 +250,7 @@ def render_markdown(summary: dict[str, Any]) -> str:
         f"- Accepted SPH consumption format: `{handoff['accepted_sph_consumption_format']}`",
         f"- MULTICOMPO NSPH block count: {handoff['multicompo_ascii_nsp_block_count']}",
         f"- MULTICOMPO ASCII: `{handoff['multicompo_ascii_path']}`",
+        *_uncorrected_macrolib_lines(handoff),
         f"- MACROLIB NSPH block count: {handoff['macrolib_ascii_nsp_block_count']}",
         f"- MACROLIB ASCII: `{handoff['macrolib_ascii_path']}`",
         "",
@@ -261,6 +272,13 @@ def render_markdown(summary: dict[str, Any]) -> str:
         )
     lines.append("")
     return "\n".join(lines)
+
+
+def _uncorrected_macrolib_lines(handoff: dict[str, Any]) -> list[str]:
+    path = handoff.get("uncorrected_macrolib_ascii_path")
+    if not path:
+        return []
+    return [f"- Uncorrected MACROLIB ASCII: `{path}`"]
 
 
 def _require_paths(paths: dict[str, Path]) -> None:
