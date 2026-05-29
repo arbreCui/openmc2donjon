@@ -270,13 +270,16 @@ function OpenmcPageContent() {
       <div className="mx-auto max-w-5xl">
         <header className="mb-8">
           <h1 className="text-3xl font-bold tracking-tight">
-            <span className="grad-text">OpenMC production workflow</span>
+            <span className="grad-text">Prepare OpenMC handoff inputs</span>
           </h1>
           <p className="mt-2 max-w-3xl text-sm text-[var(--fg-2)]">
-            Choose the production route first: direct MGXS handoff, or
-            OpenMC-side CE/MG SPH preparation before conversion.
+            Use this page only when the converter input is not ready yet:
+            export an OpenMC MGXS HDF5 from a recipe/statepoint, or prepare
+            OpenMC-side CE/MG SPH factors before conversion.
           </p>
         </header>
+
+        <OpenmcRoutingHint />
 
         <OpenmcEntryPoints
           active={activeOpenmcEntryPoint(workflow, equivalence)}
@@ -486,6 +489,51 @@ function OpenmcPageContent() {
         </section>
       </div>
     </main>
+  );
+}
+
+function OpenmcRoutingHint() {
+  return (
+    <section className="mb-5 rounded-xl border border-[var(--edge)] bg-black/15 p-4">
+      <div className="grid gap-3 md:grid-cols-3">
+        <article className="rounded-lg border border-emerald-300/20 bg-emerald-300/[0.045] p-3">
+          <div className="text-[10px] uppercase tracking-[0.14em] text-emerald-100/80">
+            Already have HDF5?
+          </div>
+          <h2 className="mt-1 text-sm font-semibold tracking-tight">
+            Go straight to Convert
+          </h2>
+          <p className="mt-2 text-[12px] leading-5 text-[var(--fg-2)]">
+            The normal product path starts with an existing MGXS HDF5 and runs
+            dry-run → convert → preview/bundle.
+          </p>
+        </article>
+        <article className="rounded-lg border border-[var(--edge)] bg-white/[0.02] p-3">
+          <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+            Need MGXS?
+          </div>
+          <h2 className="mt-1 text-sm font-semibold tracking-tight">
+            Plan the OpenMC export
+          </h2>
+          <p className="mt-2 text-[12px] leading-5 text-[var(--fg-2)]">
+            Use recipe/statepoint paths to build the CLI command that writes
+            the converter-facing HDF5.
+          </p>
+        </article>
+        <article className="rounded-lg border border-cyan-300/20 bg-cyan-300/[0.04] p-3">
+          <div className="text-[10px] uppercase tracking-[0.14em] text-cyan-100/80">
+            Need SPH?
+          </div>
+          <h2 className="mt-1 text-sm font-semibold tracking-tight">
+            Prepare NSPH upstream
+          </h2>
+          <p className="mt-2 text-[12px] leading-5 text-[var(--fg-2)]">
+            Compute OpenMC CE/MG SPH on the same geometry/output regions, then
+            inject the sidecar before using Convert.
+          </p>
+        </article>
+      </div>
+    </section>
   );
 }
 

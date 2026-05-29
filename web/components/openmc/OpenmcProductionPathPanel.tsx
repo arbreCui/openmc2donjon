@@ -144,13 +144,13 @@ export default function OpenmcProductionPathPanel({
           </div>
           <h2 className="mt-1 text-base font-semibold tracking-tight">
             {isOpenmcSph
-              ? "Three steps from OpenMC SPH to DONJON"
-              : "Three steps from OpenMC MGXS to DONJON"}
+              ? "Three steps before the converter writes MACROLIB"
+              : "Three steps before the converter writes DONJON ASCII"}
           </h2>
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
             {isOpenmcSph
-              ? "This route uses OpenMC MG as the SPH equivalence operator. DONJON receives the corrected handoff and precomputed NSPH factors; it is not used as an SPH feedback loop. The current production demo is one-shot SPH; extra MG reruns are a damping-sensitive review path."
-              : "This route exports or receives OpenMC MGXS, writes the requested DONJON ASCII object, then packages the evidence."}
+              ? "This route prepares the converter input: OpenMC MG is the SPH equivalence operator, DONJON receives precomputed NSPH factors, and DONJON is not used as an SPH feedback loop. The current production demo is one-shot SPH; extra MG reruns are a damping-sensitive review path."
+              : "This route prepares the converter-facing HDF5 from OpenMC inputs. Once planned or exported, open Convert to run production checks and write the ASCII library."}
           </p>
         </div>
         <span className="rounded border border-[var(--edge)] px-2 py-1 font-mono text-[11px] uppercase tracking-wider text-[var(--fg-2)]">

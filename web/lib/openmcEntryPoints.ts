@@ -19,13 +19,13 @@ export interface OpenmcEntryPoint {
 export const OPENMC_ENTRY_POINTS: readonly OpenmcEntryPoint[] = [
   {
     id: "direct-mgxs",
-    eyebrow: "Direct handoff",
-    title: "Convert an OpenMC MGXS handoff",
+    eyebrow: "Need HDF5 first",
+    title: "Prepare OpenMC MGXS HDF5",
     body:
-      "Start here when you already have an OpenMC MGXS HDF5. Inspect it, dry-run production gates, then write L_MULTICOMPO or L_MACROLIB ASCII.",
-    primaryLabel: "Use direct converter",
+      "Start here when your input is an OpenMC recipe/statepoint and you still need the converter-facing MGXS HDF5. If that HDF5 already exists, skip this page and open Convert.",
+    primaryLabel: "Plan HDF5 export",
     secondaryHref: "/convert?intent=direct-convert&format=multicompo&check=1&production=1",
-    secondaryLabel: "Open converter",
+    secondaryLabel: "Already have HDF5? Convert",
     workflow: "two-step",
     equivalence: "direct",
     production: true,
@@ -34,10 +34,10 @@ export const OPENMC_ENTRY_POINTS: readonly OpenmcEntryPoint[] = [
   {
     id: "openmc-sph",
     eyebrow: "OpenMC-side equivalence",
-    title: "Run CE/MG SPH preparation",
+    title: "Prepare CE/MG SPH factors",
     body:
-      "Start here when a colorset or core model needs SPH: compare OpenMC CE reference flux against OpenMC MG macro flux on the same geometry/output regions, inject NSPH, then convert to MACROLIB for DONJON.",
-    primaryLabel: "Use CE/MG SPH route",
+      "Start here when a colorset or core model needs equivalence before conversion: compare OpenMC CE reference flux against OpenMC MG macro flux on the same geometry/output regions, inject NSPH, then convert to MACROLIB for DONJON.",
+    primaryLabel: "Plan CE/MG SPH route",
     secondaryHref: "/openmc?workflow=two-step&equivalence=sph&format=macrolib",
     secondaryLabel: "Open SPH summary",
     workflow: "two-step",
