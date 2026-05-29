@@ -6,14 +6,11 @@ import {
   convertBundleHref,
   convertWriterCompareHref,
 } from "@/lib/convertNextSteps";
-import { convertWriterBackendResultLabel } from "@/lib/convertWriterBackend";
-import { Meta } from "./ConvertReportPrimitives";
 import {
-  formatSize,
-  primaryNextActionClass,
-  primaryOutcomeClass,
-  validationLabel,
-} from "./ConvertReportShared";
+  convertResultOverview,
+  type ConvertResultOverviewTone,
+} from "@/lib/convertResultOverview";
+import { primaryOutcomeClass } from "./ConvertReportShared";
 
 export default function ConvertOutcomeSummary({
   data,
@@ -49,19 +46,7 @@ export default function ConvertOutcomeSummary({
         </span>
       </div>
 
-      <dl className="mt-4 grid gap-3 text-sm md:grid-cols-2">
-        <Meta label="Input" value={data.input_path} mono />
-        <Meta label="Output" value={data.output_path} mono />
-        <Meta
-          label="Output size"
-          value={data.output_size == null ? "-" : formatSize(data.output_size)}
-        />
-        <Meta
-          label="Writer"
-          value={convertWriterBackendResultLabel(data.writer_backend)}
-        />
-        <Meta label="Validation" value={validationLabel(data)} />
-      </dl>
+      <ResultOverview data={data} />
 
       <PrimaryOutcomeActions data={data} input={input} onConvert={onConvert} />
     </section>
@@ -104,29 +89,6 @@ function PrimaryOutcomeActions({
         </span>
       </div>
 
-      <ul className="mt-3 grid gap-1.5 text-[12px] leading-5 text-[var(--fg-1)] md:grid-cols-2">
-        {decision.reasons.map((reason) => (
-          <li key={reason} className="flex gap-2">
-            <span className="mt-[0.45rem] h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-60" />
-            <span>{reason}</span>
-          </li>
-        ))}
-      </ul>
-
-      <div
-        className={
-          "mt-4 rounded-md border px-3 py-2 " +
-          primaryNextActionClass(decision.tone)
-        }
-      >
-        <div className="text-[10px] uppercase tracking-[0.14em] opacity-70">
-          {decision.nextAction.label}
-        </div>
-        <p className="mt-1 text-[12px] leading-5 text-[var(--fg-1)]">
-          {decision.nextAction.body}
-        </p>
-      </div>
-
       <div className="mt-4 flex flex-wrap gap-2">
         {readyToConvert && onConvert ? (
           <button type="button" onClick={onConvert} className="btn btn-primary">
@@ -163,24 +125,56 @@ function PrimaryOutcomeActions({
         ) : null}
       </div>
 
-      <div className="mt-3 grid gap-2 text-[12px] md:grid-cols-2">
-        <OutcomePath label="input" value={data.input_path} />
-        <OutcomePath
-          label={converted ? "DONJON ASCII" : "target"}
-          value={data.output_path}
-        />
-      </div>
+      <details className="mt-3 text-[12px]" open={decision.tone === "blocked"}>
+        <summary className="cursor-pointer text-[var(--fg-2)] hover:text-[var(--fg-1)]">
+          Why this state
+        </summary>
+        <ul className="mt-2 grid gap-1.5 leading-5 text-[var(--fg-1)] md:grid-cols-2">
+          {decision.reasons.map((reason) => (
+            <li key={reason} className="flex gap-2">
+              <span className="mt-[0.45rem] h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-60" />
+              <span>{reason}</span>
+            </li>
+          ))}
+        </ul>
+      </details>
     </section>
   );
 }
 
-function OutcomePath({ label, value }: { label: string; value: string }) {
+function ResultOverview({ data }: { data: ConvertResponse }) {
+  const tiles = convertResultOverview(data);
   return (
-    <div className="min-w-0 rounded-md border border-current/10 bg-black/15 px-3 py-2">
-      <div className="text-[10px] uppercase tracking-[0.14em] opacity-65">
-        {label}
-      </div>
-      <div className="mt-1 truncate font-mono text-[12px]">{value}</div>
+    <div className="mt-4 grid gap-2 lg:grid-cols-3">
+      {tiles.map((tile) => (
+        <article key={tile.id} className={"rounded-lg border px-3 py-2 " + resultTileClass(tile.tone)}>
+          <div className="text-[10px] uppercase tracking-[0.14em] opacity-70">
+            {tile.label}
+          </div>
+          <div
+            className={
+              "mt-1 truncate text-sm font-semibold tracking-tight " +
+              (tile.mono ? "font-mono" : "")
+            }
+            title={tile.value}
+          >
+            {tile.value}
+          </div>
+          <p className="mt-1 text-[12px] leading-5 text-[var(--fg-2)]">
+            {tile.body}
+          </p>
+        </article>
+      ))}
     </div>
   );
+}
+
+function resultTileClass(tone: ConvertResultOverviewTone): string {
+  if (tone === "ready") {
+    return "border-emerald-400/20 bg-emerald-400/[0.055] text-emerald-100";
+  }
+  if (tone === "pending") {
+    return "border-cyan-300/25 bg-cyan-300/[0.06] text-cyan-100";
+  }
+  return "border-rose-400/25 bg-rose-400/[0.06] text-rose-100";
 }
