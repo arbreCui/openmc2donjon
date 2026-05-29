@@ -15,6 +15,7 @@ import OpenmcArtifactList from "@/components/openmc/OpenmcArtifactList";
 import OpenmcCommandList from "@/components/openmc/OpenmcCommandList";
 import OpenmcEntryPoints from "@/components/openmc/OpenmcEntryPoints";
 import OpenmcProductionPathPanel from "@/components/openmc/OpenmcProductionPathPanel";
+import OpenmcSphMainlineCard from "@/components/openmc/OpenmcSphMainlineCard";
 import OpenmcSphPhysicsSummaryCard from "@/components/openmc/OpenmcSphPhysicsSummaryCard";
 import OpenmcSphQuickFillCard from "@/components/openmc/OpenmcSphQuickFillCard";
 import OpenmcWorkflowSummary from "@/components/openmc/OpenmcWorkflowSummary";
@@ -144,6 +145,14 @@ function OpenmcPageContent() {
         format,
       })
     : null;
+  const sphDemoPreset =
+    backendMode === "mock"
+      ? MOCK_OPENMC_SPH_DEMO
+      : backendMode === "live"
+        ? LIVE_OPENMC_SPH_DEMO
+        : null;
+  const sphDemoMode =
+    backendMode === "mock" || backendMode === "live" ? backendMode : null;
 
   useEffect(() => {
     let cancelled = false;
@@ -265,6 +274,16 @@ function OpenmcPageContent() {
     setAdfSource("");
   }
 
+  function reviewOpenmcSphDemo(preset: OpenmcSphDemoPreset) {
+    applyOpenmcSphDemo(preset);
+    window.setTimeout(() => {
+      document.getElementById("openmc-sph-summary")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 0);
+  }
+
   return (
     <main className="min-h-[calc(100vh-3.5rem)] px-6 py-12">
       <div className="mx-auto max-w-5xl">
@@ -285,6 +304,14 @@ function OpenmcPageContent() {
           active={activeOpenmcEntryPoint(workflow, equivalence)}
           onSelect={applyEntryPoint}
         />
+
+        {sphDemoPreset && sphDemoMode ? (
+          <OpenmcSphMainlineCard
+            preset={sphDemoPreset}
+            mode={sphDemoMode}
+            onReview={() => reviewOpenmcSphDemo(sphDemoPreset)}
+          />
+        ) : null}
 
         {backendMode === "mock" ? (
           <OpenmcSphQuickFillCard

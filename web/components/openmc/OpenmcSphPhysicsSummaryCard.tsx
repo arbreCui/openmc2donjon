@@ -49,7 +49,10 @@ export default function OpenmcSphPhysicsSummaryCard({
   }
 
   return (
-    <section className="mt-4 rounded-lg border border-emerald-300/20 bg-emerald-300/[0.04] p-4">
+    <section
+      id="openmc-sph-summary"
+      className="mt-4 rounded-lg border border-emerald-300/20 bg-emerald-300/[0.04] p-4"
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-[10px] uppercase tracking-[0.14em] text-emerald-300">

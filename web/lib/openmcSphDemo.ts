@@ -134,3 +134,45 @@ export function openmcSphSidecarHref(preset: OpenmcSphDemoPreset): string {
   });
   return `/equivalence?${params.toString()}#${encodeURIComponent(preset.sphSidecar)}`;
 }
+
+export function openmcSphEvidenceHref(preset: OpenmcSphDemoPreset): string {
+  const params = new URLSearchParams({
+    workflow: "two-step",
+    equivalence: "sph",
+    format: "macrolib",
+    production: "1",
+    summary: preset.physicsSummary,
+  });
+  return `/openmc?${params.toString()}#openmc-sph-summary`;
+}
+
+export function openmcSphConvertHref(preset: OpenmcSphDemoPreset): string {
+  const params = new URLSearchParams({
+    intent: "openmc-sph",
+    input: preset.augmentedH5,
+    output: preset.ascii,
+    format: "macrolib",
+    writer_backend: "ascii",
+    check: "1",
+    production: "1",
+    require_known_mesh: "0",
+    comment: "OpenMC-side SPH corrected handoff",
+  });
+  return `/convert?${params.toString()}`;
+}
+
+export function openmcSphBundleHref(preset: OpenmcSphDemoPreset): string {
+  const params = new URLSearchParams({
+    command: "bundle",
+    output_dir: `${parentDir(preset.ascii)}/bundle`,
+    mgxs: preset.augmentedH5,
+    macrolib: preset.ascii,
+  });
+  return `/builder?${params.toString()}`;
+}
+
+function parentDir(path: string): string {
+  const index = path.lastIndexOf("/");
+  if (index <= 0) return ".";
+  return path.slice(0, index);
+}
