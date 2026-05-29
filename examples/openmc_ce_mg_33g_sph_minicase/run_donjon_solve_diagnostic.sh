@@ -397,6 +397,47 @@ def _metrics(donjon_flux: np.ndarray, reference: np.ndarray) -> dict[str, float]
     }
 
 
+def _reaction_rate_metrics(
+    donjon_flux: np.ndarray,
+    reference: np.ndarray,
+    sigma_tallied: np.ndarray,
+    nsph: np.ndarray,
+    *,
+    mask_fraction: float = 0.01,
+) -> dict[str, float]:
+    """Compare DONJON vs reference region/group reaction rates.
+
+    SPH is a reaction-rate-preservation method, and its correction here is
+    mostly spectral (group-wise), so a per-group-normalized flux-shape residual
+    cancels it almost exactly.  This metric instead folds the cross sections
+    DONJON actually applied (``sigma_tallied / NSPH``) into a reaction rate and
+    compares it to the reference reaction rate (``sigma_tallied * reference``)
+    under a single GLOBAL normalization, so the spectral SPH effect is visible.
+    Bins below ``mask_fraction`` of the per-group peak are dropped so that
+    near-zero tails do not dominate the relative residual.
+    """
+
+    rr_donjon = (sigma_tallied / nsph) * donjon_flux
+    rr_ref = sigma_tallied * reference
+    finite = np.isfinite(rr_donjon) & np.isfinite(rr_ref) & (rr_donjon > 0.0) & (rr_ref > 0.0)
+    peak = np.maximum(
+        np.max(rr_donjon, axis=0, keepdims=True),
+        np.max(rr_ref, axis=0, keepdims=True),
+    )
+    mask = finite & (rr_donjon >= mask_fraction * peak) & (rr_ref >= mask_fraction * peak)
+    if not np.any(mask):
+        raise SystemExit("no overlapping reaction-rate bins above the mask threshold")
+    scale = float(np.sum(rr_donjon[mask] * rr_ref[mask]) / np.sum(rr_donjon[mask] * rr_donjon[mask]))
+    rel = np.abs(scale * rr_donjon[mask] / rr_ref[mask] - 1.0)
+    return {
+        "reaction_rate_global_scale_to_reference": scale,
+        "reaction_rate_mean_relative_residual": float(np.mean(rel)),
+        "reaction_rate_max_relative_residual": float(np.max(rel)),
+        "reaction_rate_mask_fraction": mask_fraction,
+        "reaction_rate_valid_bins": int(np.sum(mask)),
+    }
+
+
 def _has_five_region_colorset_volumes(volumes: np.ndarray) -> bool:
     if volumes.shape != (5,) or np.any(volumes <= 0.0):
         return False
@@ -443,6 +484,13 @@ for offset in range(0, len(case_args), 6):
     diffusion_flux = Path(case_args[offset + 4])
     spn3_flux = Path(case_args[offset + 5])
     geometry = _geometry_metadata(macrolib)
+    macro_xs = read_macrolib_ascii(macrolib)
+    sigma_tallied = np.asarray(macro_xs.ntot0, dtype=float)
+    nsph = (
+        np.ones_like(sigma_tallied)
+        if macro_xs.sph is None
+        else np.asarray(macro_xs.sph, dtype=float)
+    )
     modes = {}
     for mode, result, flux_path in (
         ("diffusion", diffusion_result, diffusion_flux),
@@ -461,6 +509,12 @@ for offset in range(0, len(case_args), 6):
             "flux_ascii_path": str(flux_path),
             "vs_openmc_ce": _metrics(donjon, reference),
             "vs_openmc_mg": _metrics(donjon, mg),
+            "reaction_rate_vs_openmc_ce": _reaction_rate_metrics(
+                donjon, reference, sigma_tallied, nsph
+            ),
+            "reaction_rate_vs_openmc_mg": _reaction_rate_metrics(
+                donjon, mg, sigma_tallied, nsph
+            ),
         }
     cases[label] = {
         "macrolib_ascii": str(macrolib),
@@ -478,6 +532,12 @@ if "uncorrected" in cases and "sph_corrected" in cases:
         after_mean = after_metrics["flux_shape_mean_relative_residual"]
         before_max = before_metrics["flux_shape_max_relative_residual"]
         after_max = after_metrics["flux_shape_max_relative_residual"]
+        rr_before = cases["uncorrected"]["modes"][mode]["reaction_rate_vs_openmc_ce"][
+            "reaction_rate_mean_relative_residual"
+        ]
+        rr_after = cases["sph_corrected"]["modes"][mode]["reaction_rate_vs_openmc_ce"][
+            "reaction_rate_mean_relative_residual"
+        ]
         improvement[mode] = {
             "ce_shape_mean_before": before_mean,
             "ce_shape_mean_after": after_mean,
@@ -487,6 +547,10 @@ if "uncorrected" in cases and "sph_corrected" in cases:
             "ce_shape_max_after": after_max,
             "ce_shape_max_delta": before_max - after_max,
             "ce_shape_max_ratio": after_max / before_max if before_max else None,
+            "reaction_rate_mean_before": rr_before,
+            "reaction_rate_mean_after": rr_after,
+            "reaction_rate_mean_delta": rr_before - rr_after,
+            "reaction_rate_mean_ratio": rr_after / rr_before if rr_before else None,
         }
 
 payload = {
@@ -559,6 +623,25 @@ if improvement:
             f"{row['ce_shape_max_after']:.6g} | "
             f"{row['ce_shape_max_delta']:.6g} |"
         )
+    lines.extend(
+        [
+            "",
+            "## Reaction-Rate vs CE (global-normalized, near-zero bins masked)",
+            "",
+            "SPH preserves reaction rates, not per-group flux shape, and its correction",
+            "here is mostly spectral; this global-normalized reaction-rate residual is the",
+            "SPH-relevant metric. A negative delta means SPH made the residual worse.",
+            "",
+            "| Mode | RR mean before | RR mean after | RR mean delta |",
+            "| --- | ---: | ---: | ---: |",
+        ]
+    )
+    for mode, row in improvement.items():
+        lines.append(
+            f"| {mode} | {row['reaction_rate_mean_before']:.6g} | "
+            f"{row['reaction_rate_mean_after']:.6g} | "
+            f"{row['reaction_rate_mean_delta']:.6g} |"
+        )
 lines.extend(
     [
         "",
@@ -575,11 +658,13 @@ for label, case in cases.items():
     for mode in ("diffusion", "spn3"):
         row = case["modes"][mode]
         metrics = row["vs_openmc_ce"]
+        rr_metrics = row["reaction_rate_vs_openmc_ce"]
         print(
             "DONJON solve diagnostic: "
             f"{label} {mode} k={row['k_effective']:.9g} "
             f"ce_shape_mean={metrics['flux_shape_mean_relative_residual']:.6g} "
-            f"ce_shape_max={metrics['flux_shape_max_relative_residual']:.6g}"
+            f"ce_shape_max={metrics['flux_shape_max_relative_residual']:.6g} "
+            f"rr_mean={rr_metrics['reaction_rate_mean_relative_residual']:.6g}"
         )
 PY
 
