@@ -186,11 +186,19 @@ export function productionEvidenceRows(summary: OpenmcSphPhysicsSummary): {
     const status = donjon.status ?? "not run";
     const pn = formatPhysicsNumber(donjon.pn_ntot0_ratio);
     const sn = formatPhysicsNumber(donjon.sn_ntot0_ratio);
+    const expected =
+      donjon.expected_g1 ?? donjon.expected_mix3_g1 ?? null;
+    const target =
+      donjon.target_mix != null && expected != null
+        ? `target mix ${donjon.target_mix} group 1 NSPH ${formatPhysicsNumber(
+            expected,
+          )}; `
+        : "";
     rows.push({
       id: "donjon",
       label: "DONJON consume smoke",
       value: status,
-      detail: `DSPH/MAC checked exported NSPH; PN NTOT0 ratio ${pn}, SN NTOT0 ratio ${sn}.`,
+      detail: `${target}DSPH/MAC checked exported NSPH; PN NTOT0 ratio ${pn}, SN NTOT0 ratio ${sn}.`,
     });
   }
   const spn3 = solve?.modes?.spn3;

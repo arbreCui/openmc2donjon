@@ -374,6 +374,8 @@ export interface OpenmcSphDonjonConsumption {
   script?: string | null;
   result_path?: string | null;
   expected_mix3_g1?: number | null;
+  target_mix?: number | null;
+  expected_g1?: number | null;
   pn_var_value?: number | null;
   sn_var_value?: number | null;
   pn_ntot0_ratio?: number | null;

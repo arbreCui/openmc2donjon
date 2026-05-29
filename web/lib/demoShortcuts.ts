@@ -38,7 +38,7 @@ export const HOME_DEMO_SHORTCUTS: readonly DemoShortcut[] = [
     eyebrow: "CE/MG SPH minicase",
     title: "Review OpenMC-side SPH",
     body:
-      "Open the CE reference + MG macro route, including the physics summary and corrected MACROLIB handoff.",
+      "Open the two-region CE reference + MG macro route, including the physics summary and corrected MACROLIB NSPH handoff.",
     href: `/openmc?workflow=two-step&equivalence=sph&format=macrolib&production=1&summary=${encodeURIComponent(
       MOCK_OPENMC_SPH_DEMO.physicsSummary,
     )}`,

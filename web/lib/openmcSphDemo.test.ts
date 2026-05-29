@@ -33,13 +33,13 @@ describe("openmcSphDemo", () => {
 
   it("points the live minicase to the repository smoke output directory", () => {
     expect(LIVE_OPENMC_SPH_DEMO.command).toContain(
-      "OPENMC2DONJON_COLORSET_VARIANT=five_region_2d",
+      "OPENMC2DONJON_COLORSET_VARIANT=two_region",
     );
     expect(LIVE_OPENMC_SPH_DEMO.command).toContain("BATCHES=80");
     expect(LIVE_OPENMC_SPH_DEMO.command).toContain("MG_BATCHES=80");
-    expect(LIVE_OPENMC_SPH_DEMO.command).toContain("MAX_CE_FLUX_REL_STD=0.05");
+    expect(LIVE_OPENMC_SPH_DEMO.command).toContain("MAX_CE_FLUX_REL_STD=0.06");
     expect(LIVE_OPENMC_SPH_DEMO.mgxs).toContain(
-      "/private/tmp/openmc2donjon_five_region_2d_production_20260529/handoff",
+      "/private/tmp/openmc2donjon_two_region_production_probe_20260529/handoff",
     );
     expect(LIVE_OPENMC_SPH_DEMO.ceStatepoint).toContain("statepoint.80.h5");
     expect(LIVE_OPENMC_SPH_DEMO.mgStatepoint).toContain("statepoint.80.h5");

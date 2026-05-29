@@ -384,7 +384,8 @@ class OpenMCSphPhysicsSummaryEndpointTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["schema"], OPENMC_SPH_PHYSICS_SUMMARY_SCHEMA)
-        self.assertEqual(payload["mixture_count"], 5)
+        self.assertEqual(payload["mixture_count"], 2)
+        self.assertEqual(payload["mixture_names"], ["CS_FUEL", "CS_MOD"])
         self.assertEqual(payload["energy_groups"], 33)
         self.assertEqual(payload["legendre_order"], 3)
         self.assertEqual(
@@ -395,6 +396,11 @@ class OpenMCSphPhysicsSummaryEndpointTests(unittest.TestCase):
         self.assertEqual(payload["sph"]["clipped_count"], 0)
         self.assertTrue(payload["handoff"]["augmented_hdf5_has_sph"])
         self.assertGreater(payload["handoff"]["ascii_nsp_block_count"], 0)
+        self.assertEqual(payload["donjon_consumption"]["target_mix"], 2)
+        self.assertAlmostEqual(
+            payload["donjon_consumption"]["expected_g1"],
+            0.970759749,
+        )
 
     def test_live_mode_reads_openmc_sph_physics_summary_json(self) -> None:
         from openmc2donjon.web.openmc_sph_summary import (

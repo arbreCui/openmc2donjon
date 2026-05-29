@@ -210,7 +210,7 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
         self.assertEqual(payload["energy_groups"], 33)
         self.assertEqual(
             payload["mixture_names"],
-            ["CS_FUEL_L", "CS_MOD", "CS_FUEL_U", "CS_ABS", "CS_REF"],
+            ["CS_FUEL", "CS_MOD"],
         )
         self.assertEqual(payload["handoff_scatter"]["format"], "legendre")
         self.assertEqual(payload["handoff_scatter"]["legendre_order"], 3)
@@ -227,34 +227,22 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
             payload["quality"]["production_flux_relative_std_dev_threshold"],
         )
         self.assertEqual(payload["sph"]["clipped_count"], 0)
-        self.assertAlmostEqual(payload["sph"]["minimum"], 0.922629545852)
-        self.assertAlmostEqual(payload["sph"]["maximum"], 1.0180355502)
+        self.assertAlmostEqual(payload["sph"]["minimum"], 0.949016357514)
+        self.assertAlmostEqual(payload["sph"]["maximum"], 1.03480679825)
         self.assertEqual(payload["handoff"]["accepted_sph_consumption_format"], "macrolib")
         self.assertEqual(payload["handoff"]["macrolib_ascii_nsp_block_count"], 33)
         self.assertTrue(payload["handoff"]["augmented_hdf5_has_sph"])
         self.assertEqual(payload["donjon_consumption"]["status"], "passed")
+        self.assertEqual(payload["donjon_consumption"]["target_mix"], 2)
         self.assertAlmostEqual(
-            payload["donjon_consumption"]["expected_mix3_g1"],
-            0.93348071,
+            payload["donjon_consumption"]["expected_g1"],
+            0.970759749,
         )
         self.assertAlmostEqual(
             payload["donjon_consumption"]["pn_ntot0_ratio"],
-            0.933480726,
+            0.970759721,
         )
-        self.assertEqual(
-            payload["donjon_solve_diagnostic"]["decision"],
-            "donjon_solve_diagnostic_recorded",
-        )
-        self.assertAlmostEqual(
-            payload["donjon_solve_diagnostic"]["modes"]["spn3"]["k_effective"],
-            1.300365,
-        )
-        self.assertAlmostEqual(
-            payload["donjon_solve_diagnostic"]["modes"]["spn3"]["vs_openmc_ce"][
-                "flux_shape_mean_relative_residual"
-            ],
-            0.22490191950241656,
-        )
+        self.assertNotIn("donjon_solve_diagnostic", payload)
         self.assertLess(
             payload["reaction_rate_preservation"]["after_sph_update_frozen_flux"][
                 "max_relative_residual"

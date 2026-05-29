@@ -88,6 +88,8 @@ const SUMMARY: OpenmcSphPhysicsSummary = {
     script: "examples/openmc_ce_mg_33g_sph_minicase/run_donjon_consume_smoke.sh",
     result_path: "/mock/donjon.result",
     expected_mix3_g1: 1.05946788,
+    target_mix: 2,
+    expected_g1: 1.05946788,
     pn_var_value: 1.05946791,
     sn_var_value: 1.05946791,
     pn_ntot0_ratio: 1.05946786,
@@ -242,6 +244,7 @@ describe("openmcSphSummary", () => {
       label: "DONJON consume smoke",
       value: "passed",
     });
+    expect(rows[4].detail).toContain("target mix 2 group 1 NSPH 1.059");
     expect(rows[4].detail).toContain("PN NTOT0 ratio 1.059");
     expect(rows[5]).toMatchObject({
       label: "DONJON solve diagnostic",
