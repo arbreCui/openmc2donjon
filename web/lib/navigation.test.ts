@@ -10,14 +10,14 @@ describe("navigation", () => {
   it("keeps the top-level bar focused on the main workflow", () => {
     expect(PRIMARY_NAV_ITEMS.map((item) => item.label)).toEqual([
       "Convert",
-      "OpenMC SPH",
-      "Inspect",
+      "OpenMC prep",
+      "Review HDF5",
     ]);
     expect(SECONDARY_NAV_ITEMS.map((item) => item.label)).toEqual([
-      "Command catalog",
+      "Commands",
       "ADF/SPH sidecars",
-      "Bundle handoff",
-      "DONJON cards",
+      "Bundle",
+      "DONJON",
       "PyGan option",
       "Settings",
     ]);
@@ -25,7 +25,7 @@ describe("navigation", () => {
 
   it("matches nested command detail routes to Commands", () => {
     const commands = SECONDARY_NAV_ITEMS.find(
-      (item) => item.label === "Command catalog",
+      (item) => item.label === "Commands",
     );
     expect(commands).toBeDefined();
     expect(isNavItemActive(commands!, "/commands/direct-convert")).toBe(true);

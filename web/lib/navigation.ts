@@ -13,12 +13,12 @@ export const PRIMARY_NAV_ITEMS: readonly NavItem[] = [
   },
   {
     href: "/openmc?workflow=two-step&equivalence=sph&production=1",
-    label: "OpenMC SPH",
+    label: "OpenMC prep",
     match: ["/openmc"],
   },
   {
     href: "/inspect",
-    label: "Inspect",
+    label: "Review HDF5",
     match: ["/inspect"],
   },
 ] as const;
@@ -26,26 +26,26 @@ export const PRIMARY_NAV_ITEMS: readonly NavItem[] = [
 export const SECONDARY_NAV_ITEMS: readonly NavItem[] = [
   {
     href: "/commands",
-    label: "Command catalog",
-    description: "All CLI commands and their web equivalents.",
+    label: "Commands",
+    description: "Advanced CLI reference and web command links.",
     match: ["/commands"],
   },
   {
     href: "/equivalence?kind=adf-sidecar",
     label: "ADF/SPH sidecars",
-    description: "Build sidecar commands and augmentation previews.",
+    description: "Build sidecar commands after the main path is chosen.",
     match: ["/equivalence"],
   },
   {
     href: "/builder?command=bundle",
-    label: "Bundle handoff",
+    label: "Bundle",
     description: "Package HDF5, ASCII, reports, and DONJON cards.",
     match: ["/builder"],
   },
   {
     href: "/donjon",
-    label: "DONJON cards",
-    description: "Review consumption paths and generated input cards.",
+    label: "DONJON",
+    description: "Review consumption paths and input-card guidance.",
     match: ["/donjon"],
   },
   {
