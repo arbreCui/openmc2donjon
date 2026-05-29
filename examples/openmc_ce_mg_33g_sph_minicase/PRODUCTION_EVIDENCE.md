@@ -152,7 +152,8 @@ DONJON solve diagnostic: spn3 k=0.9084644 ce_shape_mean=0.0515226 ce_shape_max=0
 ```
 
 This diagnostic is deliberately reported as review evidence, not as a
-k-effective benchmark or a hard acceptance gate.
+k-effective benchmark or a hard acceptance gate.  The detailed interpretation
+is in `DONJON_SOLVE_DIAGNOSTIC.md`.
 
 ## What This Proves
 
@@ -175,5 +176,7 @@ k-effective benchmark or a hard acceptance gate.
 - It does not require or validate PyGan; PyGan remains optional.
 
 The next physics validation step is a larger, benchmark-like colorset or core
-case where the DONJON low-order result is compared against the OpenMC reference
-after consuming the generated MACROLIB.
+case where the uncorrected and SPH-corrected DONJON low-order results are both
+compared against the OpenMC reference after consuming the generated MACROLIB.
+`NEXT_PHYSICS_VALIDATION.md` defines the proposed target shape and acceptance
+criteria.

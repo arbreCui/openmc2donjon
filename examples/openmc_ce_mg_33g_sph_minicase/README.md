@@ -226,6 +226,10 @@ normalization.  This is still a diagnostic, not a benchmark acceptance gate:
 the residual is reported for review rather than forced to pass a tight
 threshold.
 
+For the exact interpretation of the diffusion/SPN3 diagnostic, see
+`DONJON_SOLVE_DIAGNOSTIC.md`.  For the proposed larger validation target, see
+`NEXT_PHYSICS_VALIDATION.md`.
+
 For a shorter presentation-ready summary of that high-statistics run, see
 `PRODUCTION_EVIDENCE.md`.
 
