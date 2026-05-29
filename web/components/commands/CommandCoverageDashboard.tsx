@@ -2,25 +2,35 @@
 
 import type { CommandCoverage } from "@/lib/commandCoverage";
 
-export function CoverageDashboard({ coverage }: { coverage: CommandCoverage }) {
+export function CoverageDashboard({
+  coverage,
+  embedded = false,
+}: {
+  coverage: CommandCoverage;
+  embedded?: boolean;
+}) {
+  const summaryGridClass =
+    (embedded ? "" : "mt-4 ") + "grid gap-2 sm:grid-cols-2 lg:grid-cols-5";
   return (
-    <section className="glass rounded-lg p-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold tracking-tight">
-            Web command coverage
-          </h2>
-          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
-            Which commands already have a web surface, which are command
-            builders/planners, and which still fall back to CLI-only use.
-          </p>
+    <section className={embedded ? "" : "glass rounded-lg p-5"}>
+      {embedded ? null : (
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold tracking-tight">
+              Web command coverage
+            </h2>
+            <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
+              Which commands already have a web surface, which are command
+              builders/planners, and which still fall back to CLI-only use.
+            </p>
+          </div>
+          <span className="rounded border border-emerald-300/25 bg-emerald-300/[0.06] px-2 py-1 font-mono text-[11px] text-emerald-200">
+            {coverage.coveragePercent}% linked
+          </span>
         </div>
-        <span className="rounded border border-emerald-300/25 bg-emerald-300/[0.06] px-2 py-1 font-mono text-[11px] text-emerald-200">
-          {coverage.coveragePercent}% linked
-        </span>
-      </div>
+      )}
 
-      <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+      <div className={summaryGridClass}>
         <CoverageTile label="commands" value={coverage.total} tone="neutral" />
         <CoverageTile label="web linked" value={coverage.webLinked} tone="pass" />
         <CoverageTile label="ready" value={coverage.ready} tone="pass" />

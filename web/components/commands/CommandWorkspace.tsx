@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ApiError,
@@ -62,11 +63,12 @@ export default function CommandWorkspace() {
         <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">
-              <span className="grad-text">Command workspace</span>
+              <span className="grad-text">Command reference</span>
             </h1>
             <p className="mt-2 text-sm text-[var(--fg-2)]">
-              Production commands grouped by workflow, with web surfaces and
-              equivalent CLI entry points side by side.
+              Advanced reference for CLI commands and their web surfaces. For
+              normal work, start with Convert; use this page when you need the
+              lower-level command behind a workflow step.
             </p>
           </div>
           {state.kind === "ok" ? (
@@ -79,8 +81,8 @@ export default function CommandWorkspace() {
         </header>
 
         <TaskLauncher
-          title="Start from the user task"
-          summary="Use these shortcuts when you know your current artifact. The full command catalog remains below for lower-level tools."
+          title="Main product paths"
+          summary="These are the routes users should click first. The catalog below is for advanced command lookup and troubleshooting."
           entries={TASK_ENTRYPOINTS}
           className="mb-6"
         />
@@ -194,13 +196,21 @@ function Catalog({ data }: { data: CommandCatalog }) {
 
   return (
     <div className="space-y-6">
+      <ReferenceNotice />
       <GoalCommandGuide
         goals={goals}
         activeGoalId={activeGoalId}
         onGoalFilterChange={handleGoalFilterChange}
       />
       <WorkflowMap commands={data.commands} />
-      <CoverageDashboard coverage={coverage} />
+      <details className="glass rounded-lg p-5">
+        <summary className="cursor-pointer text-base font-semibold tracking-tight">
+          Web command coverage
+        </summary>
+        <div className="mt-4">
+          <CoverageDashboard coverage={coverage} embedded />
+        </div>
+      </details>
       <CommandFilters
         data={data}
         activeGoal={activeGoal}
@@ -230,6 +240,42 @@ function Catalog({ data }: { data: CommandCatalog }) {
         </section>
       ) : null}
     </div>
+  );
+}
+
+function ReferenceNotice() {
+  return (
+    <section className="rounded-xl border border-amber-300/20 bg-amber-300/[0.045] p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.14em] text-amber-100/80">
+            Advanced page
+          </div>
+          <h2 className="mt-1 text-base font-semibold tracking-tight text-amber-50">
+            This is not the main converter flow
+          </h2>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
+            Use Commands when you need to inspect a CLI flag, copy a lower-level
+            command, or debug a workflow. The product path remains: Convert
+            existing HDF5, or prepare OpenMC inputs before converting.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/convert?intent=direct-convert&format=multicompo&check=1&production=1"
+            className="btn btn-primary"
+          >
+            Open converter
+          </Link>
+          <Link
+            href="/openmc?workflow=two-step&equivalence=sph&production=1"
+            className="btn btn-secondary"
+          >
+            Prepare SPH inputs
+          </Link>
+        </div>
+      </div>
+    </section>
   );
 }
 
