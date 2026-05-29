@@ -62,7 +62,6 @@ export default function OutputActions({
   }, [paths, refreshToken]);
 
   const notice = outputNotice(data);
-  const postWriteFocus = convertPostWriteFocus(data);
   const input = data.preflight?.inputs[0] ?? null;
   const canConvertNow = data.dry_run && data.ok && !data.output_exists && onConvert;
   const pathLabel =
@@ -79,6 +78,19 @@ export default function OutputActions({
         statuses={statuses}
         deliveryItems={deliveryItems}
         onConvert={onConvert}
+        onRefresh={() => setRefreshToken((value) => value + 1)}
+      />
+    );
+  }
+
+  if (mode === "converted") {
+    return (
+      <ConvertedOutputActions
+        data={data}
+        input={input}
+        statuses={statuses}
+        deliveryItems={deliveryItems}
+        actions={actions}
         onRefresh={() => setRefreshToken((value) => value + 1)}
       />
     );
@@ -115,7 +127,6 @@ export default function OutputActions({
 
       <AsciiReadinessPanel data={data} outputStatus={statuses.output} />
       <DeliveryCommandPanel data={data} statuses={statuses} onConvert={onConvert} />
-      {postWriteFocus ? <PostWriteFocusPanel focus={postWriteFocus} /> : null}
 
       <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
         {actions.map((action) => (
@@ -151,6 +162,137 @@ export default function OutputActions({
       </div>
 
       <RunSummaryCard data={data} input={input} statuses={statuses} />
+    </section>
+  );
+}
+
+function ConvertedOutputActions({
+  data,
+  input,
+  statuses,
+  deliveryItems,
+  actions,
+  onRefresh,
+}: {
+  data: ConvertResponse;
+  input: ConvertPreflightInput | null;
+  statuses: ConvertArtifactStatusMap;
+  deliveryItems: readonly ConvertDeliveryItem[];
+  actions: readonly HandoffAction[];
+  onRefresh: () => void;
+}) {
+  const bundleDir = convertBundleOutputDir(data);
+  const manifestPath = convertBundleManifestPath(data);
+  const focus = convertPostWriteFocus(data);
+  return (
+    <section className="glass rounded-xl p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <div>
+          <h3 className="text-base font-semibold tracking-tight">
+            Output ready
+          </h3>
+          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
+            The DONJON-facing ASCII handoff exists. Review the text, bundle the
+            delivery record, or prepare the downstream DONJON input.
+          </p>
+        </div>
+        <span className="rounded border border-emerald-300/25 px-2 py-1 font-mono text-[11px] uppercase tracking-wider text-emerald-200">
+          artifact ready
+        </span>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-3 text-[12px] text-[var(--fg-3)]">
+        <span>{convertArtifactStatusSummary(statuses)}</span>
+        <button
+          type="button"
+          onClick={onRefresh}
+          className="text-[var(--accent-2)] hover:underline"
+        >
+          Refresh file status
+        </button>
+      </div>
+
+      <section className="mt-4 rounded-lg border border-emerald-300/20 bg-emerald-300/[0.055] p-4 text-emerald-100">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase tracking-[0.14em] opacity-70">
+              DONJON ASCII
+            </div>
+            <h4 className="mt-1 text-sm font-semibold tracking-tight">
+              Preview, bundle, then use in DONJON
+            </h4>
+            <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--fg-2)]">
+              The converter has done its job. The next useful checks are the
+              ASCII preview and the manifest-backed bundle.
+            </p>
+          </div>
+          {focus ? (
+            <span className="rounded border border-current/20 bg-black/15 px-2 py-1 text-[11px] uppercase tracking-wider">
+              {focus.badge}
+            </span>
+          ) : null}
+        </div>
+
+        <div className="mt-3 grid gap-2 md:grid-cols-2">
+          <DeliveryPath label="ASCII handoff" value={data.output_path} />
+          <DeliveryPath label="Bundle directory" value={bundleDir} />
+          {data.summary_written && data.summary_path ? (
+            <DeliveryPath label="Conversion summary" value={data.summary_path} />
+          ) : null}
+          <DeliveryPath label="Manifest after bundle" value={manifestPath} />
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <a href="#ascii-output-preview" className="btn btn-primary">
+            Preview ASCII
+          </a>
+          <Link href={convertBundleHref(data)} className="btn btn-secondary">
+            Bundle handoff
+          </Link>
+          <Link href={convertDonjonGuideHref(data)} className="btn btn-secondary">
+            DONJON guide
+          </Link>
+          {data.writer_backend === "pygan" ? (
+            <Link href={convertWriterCompareHref(data)} className="btn btn-secondary">
+              Validate PyGan
+            </Link>
+          ) : null}
+          <Link
+            href={`/inspect?path=${encodeURIComponent(data.input_path)}`}
+            className="btn btn-secondary"
+          >
+            Inspect source
+          </Link>
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <CopyCliButton
+            value={data.output_path}
+            label="Copy DONJON path"
+            ariaLabel="Copy DONJON path"
+          />
+          <CopyCliButton
+            value={data.cli_command_text}
+            label="Copy CLI"
+            ariaLabel="Copy CLI command"
+          />
+        </div>
+      </section>
+
+      <details className="mt-3 rounded-lg border border-[var(--edge)] bg-black/10 p-3">
+        <summary className="cursor-pointer select-none text-sm font-semibold tracking-tight text-[var(--fg-0)]">
+          Advanced delivery evidence
+        </summary>
+        <DeliveryPathStrip items={deliveryItems} />
+        <AsciiReadinessPanel data={data} outputStatus={statuses.output} />
+        <DeliveryCommandPanel data={data} statuses={statuses} />
+        <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+          {actions.map((action) => (
+            <ActionCard key={action.id} action={action} />
+          ))}
+        </div>
+        <BundleManifestProbe manifestPath={manifestPath} enabled />
+        <RunSummaryCard data={data} input={input} statuses={statuses} />
+      </details>
     </section>
   );
 }
@@ -255,38 +397,6 @@ function DryRunOutputActions({
         <AsciiReadinessPanel data={data} outputStatus={statuses.output} />
         <RunSummaryCard data={data} input={input} statuses={statuses} />
       </details>
-    </section>
-  );
-}
-
-function PostWriteFocusPanel({
-  focus,
-}: {
-  focus: NonNullable<ReturnType<typeof convertPostWriteFocus>>;
-}) {
-  return (
-    <section className="mt-3 rounded-lg border border-emerald-300/20 bg-emerald-300/[0.045] p-3 text-emerald-100">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-[10px] uppercase tracking-[0.14em] opacity-75">
-            {focus.badge}
-          </div>
-          <h4 className="mt-1 text-sm font-semibold tracking-tight">
-            {focus.title}
-          </h4>
-          <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--fg-1)]">
-            {focus.body}
-          </p>
-        </div>
-        <div className="flex shrink-0 flex-wrap gap-2">
-          <Link href={focus.primaryHref} className="btn btn-primary">
-            {focus.primaryLabel}
-          </Link>
-          <Link href={focus.secondaryHref} className="btn btn-secondary">
-            {focus.secondaryLabel}
-          </Link>
-        </div>
-      </div>
     </section>
   );
 }
