@@ -145,6 +145,14 @@ for both diffusion and SPN3.  The low-order flux-shape residual remains large
 in this small colorset, so this is production-quality handoff evidence rather
 than a final benchmark-quality deterministic validation.
 
+Follow-up three-iteration OpenMC MG reruns did not improve this case.  With
+`SPH_DAMPING=1.0`, the SPH range expanded to 0.548627 .. 1.10766 and the
+current-solve residual increased to 0.0910754.  With `SPH_DAMPING=0.5`, the
+range stayed more controlled at 0.850728 .. 1.0354, but the current-solve
+residual was still 0.112148.  The next validation step should therefore keep
+the one-shot SPH result as the accepted baseline and treat iterative OpenMC MG
+SPH as a separate damping/convergence study.
+
 ## Acceptance Criteria
 
 A run is useful as production evidence when:

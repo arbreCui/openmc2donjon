@@ -243,6 +243,12 @@ consumed the uncorrected and SPH-corrected MACROLIB handoffs and showed a
 small improvement in CE flux-shape residual for both diffusion and SPN3.  The
 detailed table is in `NEXT_PHYSICS_VALIDATION.md`.
 
+For this five-region case, one-shot OpenMC-side SPH is the accepted evidence
+path.  Follow-up `SPH_ITERATIONS=3` runs showed that blindly iterating OpenMC MG
+is damping-sensitive: `SPH_DAMPING=1.0` overshot, while `SPH_DAMPING=0.5` was
+more controlled but still did not improve the one-shot current-solve residual.
+Use `apply-sph` reruns as an explicit review study, not as the default demo.
+
 To close the downstream handoff, run the DONJON consumption smoke on the
 produced MACROLIB:
 

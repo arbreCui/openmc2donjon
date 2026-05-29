@@ -155,6 +155,26 @@ Interpretation:
   This is production-quality handoff evidence, not a final deterministic
   benchmark.
 
+## Iterative SPH Review
+
+The accepted five-region evidence above uses a one-shot OpenMC-side SPH
+sidecar.  Two local three-iteration follow-up runs were used to check whether
+blind OpenMC MG reruns should become the default route:
+
+| Case | Damping | SPH range after iter 3 | Current MG residual | Frozen-flux residual |
+| --- | ---: | ---: | ---: | ---: |
+| one-shot baseline | 1.0 | 0.92263 .. 1.01804 | 0.0773705 | 4.99e-12 |
+| iterated | 1.0 | 0.548627 .. 1.10766 | 0.0910754 | 0.315345 |
+| iterated | 0.5 | 0.850728 .. 1.0354 | 0.112148 | 0.0523582 |
+
+This is a useful negative result.  On this small five-region case,
+`SPH_ITERATIONS=3` did not improve the accepted one-shot evidence.  With
+undamped updates it overshot badly; with `SPH_DAMPING=0.5` it stayed more
+controlled but still did not beat the one-shot current-solve residual.  The
+web UI therefore presents one-shot OpenMC-side SPH as the accepted production
+demo, while `apply-sph` / OpenMC MG reruns remain an optional,
+damping-sensitive review path.
+
 ## Produced Artifacts
 
 The high-statistics run produced:
