@@ -35,7 +35,8 @@ describe("commandWorkflowLanes", () => {
       "convert",
     ]);
     expect(sphLane!.steps[0].body).toContain("continuous-energy OpenMC");
-    expect(sphLane!.steps[1].body).toContain("selected group structure");
+    expect(sphLane!.steps[1].body).toContain("selected energy mesh");
+    expect(sphLane!.steps[5].href).toContain("format=macrolib");
     expect(sphLane!.steps[2].commandIds).toContain("make-openmc-sph-sidecar");
     expect(sphLane!.steps[2].commandIds).toContain("make-sph-update-table");
     expect(sphLane!.steps[3].commandIds).toContain("apply-sph");

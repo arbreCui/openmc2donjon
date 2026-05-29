@@ -11,9 +11,9 @@ export const PRODUCTION_PATH_STEPS: readonly ProductionPathStep[] = [
   {
     id: "openmc-equivalence",
     label: "01",
-    title: "OpenMC-side equivalence",
+    title: "OpenMC CE/MG equivalence",
     body:
-      "Use OpenMC CE as the reference and OpenMC MG as the formal equivalence operator on the selected group structure with the same geometry.",
+      "Use CE tallies as the reference, then run OpenMC MG on the same geometry/output regions and selected energy mesh to generate NSPH.",
     result: "corrected HDF5 / SPH sidecar",
     href: "/openmc?workflow=two-step&equivalence=sph&production=1",
   },

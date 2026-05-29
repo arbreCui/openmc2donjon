@@ -9,9 +9,9 @@ const CHOICES = [
   },
   {
     title: "OpenMC-side SPH",
-    focus: "CE reference + MG same geometry",
+    focus: "CE reference + MG macro solve",
     body:
-      "Use this when CE and MG OpenMC runs share the selected group structure, geometry, and output regions. Compute SPH from their flux ratio, carry NSPH, then convert.",
+      "Use this when the CE reference tallies the selected mesh and the OpenMC MG macro solve uses the same geometry/output regions. Compute SPH from their flux ratio, carry NSPH, then convert.",
   },
   {
     title: "Review evidence",

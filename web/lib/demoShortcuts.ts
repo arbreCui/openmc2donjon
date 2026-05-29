@@ -3,9 +3,10 @@ import {
   convertDemoHref,
   convertDemoInspectHref,
 } from "./convertDemo";
+import { MOCK_OPENMC_SPH_DEMO } from "./openmcSphDemo";
 
 export interface DemoShortcut {
-  id: "convert-c5g7" | "inspect-c5g7" | "sph-sidecar";
+  id: "convert-c5g7" | "inspect-c5g7" | "openmc-sph-minicase";
   eyebrow: string;
   title: string;
   body: string;
@@ -33,12 +34,14 @@ export const HOME_DEMO_SHORTCUTS: readonly DemoShortcut[] = [
     cta: "Inspect HDF5",
   },
   {
-    id: "sph-sidecar",
-    eyebrow: "OpenMC-side SPH",
-    title: "Build an SPH sidecar command",
+    id: "openmc-sph-minicase",
+    eyebrow: "CE/MG SPH minicase",
+    title: "Review OpenMC-side SPH",
     body:
-      "Open the non-mutating sidecar builder for SPH factors produced by OpenMC CE/MG equivalence.",
-    href: "/openmc?workflow=two-step&equivalence=sph&production=1",
-    cta: "Open SPH planner",
+      "Open the CE reference + MG macro route, including the physics summary and corrected MACROLIB handoff.",
+    href: `/openmc?workflow=two-step&equivalence=sph&format=macrolib&production=1&summary=${encodeURIComponent(
+      MOCK_OPENMC_SPH_DEMO.physicsSummary,
+    )}`,
+    cta: "Open SPH minicase",
   },
 ] as const;

@@ -49,7 +49,7 @@ export const OPENMC_SPH_WORKFLOW_STEPS: readonly OpenmcSphWorkflowStep[] = [
     title: "Export MG macro flux",
     badge: "MG",
     body:
-      "Run OpenMC MG on the selected group structure with the same geometry and export the matching region/group flux.",
+      "Run OpenMC MG on the selected energy mesh with the same geometry/output regions and export the matching region/group flux.",
     commandId: "export-volume-flux",
     href: MG_EXPORT_HREF,
     cli:
@@ -100,12 +100,12 @@ export const OPENMC_SPH_WORKFLOW_STEPS: readonly OpenmcSphWorkflowStep[] = [
     title: "Convert for DONJON",
     badge: "ASCII",
     body:
-      "Run the normal converter on the corrected HDF5 and write L_MULTICOMPO or L_MACROLIB ASCII.",
+      "Run the normal converter on the corrected HDF5 and write L_MACROLIB ASCII with NSPH for DONJON consumption.",
     commandId: "direct-convert",
-    href: "/convert?intent=openmc-sph&format=multicompo&check=1&production=1",
+    href: "/convert?intent=openmc-sph&format=macrolib&check=1&production=1",
     cli:
-      "openmc2donjon mgxs_with_sph.h5 -o out.mcompo.txt " +
-      "--format multicompo --check --production --require-sph",
+      "openmc2donjon mgxs_with_sph.h5 -o out.macrolib.txt " +
+      "--format macrolib --check --production --require-sph",
   },
 ] as const;
 

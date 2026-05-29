@@ -68,7 +68,7 @@ export default function OpenmcProductionPathPanel({
           eyebrow: "OpenMC physics",
           title: "Run CE + MG",
           body:
-            "Run the CE reference and OpenMC MG macro calculation on the selected group structure with the same geometry and output regions.",
+            "Run CE as the high-fidelity reference, then run OpenMC MG on the selected energy mesh with the same geometry and output regions.",
           status: statuses.source,
           href: undefined,
           hrefLabel: undefined,
@@ -101,7 +101,7 @@ export default function OpenmcProductionPathPanel({
           eyebrow: "Converter",
           title: `Convert corrected HDF5 to ${object}`,
           body:
-            "Use the augmented HDF5 as the converter input. The macro XS remain unchanged; DONJON consumes NSPH as equivalence factors.",
+            "Use the augmented HDF5 as the converter input. The macro XS remain unchanged; DONJON consumes NSPH as equivalence factors, usually through MACROLIB.",
           status: statuses.review,
           href: convertHref ?? inspectHref ?? undefined,
           hrefLabel: convertHref ? "Open converter" : "Inspect HDF5",

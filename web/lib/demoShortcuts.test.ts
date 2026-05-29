@@ -6,7 +6,7 @@ describe("home demo shortcuts", () => {
     expect(HOME_DEMO_SHORTCUTS.map((entry) => entry.id)).toEqual([
       "convert-c5g7",
       "inspect-c5g7",
-      "sph-sidecar",
+      "openmc-sph-minicase",
     ]);
   });
 
@@ -17,6 +17,9 @@ describe("home demo shortcuts", () => {
     expect(inspect.href).toBe(
       "/inspect?path=%2Fmock%2Fhome%2Fopenmc-runs%2Fc5g7%2Fhandoff.h5",
     );
-    expect(sph.href).toBe("/openmc?workflow=two-step&equivalence=sph&production=1");
+    expect(sph.href).toContain("/openmc?workflow=two-step");
+    expect(sph.href).toContain("equivalence=sph");
+    expect(sph.href).toContain("format=macrolib");
+    expect(sph.href).toContain("summary=%2Fmock%2Fhome%2Fopenmc-runs%2Fopenmc-sph-minicase%2Fphysics_summary.json");
   });
 });

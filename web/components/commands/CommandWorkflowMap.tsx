@@ -28,10 +28,10 @@ export function WorkflowMap({ commands }: { commands: CommandCatalogEntry[] }) {
         ))}
       </div>
       <p className="mt-3 text-[12px] leading-5 text-[var(--fg-3)]">
-        For SPH, OpenMC CE is the high-fidelity reference and OpenMC MG on the
-        selected group structure is the macro calculation. openmc2donjon
-        carries the resulting SPH factors; it does not run a DONJON feedback
-        loop.
+        For SPH, OpenMC CE is the high-fidelity reference. OpenMC MG is the
+        macro calculation on the selected energy mesh and the same
+        geometry/output regions. openmc2donjon carries the resulting NSPH
+        factors; it does not run a DONJON feedback loop.
       </p>
     </section>
   );

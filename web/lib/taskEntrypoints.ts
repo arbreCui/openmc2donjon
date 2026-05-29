@@ -20,9 +20,9 @@ export const TASK_ENTRYPOINTS: readonly TaskEntrypoint[] = [
   {
     id: "openmc-sph",
     eyebrow: "Need SPH first",
-    title: "Prepare OpenMC-side SPH",
+    title: "Prepare CE/MG SPH",
     body:
-      "Use OpenMC CE as reference and OpenMC MG as the macro solve, then inject SPH into the HDF5.",
+      "Use OpenMC CE as the reference, run OpenMC MG on the same geometry/output regions, then inject NSPH before conversion.",
     href: "/openmc?workflow=two-step&equivalence=sph&format=macrolib&production=1",
     cta: "Open SPH workflow",
   },

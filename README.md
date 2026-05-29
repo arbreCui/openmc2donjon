@@ -6,14 +6,15 @@
 Build production handoffs from OpenMC multi-group cross sections and
 OpenMC-side equivalence factors to DRAGON/DONJON deterministic workflows.
 
-The production SPH route uses OpenMC MG as the equivalence operator.  OpenMC CE
-is the reference calculation; OpenMC MG runs on the selected group structure
-with the same geometry and homogenization regions; the resulting SPH factors
+The production SPH route uses OpenMC MG as the equivalence operator. OpenMC CE
+is the high-fidelity reference calculation; the CE statepoint provides the
+group-wise reference tallies, while OpenMC MG runs on the selected energy mesh
+with the same geometry and homogenization regions. The resulting SPH factors
 are then carried by this package into DRAGON/DONJON:
 
 ```text
 OpenMC CE reference
-  + OpenMC MG using the selected group structure and the same geometry
+  + OpenMC MG using the selected energy mesh and the same geometry
     (typically with Hn angular histogram scattering)
   -> OpenMC-side SPH factors and/or ADF/DF sidecars
   -> corrected MGXS HDF5 handoff
@@ -52,7 +53,7 @@ the production SPH route.
 | Method | What it does | Entry point |
 | --- | --- | --- |
 | Direct | No equivalence factors; accept the homogenization bias. | Convert without equivalence flags. |
-| OpenMC-side SPH / ADF | Generate SPH factors from OpenMC CE reference vs an OpenMC MG macro calculation on the selected group structure with the same geometry, usually using OpenMC Hn histogram angular representation for the MG macro solve; or build ADF/DF sidecars from OpenMC face-flux evidence. | `make-openmc-sph-sidecar` + optional `apply-sph` MG reruns + final `augment-sph`, `make-adf-sidecar` + `augment-adf`, or `openmc2donjon-from-openmc --sph-source` / `--build-flux-ratio-adf`. |
+| OpenMC-side SPH / ADF | Generate SPH factors from OpenMC CE reference tallies vs an OpenMC MG macro calculation on the selected energy mesh with the same geometry/output regions, usually using OpenMC Hn histogram angular representation for the MG macro solve; or build ADF/DF sidecars from OpenMC face-flux evidence. | `make-openmc-sph-sidecar` + optional `apply-sph` MG reruns + final `augment-sph`, `make-adf-sidecar` + `augment-adf`, or `openmc2donjon-from-openmc --sph-source` / `--build-flux-ratio-adf`. |
 
 ## Export And Convert Modes
 
