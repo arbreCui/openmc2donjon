@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { CopyCliButton } from "@/components/commands/CopyCliButton";
-import type { ConvertResponse } from "@/lib/api";
+import type { ConvertPreflightInput, ConvertResponse } from "@/lib/api";
 import {
   convertArtifactPaths,
   convertArtifactStatusSummary,
@@ -23,6 +23,7 @@ import {
   convertValidateBundleHref,
   convertWriterCompareHref,
 } from "@/lib/convertNextSteps";
+import { convertOutputMode } from "@/lib/convertOutputMode";
 import { convertPostWriteFocus } from "@/lib/convertPostWriteFocus";
 import {
   fileStatusIsDirectory,
@@ -68,6 +69,21 @@ export default function OutputActions({
     data.converted && data.output_exists ? "Copy DONJON path" : "Copy target path";
   const actions = handoffActions(data, onConvert, statuses);
   const deliveryItems = convertDeliveryChecklist(data, input);
+  const mode = convertOutputMode(data);
+
+  if (mode === "dry-run-ready") {
+    return (
+      <DryRunOutputActions
+        data={data}
+        input={input}
+        statuses={statuses}
+        deliveryItems={deliveryItems}
+        onConvert={onConvert}
+        onRefresh={() => setRefreshToken((value) => value + 1)}
+      />
+    );
+  }
+
   return (
     <section className="glass rounded-xl p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
@@ -135,6 +151,110 @@ export default function OutputActions({
       </div>
 
       <RunSummaryCard data={data} input={input} statuses={statuses} />
+    </section>
+  );
+}
+
+function DryRunOutputActions({
+  data,
+  input,
+  statuses,
+  deliveryItems,
+  onConvert,
+  onRefresh,
+}: {
+  data: ConvertResponse;
+  input: ConvertPreflightInput | null;
+  statuses: ConvertArtifactStatusMap;
+  deliveryItems: readonly ConvertDeliveryItem[];
+  onConvert?: () => void;
+  onRefresh: () => void;
+}) {
+  return (
+    <section className="glass rounded-xl p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <div>
+          <h3 className="text-base font-semibold tracking-tight">
+            Dry-run next step
+          </h3>
+          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
+            Dry-run accepted the request and no ASCII file was written. Convert
+            is the only main action left before preview or bundle become
+            relevant.
+          </p>
+        </div>
+        <span className="rounded border border-cyan-300/25 px-2 py-1 font-mono text-[11px] uppercase tracking-wider text-cyan-200">
+          no file written
+        </span>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-3 text-[12px] text-[var(--fg-3)]">
+        <span>{convertArtifactStatusSummary(statuses)}</span>
+        <button
+          type="button"
+          onClick={onRefresh}
+          className="text-[var(--accent-2)] hover:underline"
+        >
+          Refresh file status
+        </button>
+      </div>
+
+      <section className="mt-4 rounded-lg border border-cyan-300/25 bg-cyan-300/[0.06] p-4 text-cyan-100">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase tracking-[0.14em] opacity-70">
+              write target
+            </div>
+            <h4 className="mt-1 text-sm font-semibold tracking-tight">
+              Convert will create the DONJON ASCII handoff
+            </h4>
+            <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--fg-2)]">
+              The target path is ready for the selected format. After Convert,
+              this page will expose ASCII preview, bundle, manifest validation,
+              and DONJON guide actions.
+            </p>
+          </div>
+          {onConvert ? (
+            <button type="button" onClick={onConvert} className="btn btn-primary">
+              Convert now
+            </button>
+          ) : null}
+        </div>
+        <div className="mt-3 rounded border border-current/15 bg-black/15 px-3 py-2">
+          <div className="text-[10px] uppercase tracking-[0.14em] opacity-70">
+            target path
+          </div>
+          <div className="mt-1 break-all font-mono text-[12px] text-[var(--fg-1)]">
+            {data.output_path}
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <CopyCliButton
+            value={data.output_path}
+            label="Copy target path"
+            ariaLabel="Copy target path"
+          />
+          <CopyCliButton
+            value={data.cli_command_text}
+            label="Copy dry-run CLI"
+            ariaLabel="Copy dry-run CLI command"
+          />
+          <Link
+            href={`/inspect?path=${encodeURIComponent(data.input_path)}`}
+            className="btn btn-secondary"
+          >
+            Inspect source
+          </Link>
+        </div>
+      </section>
+
+      <details className="mt-3 rounded-lg border border-[var(--edge)] bg-black/10 p-3">
+        <summary className="cursor-pointer select-none text-sm font-semibold tracking-tight text-[var(--fg-0)]">
+          Advanced dry-run evidence
+        </summary>
+        <DeliveryPathStrip items={deliveryItems} onConvert={onConvert} />
+        <AsciiReadinessPanel data={data} outputStatus={statuses.output} />
+        <RunSummaryCard data={data} input={input} statuses={statuses} />
+      </details>
     </section>
   );
 }
