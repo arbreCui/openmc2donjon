@@ -25,6 +25,31 @@ CS_MOD   -> DONJON mixture 2 / SPH region 2
 CS_ABS   -> DONJON mixture 3 / SPH region 3
 ```
 
+This remains the default because it runs quickly and is useful as a
+development smoke.  A larger five-region two-dimensional variant is available
+for the next physics validation step:
+
+```sh
+OPENMC2DONJON_COLORSET_VARIANT=five_region_2d \
+RUN_ROOT=/private/tmp/openmc2donjon_ce_mg_sph_five_region_2d \
+bash examples/openmc_ce_mg_33g_sph_minicase/run_workflow.sh
+```
+
+The five-region variant uses the same CE/MG/SPH route, but exports five
+OpenMC cell domains instead of three:
+
+```text
+CS_FUEL_L -> fuel-like output region
+CS_MOD    -> moderator-like output region
+CS_FUEL_U -> second fuel-like output region
+CS_ABS    -> absorber/control-like output region
+CS_REF    -> reflector-like output region
+```
+
+Use the three-region variant for fast interface checks.  Use
+`five_region_2d` when reviewing whether the OpenMC-side SPH route improves a
+larger low-order colorset diagnostic.
+
 This concrete minicase uses the ECCO-33 energy mesh, but the workflow is not
 limited to 33 groups: any valid OpenMC MG group structure can be used as long
 as the CE-tallied MGXS handoff, OpenMC MG macro solve, CE flux export, and MG
@@ -82,6 +107,7 @@ SPH_CLIP_MAX=
 MAX_CE_FLUX_REL_STD=0.20
 MAX_MG_FLUX_REL_STD=0.20
 OPENMC_LIB_DIR=/path/to/openmc/build/lib
+OPENMC2DONJON_COLORSET_VARIANT=three_region   # or five_region_2d
 ```
 
 `OPENMC_LIB_DIR` is optional, but useful on macOS when the OpenMC executable

@@ -47,6 +47,18 @@ Start with a two-dimensional colorset before moving to a full assembly:
 This case should have enough regions that SPH is meaningful, but not so many
 that Monte Carlo statistics dominate every review cycle.
 
+The repository now includes the first version of that case as a selectable
+variant of this example:
+
+```sh
+OPENMC2DONJON_COLORSET_VARIANT=five_region_2d \
+RUN_ROOT=/private/tmp/openmc2donjon_ce_mg_sph_five_region_2d \
+bash examples/openmc_ce_mg_33g_sph_minicase/run_workflow.sh
+```
+
+The variant is intentionally wired through the same scripts as the three-region
+smoke, so any change to the CE/MG/SPH route is exercised by both geometries.
+
 ## Required Artifacts
 
 Each completed validation run should produce:

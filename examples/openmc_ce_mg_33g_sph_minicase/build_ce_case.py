@@ -6,6 +6,7 @@ import argparse
 from pathlib import Path
 
 from colorset_model import (
+    COLORSET_VARIANT,
     MG_MACRO_HISTOGRAM_BINS,
     MG_MACRO_LEGENDRE_ORDER,
     MG_MACRO_SCATTER_FORMAT,
@@ -74,6 +75,7 @@ def main(argv: list[str] | None = None) -> int:
         mg_macro_legendre_order=args.mg_macro_legendre_order,
     )
     print(f"wrote OpenMC CE colorset XML: {args.case_dir.resolve()}")
+    print(f"colorset variant: {COLORSET_VARIANT}")
     if args.mg_macro_scatter_format == "histogram":
         print(f"MG macro scatter treatment: H{args.mg_macro_histogram_bins}")
     else:

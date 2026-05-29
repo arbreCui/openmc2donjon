@@ -24,6 +24,7 @@ SPH_ITERATIONS="${SPH_ITERATIONS:-1}"
 SPH_DAMPING="${SPH_DAMPING:-1.0}"
 SPH_CLIP_MIN="${SPH_CLIP_MIN:-}"
 SPH_CLIP_MAX="${SPH_CLIP_MAX:-}"
+COLORSET_VARIANT="${OPENMC2DONJON_COLORSET_VARIANT:-three_region}"
 
 run_openmc_case() {
   local case_dir="$1"
@@ -55,6 +56,7 @@ fi
 
 echo "== OpenMC CE/MG SPH colorset minicase (ECCO-33 example) =="
 echo "run root: $RUN_ROOT"
+echo "colorset variant: $COLORSET_VARIANT"
 echo "SPH iterations: $SPH_ITERATIONS"
 echo "SPH damping: $SPH_DAMPING"
 if [[ -n "$SPH_CLIP_MIN" || -n "$SPH_CLIP_MAX" ]]; then

@@ -14,6 +14,7 @@ import json
 from pathlib import Path
 
 from colorset_model import (
+    COLORSET_VARIANT,
     MG_MACRO_HISTOGRAM_BINS,
     MG_MACRO_LEGENDRE_ORDER,
     MG_MACRO_SCATTER_FORMAT,
@@ -168,6 +169,7 @@ def main(argv: list[str] | None = None) -> int:
             write_sph_apply_summary(args.sph_apply_summary_json, sph_apply_report)
 
     print(f"wrote OpenMC MG colorset XML: {mg_dir}")
+    print(f"colorset variant: {COLORSET_VARIANT}")
     print(f"MG cross sections: {mgxs_path}")
     if sph_apply_report is not None:
         print(f"raw MG cross sections: {raw_mgxs_path}")

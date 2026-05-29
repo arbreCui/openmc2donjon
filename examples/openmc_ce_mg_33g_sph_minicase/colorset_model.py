@@ -1,13 +1,17 @@
-"""Three-region OpenMC CE/MG colorset used for OpenMC-side SPH.
+"""OpenMC CE/MG colorsets used for OpenMC-side SPH.
 
 The same spatial cell domains are used in the continuous-energy reference
 calculation and in the OpenMC multi-group macro calculation.  Each cell domain
-becomes one SPH/output region:
+becomes one SPH/output region.
+
+The default variant keeps the original three-region smoke:
 
 ``CS_FUEL`` -> ``CS_MOD`` -> ``CS_ABS``
 
-The model is intentionally small.  It is a production workflow fixture, not an
-accepted reactor benchmark.
+Set ``OPENMC2DONJON_COLORSET_VARIANT=five_region_2d`` to exercise a larger
+two-dimensional colorset with five output regions.  Both variants use the same
+workflow: OpenMC CE reference, OpenMC MG macro solve on the same geometry, then
+OpenMC-side ``SPH(region, group)`` factors for the converter.
 """
 
 from __future__ import annotations
@@ -33,13 +37,9 @@ DOMAIN_TYPE = "cell"
 FUEL_CELL_ID = 201
 MODERATOR_CELL_ID = 202
 ABSORBER_CELL_ID = 203
-DOMAIN_IDS = (FUEL_CELL_ID, MODERATOR_CELL_ID, ABSORBER_CELL_ID)
-DOMAIN_NAME_BY_ID = {
-    FUEL_CELL_ID: "CS_FUEL",
-    MODERATOR_CELL_ID: "CS_MOD",
-    ABSORBER_CELL_ID: "CS_ABS",
-}
-DOMAIN_VOLUME_BY_ID = {cell_id: 32.0 for cell_id in DOMAIN_IDS}
+REFLECTOR_CELL_ID = 204
+SECOND_FUEL_CELL_ID = 205
+DEFAULT_COLORSET_VARIANT = "three_region"
 ENERGY_MESH_ID = "ecco_33"
 ENERGY_GROUP_STRUCTURE = "ECCO-33"
 HANDOFF_SCATTER_FORMAT = "legendre"
@@ -69,6 +69,51 @@ class RunSettings:
     inactive: int = 5
     particles: int = 1_000
     seed: int = 31
+
+
+@dataclass(frozen=True)
+class RegionSpec:
+    cell_id: int
+    name: str
+    material: str
+    x_min: float
+    x_max: float
+    y_min: float
+    y_max: float
+
+    @property
+    def volume(self) -> float:
+        return (self.x_max - self.x_min) * (self.y_max - self.y_min) * 4.0
+
+
+COLORSET_VARIANT = os.environ.get(
+    "OPENMC2DONJON_COLORSET_VARIANT",
+    DEFAULT_COLORSET_VARIANT,
+).strip()
+REGION_SPECS_BY_VARIANT = {
+    "three_region": (
+        RegionSpec(FUEL_CELL_ID, "CS_FUEL", "colorset fuel", -3.0, -1.0, -2.0, 2.0),
+        RegionSpec(MODERATOR_CELL_ID, "CS_MOD", "colorset moderator", -1.0, 1.0, -2.0, 2.0),
+        RegionSpec(ABSORBER_CELL_ID, "CS_ABS", "colorset absorber", 1.0, 3.0, -2.0, 2.0),
+    ),
+    "five_region_2d": (
+        RegionSpec(FUEL_CELL_ID, "CS_FUEL_L", "colorset fuel", -3.0, -1.0, -2.0, 2.0),
+        RegionSpec(MODERATOR_CELL_ID, "CS_MOD", "colorset moderator", -1.0, 1.0, -2.0, 0.0),
+        RegionSpec(SECOND_FUEL_CELL_ID, "CS_FUEL_U", "colorset fuel", -1.0, 1.0, 0.0, 2.0),
+        RegionSpec(ABSORBER_CELL_ID, "CS_ABS", "colorset absorber", 1.0, 3.0, -2.0, 0.0),
+        RegionSpec(REFLECTOR_CELL_ID, "CS_REF", "colorset reflector", 1.0, 3.0, 0.0, 2.0),
+    ),
+}
+if COLORSET_VARIANT not in REGION_SPECS_BY_VARIANT:
+    allowed = ", ".join(sorted(REGION_SPECS_BY_VARIANT))
+    raise ValueError(
+        "OPENMC2DONJON_COLORSET_VARIANT must be one of "
+        f"{allowed}; got {COLORSET_VARIANT!r}"
+    )
+REGION_SPECS = REGION_SPECS_BY_VARIANT[COLORSET_VARIANT]
+DOMAIN_IDS = tuple(spec.cell_id for spec in REGION_SPECS)
+DOMAIN_NAME_BY_ID = {spec.cell_id: spec.name for spec in REGION_SPECS}
+DOMAIN_VOLUME_BY_ID = {spec.cell_id: spec.volume for spec in REGION_SPECS}
 
 
 def energy_bounds_ev() -> list[float]:
@@ -102,7 +147,12 @@ def build_materials() -> openmc.Materials:
     absorber.add_nuclide("B10", 8.0e-4)
     absorber.add_nuclide("B11", 3.2e-3)
 
-    materials = openmc.Materials([fuel, moderator, absorber])
+    reflector = openmc.Material(material_id=4, name="colorset reflector")
+    reflector.set_density("g/cm3", 0.72)
+    reflector.add_nuclide("H1", 4.8e-2)
+    reflector.add_nuclide("O16", 2.4e-2)
+
+    materials = openmc.Materials([fuel, moderator, absorber, reflector])
     cross_sections = openmc.config.get("cross_sections")
     if cross_sections:
         materials.cross_sections = str(cross_sections)
@@ -113,38 +163,45 @@ def build_geometry(materials: openmc.Materials | None = None) -> openmc.Geometry
     materials = materials or build_materials()
     by_name = {material.name: material for material in materials}
 
-    x0 = openmc.XPlane(surface_id=10, x0=-3.0, boundary_type="reflective")
-    x1 = openmc.XPlane(surface_id=11, x0=-1.0)
-    x2 = openmc.XPlane(surface_id=12, x0=1.0)
-    x3 = openmc.XPlane(surface_id=13, x0=3.0, boundary_type="reflective")
-    y0 = openmc.YPlane(surface_id=14, y0=-2.0, boundary_type="reflective")
-    y1 = openmc.YPlane(surface_id=15, y0=2.0, boundary_type="reflective")
-    z0 = openmc.ZPlane(surface_id=16, z0=-2.0, boundary_type="reflective")
-    z1 = openmc.ZPlane(surface_id=17, z0=2.0, boundary_type="reflective")
+    x_values = sorted({spec.x_min for spec in REGION_SPECS} | {spec.x_max for spec in REGION_SPECS})
+    y_values = sorted({spec.y_min for spec in REGION_SPECS} | {spec.y_max for spec in REGION_SPECS})
+    x_min, x_max = x_values[0], x_values[-1]
+    y_min, y_max = y_values[0], y_values[-1]
+    x_surfaces = {
+        value: openmc.XPlane(
+            surface_id=10 + index,
+            x0=value,
+            boundary_type="reflective" if value in (x_min, x_max) else "transmission",
+        )
+        for index, value in enumerate(x_values)
+    }
+    y_surfaces = {
+        value: openmc.YPlane(
+            surface_id=100 + index,
+            y0=value,
+            boundary_type="reflective" if value in (y_min, y_max) else "transmission",
+        )
+        for index, value in enumerate(y_values)
+    }
+    z0 = openmc.ZPlane(surface_id=200, z0=-2.0, boundary_type="reflective")
+    z1 = openmc.ZPlane(surface_id=201, z0=2.0, boundary_type="reflective")
 
-    fuel_cell = openmc.Cell(cell_id=FUEL_CELL_ID, name=DOMAIN_NAME_BY_ID[FUEL_CELL_ID])
-    fuel_cell.fill = by_name["colorset fuel"]
-    fuel_cell.region = +x0 & -x1 & +y0 & -y1 & +z0 & -z1
-    fuel_cell.volume = DOMAIN_VOLUME_BY_ID[FUEL_CELL_ID]
-
-    moderator_cell = openmc.Cell(
-        cell_id=MODERATOR_CELL_ID,
-        name=DOMAIN_NAME_BY_ID[MODERATOR_CELL_ID],
-    )
-    moderator_cell.fill = by_name["colorset moderator"]
-    moderator_cell.region = +x1 & -x2 & +y0 & -y1 & +z0 & -z1
-    moderator_cell.volume = DOMAIN_VOLUME_BY_ID[MODERATOR_CELL_ID]
-
-    absorber_cell = openmc.Cell(
-        cell_id=ABSORBER_CELL_ID,
-        name=DOMAIN_NAME_BY_ID[ABSORBER_CELL_ID],
-    )
-    absorber_cell.fill = by_name["colorset absorber"]
-    absorber_cell.region = +x2 & -x3 & +y0 & -y1 & +z0 & -z1
-    absorber_cell.volume = DOMAIN_VOLUME_BY_ID[ABSORBER_CELL_ID]
-
+    cells: list[openmc.Cell] = []
+    for spec in REGION_SPECS:
+        cell = openmc.Cell(cell_id=spec.cell_id, name=spec.name)
+        cell.fill = by_name[spec.material]
+        cell.region = (
+            +x_surfaces[spec.x_min]
+            & -x_surfaces[spec.x_max]
+            & +y_surfaces[spec.y_min]
+            & -y_surfaces[spec.y_max]
+            & +z0
+            & -z1
+        )
+        cell.volume = DOMAIN_VOLUME_BY_ID[spec.cell_id]
+        cells.append(cell)
     root = openmc.Universe(universe_id=1, name="colorset root")
-    root.add_cells([fuel_cell, moderator_cell, absorber_cell])
+    root.add_cells(cells)
     return openmc.Geometry(root)
 
 
@@ -162,7 +219,7 @@ def build_settings(
     settings.particles = run_settings.particles
     settings.seed = run_settings.seed
     settings.source = openmc.IndependentSource(
-        space=openmc.stats.Box((-2.9, -1.9, -1.9), (-1.1, 1.9, 1.9)),
+        space=openmc.stats.Box((-2.9, -1.9, -1.9), (2.9, 1.9, 1.9)),
         constraints={"fissionable": True},
     )
     settings.output = {"tallies": False}
@@ -350,8 +407,10 @@ def domain_names(_library: mgxs.Library | None = None) -> dict[int, str]:
 def root_attrs() -> dict[str, object]:
     return {
         "case": CASE_NAME,
+        "colorset_variant": COLORSET_VARIANT,
         "domain_mode": DOMAIN_MODE,
         "domain_type": DOMAIN_TYPE,
+        "output_region_count": len(DOMAIN_IDS),
         "energy_group_structure": ENERGY_GROUP_STRUCTURE,
         "energy_group_count": len(energy_bounds_ev()) - 1,
         "legendre_order": HANDOFF_LEGENDRE_ORDER,

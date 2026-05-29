@@ -30,12 +30,17 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
         self.assertIn("LEGENDRE_ORDER = 3", text)
         self.assertIn('MG_MACRO_SCATTER_FORMAT = "histogram"', text)
         self.assertIn("MG_MACRO_HISTOGRAM_BINS = 16", text)
-        self.assertIn("DOMAIN_IDS = (FUEL_CELL_ID, MODERATOR_CELL_ID, ABSORBER_CELL_ID)", text)
+        self.assertIn("OPENMC2DONJON_COLORSET_VARIANT", text)
+        self.assertIn("five_region_2d", text)
+        self.assertIn("REGION_SPECS_BY_VARIANT", text)
+        self.assertIn("DOMAIN_IDS = tuple(spec.cell_id for spec in REGION_SPECS)", text)
         self.assertIn("VOLUME_FLUX_TALLY_NAME", text)
         self.assertIn("reverse_openmc_energy_filter_flux", text)
         self.assertIn("write_openmc_volume_flux_hdf5", text)
         self.assertIn('"sph_route"', text)
         self.assertIn("OpenMC CE reference + OpenMC MG same geometry", text)
+        self.assertIn('"colorset_variant"', text)
+        self.assertIn('"output_region_count"', text)
 
     def test_recipe_uses_explicit_domain_specs_and_flux_postprocess(self) -> None:
         text = (_example_dir() / "export_recipe.py").read_text(encoding="utf-8")
@@ -74,6 +79,9 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
         self.assertIn("CS_FUEL  -> DONJON mixture 1", readme)
         self.assertIn("CS_MOD   -> DONJON mixture 2", readme)
         self.assertIn("CS_ABS   -> DONJON mixture 3", readme)
+        self.assertIn("OPENMC2DONJON_COLORSET_VARIANT=five_region_2d", readme)
+        self.assertIn("CS_FUEL_L -> fuel-like output region", readme)
+        self.assertIn("CS_REF    -> reflector-like output region", readme)
         self.assertIn("does **not** use a DONJON feedback loop", readme)
         self.assertIn("H16 histogram scatter", readme)
         self.assertIn("SPH(region, group)", readme)
@@ -85,6 +93,7 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
         self.assertIn("build_ce_case.py", script)
         self.assertIn("prepare_mg_case.py", script)
         self.assertIn("MG_MACRO_SCATTER_FORMAT", script)
+        self.assertIn("colorset variant: $COLORSET_VARIANT", script)
         self.assertIn("--scatter-format \"$MG_MACRO_SCATTER_FORMAT\"", script)
         self.assertIn("ITER_MG_MACRO_SUMMARY=\"$OUT_DIR/mg_macro_summary.json\"", script)
         self.assertIn("--summary-json \"$ITER_MG_MACRO_SUMMARY\"", script)
@@ -103,6 +112,15 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
         self.assertIn("DYLD_LIBRARY_PATH", script)
         self.assertIn("LD_LIBRARY_PATH", script)
         self.assertNotIn("run-sph-loop", script)
+
+    def test_next_validation_target_points_to_five_region_variant(self) -> None:
+        target = (_example_dir() / "NEXT_PHYSICS_VALIDATION.md").read_text(encoding="utf-8")
+
+        self.assertIn("OPENMC2DONJON_COLORSET_VARIANT=five_region_2d", target)
+        self.assertIn("5 to 9 output regions", target)
+        self.assertIn("uncorrected DONJON handoff", target)
+        self.assertIn("SPH-corrected DONJON handoff", target)
+        self.assertIn("same scripts as the three-region", target)
 
     def test_donjon_consume_smoke_is_documented_as_downstream_handoff(self) -> None:
         readme = (_example_dir() / "README.md").read_text(encoding="utf-8")
