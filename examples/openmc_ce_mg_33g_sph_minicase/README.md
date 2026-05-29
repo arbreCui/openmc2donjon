@@ -177,6 +177,23 @@ That run gave CE/MG flux relative standard deviations of 0.241 / 0.172 and an
 SPH range of 0.761 .. 1.115.  It is suitable as a live demonstration of the
 OpenMC-side SPH route, but it remains above the 5% production-quality threshold.
 
+A local production-quality run reached the 5% CE/MG flux uncertainty target
+with higher MG statistics:
+
+```sh
+RUN_ROOT=/private/tmp/openmc2donjon_ce_mg_sph_production_candidate2 \
+BATCHES=80 INACTIVE=20 PARTICLES=20000 \
+MG_BATCHES=100 MG_INACTIVE=20 MG_PARTICLES=30000 \
+MAX_CE_FLUX_REL_STD=0.05 \
+MAX_MG_FLUX_REL_STD=0.05 \
+bash examples/openmc_ce_mg_33g_sph_minicase/run_workflow.sh
+```
+
+That run gave CE/MG flux relative standard deviations of 0.04198 / 0.03236,
+an SPH range of 0.96344 .. 1.05947, and a frozen-flux reaction-rate residual
+of about 4.7e-12 after applying the newly generated SPH factors.  The summary
+decision was `openmc_ce_mg_sph_production_quality`.
+
 ## Damping sweep review
 
 To compare several completed damping runs, use `summarize_damping_sweep.py`.
