@@ -104,6 +104,52 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
         self.assertIn("LD_LIBRARY_PATH", script)
         self.assertNotIn("run-sph-loop", script)
 
+    def test_production_evidence_fixture_records_openmc_sph_handoff_quality(self) -> None:
+        evidence = (_example_dir() / "PRODUCTION_EVIDENCE.md").read_text(encoding="utf-8")
+        fixture = _repo_root() / "src/openmc2donjon/web/fixtures/openmc_sph_physics_summary.json"
+        payload = json.loads(fixture.read_text(encoding="utf-8"))
+
+        self.assertIn("openmc_ce_mg_sph_production_quality", evidence)
+        self.assertIn("not a DONJON feedback loop", evidence)
+        self.assertIn("MACROLIB handoff", evidence)
+        self.assertEqual(
+            payload["schema"],
+            "openmc2donjon.openmc-ce-mg-sph-physics-summary.v1",
+        )
+        self.assertEqual(payload["route"], "OpenMC CE reference + OpenMC MG same geometry -> OpenMC-side SPH")
+        self.assertEqual(payload["energy_groups"], 33)
+        self.assertEqual(payload["mixture_names"], ["CS_FUEL", "CS_MOD", "CS_ABS"])
+        self.assertEqual(payload["handoff_scatter"]["format"], "legendre")
+        self.assertEqual(payload["handoff_scatter"]["legendre_order"], 3)
+        self.assertEqual(payload["mg_macro_scatter"]["scatter_format"], "histogram")
+        self.assertEqual(payload["mg_macro_scatter"]["histogram_bins"], 16)
+        self.assertEqual(payload["quality"]["decision"], "openmc_ce_mg_sph_production_quality")
+        self.assertTrue(payload["quality"]["production_ready"])
+        self.assertLessEqual(
+            payload["flux_uncertainty"]["ce_max_relative_std_dev"],
+            payload["quality"]["production_flux_relative_std_dev_threshold"],
+        )
+        self.assertLessEqual(
+            payload["flux_uncertainty"]["mg_max_relative_std_dev"],
+            payload["quality"]["production_flux_relative_std_dev_threshold"],
+        )
+        self.assertEqual(payload["sph"]["clipped_count"], 0)
+        self.assertAlmostEqual(payload["sph"]["minimum"], 0.963440826483)
+        self.assertAlmostEqual(payload["sph"]["maximum"], 1.0594678831)
+        self.assertEqual(payload["handoff"]["accepted_sph_consumption_format"], "macrolib")
+        self.assertEqual(payload["handoff"]["macrolib_ascii_nsp_block_count"], 33)
+        self.assertTrue(payload["handoff"]["augmented_hdf5_has_sph"])
+        self.assertLess(
+            payload["reaction_rate_preservation"]["after_sph_update_frozen_flux"][
+                "max_relative_residual"
+            ],
+            1.0e-10,
+        )
+        self.assertGreater(
+            payload["reaction_rate_preservation"]["current_solve"]["max_relative_residual"],
+            0.05,
+        )
+
     def test_summary_script_writes_physics_summary(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             handoff = Path(tmp)

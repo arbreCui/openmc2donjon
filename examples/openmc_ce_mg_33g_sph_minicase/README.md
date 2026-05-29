@@ -194,6 +194,9 @@ an SPH range of 0.96344 .. 1.05947, and a frozen-flux reaction-rate residual
 of about 4.7e-12 after applying the newly generated SPH factors.  The summary
 decision was `openmc_ce_mg_sph_production_quality`.
 
+For a shorter presentation-ready summary of that high-statistics run, see
+`PRODUCTION_EVIDENCE.md`.
+
 ## Damping sweep review
 
 To compare several completed damping runs, use `summarize_damping_sweep.py`.
