@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import csv
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
 from pathlib import Path
 import re
@@ -20,6 +20,7 @@ from .sph_augment import load_sph_source
 SCHEMA = "openmc2donjon.sph-iteration-table.v1"
 PASS_DECISION = "openmc2donjon_sph_iteration_table_passed"
 FLUX_NORMALIZATIONS = ("none", "total", "power", "auto")
+ZERO_FLUX_POLICIES = ("reject", "identity")
 H_FACTOR_DATASETS = (
     "h_factor",
     "H-FACTOR",
@@ -101,6 +102,12 @@ class SphUpdateTableReport:
     sph_minimum: float
     sph_maximum: float
     clipped_count: int
+    zero_flux_policy: str
+    identity_bin_count: int
+    flux_floor_rel: float | None
+    floored_bin_count: int
+    freeze_groups: tuple[int, ...] | None
+    frozen_group_bin_count: int
     worst_residual_bins: tuple[SphUpdateBinDiagnostic, ...]
     clipped_bins: tuple[SphUpdateBinDiagnostic, ...]
     source_label: str
@@ -117,6 +124,9 @@ def create_sph_update_table(
     clip_min: float | None = None,
     clip_max: float | None = None,
     flux_normalization: str = "none",
+    zero_flux_policy: str = "reject",
+    flux_floor_rel: float | None = None,
+    freeze_groups: tuple[int, ...] | None = None,
     require_reference_flux_std_dev: bool = False,
     max_reference_flux_std_dev_rel: float | None = None,
     require_low_order_flux_std_dev: bool = False,
@@ -131,7 +141,7 @@ def create_sph_update_table(
     ``"none"``, the low-order flux is first scaled to the reference flux's
     global normalization:
 
-    ``next_sph = previous_sph * (normalized_low_order_flux / reference_flux) ** damping``.
+    ``next_sph = previous_sph * (reference_flux / normalized_low_order_flux) ** damping``.
 
     DONJON's ``DSPH``/``MAC`` path treats ``NSPH`` as a divisor on the
     macroscopic data.  A low-order flux that is too high must therefore produce
@@ -147,9 +157,18 @@ def create_sph_update_table(
     if output_table.exists() and not force:
         raise FileExistsError(f"output already exists; use --force to overwrite: {output_table}")
     flux_normalization = _normalize_flux_normalization(flux_normalization)
-    _validate_update_options(damping=damping, clip_min=clip_min, clip_max=clip_max)
+    if zero_flux_policy not in ZERO_FLUX_POLICIES:
+        allowed = ", ".join(ZERO_FLUX_POLICIES)
+        raise ValueError(f"--zero-flux-policy must be one of: {allowed}")
+    _validate_update_options(
+        damping=damping,
+        clip_min=clip_min,
+        clip_max=clip_max,
+        flux_floor_rel=flux_floor_rel,
+    )
 
     mixture_names, energy_groups = _read_mgxs_metadata(input_h5)
+    freeze_groups = _normalize_freeze_groups(freeze_groups, energy_groups=energy_groups)
     reference = _load_matrix_source(
         reference_flux,
         mixture_names=mixture_names,
@@ -171,8 +190,39 @@ def create_sph_update_table(
         energy_groups=energy_groups,
     )
 
-    _validate_flux(reference.values, "reference flux")
-    _validate_flux(low_order.values, "low-order flux")
+    floored_mask = _floored_flux_mask(reference.values, flux_floor_rel=flux_floor_rel)
+    frozen_groups_mask = _freeze_groups_mask(
+        freeze_groups,
+        mixture_count=len(mixture_names),
+        energy_groups=energy_groups,
+    )
+    exempt_mask = _union_masks(floored_mask, frozen_groups_mask)
+    identity_mask = _identity_zero_flux_mask(
+        reference.values,
+        low_order.values,
+        mixture_names=mixture_names,
+        zero_flux_policy=zero_flux_policy,
+        exempt_mask=exempt_mask,
+    )
+    # Frozen bins (identity zeros, below-floor bins, frozen groups) pass
+    # raw_update 1.0 through the update and are exempt from positivity and
+    # std-dev gates.
+    frozen_mask = _union_masks(identity_mask, exempt_mask)
+    if frozen_mask is not None:
+        reference = replace(
+            reference,
+            max_relative_std_dev=_max_relative_std_dev(
+                reference.values, reference.std_dev, exclude_mask=frozen_mask
+            ),
+        )
+        low_order = replace(
+            low_order,
+            max_relative_std_dev=_max_relative_std_dev(
+                low_order.values, low_order.std_dev, exclude_mask=frozen_mask
+            ),
+        )
+    _validate_flux(reference.values, "reference flux", zero_mask=frozen_mask)
+    _validate_flux(low_order.values, "low-order flux", zero_mask=frozen_mask)
     _validate_flux_std_dev_gate(
         reference,
         "reference flux",
@@ -194,9 +244,32 @@ def create_sph_update_table(
         mixture_names=mixture_names,
         energy_groups=energy_groups,
         flux_normalization=flux_normalization,
+        zero_mask=frozen_mask,
     )
     resolved_flux_normalization = str(normalization["flux_normalization"])
-    raw_update = normalized_low_order / reference.values
+    # The ratio must be reference/low-order: NSPH divides the macroscopic
+    # data, which scales the next MG flux by the applied SPH factor, so this
+    # orientation makes the iteration contract (log-error factor 1-damping);
+    # the inverse orientation amplifies it (factor 1+damping) and diverges.
+    if frozen_mask is None:
+        raw_update = reference.values / normalized_low_order
+    else:
+        # Frozen bins force raw_update to 1.0 so the updated SPH keeps the
+        # previous value there.
+        raw_update = np.divide(
+            reference.values,
+            normalized_low_order,
+            out=np.ones_like(reference.values),
+            where=~frozen_mask,
+        )
+    # Disjoint attribution: identity zeros first, then the explicit group
+    # list, then the floor, so the three counters sum to the frozen total.
+    identity_bin_count = 0 if identity_mask is None else int(np.count_nonzero(identity_mask))
+    frozen_group_bin_count = _masked_count(frozen_groups_mask, exclude=identity_mask)
+    floored_bin_count = _masked_count(
+        floored_mask,
+        exclude=_union_masks(identity_mask, frozen_groups_mask),
+    )
     unclipped = previous.values * np.power(raw_update, float(damping))
     updated = unclipped.copy()
     clipped_mask = np.zeros_like(updated, dtype=bool)
@@ -265,6 +338,12 @@ def create_sph_update_table(
         sph_minimum=float(np.min(updated)),
         sph_maximum=float(np.max(updated)),
         clipped_count=clipped_count,
+        zero_flux_policy=zero_flux_policy,
+        identity_bin_count=identity_bin_count,
+        flux_floor_rel=None if flux_floor_rel is None else float(flux_floor_rel),
+        floored_bin_count=floored_bin_count,
+        freeze_groups=freeze_groups,
+        frozen_group_bin_count=frozen_group_bin_count,
         worst_residual_bins=worst_residual_bins,
         clipped_bins=clipped_bins,
         source_label=source_label,
@@ -306,6 +385,22 @@ def print_report(report: SphUpdateTableReport) -> None:
         f"  mixtures={len(report.mixture_names)} groups={report.energy_groups} "
         f"damping={report.damping:g} clipped={report.clipped_count}"
     )
+    if report.zero_flux_policy != "reject":
+        print(
+            f"  zero_flux_policy: {report.zero_flux_policy} "
+            f"identity_bins={report.identity_bin_count}"
+        )
+    if report.flux_floor_rel is not None:
+        print(
+            f"  flux_floor_rel: {report.flux_floor_rel:g} "
+            f"floored_bins={report.floored_bin_count}"
+        )
+    if report.freeze_groups is not None:
+        rendered = ",".join(str(group) for group in report.freeze_groups)
+        print(
+            f"  freeze_groups: {rendered} "
+            f"frozen_group_bins={report.frozen_group_bin_count}"
+        )
     if report.flux_normalization != "none":
         print(
             "  flux_normalization: "
@@ -372,6 +467,12 @@ def write_summary(path: Path, report: SphUpdateTableReport) -> None:
         "sph_minimum": report.sph_minimum,
         "sph_maximum": report.sph_maximum,
         "clipped_count": report.clipped_count,
+        "zero_flux_policy": report.zero_flux_policy,
+        "identity_bin_count": report.identity_bin_count,
+        "flux_floor_rel": report.flux_floor_rel,
+        "floored_bin_count": report.floored_bin_count,
+        "freeze_groups": None if report.freeze_groups is None else list(report.freeze_groups),
+        "frozen_group_bin_count": report.frozen_group_bin_count,
         "diagnostic_bin_limit": DIAGNOSTIC_BIN_LIMIT,
         "worst_residual_bins": [
             _bin_diagnostic_payload(item) for item in report.worst_residual_bins
@@ -382,7 +483,7 @@ def write_summary(path: Path, report: SphUpdateTableReport) -> None:
         "source_label": report.source_label,
         "formula": (
             "next_sph = previous_sph * "
-            "(normalized_low_order_flux / reference_flux) ** damping"
+            "(reference_flux / normalized_low_order_flux) ** damping"
         ),
     }
     Path(path).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -535,6 +636,7 @@ def _normalized_low_order_flux(
     mixture_names: tuple[str, ...],
     energy_groups: int,
     flux_normalization: str,
+    zero_mask: np.ndarray | None = None,
 ) -> tuple[np.ndarray, dict[str, float | str | None]]:
     if flux_normalization == "none":
         return low_order_flux, {
@@ -585,8 +687,10 @@ def _normalized_low_order_flux(
             f"{flux_normalization} normalization low-order integral must be positive"
         )
     factor = reference_integral / low_order_integral
+    # Zero bins contribute zero to both normalization integrals and stay zero
+    # after scaling, so the frozen-bin mask remains valid for the ratio.
     normalized = low_order_flux * factor
-    _validate_flux(normalized, "normalized low-order flux")
+    _validate_flux(normalized, "normalized low-order flux", zero_mask=zero_mask)
     return normalized, {
         "flux_normalization": flux_normalization,
         "factor": float(factor),
@@ -1072,9 +1176,16 @@ def _validate_update_options(
     damping: float,
     clip_min: float | None,
     clip_max: float | None,
+    flux_floor_rel: float | None = None,
 ) -> None:
     if not np.isfinite(damping) or damping < 0.0 or damping > 1.0:
         raise ValueError("--damping must be finite and within 0..1")
+    if flux_floor_rel is not None and (
+        not np.isfinite(flux_floor_rel)
+        or flux_floor_rel <= 0.0
+        or flux_floor_rel >= 1.0
+    ):
+        raise ValueError("--flux-floor-rel must be strictly between 0 and 1")
     if clip_min is not None and (not np.isfinite(clip_min) or clip_min <= 0.0):
         raise ValueError("--clip-min must be positive and finite")
     if clip_max is not None and (not np.isfinite(clip_max) or clip_max <= 0.0):
@@ -1083,11 +1194,115 @@ def _validate_update_options(
         raise ValueError("--clip-min must be less than or equal to --clip-max")
 
 
-def _validate_flux(values: np.ndarray, label: str) -> None:
+def _validate_flux(
+    values: np.ndarray,
+    label: str,
+    *,
+    zero_mask: np.ndarray | None = None,
+) -> None:
     if not np.all(np.isfinite(values)):
         raise ValueError(f"{label} values must be finite")
-    if np.any(values <= 0.0):
+    allowed = values > 0.0
+    if zero_mask is not None:
+        allowed |= zero_mask & (values == 0.0)
+    if not np.all(allowed):
         raise ValueError(f"{label} values must be positive")
+
+
+def _floored_flux_mask(
+    reference_flux: np.ndarray,
+    *,
+    flux_floor_rel: float | None,
+) -> np.ndarray | None:
+    if flux_floor_rel is None:
+        return None
+    floors = float(flux_floor_rel) * np.max(reference_flux, axis=1, keepdims=True)
+    return reference_flux < floors
+
+
+def _normalize_freeze_groups(
+    freeze_groups: tuple[int, ...] | None,
+    *,
+    energy_groups: int,
+) -> tuple[int, ...] | None:
+    if freeze_groups is None:
+        return None
+    groups = tuple(int(group) for group in freeze_groups)
+    if not groups:
+        return None
+    for group in groups:
+        if group < 1 or group > energy_groups:
+            raise ValueError(f"--freeze-groups group {group} outside 1..{energy_groups}")
+    if len(set(groups)) != len(groups):
+        raise ValueError("--freeze-groups must not contain duplicate groups")
+    return groups
+
+
+def _freeze_groups_mask(
+    freeze_groups: tuple[int, ...] | None,
+    *,
+    mixture_count: int,
+    energy_groups: int,
+) -> np.ndarray | None:
+    if freeze_groups is None:
+        return None
+    mask = np.zeros((mixture_count, energy_groups), dtype=bool)
+    mask[:, [group - 1 for group in freeze_groups]] = True
+    return mask
+
+
+def _union_masks(*masks: np.ndarray | None) -> np.ndarray | None:
+    combined: np.ndarray | None = None
+    for mask in masks:
+        if mask is None:
+            continue
+        combined = mask if combined is None else combined | mask
+    return combined
+
+
+def _masked_count(mask: np.ndarray | None, *, exclude: np.ndarray | None) -> int:
+    if mask is None:
+        return 0
+    if exclude is not None:
+        mask = mask & ~exclude
+    return int(np.count_nonzero(mask))
+
+
+def _identity_zero_flux_mask(
+    reference_flux: np.ndarray,
+    low_order_flux: np.ndarray,
+    *,
+    mixture_names: tuple[str, ...],
+    zero_flux_policy: str,
+    exempt_mask: np.ndarray | None = None,
+) -> np.ndarray | None:
+    if zero_flux_policy != "identity":
+        return None
+    reference_zero = reference_flux == 0.0
+    low_order_zero = low_order_flux == 0.0
+    one_sided = reference_zero ^ low_order_zero
+    if exempt_mask is not None:
+        # Below-floor and explicitly frozen bins are passed through anyway; a
+        # one-sided zero there is noise, not a CE/MG inconsistency.
+        one_sided &= ~exempt_mask
+    if np.any(one_sided):
+        rendered: list[str] = []
+        for mixture_index, group_index in np.argwhere(one_sided)[:DIAGNOSTIC_BIN_LIMIT]:
+            side = (
+                "reference flux"
+                if reference_zero[mixture_index, group_index]
+                else "low-order flux"
+            )
+            rendered.append(
+                f"{mixture_names[int(mixture_index)]} g{int(group_index) + 1} "
+                f"(zero {side})"
+            )
+        raise ValueError(
+            "zero-flux policy 'identity' requires zero bins to match in the "
+            "reference and low-order fluxes; one-sided zero flux indicates a "
+            "CE/MG inconsistency: " + "; ".join(rendered)
+        )
+    return reference_zero & low_order_zero
 
 
 def _validate_std_dev(values: np.ndarray, label: str) -> None:
@@ -1097,10 +1312,22 @@ def _validate_std_dev(values: np.ndarray, label: str) -> None:
         raise ValueError(f"{label} values must be non-negative")
 
 
-def _max_relative_std_dev(values: np.ndarray, std_dev: np.ndarray | None) -> float | None:
+def _max_relative_std_dev(
+    values: np.ndarray,
+    std_dev: np.ndarray | None,
+    *,
+    exclude_mask: np.ndarray | None = None,
+) -> float | None:
     if std_dev is None:
         return None
-    rel = std_dev / np.abs(values)
+    # Zero-mean bins (identity zero-flux policy) carry zero Monte Carlo
+    # std_dev; exclude them so the relative gate stays finite.  Frozen bins
+    # (exclude_mask) are passed through the update and bypass the gate.
+    include = values != 0.0
+    if exclude_mask is not None:
+        include &= ~exclude_mask
+    rel = np.zeros_like(std_dev, dtype=float)
+    np.divide(std_dev, np.abs(values), out=rel, where=include)
     return float(np.max(rel))
 
 

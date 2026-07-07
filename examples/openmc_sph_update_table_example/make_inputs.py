@@ -14,7 +14,7 @@ MIXTURE_NAMES = ("ASM_LEFT", "ASM_RIGHT")
 PREVIOUS_SPH = np.array([[1.0, 1.1], [0.9, 1.0]], dtype=float)
 REFERENCE_FLUX = np.array([[1.20, 0.80], [0.90, 1.10]], dtype=float)
 LOW_ORDER_FLUX = np.array([[1.00, 1.00], [1.00, 1.00]], dtype=float)
-EXPECTED_SPH = PREVIOUS_SPH * (LOW_ORDER_FLUX / REFERENCE_FLUX)
+EXPECTED_SPH = PREVIOUS_SPH * (REFERENCE_FLUX / LOW_ORDER_FLUX)
 
 
 def main(argv: list[str] | None = None) -> int:

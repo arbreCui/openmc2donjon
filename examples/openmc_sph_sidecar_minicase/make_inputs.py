@@ -34,7 +34,7 @@ MG_FLUX_STD_DEV = np.array(
     dtype=float,
 )
 DAMPING = 0.5
-EXPECTED_SPH = np.power(MG_FLUX / REFERENCE_FLUX, DAMPING)
+EXPECTED_SPH = np.power(REFERENCE_FLUX / MG_FLUX, DAMPING)
 
 
 def main(argv: list[str] | None = None) -> int:

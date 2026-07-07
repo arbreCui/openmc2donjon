@@ -38,6 +38,9 @@ def create_openmc_sph_sidecar(
     clip_min: float | None = None,
     clip_max: float | None = None,
     flux_normalization: str = "none",
+    zero_flux_policy: str = "reject",
+    flux_floor_rel: float | None = None,
+    freeze_groups: tuple[int, ...] | None = None,
     require_reference_flux_std_dev: bool = False,
     max_reference_flux_std_dev_rel: float | None = None,
     require_mg_flux_std_dev: bool = False,
@@ -78,6 +81,9 @@ def create_openmc_sph_sidecar(
         clip_min=clip_min,
         clip_max=clip_max,
         flux_normalization=flux_normalization,
+        zero_flux_policy=zero_flux_policy,
+        flux_floor_rel=flux_floor_rel,
+        freeze_groups=freeze_groups,
         require_reference_flux_std_dev=require_reference_flux_std_dev,
         max_reference_flux_std_dev_rel=max_reference_flux_std_dev_rel,
         require_low_order_flux_std_dev=require_mg_flux_std_dev,
@@ -159,6 +165,14 @@ def write_summary(path: Path, report: OpenmcSphSidecarReport) -> None:
         "clip_min": report.update.clip_min,
         "clip_max": report.update.clip_max,
         "flux_normalization": report.update.flux_normalization,
+        "zero_flux_policy": report.update.zero_flux_policy,
+        "identity_bin_count": report.update.identity_bin_count,
+        "flux_floor_rel": report.update.flux_floor_rel,
+        "floored_bin_count": report.update.floored_bin_count,
+        "freeze_groups": None
+        if report.update.freeze_groups is None
+        else list(report.update.freeze_groups),
+        "frozen_group_bin_count": report.update.frozen_group_bin_count,
         "normalization_factor": report.update.normalization_factor,
         "sph_min": report.sidecar.sph_min,
         "sph_max": report.sidecar.sph_max,
@@ -171,7 +185,7 @@ def write_summary(path: Path, report: OpenmcSphSidecarReport) -> None:
         "source_label": report.update.source_label,
         "formula": (
             "sph = previous_sph * "
-            "(normalized_openmc_mg_flux / openmc_ce_reference_flux) ** damping"
+            "(openmc_ce_reference_flux / normalized_openmc_mg_flux) ** damping"
         ),
     }
     path.parent.mkdir(parents=True, exist_ok=True)

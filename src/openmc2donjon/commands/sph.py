@@ -24,7 +24,7 @@ from ..sph_augment import (
     create_table_sph_sidecar,
     create_unity_sph_sidecar,
 )
-from ..sph_iteration import FLUX_NORMALIZATIONS, create_sph_update_table
+from ..sph_iteration import FLUX_NORMALIZATIONS, ZERO_FLUX_POLICIES, create_sph_update_table
 
 
 def command_specs() -> tuple[CommandSpec, ...]:
@@ -112,6 +112,39 @@ def build_make_openmc_sph_sidecar_parser() -> argparse.ArgumentParser:
         help=(
             "scale MG flux before forming the SPH ratio: none, total, power, "
             "or auto using group-wise H-FACTOR/kappa_fission (default: none)"
+        ),
+    )
+    parser.add_argument(
+        "--zero-flux-policy",
+        choices=ZERO_FLUX_POLICIES,
+        default="reject",
+        help=(
+            "handling of bins where both CE and MG flux are exactly zero, "
+            "e.g. thermal groups of a fast-spectrum case: reject fails, "
+            "identity keeps the previous SPH value there (default: reject)"
+        ),
+    )
+    parser.add_argument(
+        "--flux-floor-rel",
+        type=float,
+        default=None,
+        metavar="FLOAT",
+        help=(
+            "freeze bins whose CE reference flux is below FLOAT times the "
+            "mixture's peak reference flux: their SPH keeps the previous "
+            "value and they bypass zero-flux and std-dev gates, so noisy "
+            "near-zero groups do not get fitted (default: none)"
+        ),
+    )
+    parser.add_argument(
+        "--freeze-groups",
+        default=None,
+        metavar="G1,G2",
+        help=(
+            "comma-separated 1-based group indices (same numbering as the "
+            "update table and diagnostics) whose SPH is frozen at the "
+            "previous value for all mixtures, e.g. 31 or 30,31 "
+            "(default: none)"
         ),
     )
     parser.add_argument(
@@ -539,6 +572,18 @@ def make_sph_update_table_handler(args: argparse.Namespace) -> int:
     return 0
 
 
+def _parse_freeze_groups(raw: str | None) -> tuple[int, ...] | None:
+    if raw is None:
+        return None
+    items = [item.strip() for item in str(raw).split(",") if item.strip()]
+    if not items:
+        raise ValueError("--freeze-groups must list at least one group index")
+    try:
+        return tuple(int(item) for item in items)
+    except ValueError as exc:
+        raise ValueError("--freeze-groups must be comma-separated integers") from exc
+
+
 def make_openmc_sph_sidecar_handler(args: argparse.Namespace) -> int:
     parser = parser_from_args(args)
     try:
@@ -553,6 +598,9 @@ def make_openmc_sph_sidecar_handler(args: argparse.Namespace) -> int:
             clip_min=args.clip_min,
             clip_max=args.clip_max,
             flux_normalization=args.flux_normalization,
+            zero_flux_policy=args.zero_flux_policy,
+            flux_floor_rel=args.flux_floor_rel,
+            freeze_groups=_parse_freeze_groups(args.freeze_groups),
             require_reference_flux_std_dev=args.require_reference_flux_std_dev,
             max_reference_flux_std_dev_rel=args.max_reference_flux_std_dev_rel,
             require_mg_flux_std_dev=args.require_mg_flux_std_dev,

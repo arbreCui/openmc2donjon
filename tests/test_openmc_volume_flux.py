@@ -12,6 +12,7 @@ import unittest
 import h5py
 import numpy as np
 
+from openmc2donjon.cli import main as cli_main
 from openmc2donjon.constants import MGXS_DONJON_GROUP_ORDER
 from openmc2donjon.openmc_volume_flux import (
     DATASET_NAME,
@@ -179,6 +180,90 @@ class OpenMCVolumeFluxTests(unittest.TestCase):
                     mixture_names=("ASM_A",),
                     std_dev=[[0.0, -0.1]],
                 )
+
+    def test_allow_zero_accepts_exactly_zero_flux_bins(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "mgxs.h5"
+            flux = np.array([[10.0, 0.0], [30.0, 40.0]])
+            std_dev = np.array([[0.1, 0.0], [0.3, 0.4]])
+
+            report = write_openmc_volume_flux_hdf5(
+                path,
+                flux,
+                mixture_names=("ASM_A", "ASM_B"),
+                std_dev=std_dev,
+                allow_zero=True,
+            )
+
+            with h5py.File(path, "r") as h5:
+                values = h5[DATASET_NAME][:]
+
+        self.assertEqual(report.minimum, 0.0)
+        self.assertEqual(report.maximum, 40.0)
+        self.assertTrue(report.allow_zero_flux)
+        self.assertAlmostEqual(report.max_relative_std_dev or 0.0, 0.01)
+        np.testing.assert_allclose(values, flux)
+
+    def test_allow_zero_still_rejects_negative_or_nonfinite_values(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "mgxs.h5"
+
+            with self.assertRaisesRegex(ValueError, "must be non-negative"):
+                write_openmc_volume_flux_hdf5(
+                    path,
+                    [[1.0, -2.0]],
+                    mixture_names=("ASM_A",),
+                    allow_zero=True,
+                )
+
+            with self.assertRaisesRegex(ValueError, "must be finite"):
+                write_openmc_volume_flux_hdf5(
+                    path,
+                    [[1.0, np.nan]],
+                    mixture_names=("ASM_A",),
+                    allow_zero=True,
+                )
+
+    def test_cli_allow_zero_flux_flag_threads_through_export(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            statepoint = tmp / "statepoint.10.h5"
+            statepoint.write_bytes(b"fake")
+            mgxs = tmp / "mgxs.h5"
+            output = tmp / "ce_flux.h5"
+            summary = tmp / "ce_flux_summary.json"
+            _write_mgxs_metadata(mgxs)
+            fake_openmc = _fake_openmc_module(
+                mean=np.array([[0.0], [1.0], [0.0], [2.0]]),
+                std_dev=np.array([[0.0], [0.1], [0.0], [0.2]]),
+            )
+
+            stream = io.StringIO()
+            with _patched_openmc(fake_openmc), contextlib.redirect_stdout(stream):
+                rc = cli_main(
+                    [
+                        "export-volume-flux",
+                        str(statepoint),
+                        "-o",
+                        str(output),
+                        "--mgxs",
+                        str(mgxs),
+                        "--tally-name",
+                        "ce_flux",
+                        "--allow-zero-flux",
+                        "--summary-json",
+                        str(summary),
+                    ]
+                )
+
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+            with h5py.File(output, "r") as h5:
+                values = h5[DATASET_NAME][:]
+
+        self.assertEqual(rc, 0)
+        self.assertTrue(payload["allow_zero_flux"])
+        self.assertEqual(payload["min"], 0.0)
+        np.testing.assert_allclose(values, [[1.0, 0.0], [2.0, 0.0]])
 
 
 def _decode(value: object) -> str:

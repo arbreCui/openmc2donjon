@@ -355,6 +355,15 @@ def build_export_volume_flux_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--allow-zero-flux",
+        action="store_true",
+        help=(
+            "accept exactly-zero flux bins instead of failing, e.g. the "
+            "thermal groups of a fast-spectrum case where the Monte Carlo "
+            "flux is exactly zero; negative values are still rejected"
+        ),
+    )
+    parser.add_argument(
         "--summary-json",
         type=Path,
         default=None,
@@ -661,6 +670,7 @@ def export_volume_flux_handler(args: argparse.Namespace) -> int:
             mixture_names=_parse_optional_str_tuple(args.mixture_names),
             energy_groups=args.energy_groups,
             source_group_order=args.source_group_order,
+            allow_zero=args.allow_zero_flux,
             force=args.force,
             summary_json=args.summary_json,
         )

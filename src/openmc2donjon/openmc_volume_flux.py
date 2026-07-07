@@ -35,6 +35,7 @@ class OpenMCVolumeFluxReport:
     max_relative_std_dev: float | None = None
     statepoint: Path | None = None
     tally_name: str | None = None
+    allow_zero_flux: bool = False
 
 
 def export_openmc_volume_flux(
@@ -48,6 +49,7 @@ def export_openmc_volume_flux(
     mixture_names: Iterable[str] | None = None,
     energy_groups: int | None = None,
     source_group_order: str = DEFAULT_SOURCE_GROUP_ORDER,
+    allow_zero: bool = False,
     force: bool = False,
     summary_json: str | PathLike[str] | None = None,
 ) -> OpenMCVolumeFluxReport:
@@ -105,6 +107,7 @@ def export_openmc_volume_flux(
             else f"{dataset_name}_std_dev"
         ),
         source_group_order=source_group_order,
+        allow_zero=allow_zero,
         replace=True,
         statepoint=statepoint_path,
         tally_name=tally_name,
@@ -148,6 +151,7 @@ def write_openmc_volume_flux_hdf5(
     dataset_name: str = DATASET_NAME,
     std_dev_dataset_name: str = STD_DEV_DATASET_NAME,
     source_group_order: str = DEFAULT_SOURCE_GROUP_ORDER,
+    allow_zero: bool = False,
     replace: bool = True,
 ) -> OpenMCVolumeFluxReport:
     """Append a canonical ``/openmc_volume_flux`` dataset to an MGXS HDF5 file."""
@@ -160,6 +164,7 @@ def write_openmc_volume_flux_hdf5(
         dataset_name=dataset_name,
         std_dev_dataset_name=std_dev_dataset_name,
         source_group_order=source_group_order,
+        allow_zero=allow_zero,
         replace=replace,
     )
 
@@ -173,6 +178,7 @@ def write_openmc_flux_hdf5(
     dataset_name: str = DATASET_NAME,
     std_dev_dataset_name: str = STD_DEV_DATASET_NAME,
     source_group_order: str = DEFAULT_SOURCE_GROUP_ORDER,
+    allow_zero: bool = False,
     replace: bool = True,
     statepoint: str | PathLike[str] | None = None,
     tally_name: str | None = None,
@@ -188,7 +194,7 @@ def write_openmc_flux_hdf5(
 
     path = Path(output_h5)
     names = _as_mixture_names(mixture_names)
-    flux = _as_flux_array(values, names=names, dataset_name=dataset_name)
+    flux = _as_flux_array(values, names=names, dataset_name=dataset_name, allow_zero=allow_zero)
     flux_std_dev = _as_std_dev_array(
         std_dev,
         expected_shape=flux.shape,
@@ -233,10 +239,11 @@ def write_openmc_flux_hdf5(
         max_relative_std_dev=(
             None
             if flux_std_dev is None
-            else float(np.max(flux_std_dev / np.abs(flux)))
+            else _max_relative_std_dev(flux, flux_std_dev)
         ),
         statepoint=None if statepoint is None else Path(statepoint),
         tally_name=tally_name,
+        allow_zero_flux=allow_zero,
     )
 
 
@@ -285,6 +292,7 @@ def write_summary(path: Path, report: OpenMCVolumeFluxReport) -> None:
         "min": report.minimum,
         "max": report.maximum,
         "max_relative_std_dev": report.max_relative_std_dev,
+        "allow_zero_flux": report.allow_zero_flux,
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -336,6 +344,7 @@ def _as_flux_array(
     *,
     names: tuple[str, ...],
     dataset_name: str,
+    allow_zero: bool = False,
 ) -> np.ndarray:
     flux = np.asarray(values, dtype=float)
     if flux.ndim != 2:
@@ -349,9 +358,20 @@ def _as_flux_array(
         raise ValueError(f"{dataset_name} must contain at least one energy group")
     if not np.all(np.isfinite(flux)):
         raise ValueError(f"{dataset_name} values must be finite")
-    if np.any(flux <= 0.0):
+    if allow_zero:
+        if np.any(flux < 0.0):
+            raise ValueError(f"{dataset_name} values must be non-negative")
+    elif np.any(flux <= 0.0):
         raise ValueError(f"{dataset_name} values must be positive")
     return flux
+
+
+def _max_relative_std_dev(flux: np.ndarray, std_dev: np.ndarray) -> float:
+    # Zero-flux bins (allow_zero) carry zero Monte Carlo std_dev; exclude them
+    # from the ratio so the report stays finite.
+    rel = np.zeros_like(std_dev, dtype=float)
+    np.divide(std_dev, np.abs(flux), out=rel, where=flux != 0.0)
+    return float(np.max(rel))
 
 
 def _as_std_dev_array(

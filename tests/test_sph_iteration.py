@@ -58,8 +58,8 @@ class SphIterationTests(unittest.TestCase):
 
             expected = np.array(
                 [
-                    [np.sqrt(1.0 / 1.21), np.sqrt(1.0 / 0.81)],
-                    [np.sqrt(1.0 / 0.64), np.sqrt(1.0 / 1.44)],
+                    [np.sqrt(1.21), np.sqrt(0.81)],
+                    [np.sqrt(0.64), np.sqrt(1.44)],
                 ]
             )
             self.assertTrue(table.exists())
@@ -279,8 +279,8 @@ class SphIterationTests(unittest.TestCase):
 
             expected = np.array(
                 [
-                    [1.0 * np.sqrt(1.0 / 1.21), 1.1 * np.sqrt(1.0 / 0.81)],
-                    [0.9 * np.sqrt(1.0 / 0.64), 1.0 * np.sqrt(1.0 / 1.44)],
+                    [1.0 * np.sqrt(1.21), 1.1 * np.sqrt(0.81)],
+                    [0.9 * np.sqrt(0.64), 1.0 * np.sqrt(1.44)],
                 ]
             )
             with h5py.File(sidecar, "r") as h5:
@@ -290,7 +290,7 @@ class SphIterationTests(unittest.TestCase):
             self.assertEqual(
                 payload["formula"],
                 "next_sph = previous_sph * "
-                "(normalized_low_order_flux / reference_flux) ** damping",
+                "(reference_flux / normalized_low_order_flux) ** damping",
             )
             self.assertEqual(payload["flux_normalization"], "none")
             self.assertEqual(payload["normalization_factor"], 1.0)
@@ -300,9 +300,9 @@ class SphIterationTests(unittest.TestCase):
             self.assertEqual(payload["diagnostic_bin_limit"], 10)
             worst = payload["worst_residual_bins"][0]
             self.assertEqual(worst["mixture"], "moderator")
-            self.assertEqual(worst["group"], 1)
-            self.assertAlmostEqual(worst["raw_update"], 1.0 / 0.64)
-            self.assertAlmostEqual(worst["residual"], 1.0 / 0.64 - 1.0)
+            self.assertEqual(worst["group"], 2)
+            self.assertAlmostEqual(worst["raw_update"], 1.44)
+            self.assertAlmostEqual(worst["residual"], 1.44 - 1.0)
 
     def test_power_normalization_scales_low_order_flux_with_h_factor(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -342,7 +342,7 @@ class SphIterationTests(unittest.TestCase):
             )
 
             factor = (10.0 * 10.0 + 20.0 * 100.0 + 30.0 + 40.0) / (10.0 + 100.0 + 1.0 + 1.0)
-            expected = np.asarray([[factor / 10.0, factor / 20.0], [factor / 30.0, factor / 40.0]])
+            expected = np.asarray([[10.0 / factor, 20.0 / factor], [30.0 / factor, 40.0 / factor]])
             self.assertAlmostEqual(report.normalization_factor, factor)
             self.assertEqual(report.flux_normalization, "power")
             rows = table.read_text(encoding="utf-8").strip().splitlines()[1:]
@@ -418,8 +418,8 @@ class SphIterationTests(unittest.TestCase):
             factor = (10.0 * 10.0 + 20.0 * 100.0) / (10.0 + 100.0)
             expected = np.asarray(
                 [
-                    [factor / 10.0, factor / 20.0],
-                    [factor / 30.0, factor / 40.0],
+                    [10.0 / factor, 20.0 / factor],
+                    [30.0 / factor, 40.0 / factor],
                 ]
             )
             self.assertAlmostEqual(report.normalization_factor, factor)
@@ -620,7 +620,7 @@ class SphIterationTests(unittest.TestCase):
                 0,
             )
 
-            expected = np.asarray([[0.25, 0.2], [0.5, 1.0 / 3.0]])
+            expected = np.asarray([[4.0, 5.0], [2.0, 3.0]])
             with h5py.File(sidecar, "r") as h5:
                 np.testing.assert_allclose(h5["sph"][:], expected)
 
@@ -635,14 +635,14 @@ class SphIterationTests(unittest.TestCase):
             write_mgxs(mgxs)
             reference_flux.write_text(
                 "mixture,group,flux\n"
-                "fuel,1,1.0\nfuel,2,1.0\n"
-                "moderator,1,1.0\nmoderator,2,1.0\n",
+                "fuel,1,3.0\nfuel,2,1.0\n"
+                "moderator,1,1.0\nmoderator,2,2.0\n",
                 encoding="utf-8",
             )
             low_order_flux.write_text(
                 "mixture,group,flux\n"
-                "fuel,1,3.0\nfuel,2,1.0\n"
-                "moderator,1,1.0\nmoderator,2,2.0\n",
+                "fuel,1,1.0\nfuel,2,1.0\n"
+                "moderator,1,1.0\nmoderator,2,1.0\n",
                 encoding="utf-8",
             )
 
@@ -711,10 +711,10 @@ class SphIterationTests(unittest.TestCase):
 
             rows = table.read_text(encoding="utf-8").strip().splitlines()
             self.assertEqual(rows[0], "mixture,group,sph")
-            self.assertIn("fuel,1,0.55", rows)
-            self.assertIn("fuel,2,0.4", rows)
-            self.assertIn("moderator,1,0.225", rows)
-            self.assertIn("moderator,2,0.2", rows)
+            self.assertIn("fuel,1,2.2", rows)
+            self.assertIn("fuel,2,3.6", rows)
+            self.assertIn("moderator,1,3.6", rows)
+            self.assertIn("moderator,2,5", rows)
 
     def test_rejects_hdf5_flux_without_required_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -760,6 +760,661 @@ class SphIterationTests(unittest.TestCase):
                     reference_flux=reference_flux,
                     low_order_flux=f"{low_order_flux}::low_order_flux",
                 )
+
+    def test_identity_zero_flux_policy_passes_through_matched_zero_bins(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference_flux = root / "reference_flux.csv"
+            low_order_flux = root / "low_order_flux.csv"
+            control_reference_flux = root / "control_reference_flux.csv"
+            control_low_order_flux = root / "control_low_order_flux.csv"
+            table = root / "next_sph.csv"
+            control_table = root / "control_sph.csv"
+            summary = root / "summary.json"
+            write_mgxs(mgxs)
+            reference_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,4.0\nfuel,2,0.0\n"
+                "moderator,1,16.0\nmoderator,2,25.0\n",
+                encoding="utf-8",
+            )
+            low_order_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,1.0\nfuel,2,0.0\n"
+                "moderator,1,1.0\nmoderator,2,1.0\n",
+                encoding="utf-8",
+            )
+            control_reference_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,4.0\nfuel,2,9.0\n"
+                "moderator,1,16.0\nmoderator,2,25.0\n",
+                encoding="utf-8",
+            )
+            control_low_order_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,1.0\nfuel,2,1.0\n"
+                "moderator,1,1.0\nmoderator,2,1.0\n",
+                encoding="utf-8",
+            )
+
+            report = create_sph_update_table(
+                mgxs,
+                table,
+                reference_flux=reference_flux,
+                low_order_flux=low_order_flux,
+                zero_flux_policy="identity",
+                summary_json=summary,
+            )
+            control_report = create_sph_update_table(
+                mgxs,
+                control_table,
+                reference_flux=control_reference_flux,
+                low_order_flux=control_low_order_flux,
+            )
+
+            self.assertEqual(report.zero_flux_policy, "identity")
+            self.assertEqual(report.identity_bin_count, 1)
+            self.assertEqual(control_report.zero_flux_policy, "reject")
+            self.assertEqual(control_report.identity_bin_count, 0)
+            actual = _read_sph_table(table)
+            control = _read_sph_table(control_table)
+            # The identity bin keeps the previous SPH value (unity here).
+            self.assertEqual(actual[0, 1], 1.0)
+            np.testing.assert_allclose(actual[0, 0], control[0, 0], rtol=1.0e-11)
+            np.testing.assert_allclose(actual[1, :], control[1, :], rtol=1.0e-11)
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+            self.assertEqual(payload["zero_flux_policy"], "identity")
+            self.assertEqual(payload["identity_bin_count"], 1)
+
+    def test_identity_zero_flux_policy_keeps_previous_sph_value(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference_flux = root / "reference_flux.csv"
+            low_order_flux = root / "low_order_flux.csv"
+            previous_sph = root / "previous_sph.csv"
+            table = root / "next_sph.csv"
+            write_mgxs(mgxs)
+            reference_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,4.0\nfuel,2,0.0\n"
+                "moderator,1,16.0\nmoderator,2,25.0\n",
+                encoding="utf-8",
+            )
+            low_order_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,1.0\nfuel,2,0.0\n"
+                "moderator,1,1.0\nmoderator,2,1.0\n",
+                encoding="utf-8",
+            )
+            previous_sph.write_text(
+                "mixture,g1,g2\nfuel,1.0,1.1\nmoderator,0.9,1.0\n",
+                encoding="utf-8",
+            )
+
+            create_sph_update_table(
+                mgxs,
+                table,
+                reference_flux=reference_flux,
+                low_order_flux=low_order_flux,
+                previous_sph=previous_sph,
+                zero_flux_policy="identity",
+            )
+
+            actual = _read_sph_table(table)
+            self.assertEqual(actual[0, 1], 1.1)
+            np.testing.assert_allclose(actual[0, 0], 1.0 * 4.0, rtol=1.0e-11)
+
+    def test_identity_zero_flux_policy_rejects_one_sided_zero(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference_flux = root / "reference_flux.csv"
+            low_order_flux = root / "low_order_flux.csv"
+            table = root / "next_sph.csv"
+            write_mgxs(mgxs)
+            reference_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,4.0\nfuel,2,0.0\n"
+                "moderator,1,16.0\nmoderator,2,25.0\n",
+                encoding="utf-8",
+            )
+            low_order_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,1.0\nfuel,2,1.0\n"
+                "moderator,1,1.0\nmoderator,2,1.0\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                ValueError,
+                r"CE/MG inconsistency: fuel g2 \(zero reference flux\)",
+            ):
+                create_sph_update_table(
+                    mgxs,
+                    table,
+                    reference_flux=reference_flux,
+                    low_order_flux=low_order_flux,
+                    zero_flux_policy="identity",
+                )
+
+    def test_default_policy_rejects_matched_zero_bins(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference_flux = root / "reference_flux.csv"
+            low_order_flux = root / "low_order_flux.csv"
+            table = root / "next_sph.csv"
+            write_mgxs(mgxs)
+            reference_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,4.0\nfuel,2,0.0\n"
+                "moderator,1,16.0\nmoderator,2,25.0\n",
+                encoding="utf-8",
+            )
+            low_order_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,1.0\nfuel,2,0.0\n"
+                "moderator,1,1.0\nmoderator,2,1.0\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "reference flux values must be positive"):
+                create_sph_update_table(
+                    mgxs,
+                    table,
+                    reference_flux=reference_flux,
+                    low_order_flux=low_order_flux,
+                )
+
+            with self.assertRaisesRegex(ValueError, "--zero-flux-policy must be one of"):
+                create_sph_update_table(
+                    mgxs,
+                    table,
+                    reference_flux=reference_flux,
+                    low_order_flux=low_order_flux,
+                    zero_flux_policy="bogus",
+                )
+
+    def test_identity_zero_flux_policy_excludes_identity_bins_from_std_dev_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference_flux = root / "openmc_ce_flux.h5"
+            mg_flux = root / "openmc_mg_flux.h5"
+            table = root / "next_sph.csv"
+            write_mgxs(mgxs)
+            _write_flux_source(
+                reference_flux,
+                "openmc_volume_flux",
+                values=np.array([[2.0, 0.0], [4.0, 2.0]]),
+                std_dev=np.array([[0.02, 0.0], [0.08, 0.02]]),
+            )
+            _write_flux_source(
+                mg_flux,
+                "openmc_mg_flux",
+                values=np.array([[1.0, 0.0], [1.0, 1.0]]),
+                std_dev=np.array([[0.01, 0.0], [0.03, 0.04]]),
+            )
+
+            report = create_sph_update_table(
+                mgxs,
+                table,
+                reference_flux=f"{reference_flux}::openmc_volume_flux",
+                low_order_flux=f"{mg_flux}::openmc_mg_flux",
+                zero_flux_policy="identity",
+                require_reference_flux_std_dev=True,
+                max_reference_flux_std_dev_rel=0.03,
+                require_low_order_flux_std_dev=True,
+                max_low_order_flux_std_dev_rel=0.05,
+            )
+
+            self.assertEqual(report.identity_bin_count, 1)
+            self.assertAlmostEqual(report.reference_flux_max_relative_std_dev or 0.0, 0.02)
+            self.assertAlmostEqual(report.low_order_flux_max_relative_std_dev or 0.0, 0.04)
+
+    def test_cli_openmc_sph_sidecar_accepts_zero_flux_policy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference_flux = root / "openmc_ce_flux.h5"
+            mg_flux = root / "openmc_mg_flux.h5"
+            sidecar = root / "openmc_sph.h5"
+            table = root / "openmc_sph.csv"
+            summary = root / "openmc_sph_summary.json"
+            write_mgxs(mgxs)
+            _write_flux_source(
+                reference_flux,
+                "openmc_volume_flux",
+                values=np.array([[4.0, 0.0], [16.0, 25.0]]),
+            )
+            _write_flux_source(
+                mg_flux,
+                "openmc_mg_flux",
+                values=np.array([[1.0, 0.0], [1.0, 1.0]]),
+            )
+
+            self.assertEqual(
+                cli_main(
+                    [
+                        "make-openmc-sph-sidecar",
+                        str(mgxs),
+                        "-o",
+                        str(sidecar),
+                        "--reference-flux",
+                        f"{reference_flux}::openmc_volume_flux",
+                        "--mg-flux",
+                        f"{mg_flux}::openmc_mg_flux",
+                        "--table-output",
+                        str(table),
+                        "--zero-flux-policy",
+                        "identity",
+                        "--summary-json",
+                        str(summary),
+                    ]
+                ),
+                0,
+            )
+
+            expected = np.array([[4.0, 1.0], [16.0, 25.0]])
+            with h5py.File(sidecar, "r") as h5:
+                np.testing.assert_allclose(h5["sph"][:], expected, rtol=1.0e-11)
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+            self.assertEqual(payload["zero_flux_policy"], "identity")
+            self.assertEqual(payload["identity_bin_count"], 1)
+
+    def test_flux_floor_freezes_low_flux_bins_and_keeps_previous_sph(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference_flux = root / "reference_flux.csv"
+            low_order_flux = root / "low_order_flux.csv"
+            control_reference_flux = root / "control_reference_flux.csv"
+            control_low_order_flux = root / "control_low_order_flux.csv"
+            previous_sph = root / "previous_sph.csv"
+            table = root / "next_sph.csv"
+            control_table = root / "control_sph.csv"
+            summary = root / "summary.json"
+            write_mgxs(mgxs)
+            reference_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,4.0\nfuel,2,1.0e-5\n"
+                "moderator,1,16.0\nmoderator,2,25.0\n",
+                encoding="utf-8",
+            )
+            low_order_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,1.0\nfuel,2,0.5\n"
+                "moderator,1,1.0\nmoderator,2,1.0\n",
+                encoding="utf-8",
+            )
+            control_reference_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,4.0\nfuel,2,9.0\n"
+                "moderator,1,16.0\nmoderator,2,25.0\n",
+                encoding="utf-8",
+            )
+            control_low_order_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,1.0\nfuel,2,1.0\n"
+                "moderator,1,1.0\nmoderator,2,1.0\n",
+                encoding="utf-8",
+            )
+            previous_sph.write_text(
+                "mixture,g1,g2\nfuel,1.0,1.1\nmoderator,0.9,1.0\n",
+                encoding="utf-8",
+            )
+
+            report = create_sph_update_table(
+                mgxs,
+                table,
+                reference_flux=reference_flux,
+                low_order_flux=low_order_flux,
+                previous_sph=previous_sph,
+                flux_floor_rel=1.0e-3,
+                summary_json=summary,
+            )
+            control_report = create_sph_update_table(
+                mgxs,
+                control_table,
+                reference_flux=control_reference_flux,
+                low_order_flux=control_low_order_flux,
+                previous_sph=previous_sph,
+            )
+
+            self.assertEqual(report.flux_floor_rel, 1.0e-3)
+            self.assertEqual(report.floored_bin_count, 1)
+            self.assertEqual(report.identity_bin_count, 0)
+            self.assertIsNone(control_report.flux_floor_rel)
+            self.assertEqual(control_report.floored_bin_count, 0)
+            actual = _read_sph_table(table)
+            control = _read_sph_table(control_table)
+            # The floored bin keeps the previous SPH value.
+            self.assertEqual(actual[0, 1], 1.1)
+            np.testing.assert_allclose(actual[0, 0], control[0, 0], rtol=1.0e-11)
+            np.testing.assert_allclose(actual[1, :], control[1, :], rtol=1.0e-11)
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+            self.assertEqual(payload["flux_floor_rel"], 1.0e-3)
+            self.assertEqual(payload["floored_bin_count"], 1)
+
+    def test_flux_floor_exempts_one_sided_zero_below_floor(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference_flux = root / "reference_flux.csv"
+            low_order_flux = root / "low_order_flux.csv"
+            table = root / "next_sph.csv"
+            identity_table = root / "identity_sph.csv"
+            write_mgxs(mgxs)
+            reference_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,4.0\nfuel,2,1.0e-6\n"
+                "moderator,1,16.0\nmoderator,2,25.0\n",
+                encoding="utf-8",
+            )
+            low_order_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,1.0\nfuel,2,0.0\n"
+                "moderator,1,1.0\nmoderator,2,1.0\n",
+                encoding="utf-8",
+            )
+
+            report = create_sph_update_table(
+                mgxs,
+                table,
+                reference_flux=reference_flux,
+                low_order_flux=low_order_flux,
+                flux_floor_rel=1.0e-3,
+            )
+            identity_report = create_sph_update_table(
+                mgxs,
+                identity_table,
+                reference_flux=reference_flux,
+                low_order_flux=low_order_flux,
+                zero_flux_policy="identity",
+                flux_floor_rel=1.0e-3,
+            )
+
+            self.assertEqual(report.floored_bin_count, 1)
+            self.assertEqual(report.identity_bin_count, 0)
+            self.assertEqual(identity_report.floored_bin_count, 1)
+            self.assertEqual(identity_report.identity_bin_count, 0)
+            actual = _read_sph_table(table)
+            self.assertEqual(actual[0, 1], 1.0)
+            np.testing.assert_allclose(actual, _read_sph_table(identity_table))
+
+    def test_flux_floor_one_sided_zero_above_floor_still_raises(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference_flux = root / "reference_flux.csv"
+            low_order_flux = root / "low_order_flux.csv"
+            table = root / "next_sph.csv"
+            write_mgxs(mgxs)
+            reference_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,4.0\nfuel,2,3.0\n"
+                "moderator,1,16.0\nmoderator,2,25.0\n",
+                encoding="utf-8",
+            )
+            low_order_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,1.0\nfuel,2,0.0\n"
+                "moderator,1,1.0\nmoderator,2,1.0\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                ValueError,
+                r"CE/MG inconsistency: fuel g2 \(zero low-order flux\)",
+            ):
+                create_sph_update_table(
+                    mgxs,
+                    table,
+                    reference_flux=reference_flux,
+                    low_order_flux=low_order_flux,
+                    zero_flux_policy="identity",
+                    flux_floor_rel=1.0e-3,
+                )
+
+    def test_rejects_invalid_flux_floor_rel(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference_flux = root / "reference_flux.csv"
+            low_order_flux = root / "low_order_flux.csv"
+            table = root / "next_sph.csv"
+            write_mgxs(mgxs)
+            reference_flux.write_text(
+                "mixture,group,flux\nfuel,1,1.0\nfuel,2,1.0\nmoderator,1,1.0\nmoderator,2,1.0\n",
+                encoding="utf-8",
+            )
+            low_order_flux.write_text(
+                "mixture,group,flux\nfuel,1,1.0\nfuel,2,1.0\nmoderator,1,1.0\nmoderator,2,1.0\n",
+                encoding="utf-8",
+            )
+
+            for invalid in (0.0, 1.0, -0.5):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "--flux-floor-rel must be strictly between 0 and 1",
+                ):
+                    create_sph_update_table(
+                        mgxs,
+                        table,
+                        reference_flux=reference_flux,
+                        low_order_flux=low_order_flux,
+                        flux_floor_rel=invalid,
+                    )
+
+    def test_cli_openmc_sph_sidecar_accepts_flux_floor_rel(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference_flux = root / "openmc_ce_flux.h5"
+            mg_flux = root / "openmc_mg_flux.h5"
+            sidecar = root / "openmc_sph.h5"
+            table = root / "openmc_sph.csv"
+            summary = root / "openmc_sph_summary.json"
+            write_mgxs(mgxs)
+            _write_flux_source(
+                reference_flux,
+                "openmc_volume_flux",
+                values=np.array([[4.0, 1.0e-5], [16.0, 25.0]]),
+            )
+            _write_flux_source(
+                mg_flux,
+                "openmc_mg_flux",
+                values=np.array([[1.0, 0.0], [1.0, 1.0]]),
+            )
+
+            self.assertEqual(
+                cli_main(
+                    [
+                        "make-openmc-sph-sidecar",
+                        str(mgxs),
+                        "-o",
+                        str(sidecar),
+                        "--reference-flux",
+                        f"{reference_flux}::openmc_volume_flux",
+                        "--mg-flux",
+                        f"{mg_flux}::openmc_mg_flux",
+                        "--table-output",
+                        str(table),
+                        "--flux-floor-rel",
+                        "1.0e-3",
+                        "--summary-json",
+                        str(summary),
+                    ]
+                ),
+                0,
+            )
+
+            expected = np.array([[4.0, 1.0], [16.0, 25.0]])
+            with h5py.File(sidecar, "r") as h5:
+                np.testing.assert_allclose(h5["sph"][:], expected, rtol=1.0e-11)
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+            self.assertEqual(payload["flux_floor_rel"], 1.0e-3)
+            self.assertEqual(payload["floored_bin_count"], 1)
+            self.assertEqual(payload["zero_flux_policy"], "reject")
+
+    def test_freeze_groups_holds_group_at_previous_value_for_all_mixtures(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference_flux = root / "reference_flux.csv"
+            low_order_flux = root / "low_order_flux.csv"
+            previous_sph = root / "previous_sph.csv"
+            table = root / "next_sph.csv"
+            summary = root / "summary.json"
+            write_mgxs(mgxs)
+            reference_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,4.0\nfuel,2,9.0\n"
+                "moderator,1,16.0\nmoderator,2,25.0\n",
+                encoding="utf-8",
+            )
+            low_order_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,1.0\nfuel,2,1.0\n"
+                "moderator,1,1.0\nmoderator,2,1.0\n",
+                encoding="utf-8",
+            )
+            previous_sph.write_text(
+                "mixture,g1,g2\nfuel,1.0,1.1\nmoderator,0.9,1.2\n",
+                encoding="utf-8",
+            )
+
+            report = create_sph_update_table(
+                mgxs,
+                table,
+                reference_flux=reference_flux,
+                low_order_flux=low_order_flux,
+                previous_sph=previous_sph,
+                freeze_groups=(2,),
+                summary_json=summary,
+            )
+
+            self.assertEqual(report.freeze_groups, (2,))
+            self.assertEqual(report.frozen_group_bin_count, 2)
+            self.assertEqual(report.floored_bin_count, 0)
+            self.assertEqual(report.identity_bin_count, 0)
+            # The frozen group is matched by the table's own group labels.
+            labeled = _read_sph_table_by_label(table)
+            self.assertEqual(labeled[("fuel", 2)], 1.1)
+            self.assertEqual(labeled[("moderator", 2)], 1.2)
+            np.testing.assert_allclose(labeled[("fuel", 1)], 1.0 * 4.0, rtol=1.0e-11)
+            np.testing.assert_allclose(labeled[("moderator", 1)], 0.9 * 16.0, rtol=1.0e-11)
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+            self.assertEqual(payload["freeze_groups"], [2])
+            self.assertEqual(payload["frozen_group_bin_count"], 2)
+
+    def test_rejects_invalid_freeze_groups(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference_flux = root / "reference_flux.csv"
+            low_order_flux = root / "low_order_flux.csv"
+            table = root / "next_sph.csv"
+            write_mgxs(mgxs)
+            reference_flux.write_text(
+                "mixture,group,flux\nfuel,1,1.0\nfuel,2,1.0\nmoderator,1,1.0\nmoderator,2,1.0\n",
+                encoding="utf-8",
+            )
+            low_order_flux.write_text(
+                "mixture,group,flux\nfuel,1,1.0\nfuel,2,1.0\nmoderator,1,1.0\nmoderator,2,1.0\n",
+                encoding="utf-8",
+            )
+
+            for invalid in ((0,), (3,)):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    r"--freeze-groups group -?\d+ outside 1\.\.2",
+                ):
+                    create_sph_update_table(
+                        mgxs,
+                        table,
+                        reference_flux=reference_flux,
+                        low_order_flux=low_order_flux,
+                        freeze_groups=invalid,
+                    )
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "--freeze-groups must not contain duplicate groups",
+            ):
+                create_sph_update_table(
+                    mgxs,
+                    table,
+                    reference_flux=reference_flux,
+                    low_order_flux=low_order_flux,
+                    freeze_groups=(1, 1),
+                )
+
+    def test_cli_openmc_sph_sidecar_accepts_freeze_groups(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference_flux = root / "openmc_ce_flux.h5"
+            mg_flux = root / "openmc_mg_flux.h5"
+            sidecar = root / "openmc_sph.h5"
+            table = root / "openmc_sph.csv"
+            summary = root / "openmc_sph_summary.json"
+            write_mgxs(mgxs)
+            _write_flux_source(
+                reference_flux,
+                "openmc_volume_flux",
+                values=np.array([[4.0, 9.0], [16.0, 25.0]]),
+            )
+            _write_flux_source(
+                mg_flux,
+                "openmc_mg_flux",
+                values=np.array([[1.0, 1.0], [1.0, 1.0]]),
+            )
+
+            self.assertEqual(
+                cli_main(
+                    [
+                        "make-openmc-sph-sidecar",
+                        str(mgxs),
+                        "-o",
+                        str(sidecar),
+                        "--reference-flux",
+                        f"{reference_flux}::openmc_volume_flux",
+                        "--mg-flux",
+                        f"{mg_flux}::openmc_mg_flux",
+                        "--table-output",
+                        str(table),
+                        "--freeze-groups",
+                        "2",
+                        "--summary-json",
+                        str(summary),
+                    ]
+                ),
+                0,
+            )
+
+            expected = np.array([[4.0, 1.0], [16.0, 1.0]])
+            with h5py.File(sidecar, "r") as h5:
+                np.testing.assert_allclose(h5["sph"][:], expected, rtol=1.0e-11)
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+            self.assertEqual(payload["freeze_groups"], [2])
+            self.assertEqual(payload["frozen_group_bin_count"], 2)
+
+
+def _read_sph_table_by_label(path: Path) -> dict[tuple[str, int], float]:
+    rows = path.read_text(encoding="utf-8").strip().splitlines()[1:]
+    labeled: dict[tuple[str, int], float] = {}
+    for row in rows:
+        mixture, group, value = row.split(",")
+        labeled[(mixture, int(group))] = float(value)
+    return labeled
+
+
+def _read_sph_table(path: Path) -> np.ndarray:
+    rows = path.read_text(encoding="utf-8").strip().splitlines()[1:]
+    return np.asarray([float(row.split(",")[2]) for row in rows]).reshape(2, 2)
 
 
 def write_mgxs(path: Path, *, h_factor: dict[str, np.ndarray] | None = None) -> None:
