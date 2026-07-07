@@ -1,6 +1,6 @@
 {
   "schema": "openmc2donjon.accepted-baseline.v2",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "decision": "c5g7_assembly_wise_baseline_locked",
   "lines": {
     "c5g7": {

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+Nothing yet.
+
+## v0.1.3-hex-accepted - 2026-07-07
+
+Accepted hex benchmark release. Adds the IRENA-30 ZREFL 91-hex benchmark
+(first accepted hex validation line), the SPH sidecar/augmentation and
+external face-flux workflows, and the C5G7 accepted-artifact parity
+refresh for the uncertainty-preserving exporter.
+
 - Added `examples/irena30_zrefl_hex`, the accepted hex benchmark: IRENA-30
   91-hex 2D ARI ZREFL in OpenMC multi-group mode with per-position MGXS
   tallies, exported to a 91-mixture `L_MULTICOMPO` and consumed through

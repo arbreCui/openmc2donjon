@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "openmc2donjon"
-version = "0.1.2"
+version = "0.1.3"
 description = "Convert OpenMC MGXS library HDF5 files to DRAGON/DONJON L_MULTICOMPO ASCII."
 readme = "README.md"
 requires-python = ">=3.10"

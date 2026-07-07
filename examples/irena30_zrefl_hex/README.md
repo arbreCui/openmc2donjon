@@ -91,3 +91,8 @@ directory, checked by the baseline manifest validation.
 The TRIVAC MCFD diffusion diagnostic (+2532 pcm) is reported but not
 gated: one mesh point per 17.5 cm hex is far too coarse for a fast core,
 and it documents why the transport solver is the meaningful consumer.
+
+Different-seed robustness (`IRENA_SEED=20260707`): OpenMC
+1.192715 +/- 23 pcm, SN8 delta +28.6 pcm, power shape 1.40 % worst /
+0.56 % RMS — both gates pass away from the accepted run's seed. The
+worst position is consistently the low-power edge hex R4P21_EXT.

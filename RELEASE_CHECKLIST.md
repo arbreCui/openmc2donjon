@@ -1,6 +1,6 @@
 # openmc2donjon Release Checklist
 
-This checklist covers the current `0.1.2` internal handoff state.
+This checklist covers the current `0.1.3` internal handoff state.
 
 ## Package Scope
 
@@ -19,6 +19,10 @@ This checklist covers the current `0.1.2` internal handoff state.
 - [x] Experimental one-dimensional `BURN` multi-state serialization with a
   DONJON `NCR:` consumer smoke.
 - [x] Preflight rejection for unsupported multi-axis branch-library inputs.
+- [x] SPH sidecar/augmentation carry (`make-sph-sidecar`, `augment-sph`,
+  HDF5 `sph/NSPH`, DONJON `L_MACROLIB` `GROUP/*/NSPH`).
+- [x] Accepted hex benchmark: IRENA-30 ZREFL 91-hex
+  (`examples/irena30_zrefl_hex`, local IRENA workspace + DONJON required).
 
 ## Required Smoke Commands
 
@@ -111,8 +115,10 @@ bash examples/donjon_openmc2donjon/run_acceptance.sh
 
 - [ ] General multi-axis branch libraries are not implemented; only the
   experimental one-dimensional `BURN` path is supported.
-- [ ] Hex support is implemented as capability work, but no accepted hex
-  benchmark is included yet.
+- [ ] The accepted hex benchmark requires local IRENA workspace data and a
+  local DRAGON/DONJON checkout; it is not part of the default gate.
+- [ ] OpenMC-side SPH physics evidence is at colorset-minicase level; no
+  accepted SPH physics benchmark yet.
 - [ ] Full-core production use should keep validating against the local
   DONJON-side handoff workspace before promotion.
 
@@ -124,5 +130,5 @@ C5G7 DONJON-side acceptance remains green.
 Accepted release tag:
 
 ```text
-v0.1.2-openmc-workflow
+v0.1.3-hex-accepted
 ```

@@ -116,6 +116,9 @@ require_executable() {
   fi
 }
 
+# RUN_DIR is scratch: recreate it so consecutive gate runs never trip on
+# outputs left behind by a previous run (some sub-smokes refuse to overwrite).
+rm -rf "$RUN_DIR"
 mkdir -p "$RUN_DIR"
 export PYTHONDONTWRITEBYTECODE=1
 export PYTHONPATH="$PACKAGE_SRC${PYTHONPATH:+:$PYTHONPATH}"
