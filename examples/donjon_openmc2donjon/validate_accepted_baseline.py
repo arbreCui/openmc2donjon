@@ -37,7 +37,7 @@ def main() -> int:
         *manifest_checks(manifest),
         *artifact_checks(manifest),
         *c5g7_checks(manifest),
-        hex_status_check(manifest),
+        *hex_checks(manifest),
     ]
 
     print("OpenMC-to-DONJON accepted baseline")
@@ -110,13 +110,28 @@ def c5g7_checks(manifest: dict[str, Any]) -> list[Check]:
     return checks
 
 
-def hex_status_check(manifest: dict[str, Any]) -> Check:
-    status = manifest.get("hex", {}).get("status")
-    return Check(
-        "hex line is marked capability-only",
-        status == "capability_done_no_accepted_benchmark",
-        str(status),
-    )
+def hex_checks(manifest: dict[str, Any]) -> list[Check]:
+    hex_line = manifest.get("hex", {})
+    checks = [
+        Check(
+            "hex line is accepted",
+            hex_line.get("status") == "accepted",
+            str(hex_line.get("status")),
+        ),
+        Check(
+            "hex benchmark is IRENA-30 ZREFL",
+            hex_line.get("benchmark") == "irena30_zrefl",
+            str(hex_line.get("benchmark")),
+        ),
+    ]
+    for label in ("keff_comparison", "power_comparison"):
+        raw = hex_line.get(label)
+        path = resolve(str(raw))
+        checks.append(Check(f"hex result exists: {label}", raw is not None and path.is_file(), str(raw)))
+        if raw is not None and path.is_file():
+            decision = str(load_json(path).get("decision", ""))
+            checks.append(Check(f"hex {label} decision passed", decision.endswith("_passed"), decision))
+    return checks
 
 
 def close_check(name: str, observed: float, expected: float, tolerance: float) -> Check:

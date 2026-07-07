@@ -37,7 +37,26 @@
     }
   },
   "hex": {
-    "status": "capability_done_no_accepted_benchmark",
-    "note": "Hex-domain conversion/modeling support exists, but this workspace does not keep an accepted hex benchmark validation line yet."
+    "status": "accepted",
+    "benchmark": "irena30_zrefl",
+    "example": "examples/irena30_zrefl_hex",
+    "domain_mode": "hex_cell",
+    "energy_groups": 33,
+    "legendre_order": 1,
+    "openmc_reference_keff": 1.1922318072110356,
+    "results": {
+      "sn8": {
+        "keff": 1.192125,
+        "delta_pcm": -8.96
+      },
+      "power_shape": {
+        "max_rel_error": 0.01269,
+        "rms_rel_error": 0.00475
+      }
+    },
+    "keff_comparison": "irena30_zrefl_accepted/keff_comparison.json",
+    "power_comparison": "irena30_zrefl_accepted/power_comparison.json",
+    "accepted_mco": "irena30_zrefl_accepted/irena_zrefl.mcompo.txt",
+    "note": "IRENA-30 91-hex 2D ARI ZREFL vs the paired OpenMC-MG run (same 33g macrolib). Reproduce with bash examples/irena30_zrefl_hex/run_zrefl_keff.sh (requires the local IRENA workspace and DRAGON/DONJON checkout)."
   }
 }

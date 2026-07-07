@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+- Added `examples/irena30_zrefl_hex`, the accepted hex benchmark: IRENA-30
+  91-hex 2D ARI ZREFL in OpenMC multi-group mode with per-position MGXS
+  tallies, exported to a 91-mixture `L_MULTICOMPO` and consumed through
+  DONJON `NCR:` + `SNT:` SN8 transport (primary) and TRIVAC MCFD diffusion
+  (diagnostic). Both acceptance gates passed in one `run_zrefl_keff.sh`
+  invocation against the paired OpenMC reference: SN8 k-eff delta -9 pcm
+  (21 pcm Monte Carlo sigma) and per-assembly fission-source shape within
+  1.27 % worst / 0.47 % RMS over the 52 fuel positions (via `EDI: MERG MIX
+  COND` and `NUSIGF * FLUX-INTG`). The baseline manifest's hex line is now
+  `accepted` and its summaries are validated by
+  `validate_accepted_baseline.py`. Encodes two multi-group-mode workflow
+  gotchas: MG statepoints return mgxs arrays in ascending-energy order
+  (the recipe requests `order_groups="decreasing"`), and zero-flux thermal
+  groups need macrolib substitution before the input contract accepts the
+  export.
+- Refreshed the accepted C5G7 artifact
+  (`examples/donjon_openmc2donjon/c5g7_assembly_p1_adf_production.h5`)
+  additively so the exporter-parity smokes pass again after the
+  uncertainty-preservation feature: current exporters also write
+  `mixture_names`, per-dataset `*_std_dev`, per-mixture `source_domain_*`
+  attributes, and the `domain_type` / `energy_bounds_sha256` /
+  `energy_group_structure` root attributes. All previously present datasets
+  and attributes are byte-identical to the locked baseline.
 - Added SPH sidecar/augmentation support: `make-sph-sidecar`,
   `augment-sph`, `check --require-sph`, HDF5 `sph/NSPH` carry-through, and
   DONJON `L_MACROLIB` `GROUP/*/NSPH` read/write with `STATE-VECTOR(14)` set.

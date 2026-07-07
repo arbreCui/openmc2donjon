@@ -17,8 +17,12 @@
   DRAGON/DONJON checkout.
 - Experimental one-parameter `BURN` multi-state serialization is available and
   has a tiny DONJON `NCR:` consumer smoke.
-- Hex support exists as capability work, with synthetic and real OpenMC hex
-  workflow smokes, but no accepted hex benchmark is included yet.
+- Hex support is validated by an accepted benchmark:
+  `examples/irena30_zrefl_hex` (IRENA-30 91-hex 2D ARI ZREFL, paired
+  OpenMC-MG reference; DONJON SN8 k-eff within Monte Carlo statistics and
+  per-assembly fission-source shape within 1.3 % worst / 0.5 % RMS).
+  The synthetic and real OpenMC hex workflow smokes remain as capability
+  checks.
 
 ## Near-Term Work
 
@@ -48,10 +52,18 @@
    - Keep it separate from the accepted C5G7 physics baseline.
    - Promote only after it is backed by a real depletion or branch case.
 
-5. Select a proper hex benchmark.
-   - Require complete geometry, material/profile/control inputs.
-   - Require a defensible reference solution.
-   - Promote only after field-level and k-effective checks are reproducible.
+5. Keep the accepted hex benchmark reproducible.
+   - `examples/irena30_zrefl_hex` (IRENA-30 91-hex 2D ARI ZREFL) is the
+     accepted line: both gates — SN8 k-eff vs the paired OpenMC run and the
+     per-assembly fission-source shape — passed in one
+     `run_zrefl_keff.sh` invocation; summaries are locked under
+     `irena30_zrefl_accepted/` and checked by the baseline manifest
+     validation.
+   - It depends on local IRENA workspace data and a local DONJON, so it
+     stays an optional local check rather than a default gate step.
+   - Natural extensions: the 3D fineZ rod-depth points (d00..d90) as a
+     multi-state `ROD-DEPTH` multicompo, and a different-seed robustness
+     run.
 
 ## Later Work
 
