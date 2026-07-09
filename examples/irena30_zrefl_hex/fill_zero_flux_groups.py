@@ -77,7 +77,13 @@ def main() -> int:
             temp_idx = 0
 
             total = group["total"][:]
-            fill = np.where(total == 0.0)[0]
+            fill_mask = total == 0.0
+            if "transport_total" in group:
+                # Micro-flux groups can tally a few counts (total > 0) while
+                # the P1-corrected transport value is still zero or negative
+                # noise; substitute those bins from the macrolib as well.
+                fill_mask |= group["transport_total"][:] <= 0.0
+            fill = np.where(fill_mask)[0]
             if not len(fill):
                 continue
 
