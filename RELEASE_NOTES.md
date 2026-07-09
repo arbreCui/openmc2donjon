@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+Nothing yet.
+
+## v0.1.4-sph-rate - 2026-07-10
+
 SPH physics line: update-direction fix, rate-preserving target, and the
 fast-spectrum policies, validated on the IRENA colorsets.
 
@@ -43,6 +47,18 @@ fast-spectrum policies, validated on the IRENA colorsets.
   the new options and summary fields (an "SPH update policy" block, with
   graceful omission for older summaries); the workflow example CLIs stay
   strict.
+- Verified and documented the DONJON NSPH consumption routes: `NCR:`
+  contains no SPH handling, so MULTICOMPO `NSPH` records are inert
+  archive metadata (numerically confirmed bit-for-bit). SPH takes effect
+  through the `L_MACROLIB` `GROUP/*/NSPH` route (`DSPH:` + `MAC:`) or by
+  pre-applying with `apply-sph`; the MULTICOMPO+`NCR:` production route
+  therefore requires pre-application.
+- Promoted the fast-spectrum zero-flux fill to a package command,
+  `openmc2donjon fill-zero-flux` (copy-by-default, `--in-place` opt-in,
+  generalized `--label-attr`), replacing the shared example script; the
+  accepted-benchmark data verifies as a no-op under the new command.
+- Fixed the stale package `__version__` (was still 0.1.2) and added a
+  consistency test locking it to the pyproject version.
 
 ## v0.1.3-hex-accepted - 2026-07-07
 

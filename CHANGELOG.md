@@ -11,13 +11,20 @@ machine-readable index; cross-reference the release notes for context.
 
 ## [Unreleased]
 
-SPH physics line: update-direction fix (pre-existing divergence, wrong
-one-shot sign), rate-preserving `--sph-target rate`, fast-spectrum
-zero-flux/floor/freeze policies, IRENA Stage 1/2 colorset examples with
-the PNL prescription validated to core level, regenerated minicase
-evidence, and web-frontend wiring for the new options.
+Nothing yet.
 
-See [`RELEASE_NOTES.md`](RELEASE_NOTES.md#unreleased) for details.
+## [0.1.4] - 2026-07-10
+
+SPH physics release: update-direction fix (the pre-existing loop was
+structurally divergent and even one-shot corrections carried the wrong
+sign), rate-preserving `--sph-target rate` (k-pinning, DRAGON
+semantics), fast-spectrum zero-flux/floor/freeze policies and the
+`fill-zero-flux` command, IRENA Stage 1/2 colorset examples with the
+PNL prescription validated to core level, regenerated minicase
+evidence, verified DONJON NSPH consumption routes, and web-frontend
+wiring for the new options.
+
+See [`RELEASE_NOTES.md`](RELEASE_NOTES.md) for the full narrative.
 
 ## [0.1.3] - 2026-07-07
 
@@ -51,7 +58,8 @@ Tagged as `v0.1.0-c5g7-accepted`. First accepted C5G7 assembly-wise
 DONJON/DRAGON validation: diffusion and SPN3 k-effective against an
 OpenMC reference, with documented bias margins.
 
-[Unreleased]: https://github.com/arbreCui/openmc2donjon/compare/v0.1.3-hex-accepted...HEAD
+[Unreleased]: https://github.com/arbreCui/openmc2donjon/compare/v0.1.4-sph-rate...HEAD
+[0.1.4]: https://github.com/arbreCui/openmc2donjon/releases/tag/v0.1.4-sph-rate
 [0.1.3]: https://github.com/arbreCui/openmc2donjon/releases/tag/v0.1.3-hex-accepted
 [0.1.2]: https://github.com/arbreCui/openmc2donjon/releases/tag/v0.1.2-openmc-workflow
 [0.1.1]: https://github.com/arbreCui/openmc2donjon/releases/tag/v0.1.1-c5g7-handoff

@@ -1,6 +1,6 @@
 """OpenMC MGXS to DRAGON/DONJON ASCII conversion tools."""
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 
 from .adf_augment import augment_hdf5_with_adf
 from .macrolib import write_macrolib

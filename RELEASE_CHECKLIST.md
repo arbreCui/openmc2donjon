@@ -1,6 +1,6 @@
 # openmc2donjon Release Checklist
 
-This checklist covers the current `0.1.3` internal handoff state.
+This checklist covers the current `0.1.4` internal handoff state.
 
 ## Package Scope
 
@@ -130,5 +130,5 @@ C5G7 DONJON-side acceptance remains green.
 Accepted release tag:
 
 ```text
-v0.1.3-hex-accepted
+v0.1.4-sph-rate
 ```

@@ -38,7 +38,7 @@ class FromOpenMCCliTests(unittest.TestCase):
             build_parser().parse_args(["--version"])
 
         self.assertEqual(cm.exception.code, 0)
-        self.assertEqual(stream.getvalue().strip(), "openmc2donjon-from-openmc 0.1.3")
+        self.assertEqual(stream.getvalue().strip(), "openmc2donjon-from-openmc 0.1.4")
 
     def test_recipe_to_multicompo_with_kept_hdf5(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
@@ -86,7 +86,7 @@ class FromOpenMCCliTests(unittest.TestCase):
             payload = json.loads(summary.read_text(encoding="utf-8"))
             assert_from_openmc_summary(self, payload)
             self.assertEqual(payload["schema"], FROM_OPENMC_SUMMARY_SCHEMA)
-            self.assertEqual(payload["package_version"], "0.1.3")
+            self.assertEqual(payload["package_version"], "0.1.4")
             self.assertEqual(payload["recipe"], str(recipe.resolve()))
             self.assertEqual(payload["statepoint"], str(statepoint.resolve()))
             self.assertTrue(payload["loaded_statepoint"])

@@ -1014,7 +1014,7 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
             build_parser().parse_args(["--version"])
 
         self.assertEqual(cm.exception.code, 0)
-        self.assertEqual(stream.getvalue().strip(), "openmc2donjon-export 0.1.3")
+        self.assertEqual(stream.getvalue().strip(), "openmc2donjon-export 0.1.4")
 
 
 if __name__ == "__main__":
