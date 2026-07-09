@@ -63,6 +63,19 @@ describe("equivalence command builder", () => {
 
     expect(
       buildEquivalenceCli({
+        ...defaultEquivalenceOptions("openmc-sph-sidecar"),
+        inputH5: "/tmp/mgxs.h5",
+        outputPath: "/tmp/openmc_sph.h5",
+        referenceFlux: "/tmp/ce_flux.h5::openmc_volume_flux",
+        mgFlux: "/tmp/mg_flux.h5::openmc_mg_flux",
+        zeroFluxPolicy: "identity" as const,
+      }),
+    ).toBe(
+      "openmc2donjon make-openmc-sph-sidecar /tmp/mgxs.h5 -o /tmp/openmc_sph.h5 --reference-flux /tmp/ce_flux.h5::openmc_volume_flux --mg-flux /tmp/mg_flux.h5::openmc_mg_flux --damping 1.0 --flux-normalization none --zero-flux-policy identity",
+    );
+
+    expect(
+      buildEquivalenceCli({
         ...defaultEquivalenceOptions("sph-sidecar"),
         inputH5: "/tmp/mgxs.h5",
         outputPath: "/tmp/sph.h5",
@@ -81,6 +94,23 @@ describe("equivalence command builder", () => {
       }),
     ).toBe(
       "openmc2donjon augment-sph /tmp/mgxs.h5 --sph-source /tmp/sph.h5 -o /tmp/mgxs_sph.h5 --sph-applied false",
+    );
+  });
+
+  it("composes the IRENA PNL rate-preserving SPH prescription", () => {
+    const options = {
+      ...defaultEquivalenceOptions("openmc-sph-sidecar"),
+      inputH5: "/tmp/mgxs.h5",
+      outputPath: "/tmp/openmc_sph.h5",
+      referenceFlux: "/tmp/ce_flux.h5::openmc_volume_flux",
+      mgFlux: "/tmp/mg_flux.h5::openmc_mg_flux",
+      sphTarget: "rate" as const,
+      freezeGroups: "1,31",
+      fluxFloorRel: "1e-3",
+    };
+
+    expect(buildEquivalenceCli(options)).toBe(
+      "openmc2donjon make-openmc-sph-sidecar /tmp/mgxs.h5 -o /tmp/openmc_sph.h5 --reference-flux /tmp/ce_flux.h5::openmc_volume_flux --mg-flux /tmp/mg_flux.h5::openmc_mg_flux --damping 1.0 --flux-normalization none --sph-target rate --flux-floor-rel 1e-3 --freeze-groups 1,31",
     );
   });
 });

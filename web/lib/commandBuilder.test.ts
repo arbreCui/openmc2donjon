@@ -71,6 +71,16 @@ describe("commandBuilder", () => {
         "--tally-name openmc_mg_volume_flux --dataset-name openmc_mg_flux " +
         "--summary-json /runs/case/openmc_mg_flux_summary.json",
     );
+
+    values.allow_zero_flux = true;
+
+    expect(buildCommandCli(spec!, values)).toBe(
+      "openmc2donjon export-volume-flux /runs/case/mg_statepoint.h5 " +
+        "-o /runs/case/openmc_mg_flux.h5 --mgxs /runs/case/mgxs_library.h5 " +
+        "--tally-name openmc_mg_volume_flux --dataset-name openmc_mg_flux " +
+        "--allow-zero-flux " +
+        "--summary-json /runs/case/openmc_mg_flux_summary.json",
+    );
   });
 
   it("builds SPH application commands for OpenMC MG reruns", () => {

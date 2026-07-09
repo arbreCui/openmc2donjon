@@ -173,6 +173,7 @@ export const COMMAND_BUILDER_SPECS: readonly CommandBuilderSpec[] = [
       text("mixture_names", "Mixture names", "Comma-separated names when --mgxs is not supplied.", "--mixture-names"),
       text("energy_groups", "Energy groups", "Group count when --mgxs is not supplied.", "--energy-groups"),
       text("source_group_order", "Source group order", "Metadata label for raw tally order.", "--source-group-order"),
+      toggle("allow_zero_flux", "Allow zero flux", "Accept exactly-zero flux bins, e.g. fast-spectrum thermal groups.", "--allow-zero-flux"),
       optionPath("summary_json", "Summary JSON", "Optional export summary JSON.", "--summary-json", "volume_flux_summary.json", JSON),
       toggle("force", "Force overwrite", "Allow replacing an existing output file.", "--force"),
     ],

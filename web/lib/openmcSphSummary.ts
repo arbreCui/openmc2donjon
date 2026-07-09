@@ -123,6 +123,59 @@ function normalizedAcceptedFormat(
   return summary.handoff.accepted_sph_consumption_format?.toLowerCase() ?? null;
 }
 
+export function sphUpdatePolicyRows(summary: OpenmcSphPhysicsSummary): {
+  id: "target" | "zero-flux" | "flux-floor" | "freeze-groups";
+  label: string;
+  value: string;
+  detail: string;
+}[] {
+  const rows: {
+    id: "target" | "zero-flux" | "flux-floor" | "freeze-groups";
+    label: string;
+    value: string;
+    detail: string;
+  }[] = [];
+  if (summary.sph_target != null) {
+    rows.push({
+      id: "target",
+      label: "SPH target",
+      value: summary.sph_target,
+      detail:
+        summary.sph_target === "rate"
+          ? "Rate-preserving fixed point: MG flux matches SPH times the CE reference."
+          : "Flux-matching fixed point: corrected MG flux matches the CE reference.",
+    });
+  }
+  if (summary.zero_flux_policy != null) {
+    rows.push({
+      id: "zero-flux",
+      label: "Zero-flux policy",
+      value: summary.zero_flux_policy,
+      detail:
+        summary.zero_flux_policy === "identity"
+          ? `${summary.identity_bin_count ?? 0} bin(s) with zero CE and MG flux kept the previous SPH.`
+          : "Bins where CE and MG flux are both exactly zero fail the update.",
+    });
+  }
+  if (summary.flux_floor_rel != null) {
+    rows.push({
+      id: "flux-floor",
+      label: "Flux floor",
+      value: formatPhysicsNumber(summary.flux_floor_rel),
+      detail: `${summary.floored_bin_count ?? 0} bin(s) below the per-mixture floor were frozen at the previous SPH.`,
+    });
+  }
+  if (summary.freeze_groups != null && summary.freeze_groups.length > 0) {
+    rows.push({
+      id: "freeze-groups",
+      label: "Frozen groups",
+      value: summary.freeze_groups.join(", "),
+      detail: `${summary.frozen_group_bin_count ?? 0} bin(s) frozen at the previous SPH across all mixtures.`,
+    });
+  }
+  return rows;
+}
+
 export function reactionRatePreservationRows(summary: OpenmcSphPhysicsSummary): {
   id: "current" | "frozen";
   label: string;

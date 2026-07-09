@@ -417,6 +417,13 @@ export interface OpenmcSphPhysicsSummary {
   mixture_names: string[];
   decisions: OpenmcSphPhysicsSummaryDecision;
   normalization: OpenmcSphPhysicsSummaryNormalization;
+  sph_target?: string | null;
+  zero_flux_policy?: string | null;
+  identity_bin_count?: number | null;
+  flux_floor_rel?: number | null;
+  floored_bin_count?: number | null;
+  freeze_groups?: number[] | null;
+  frozen_group_bin_count?: number | null;
   flux_uncertainty: OpenmcSphPhysicsSummaryFluxUncertainty;
   quality?: OpenmcSphPhysicsSummaryQuality;
   sph: OpenmcSphPhysicsSummarySph;

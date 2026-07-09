@@ -34,6 +34,10 @@ export interface EquivalenceCommandOptions {
   previousSph: string;
   damping: string;
   fluxNormalization: "none" | "total" | "power" | "auto";
+  sphTarget: "flux" | "rate";
+  zeroFluxPolicy: "reject" | "identity";
+  fluxFloorRel: string;
+  freezeGroups: string;
   sphSource: string;
   sphApplied: BooleanChoice;
 }
@@ -138,6 +142,10 @@ export function defaultEquivalenceOptions(kind: EquivalenceKind): EquivalenceCom
     previousSph: "",
     damping: "1.0",
     fluxNormalization: "none",
+    sphTarget: "flux",
+    zeroFluxPolicy: "reject",
+    fluxFloorRel: "",
+    freezeGroups: "",
     sphSource: "",
     sphApplied: "",
   };
@@ -227,6 +235,14 @@ function buildOpenmcSphSidecarCli(options: EquivalenceCommandOptions): string {
   pushOptional(command, "--previous-sph", options.previousSph);
   pushOptional(command, "--damping", options.damping);
   pushOptional(command, "--flux-normalization", options.fluxNormalization);
+  if (options.sphTarget !== "flux") {
+    command.push("--sph-target", options.sphTarget);
+  }
+  if (options.zeroFluxPolicy !== "reject") {
+    command.push("--zero-flux-policy", options.zeroFluxPolicy);
+  }
+  pushOptional(command, "--flux-floor-rel", options.fluxFloorRel);
+  pushOptional(command, "--freeze-groups", options.freezeGroups);
   pushOptional(command, "--clip-min", options.clipMin);
   pushOptional(command, "--clip-max", options.clipMax);
   pushCommon(command, options);

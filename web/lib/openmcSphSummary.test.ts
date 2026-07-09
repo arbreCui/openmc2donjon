@@ -6,6 +6,7 @@ import {
   openmcSphConvertHref,
   productionEvidenceRows,
   reactionRatePreservationRows,
+  sphUpdatePolicyRows,
   summaryStatus,
   topSphDeviationRows,
 } from "./openmcSphSummary";
@@ -208,6 +209,57 @@ describe("openmcSphSummary", () => {
 
   it("describes the Pn handoff and Hn MG macro treatments separately", () => {
     expect(formatScatterTreatment(SUMMARY)).toBe("P3 handoff · H16 MG macro");
+  });
+
+  it("omits SPH update policy rows for summaries without the new fields", () => {
+    expect(sphUpdatePolicyRows(SUMMARY)).toEqual([]);
+  });
+
+  it("surfaces the rate-preserving SPH update policy fields when present", () => {
+    const rows = sphUpdatePolicyRows({
+      ...SUMMARY,
+      sph_target: "rate",
+      zero_flux_policy: "identity",
+      identity_bin_count: 4,
+      flux_floor_rel: 1.0e-3,
+      floored_bin_count: 6,
+      freeze_groups: [1, 31],
+      frozen_group_bin_count: 10,
+    });
+
+    expect(rows.map((row) => row.id)).toEqual([
+      "target",
+      "zero-flux",
+      "flux-floor",
+      "freeze-groups",
+    ]);
+    expect(rows[0]).toMatchObject({ label: "SPH target", value: "rate" });
+    expect(rows[0].detail).toContain("Rate-preserving");
+    expect(rows[1]).toMatchObject({
+      label: "Zero-flux policy",
+      value: "identity",
+    });
+    expect(rows[1].detail).toContain("4 bin(s)");
+    expect(rows[2]).toMatchObject({ label: "Flux floor", value: "0.001" });
+    expect(rows[2].detail).toContain("6 bin(s)");
+    expect(rows[3]).toMatchObject({
+      label: "Frozen groups",
+      value: "1, 31",
+    });
+    expect(rows[3].detail).toContain("10 bin(s)");
+  });
+
+  it("keeps flux-target reject policies readable in the update policy rows", () => {
+    const rows = sphUpdatePolicyRows({
+      ...SUMMARY,
+      sph_target: "flux",
+      zero_flux_policy: "reject",
+      identity_bin_count: 0,
+    });
+
+    expect(rows.map((row) => row.id)).toEqual(["target", "zero-flux"]);
+    expect(rows[0].detail).toContain("Flux-matching");
+    expect(rows[1].detail).toContain("fail the update");
   });
 
   it("extracts current and frozen-flux reaction-rate preservation diagnostics", () => {

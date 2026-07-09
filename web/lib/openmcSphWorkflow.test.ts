@@ -28,6 +28,16 @@ describe("openmcSphWorkflow", () => {
     expect(mg?.cli).toContain("--tally-name openmc_mg_volume_flux");
   });
 
+  it("keeps the example flux exports strict (no zero-flux relaxation)", () => {
+    const ce = OPENMC_SPH_WORKFLOW_STEPS.find((step) => step.id === "ce-flux");
+    const mg = OPENMC_SPH_WORKFLOW_STEPS.find((step) => step.id === "mg-flux");
+
+    expect(ce?.href).not.toContain("allow_zero_flux");
+    expect(ce?.cli).not.toContain("--allow-zero-flux");
+    expect(mg?.href).not.toContain("allow_zero_flux");
+    expect(mg?.cli).not.toContain("--allow-zero-flux");
+  });
+
   it("marks both export-volume-flux steps active on the flux builder", () => {
     const active = openmcSphWorkflowSteps("export-volume-flux").filter(
       (step) => step.active,

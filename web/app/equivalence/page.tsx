@@ -500,6 +500,42 @@ function OpenmcSphSidecarFields({
           ]}
           hint="Optional global scaling before forming MG/CE flux ratios."
         />
+        <SelectField
+          label="SPH target"
+          value={options.sphTarget}
+          onChange={(value) => patch({ sphTarget: value as "flux" | "rate" })}
+          options={[
+            ["flux", "flux (match CE flux)"],
+            ["rate", "rate (preserve reaction rates)"],
+          ]}
+          hint="flux matches the corrected MG flux to CE; rate preserves reaction rates in spatially coupled regions."
+        />
+        <SelectField
+          label="Zero-flux policy"
+          value={options.zeroFluxPolicy}
+          onChange={(value) => patch({ zeroFluxPolicy: value as "reject" | "identity" })}
+          options={[
+            ["reject", "reject (fail on zero bins)"],
+            ["identity", "identity (keep previous SPH)"],
+          ]}
+          hint="identity keeps previous SPH where both CE and MG flux are exactly zero, e.g. fast-spectrum thermal groups."
+        />
+        <TextField
+          label="Flux floor (relative)"
+          value={options.fluxFloorRel}
+          onChange={(value) => patch({ fluxFloorRel: value })}
+          placeholder="1e-3"
+          mono
+          hint="Freeze bins below this fraction of the mixture's peak CE flux so noisy near-zero groups are not fitted."
+        />
+        <TextField
+          label="Freeze groups"
+          value={options.freezeGroups}
+          onChange={(value) => patch({ freezeGroups: value })}
+          placeholder="1,31"
+          mono
+          hint="Comma-separated 1-based group indices whose SPH is frozen at the previous value for all mixtures."
+        />
         <TextField
           label="Clip min"
           value={options.clipMin}

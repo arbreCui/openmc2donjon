@@ -9,6 +9,7 @@ import {
   openmcSphConvertHref,
   productionEvidenceRows,
   reactionRatePreservationRows,
+  sphUpdatePolicyRows,
   summaryStatus,
   topSphDeviationRows,
 } from "@/lib/openmcSphSummary";
@@ -127,6 +128,7 @@ function SummaryBody({ state }: { state: SummaryState }) {
   const summary = state.data;
   const status = summaryStatus(summary);
   const rows = topSphDeviationRows(summary);
+  const policyRows = sphUpdatePolicyRows(summary);
   const reactionRows = reactionRatePreservationRows(summary);
   const evidenceRows = productionEvidenceRows(summary);
   const convertHref = openmcSphConvertHref(summary);
@@ -231,6 +233,32 @@ function SummaryBody({ state }: { state: SummaryState }) {
           />
         </div>
       </div>
+
+      {policyRows.length > 0 ? (
+        <div className="rounded-md border border-[var(--edge)] bg-black/15 p-3">
+          <div className="mb-2 text-[11px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+            SPH update policy
+          </div>
+          <div className="grid gap-2 md:grid-cols-4">
+            {policyRows.map((row) => (
+              <div
+                key={row.id}
+                className="rounded border border-[var(--edge)] bg-white/[0.02] p-2"
+              >
+                <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+                  {row.label}
+                </div>
+                <div className="mt-1 font-mono text-[13px] text-[var(--fg-0)]">
+                  {row.value}
+                </div>
+                <div className="mt-1 text-[11px] leading-4 text-[var(--fg-2)]">
+                  {row.detail}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {reactionRows.length > 0 ? (
         <div className="rounded-md border border-[var(--edge)] bg-black/15 p-3">
