@@ -11,7 +11,13 @@ machine-readable index; cross-reference the release notes for context.
 
 ## [Unreleased]
 
-Nothing yet.
+SPH physics line: update-direction fix (pre-existing divergence, wrong
+one-shot sign), rate-preserving `--sph-target rate`, fast-spectrum
+zero-flux/floor/freeze policies, IRENA Stage 1/2 colorset examples with
+the PNL prescription validated to core level, regenerated minicase
+evidence, and web-frontend wiring for the new options.
+
+See [`RELEASE_NOTES.md`](RELEASE_NOTES.md#unreleased) for details.
 
 ## [0.1.3] - 2026-07-07
 

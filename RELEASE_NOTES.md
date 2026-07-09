@@ -2,7 +2,47 @@
 
 ## Unreleased
 
-Nothing yet.
+SPH physics line: update-direction fix, rate-preserving target, and the
+fast-spectrum policies, validated on the IRENA colorsets.
+
+- **Fixed the SPH iteration update direction** (pre-existing): the update
+  multiplied by `mg_flux/ce_flux` while every apply path divides cross
+  sections by the factor, making the loop structurally divergent
+  (amplification `1+damping`) and giving even one-shot corrections the
+  wrong sign. Theory reproduced the measured runaway bit-for-bit. The
+  ratio is now `reference/low-order`; the fixed loop converges
+  geometrically at the theoretical `1-damping` rate. All recorded
+  evidence of `examples/openmc_ce_mg_33g_sph_minicase` was regenerated
+  with the fixed loop; its DONJON solve diagnostic now demonstrates the
+  corrected operator moving toward the CE reference (+530 pcm diffusion,
+  +517 pcm SPN3, residuals improving).
+- Added `make-openmc-sph-sidecar --sph-target {flux,rate}`: `rate` is the
+  classic Hebert/DRAGON rate-preserving update whose fixed point pins k
+  (measured on the IRENA colorsets: flux-target k drift grows with the
+  center homogenization defect — single fissile assembly ~0,
+  pnl_ext -145 pcm, csd_int -440+ pcm — while rate mode stays flat).
+- Added fast-spectrum policies: `export-volume-flux --allow-zero-flux`,
+  `--zero-flux-policy {reject,identity}`, `--flux-floor-rel` (relative
+  flux floor: don't fit Monte Carlo noise), and `--freeze-groups`
+  (explicit DRAGON-order group switch-off, the established IRENA CSD
+  "group 31 off" practice).
+- Added `examples/irena30_sph_stage1` (fissile-assembly CE fine vs MG
+  coarse loop; textbook convergence to the ~1% Monte Carlo noise floor;
+  recommended damping 0.5 x 4 iterations) and
+  `examples/irena30_sph_stage2_csd` (CSD/PNL seven-assembly colorsets;
+  PNL line complete under the prescription rate + freeze {1,31} + 2-3
+  iterations, with the DONJON leg closed at core level: PNL factors on
+  the accepted 91-hex benchmark move DONJON SN8 k by -4 pcm vs
+  +24 +/- 36 pcm in the OpenMC-MG twin).
+- Documented a DONJON limitation found on the way: SNT hexagonal
+  `HBC COMPLETE REFL` (and `ALBE 1.0`) silently leaks; white-boundary
+  colorset decks cannot be validated in SNT (identical clean XS: 0.969
+  vs OpenMC 1.149), so DONJON-side checks run at core level with the
+  benchmark's VOID geometry.
+- Web frontend: the equivalence builder and summary card now understand
+  the new options and summary fields (an "SPH update policy" block, with
+  graceful omission for older summaries); the workflow example CLIs stay
+  strict.
 
 ## v0.1.3-hex-accepted - 2026-07-07
 

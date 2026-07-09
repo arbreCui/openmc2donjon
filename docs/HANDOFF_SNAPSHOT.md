@@ -1,6 +1,6 @@
 # Handoff Snapshot
 
-Last updated: 2026-05-21
+Last updated: 2026-07-09
 
 ## Goal
 
@@ -36,6 +36,15 @@ remain separate mixtures when their spectra or leakage environments differ.
 - SPH sidecar injection and DONJON `NSPH` carry-through for routes where the
   downstream solver uses SPH equivalence factors instead of ADF/DF, including
   extraction from DONJON/DRAGON `L_MACROLIB` ASCII dumps.
+- OpenMC-side CE/MG SPH iteration with a fixed, convergent update
+  (direction fix of 2026-07), selectable equivalence target
+  (`--sph-target {flux,rate}`; rate = Hebert/DRAGON rate-preserving,
+  pins k in coupled geometry), and fast-spectrum regularization
+  (`--allow-zero-flux`, `--zero-flux-policy`, `--flux-floor-rel`,
+  `--freeze-groups`). Validated on the IRENA fissile-assembly and
+  CSD/PNL colorset stages (`examples/irena30_sph_stage1`,
+  `examples/irena30_sph_stage2_csd`); the PNL prescription
+  (rate, freeze {1,31}, 2-3 iterations) is closed to core level.
 - External homogeneous face-flux adapter pattern for low-order, nodal, SPN, or
   diffusion solvers that already compute the ADF denominator directly.
 - Managed run directories with `mgxs_library.h5`, DONJON ASCII output,
@@ -43,7 +52,17 @@ remain separate mixtures when their spectra or leakage environments differ.
 
 ## Accepted Validation
 
-The accepted physics line is C5G7 assembly-wise homogenization:
+Two accepted physics lines exist.
+
+**Hex line — IRENA-30 ZREFL 91-hex benchmark** (`examples/irena30_zrefl_hex`,
+local IRENA workspace + DONJON required): OpenMC-MG per-position tallies ->
+91-mixture `L_MULTICOMPO` -> DONJON `NCR:` + `SNT:` SN8. Both gates pass in
+one invocation against the paired OpenMC reference: k-eff delta -9 pcm
+(21 pcm sigma; different-seed run +29 pcm) and fission-source shape
+1.27 % worst / 0.47 % RMS over 52 fuel positions. Locked summaries are
+checked by the baseline manifest validation.
+
+**Cartesian line — C5G7 assembly-wise homogenization:**
 
 ```text
 OpenMC MGXS + production ADF HDF5
