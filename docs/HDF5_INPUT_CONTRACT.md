@@ -263,6 +263,19 @@ factors and provenance metadata so a DONJON/DRAGON workflow that expects SPH
 can consume them, or so an upstream equivalence step can mark that the XS were
 already corrected with `sph_applied=true`.
 
+**DONJON consumption routes (verified 2026-07-10).** Donjon's `NCR:` module
+contains no SPH handling: `NSPH` records inside a `L_MULTICOMPO` are inert
+archive metadata and are silently ignored on `NCR:` read (confirmed against
+the DONJON 5.1 sources and numerically — an NSPH-carrying multicompo
+reproduces the uncorrected k bit-for-bit while the pre-applied library
+shifts it). The two working routes for making SPH factors take effect are:
+
+1. the root `L_MACROLIB` output, whose `GROUP/*/NSPH` records are read by
+   `DSPH:` and applied by `MAC:`; or
+2. `openmc2donjon apply-sph`, which folds the factors into the cross
+   sections before conversion, after which either output format works
+   with any consumer.
+
 A compact sidecar layout can be injected:
 
 ```text
