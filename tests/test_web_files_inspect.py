@@ -398,10 +398,10 @@ class OpenMCSphPhysicsSummaryEndpointTests(unittest.TestCase):
         self.assertEqual(payload["sph"]["clipped_count"], 0)
         self.assertTrue(payload["handoff"]["augmented_hdf5_has_sph"])
         self.assertGreater(payload["handoff"]["ascii_nsp_block_count"], 0)
-        self.assertEqual(payload["donjon_consumption"]["target_mix"], 2)
+        self.assertEqual(payload["donjon_consumption"]["target_mix"], 1)
         self.assertAlmostEqual(
             payload["donjon_consumption"]["expected_g1"],
-            0.970759749,
+            1.11109312,
         )
 
     def test_live_mode_reads_openmc_sph_physics_summary_json(self) -> None:

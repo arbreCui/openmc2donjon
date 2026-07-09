@@ -148,9 +148,9 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
 
         self.assertIn("DONJON consume smoke", evidence)
         self.assertIn("Two-Region SPH Production Probe", evidence)
-        self.assertIn("target_mix=2 expected_g1=0.970759749", evidence)
-        self.assertIn("expected_mix3_g1=1.05946788", evidence)
-        self.assertIn("pn_ntot0_ratio=1.05946786", evidence)
+        self.assertIn("target_mix=1 expected_g1=1.11109312", evidence)
+        self.assertIn("target_mix=2 expected_g1=1.08736236", evidence)
+        self.assertIn("pn_ntot0_ratio=1.08736241", evidence)
         self.assertIn("DSPH:", evidence)
         self.assertIn("MAC:", evidence)
 
@@ -180,8 +180,8 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
         self.assertIn("TRIVAT/TRIVAA/FLUD", readme)
 
         self.assertIn("DONJON solve diagnostic", evidence)
-        self.assertIn("diffusion k=0.8899511", evidence)
-        self.assertIn("spn3 k=0.9084644", evidence)
+        self.assertIn("diffusion k=0.8942402", evidence)
+        self.assertIn("spn3 k=0.9124593", evidence)
         self.assertIn("not as a\nk-effective benchmark", evidence)
 
         self.assertIn("donjon_solve_diagnostic_recorded", script)
@@ -227,27 +227,32 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
             payload["quality"]["production_flux_relative_std_dev_threshold"],
         )
         self.assertEqual(payload["sph"]["clipped_count"], 0)
-        self.assertAlmostEqual(payload["sph"]["minimum"], 0.949016357514)
-        self.assertAlmostEqual(payload["sph"]["maximum"], 1.03480679825)
+        self.assertAlmostEqual(payload["sph"]["minimum"], 0.872017860823)
+        self.assertAlmostEqual(payload["sph"]["maximum"], 1.11109311723)
+        self.assertEqual(len(payload["sph_iterations"]), 3)
         self.assertEqual(payload["handoff"]["accepted_sph_consumption_format"], "macrolib")
         self.assertEqual(payload["handoff"]["macrolib_ascii_nsp_block_count"], 33)
         self.assertTrue(payload["handoff"]["augmented_hdf5_has_sph"])
         self.assertEqual(payload["donjon_consumption"]["status"], "passed")
-        self.assertEqual(payload["donjon_consumption"]["target_mix"], 2)
+        self.assertEqual(payload["donjon_consumption"]["target_mix"], 1)
         self.assertAlmostEqual(
             payload["donjon_consumption"]["expected_g1"],
-            0.970759749,
+            1.11109312,
         )
         self.assertAlmostEqual(
             payload["donjon_consumption"]["pn_ntot0_ratio"],
-            0.970759721,
+            1.11109318,
         )
         self.assertNotIn("donjon_solve_diagnostic", payload)
-        self.assertLess(
+        # Flux-target SPH drives the corrected MG flux to the CE reference;
+        # it does not close the frozen-flux rate residual (rate closure is
+        # the --sph-target rate fixed point).  Keep the recorded value in
+        # lockstep with the fixture.
+        self.assertAlmostEqual(
             payload["reaction_rate_preservation"]["after_sph_update_frozen_flux"][
                 "max_relative_residual"
             ],
-            1.0e-10,
+            0.21490695516559474,
         )
         self.assertGreater(
             payload["reaction_rate_preservation"]["current_solve"]["max_relative_residual"],
@@ -287,9 +292,13 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
                 preservation["current_solve"]["max_relative_residual"],
                 0.2,
             )
+            # Flux-target SPH does not preserve reaction rates: with
+            # sph = ce/mg the frozen-flux rate is xs * mg^2 / ce, so the
+            # worst bin is CS_MOD g2 with |4.8^2/4^2 - 1| = 0.44.  Rate
+            # closure is the --sph-target rate fixed point instead.
             self.assertAlmostEqual(
                 preservation["after_sph_update_frozen_flux"]["max_relative_residual"],
-                0.0,
+                0.44,
             )
             self.assertEqual(len(payload["sph_iterations"]), 1)
             self.assertIn("OpenMC CE/MG SPH Physics Summary", markdown)
@@ -433,9 +442,10 @@ def _load_sweep_module():
 def _write_summary_fixture(handoff: Path, *, flux_std_scale: float = 0.01) -> None:
     names = np.array(["CS_FUEL", "CS_MOD"], dtype=h5py.string_dtype(encoding="utf-8"))
     energy_bounds = np.array([0.0, 1.0, 2.0])
+    # Fixed update direction: sph = ce_flux / normalized_mg_flux.
     sph = {
-        "CS_FUEL": np.array([0.9, 1.1]),
-        "CS_MOD": np.array([1.0, 1.2]),
+        "CS_FUEL": np.array([1.0 / 0.9, 2.0 / 2.2]),
+        "CS_MOD": np.array([1.0, 4.0 / 4.8]),
     }
     with h5py.File(handoff / "mgxs_library.h5", "w") as h5:
         h5.attrs["legendre_order"] = 3
@@ -469,20 +479,23 @@ def _write_summary_fixture(handoff: Path, *, flux_std_scale: float = 0.01) -> No
         flux_std_scale=flux_std_scale,
     )
     with h5py.File(handoff / "openmc_sph_sidecar.h5", "w") as h5:
-        h5.create_dataset("sph", data=np.array([[0.9, 1.1], [1.0, 1.2]]))
+        h5.create_dataset("sph", data=np.array([[1.0 / 0.9, 2.0 / 2.2], [1.0, 4.0 / 4.8]]))
     (handoff / "openmc_sph_summary.json").write_text(
         json.dumps(
             {
                 "decision": "openmc2donjon_openmc_sph_sidecar_passed",
                 "flux_normalization": "power",
-                "formula": "sph = normalized_openmc_mg_flux / openmc_ce_reference_flux",
+                "formula": (
+                    "sph = previous_sph * "
+                    "(openmc_ce_reference_flux / normalized_openmc_mg_flux) ** damping"
+                ),
                 "normalization_factor": 1.0,
                 "sph_kind": "openmc-ce-mg",
                 "sph_real": True,
-                "sph_min": 0.9,
-                "sph_max": 1.2,
-                "raw_update_minimum": 0.9,
-                "raw_update_maximum": 1.2,
+                "sph_min": 4.0 / 4.8,
+                "sph_max": 1.0 / 0.9,
+                "raw_update_minimum": 4.0 / 4.8,
+                "raw_update_maximum": 1.0 / 0.9,
                 "reference_flux_max_relative_std_dev": flux_std_scale,
                 "mg_flux_max_relative_std_dev": flux_std_scale,
                 "clipped_count": 0,

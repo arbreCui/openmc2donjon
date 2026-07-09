@@ -75,7 +75,7 @@ describe("openmcSphDemo", () => {
     expect(LIVE_OPENMC_SPH_DEMO.command).toContain("MG_BATCHES=80");
     expect(LIVE_OPENMC_SPH_DEMO.command).toContain("MAX_CE_FLUX_REL_STD=0.06");
     expect(LIVE_OPENMC_SPH_DEMO.mgxs).toContain(
-      "/private/tmp/openmc2donjon_two_region_production_probe_20260529/handoff",
+      "/private/tmp/openmc2donjon_two_region_production_20260709/handoff",
     );
     expect(LIVE_OPENMC_SPH_DEMO.ceStatepoint).toContain("statepoint.80.h5");
     expect(LIVE_OPENMC_SPH_DEMO.mgStatepoint).toContain("statepoint.80.h5");

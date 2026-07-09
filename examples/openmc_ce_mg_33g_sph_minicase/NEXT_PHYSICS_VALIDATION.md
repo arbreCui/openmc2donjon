@@ -96,62 +96,70 @@ quality:
 
 ```sh
 OPENMC2DONJON_COLORSET_VARIANT=five_region_2d \
-RUN_ROOT=/private/tmp/openmc2donjon_five_region_2d_production_20260529 \
+RUN_ROOT=/private/tmp/openmc2donjon_five_region_2d_production_20260709 \
 BATCHES=80 INACTIVE=20 PARTICLES=30000 \
 MG_BATCHES=80 MG_INACTIVE=20 MG_PARTICLES=30000 \
 MAX_CE_FLUX_REL_STD=0.05 \
 MAX_MG_FLUX_REL_STD=0.05 \
+SPH_ITERATIONS=3 \
 bash examples/openmc_ce_mg_33g_sph_minicase/run_workflow.sh
 ```
 
 The run produced five OpenMC output regions, ECCO-33 groups, CE-tallied P3
 Legendre MGXS for the converter, and H16 histogram scatter for the OpenMC MG
-macro solve used to generate SPH factors.
+macro solve used to generate SPH factors.  It uses the fixed SPH update
+direction (`next_sph = previous_sph * (ce_flux / mg_flux) ** damping`) with
+three iterations; the pre-fix snapshot recorded here previously carried the
+inverted update and was invalidated.
 
 | Quantity | Result |
 | --- | ---: |
 | Summary decision | `openmc_ce_mg_sph_production_quality` |
 | CE flux max relative std dev | 0.0406169 |
-| MG flux max relative std dev | 0.0407901 |
+| MG flux max relative std dev | 0.0447442 |
 | Production flux uncertainty threshold | 0.05 |
-| SPH minimum | 0.92263 |
-| SPH maximum | 1.01804 |
-| Max `abs(SPH - 1)` | 0.0773705 |
+| SPH minimum | 0.927331 |
+| SPH maximum | 1.13000 |
+| Max `abs(SPH - 1)` | 0.130003 |
 | Clipped SPH bins | 0 |
-| Current OpenMC MG reaction-rate residual | 0.0773705 |
-| Frozen-flux residual after applying the new SPH update | 4.99e-12 |
+| Current OpenMC MG reaction-rate residual | 0.115047 |
+| Frozen-flux rate residual after the new SPH update | 0.173332 |
+| OpenMC CE reference k | 1.3741 +/- 0.0005 |
 
-The matching 2D DONJON diagnostic consumed both the uncorrected and
-SPH-corrected MACROLIB handoffs:
+The frozen-flux rate row does not close under the flux-target update; rate
+closure is the `--sph-target rate` fixed point (see
+`examples/irena30_sph_stage2_csd/README.md`).
+
+The matching 2D DONJON diagnostic solved the uncorrected handoff and the
+SPH-corrected operator (cross sections divided by `NSPH`):
 
 ```sh
-RUN_ROOT=/private/tmp/openmc2donjon_five_region_2d_production_20260529 \
-RUN_DIR=/private/tmp/openmc2donjon_five_region_2d_production_20260529_donjon_2d \
+RUN_ROOT=/private/tmp/openmc2donjon_five_region_2d_production_20260709 \
+RUN_DIR=/private/tmp/openmc2donjon_five_region_2d_production_20260709_donjon_2d \
 RUN_TAG=openmc_ce_mg_sph_five_region_production_2d \
 bash examples/openmc_ce_mg_33g_sph_minicase/run_donjon_solve_diagnostic.sh
 ```
 
-| Case | Mode | k-effective | CE shape mean residual | CE shape max residual |
-| --- | --- | ---: | ---: | ---: |
-| uncorrected | diffusion | 1.295644 | 0.232018 | 0.908086 |
-| SPH-corrected | diffusion | 1.297504 | 0.231839 | 0.90773 |
-| uncorrected | SPN3 | 1.298612 | 0.225032 | 0.910189 |
-| SPH-corrected | SPN3 | 1.300365 | 0.224902 | 0.909797 |
+| Case | Mode | k-effective | CE shape mean residual | CE shape max residual | CE rate mean residual |
+| --- | --- | ---: | ---: | ---: | ---: |
+| uncorrected | diffusion | 1.295644 | 0.232018 | 0.908086 | 0.297742 |
+| SPH-corrected | diffusion | 1.302132 | 0.230841 | 0.906976 | 0.287371 |
+| uncorrected | SPN3 | 1.298612 | 0.225032 | 0.910189 | 0.429037 |
+| SPH-corrected | SPN3 | 1.304875 | 0.224348 | 0.908928 | 0.419784 |
 
-This is useful evidence for the new route: the OpenMC-side SPH factors close
-the frozen-flux reaction-rate diagnostic, DONJON consumes the corrected
-MACROLIB, and the matching 2D low-order diagnostic moves in the right direction
-for both diffusion and SPN3.  The low-order flux-shape residual remains large
+This is useful evidence for the new route: with the fixed update direction
+the corrected operator moves k toward the OpenMC CE reference (+649 pcm
+diffusion, +626 pcm SPN3) and improves the CE flux-shape and reaction-rate
+residuals for both modes.  The low-order flux-shape residual remains large
 in this small colorset, so this is production-quality handoff evidence rather
 than a final benchmark-quality deterministic validation.
 
-Follow-up three-iteration OpenMC MG reruns did not improve this case.  With
-`SPH_DAMPING=1.0`, the SPH range expanded to 0.548627 .. 1.10766 and the
-current-solve residual increased to 0.0910754.  With `SPH_DAMPING=0.5`, the
-range stayed more controlled at 0.850728 .. 1.0354, but the current-solve
-residual was still 0.112148.  The next validation step should therefore keep
-the one-shot SPH result as the accepted baseline and treat iterative OpenMC MG
-SPH as a separate damping/convergence study.
+With the fixed loop, the three-iteration run behaves as a contraction: the
+first iteration removes the systematic CE/MG defect (raw updates up to about
+8% from unity) and iterations two and three stay within the Monte Carlo
+noise band of the flux ratios.  The pre-fix conclusion that iteration
+overshoots and that one-shot SPH should be the accepted baseline was an
+artifact of the inverted update and no longer applies.
 
 ## Acceptance Criteria
 

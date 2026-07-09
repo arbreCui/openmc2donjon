@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RUN_ROOT="${RUN_ROOT:-/private/tmp/openmc2donjon_ce_mg_sph_production_candidate2}"
+RUN_ROOT="${RUN_ROOT:-/private/tmp/openmc2donjon_ce_mg_sph_production_fixed_20260709}"
 RUN_DIR="${RUN_DIR:-/private/tmp/openmc_ce_mg_33g_sph_donjon_consume_smoke}"
 RUN_TAG="${RUN_TAG:-openmc_ce_mg_33g_sph_macrolib_donjon_smoke}"
 MACROLIB_ASCII="${MACROLIB_ASCII:-$RUN_ROOT/handoff/out_with_openmc_sph.macrolib.txt}"

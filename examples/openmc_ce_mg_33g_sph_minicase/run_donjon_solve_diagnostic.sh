@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RUN_ROOT="${RUN_ROOT:-/private/tmp/openmc2donjon_ce_mg_sph_production_candidate2}"
+RUN_ROOT="${RUN_ROOT:-/private/tmp/openmc2donjon_ce_mg_sph_production_fixed_20260709}"
 RUN_DIR="${RUN_DIR:-/private/tmp/openmc_ce_mg_33g_sph_donjon_solve_diagnostic}"
 RUN_TAG="${RUN_TAG:-openmc_ce_mg_33g_sph_colorset}"
 PYTHON_BIN="${PYTHON_BIN:-}"
@@ -10,6 +10,8 @@ DONJON_ROOT="${DONJON_ROOT:-/Users/wen/dragon-5.1/Donjon}"
 DONJON_RUNNER="${DONJON_RUNNER:-$DONJON_ROOT/rdonjon}"
 MACROLIB_ASCII="${MACROLIB_ASCII:-$RUN_ROOT/handoff/out_with_openmc_sph.macrolib.txt}"
 UNCORRECTED_MACROLIB_ASCII="${UNCORRECTED_MACROLIB_ASCII:-$RUN_ROOT/handoff/out_uncorrected.macrolib.txt}"
+MGXS_H5="${MGXS_H5:-$RUN_ROOT/handoff/mgxs_library.h5}"
+SPH_SIDECAR="${SPH_SIDECAR:-$RUN_ROOT/handoff/openmc_sph_sidecar.h5}"
 REFERENCE_FLUX="${REFERENCE_FLUX:-$RUN_ROOT/handoff/openmc_ce_flux.h5}"
 REFERENCE_DATASET="${REFERENCE_DATASET:-openmc_volume_flux}"
 MG_FLUX="${MG_FLUX:-$RUN_ROOT/handoff/openmc_mg_flux.h5}"
@@ -36,6 +38,13 @@ if [[ ! -f "$REFERENCE_FLUX" || ! -f "$MG_FLUX" ]]; then
   echo "OpenMC CE/MG flux files are required for the solve diagnostic:"
   echo "  reference: $REFERENCE_FLUX"
   echo "  mg:        $MG_FLUX"
+  exit 1
+fi
+
+if [[ ! -f "$MGXS_H5" || ! -f "$SPH_SIDECAR" ]]; then
+  echo "MGXS handoff and SPH sidecar are required to build the corrected solve operator:"
+  echo "  mgxs:    $MGXS_H5"
+  echo "  sidecar: $SPH_SIDECAR"
   exit 1
 fi
 
@@ -75,8 +84,7 @@ make_deck() {
   local macrolib="$4"
   local deck_path="$5"
   local flux_path="$6"
-  local apply_sph="$7"
-  "$PYTHON_BIN" - "$label" "$mode" "$track_options" "$macrolib" "$deck_path" "$flux_path" "$apply_sph" <<'PY'
+  "$PYTHON_BIN" - "$label" "$mode" "$track_options" "$macrolib" "$deck_path" "$flux_path" <<'PY'
 from pathlib import Path
 import sys
 
@@ -85,9 +93,8 @@ import numpy as np
 from openmc2donjon.macrolib import read_macrolib_ascii
 
 
-label, mode, track_options, macrolib, deck, flux, apply_sph_raw = sys.argv[1:]
+label, mode, track_options, macrolib, deck, flux = sys.argv[1:]
 macro = read_macrolib_ascii(macrolib)
-apply_sph = apply_sph_raw == "1"
 
 
 def _mesh_edges(volumes: np.ndarray) -> list[float]:
@@ -160,23 +167,18 @@ deck_path = Path(deck)
 flux_path = Path(flux)
 echo_label = label.upper().replace("-", "_")
 echo_mode = mode.upper().replace("-", "_")
-if apply_sph:
-    macro_setup = f"""DMACRO OPTIM := DSPH: MACRO :: EDIT 1 SPH PN ;
-SOLVE_MACRO := MACRO ;
-SOLVE_MACRO := MAC: SOLVE_MACRO OPTIM ;
-ECHO 'OPENMC2DONJON OPENMC SPH COLORSET {echo_label} {echo_mode} NSPH APPLIED PN' ;"""
-else:
-    macro_setup = "SOLVE_MACRO := MACRO ;"
+# The SPH-corrected case reads a macrolib whose XS were already divided by
+# NSPH package-side (apply-sph), so both cases use the same plain deck.
 deck_path.write_text(
     f"""* OpenMC CE/MG SPH colorset DONJON {label} {mode} solve diagnostic.
-MODULE GEO: TRIVAT: TRIVAA: FLUD: DSPH: MAC: GREP: END: ABORT: ;
-LINKED_LIST MACRO SOLVE_MACRO GEOM TRACK SYS FLUX DMACRO OPTIM ;
+MODULE GEO: TRIVAT: TRIVAA: FLUD: GREP: END: ABORT: ;
+LINKED_LIST MACRO SOLVE_MACRO GEOM TRACK SYS FLUX ;
 REAL keff ;
 SEQ_ASCII MACRO_ASC :: FILE '{macrolib}' ;
 SEQ_ASCII FLUX_ASC :: FILE '{flux_path}' ;
 
 MACRO := MACRO_ASC ;
-{macro_setup}
+SOLVE_MACRO := MACRO ;
 GEOM := GEO: :: {geometry_card}
 ;
 TRACK := TRIVAT: GEOM ::
@@ -201,7 +203,6 @@ run_mode() {
   local mode="$2"
   local track_options="$3"
   local macrolib="$4"
-  local apply_sph="$5"
   local safe_label="${label//-/_}"
   local deck_rel="openmc2donjon/case_runs/openmc_ce_mg_sph_colorset/${RUN_TAG}_${safe_label}_${mode}.x2m"
   local deck_path="$DONJON_ROOT/data/$deck_rel"
@@ -210,7 +211,7 @@ run_mode() {
   local result_path="$DONJON_ROOT/Darwin_arm64/${RUN_TAG}_${safe_label}_${mode}.result"
 
   rm -f "$flux_path" "$result_path"
-  make_deck "$label" "$mode" "$track_options" "$macrolib" "$deck_path" "$flux_path" "$apply_sph"
+  make_deck "$label" "$mode" "$track_options" "$macrolib" "$deck_path" "$flux_path"
 
   echo "== DONJON $label $mode solve =="
   (
@@ -239,8 +240,8 @@ CASE_ARGS=()
 if [[ -f "$UNCORRECTED_MACROLIB_ASCII" ]]; then
   SHORT_UNCORRECTED="/tmp/o2d_uncorrected_${SCRIPT_PID}.macrolib.txt"
   cp "$UNCORRECTED_MACROLIB_ASCII" "$SHORT_UNCORRECTED"
-  run_mode uncorrected diffusion "DUAL 1 1" "$SHORT_UNCORRECTED" 0
-  run_mode uncorrected spn3 "DUAL 1 1 SPN 3 SCAT 2" "$SHORT_UNCORRECTED" 0
+  run_mode uncorrected diffusion "DUAL 1 1" "$SHORT_UNCORRECTED"
+  run_mode uncorrected spn3 "DUAL 1 1 SPN 3 SCAT 2" "$SHORT_UNCORRECTED"
   CASE_ARGS+=(
     uncorrected
     "$UNCORRECTED_MACROLIB_ASCII"
@@ -251,10 +252,24 @@ if [[ -f "$UNCORRECTED_MACROLIB_ASCII" ]]; then
   )
 fi
 
+# Build the SPH-corrected solve operator with the package divisor convention
+# (XS_corrected = XS / NSPH), the same application used by apply-sph and the
+# OpenMC MG rerun loop.  DONJON's native DSPH:/MAC: path applies NSPH
+# multiplicatively (measured by the consume smoke), which would invert the
+# openmc2donjon correction, so the corrected operator is prepared
+# package-side and DONJON solves it directly.
+APPLIED_H5="/tmp/o2d_sph_applied_${SCRIPT_PID}.h5"
 SHORT_CORRECTED="/tmp/o2d_sph_corrected_${SCRIPT_PID}.macrolib.txt"
-cp "$MACROLIB_ASCII" "$SHORT_CORRECTED"
-run_mode sph_corrected diffusion "DUAL 1 1" "$SHORT_CORRECTED" 1
-run_mode sph_corrected spn3 "DUAL 1 1 SPN 3 SCAT 2" "$SHORT_CORRECTED" 1
+"$PYTHON_BIN" -m openmc2donjon.cli apply-sph "$MGXS_H5" \
+  --sph-source "$SPH_SIDECAR" \
+  -o "$APPLIED_H5" \
+  --force
+"$PYTHON_BIN" -m openmc2donjon.cli "$APPLIED_H5" \
+  --format macrolib \
+  -o "$SHORT_CORRECTED" \
+  --check
+run_mode sph_corrected diffusion "DUAL 1 1" "$SHORT_CORRECTED"
+run_mode sph_corrected spn3 "DUAL 1 1 SPN 3 SCAT 2" "$SHORT_CORRECTED"
 CASE_ARGS+=(
   sph_corrected
   "$MACROLIB_ASCII"
@@ -571,6 +586,10 @@ payload = {
         "the same DONJON geometry and solver settings are used for both cases."
         " For multi-cell diagnostic geometries, DONJON flux unknowns are "
         "area-weighted back to the OpenMC output-mixture ordering before comparison."
+        " The SPH-corrected case solves cross sections divided by NSPH "
+        "(the openmc2donjon divisor convention shared with apply-sph); "
+        "DONJON's DSPH:/MAC: modules apply NSPH multiplicatively and are "
+        "exercised by the consume smoke, not by this solve."
     ),
     "cases": cases,
     "improvement": improvement,

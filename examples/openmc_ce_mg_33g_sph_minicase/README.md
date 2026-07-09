@@ -130,10 +130,13 @@ OPENMC2DONJON_COLORSET_VARIANT=three_region   # or two_region / five_region_2d
 would otherwise pick up a stale `libopenmc.dylib` from another Python or conda
 environment.
 
-`SPH_DAMPING` controls the multiplicative SPH update:
+`SPH_DAMPING` controls the multiplicative SPH update (fixed direction: the
+converged flux-target factor is the CE/MG flux ratio, so a low-order flux
+that is too high produces a factor below unity and the corrected cross
+sections increase):
 
 ```text
-next_sph = previous_sph * (normalized_mg_flux / ce_flux) ** SPH_DAMPING
+next_sph = previous_sph * (ce_flux / normalized_mg_flux) ** SPH_DAMPING
 ```
 
 The default `1.0` is the undamped update.  For noisy or low-flux colorset
@@ -184,7 +187,11 @@ production SPH factors.
 The physics summary records the CE/MG flux uncertainty, SPH factor range by
 mixture, and a reaction-rate preservation diagnostic.  The diagnostic compares
 `CE-tallied MGXS * CE volume flux` against the OpenMC MG rate before/after the
-new SPH update using the same `XS / NSPH` convention used by DONJON.  It is
+new SPH update using the openmc2donjon `XS / NSPH` divisor convention (the
+same application used by `apply-sph`; DONJON's native `MAC:` module applies
+`NSPH` multiplicatively, see `PRODUCTION_EVIDENCE.md`).  With the default
+flux-target update the after-update rate rows do not close to zero; rate
+closure is the `--sph-target rate` fixed point.  It is
 meant for review and demos; it is not a substitute for a benchmark-quality
 validation.
 
@@ -208,68 +215,77 @@ sides reached `openmc_ce_mg_sph_demonstration_quality` on the development
 machine:
 
 ```sh
-RUN_ROOT=/private/tmp/openmc2donjon_ce_mg_sph_demo_quality \
+RUN_ROOT=/private/tmp/openmc2donjon_ce_mg_sph_demo_quality_20260709 \
 BATCHES=24 INACTIVE=6 PARTICLES=4000 \
 MG_BATCHES=24 MG_INACTIVE=6 MG_PARTICLES=4000 \
 MAX_CE_FLUX_REL_STD=0.30 \
 MAX_MG_FLUX_REL_STD=0.30 \
+SPH_ITERATIONS=3 \
 bash examples/openmc_ce_mg_33g_sph_minicase/run_workflow.sh
 ```
 
-That run gave CE/MG flux relative standard deviations of 0.241 / 0.172 and an
-SPH range of 0.761 .. 1.115.  It is suitable as a live demonstration of the
-OpenMC-side SPH route, but it remains above the 5% production-quality threshold.
+That run gave CE/MG flux relative standard deviations of 0.231 / 0.184 and an
+SPH range of 0.640 .. 1.326 (at these statistics the iterated factors are
+dominated by the flux-ratio noise, not by a systematic defect).  It is
+suitable as a live demonstration of the OpenMC-side SPH route, but it remains
+above the 5% production-quality threshold.
 
 A local production-quality run reached the 5% CE/MG flux uncertainty target
-with higher MG statistics:
+with higher MG statistics (all recorded production evidence uses the fixed
+update direction and `SPH_ITERATIONS=3`; the pre-fix records were
+invalidated):
 
 ```sh
-RUN_ROOT=/private/tmp/openmc2donjon_ce_mg_sph_production_candidate2 \
+RUN_ROOT=/private/tmp/openmc2donjon_ce_mg_sph_production_fixed_20260709 \
 BATCHES=80 INACTIVE=20 PARTICLES=20000 \
 MG_BATCHES=100 MG_INACTIVE=20 MG_PARTICLES=30000 \
 MAX_CE_FLUX_REL_STD=0.05 \
 MAX_MG_FLUX_REL_STD=0.05 \
+SPH_ITERATIONS=3 \
 bash examples/openmc_ce_mg_33g_sph_minicase/run_workflow.sh
 ```
 
-That run gave CE/MG flux relative standard deviations of 0.04198 / 0.03236,
-an SPH range of 0.96344 .. 1.05947, and a frozen-flux reaction-rate residual
-of about 4.7e-12 after applying the newly generated SPH factors.  The summary
-decision was `openmc_ce_mg_sph_production_quality`.
+That run gave CE/MG flux relative standard deviations of 0.04282 / 0.02699
+and an SPH range of 0.96575 .. 1.08736 with no clipped bins.  The summary
+decision was `openmc_ce_mg_sph_production_quality`.  The flux-target update
+does not close the frozen-flux reaction-rate diagnostic (that closure is the
+`--sph-target rate` fixed point); the recorded rate residuals are reviewed in
+`PRODUCTION_EVIDENCE.md`.
 
 The larger `five_region_2d` variant has also closed the complete route at
 production quality:
 
 ```sh
 OPENMC2DONJON_COLORSET_VARIANT=five_region_2d \
-RUN_ROOT=/private/tmp/openmc2donjon_five_region_2d_production_20260529 \
+RUN_ROOT=/private/tmp/openmc2donjon_five_region_2d_production_20260709 \
 BATCHES=80 INACTIVE=20 PARTICLES=30000 \
 MG_BATCHES=80 MG_INACTIVE=20 MG_PARTICLES=30000 \
 MAX_CE_FLUX_REL_STD=0.05 \
 MAX_MG_FLUX_REL_STD=0.05 \
+SPH_ITERATIONS=3 \
 bash examples/openmc_ce_mg_33g_sph_minicase/run_workflow.sh
 ```
 
 That five-region run gave CE/MG flux relative standard deviations of
-0.04062 / 0.04079, an SPH range of 0.92263 .. 1.01804, no clipped SPH bins,
-and a frozen-flux reaction-rate residual of about 4.99e-12 after applying the
-new SPH update.  The summary decision was
-`openmc_ce_mg_sph_production_quality`.  A matching 2D DONJON diagnostic
-consumed the uncorrected and SPH-corrected MACROLIB handoffs and showed a
-small improvement in CE flux-shape residual for both diffusion and SPN3.  The
-detailed table is in `NEXT_PHYSICS_VALIDATION.md`.
+0.04062 / 0.04474, an SPH range of 0.92733 .. 1.13000, and no clipped SPH
+bins.  The summary decision was `openmc_ce_mg_sph_production_quality`.  A
+matching 2D DONJON diagnostic solved the uncorrected handoff and the
+SPH-corrected operator and moved k, the CE flux-shape residuals, and the CE
+reaction-rate residual toward the OpenMC CE reference for both diffusion and
+SPN3.  The detailed table is in `NEXT_PHYSICS_VALIDATION.md`.
 
-For this five-region case, one-shot OpenMC-side SPH is the accepted evidence
-path.  Follow-up `SPH_ITERATIONS=3` runs showed that blindly iterating OpenMC MG
-is damping-sensitive: `SPH_DAMPING=1.0` overshot, while `SPH_DAMPING=0.5` was
-more controlled but still did not improve the one-shot current-solve residual.
-Use `apply-sph` reruns as an explicit review study, not as the default demo.
+With the fixed update direction, `SPH_ITERATIONS=3` is the evidence default
+for this example: the first iteration removes the systematic CE/MG defect
+and later iterations sit at the Monte Carlo noise floor of the flux ratios.
+The previously recorded conclusion that iterating OpenMC MG overshoots and
+that one-shot SPH is the accepted path was measured with the inverted
+pre-fix update and no longer applies.
 
 To close the downstream handoff, run the DONJON consumption smoke on the
 produced MACROLIB:
 
 ```sh
-RUN_ROOT=/private/tmp/openmc2donjon_ce_mg_sph_production_candidate2 \
+RUN_ROOT=/private/tmp/openmc2donjon_ce_mg_sph_production_fixed_20260709 \
 bash examples/openmc_ce_mg_33g_sph_minicase/run_donjon_consume_smoke.sh
 ```
 
@@ -283,7 +299,7 @@ For a slightly stronger downstream diagnostic, run a DONJON low-order solve
 with the same MACROLIB:
 
 ```sh
-RUN_ROOT=/private/tmp/openmc2donjon_ce_mg_sph_production_candidate2 \
+RUN_ROOT=/private/tmp/openmc2donjon_ce_mg_sph_production_fixed_20260709 \
 bash examples/openmc_ce_mg_33g_sph_minicase/run_donjon_solve_diagnostic.sh
 ```
 
@@ -298,7 +314,10 @@ area-weights the repeated left-fuel cells back to the single OpenMC output
 region before comparison.  If
 `handoff/out_uncorrected.macrolib.txt` is present, the script runs the same
 geometry and solver settings for both the uncorrected and SPH-corrected
-MACROLIB handoffs.  This is still a diagnostic, not a benchmark acceptance
+cases.  The SPH-corrected operator is prepared package-side with `apply-sph`
+(`XS_corrected = XS / NSPH`); DONJON's native `DSPH:`/`MAC:` application is
+multiplicative and is exercised by the consume smoke instead.  This is still
+a diagnostic, not a benchmark acceptance
 gate: the residual is reported for review rather than forced to pass a tight
 threshold.
 
@@ -328,12 +347,14 @@ after-update frozen-flux residual, SPH range, update range, and flux
 statistical uncertainty.  Use it to justify a damping recommendation instead
 of selecting `SPH_DAMPING` from the SPH factor range alone.
 
-In one 60-batch / 10000-particle local sweep with three SPH iterations,
-`SPH_DAMPING=0.7` gave the smallest current-solve residual, while
-`SPH_DAMPING=0.5` gave the smallest after-update frozen-flux residual.
-That is a useful practical split: `0.7` is a reasonable first review point,
-and `0.5` is the safer exploratory choice when low-flux bins start to drive
-large updates.
+A pre-fix 60-batch / 10000-particle sweep recorded here previously was
+measured with the inverted update direction and its damping recommendations
+are invalidated: it was characterizing the divergence rate of a structurally
+unstable loop.  With the fixed update the undamped loop is already a
+contraction, and damping mainly trades convergence speed against the Monte
+Carlo noise accumulated by extra iterations.  A fresh sweep with the fixed
+loop has not been recorded yet; use `summarize_damping_sweep.py` when one is
+needed.
 
 ## Manual Steps
 

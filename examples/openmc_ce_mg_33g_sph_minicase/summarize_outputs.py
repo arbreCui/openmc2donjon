@@ -105,6 +105,13 @@ def summarize_handoff(handoff_dir: Path) -> dict[str, Any]:
     previous_sph = _read_previous_sph(paths["sph_summary"], sph_summary, mixture_names, sph.shape[1])
     normalization_factor = float(sph_summary.get("normalization_factor", 1.0))
     normalized_mg_flux = mg_flux * normalization_factor
+    # MG-vs-CE flux agreement ratio, reported as normalized_mg_over_ce_* in
+    # the per-mixture rows (key names are stable for downstream consumers).
+    # Direction note: the SPH update is
+    #   next_sph = previous_sph * (ce_flux / normalized_mg_flux) ** damping,
+    # so the converged flux-target SPH factor is the INVERSE of this ratio.
+    # The ratio itself measures how close the latest OpenMC MG flux is to the
+    # CE reference (1.0 means converged); it is not the SPH factor.
     flux_ratio = normalized_mg_flux / ce_flux
     reaction_xs = _read_reaction_xs(paths["mgxs"], mixture_names)
     reaction_rate_preservation = _reaction_rate_preservation(
@@ -447,6 +454,10 @@ def _reaction_rate_lines(payload: dict[str, Any]) -> list[str]:
         "solve row uses the SPH factors that actually generated the latest",
         "OpenMC MG flux. The frozen-flux row applies the newly generated SPH",
         "sidecar to that same MG flux as a diagnostic for the next iteration.",
+        "With the flux-target SPH update this frozen-flux row does not close",
+        "to zero: flux mode drives the corrected MG flux toward the CE",
+        "reference, not the reaction rates. Rate closure is the",
+        "`--sph-target rate` fixed point.",
         "",
         "| diagnostic | max rel residual | mean rel residual | valid bins | worst bin |",
         "| --- | ---: | ---: | ---: | --- |",

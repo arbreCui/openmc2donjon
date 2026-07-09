@@ -12,13 +12,15 @@ and to expose the resulting flux-shape comparison for review.
 The diagnostic uses the high-statistics minicase run:
 
 ```text
-/private/tmp/openmc2donjon_ce_mg_sph_production_candidate2
+/private/tmp/openmc2donjon_ce_mg_sph_production_fixed_20260709
 ```
 
 Required files:
 
 ```text
 handoff/out_with_openmc_sph.macrolib.txt
+handoff/mgxs_library.h5
+handoff/openmc_sph_sidecar.h5
 handoff/openmc_ce_flux.h5
 handoff/openmc_mg_flux.h5
 ```
@@ -31,16 +33,21 @@ handoff/out_uncorrected.macrolib.txt
 
 When the uncorrected MACROLIB exists, the diagnostic runs the same DONJON
 geometry and solver settings for both the uncorrected and SPH-corrected
-handoffs.
+cases.
 
-The MACROLIB is the accepted SPH consumption route for this minicase because it
-writes `GROUP/*/NSPH` directly.  DONJON reads those factors through `DSPH:` and
-applies them through `MAC:`.
+The MACROLIB is the accepted SPH consumption route for this minicase because
+it writes `GROUP/*/NSPH` directly.  DONJON reads those factors through
+`DSPH:` and applies them through `MAC:` — the consume smoke verifies that
+plumbing.  For the corrected SOLVE, this diagnostic prepares the corrected
+operator package-side with `apply-sph` (`XS_corrected = XS / NSPH`, the
+openmc2donjon divisor convention shared with the OpenMC MG rerun loop),
+because DONJON's native `MAC:` application is multiplicative and would
+invert the openmc2donjon correction if used directly on this payload.
 
 ## Command
 
 ```sh
-RUN_ROOT=/private/tmp/openmc2donjon_ce_mg_sph_production_candidate2 \
+RUN_ROOT=/private/tmp/openmc2donjon_ce_mg_sph_production_fixed_20260709 \
 bash examples/openmc_ce_mg_33g_sph_minicase/run_donjon_solve_diagnostic.sh
 ```
 
@@ -90,17 +97,23 @@ each flux shape is compared after removing a scalar normalization factor.
 
 ## Current Result
 
-The current high-statistics run gives:
+The current high-statistics run (fixed update direction, `SPH_ITERATIONS=3`)
+gives, against the OpenMC CE reference k of 0.9948 +/- 0.0008:
 
-| Mode | k-effective | CE shape mean residual | CE shape max residual |
-| --- | ---: | ---: | ---: |
-| diffusion | 0.8899511 | 0.0755294 | 0.761238 |
-| SPN3 | 0.9084644 | 0.0515226 | 0.767714 |
+| Case | Mode | k-effective | CE shape mean residual | CE shape max residual | CE rate mean residual |
+| --- | --- | ---: | ---: | ---: | ---: |
+| uncorrected | diffusion | 0.8889332 | 0.0768475 | 0.762128 | 0.378818 |
+| SPH-corrected | diffusion | 0.8942402 | 0.0760514 | 0.750895 | 0.357176 |
+| uncorrected | SPN3 | 0.9072928 | 0.0504169 | 0.768526 | 0.495103 |
+| SPH-corrected | SPN3 | 0.9124593 | 0.0511100 | 0.757663 | 0.476871 |
 
 Interpretation:
 
-- DONJON successfully reads the exported MACROLIB, consumes `NSPH`, and runs a
-  low-order solve.
+- DONJON successfully reads the exported handoff and runs the same low-order
+  solve for the uncorrected and SPH-corrected operators.
+- The corrected operator moves k toward the CE reference in both modes
+  (+530 pcm diffusion, +517 pcm SPN3) and improves the CE shape max and
+  reaction-rate residuals; the SPN3 shape mean is flat within a small margin.
 - SPN3 gives a better mean flux-shape diagnostic than diffusion for this
   minicase.
 - The maximum residual remains large because this tiny reflective three-region
@@ -109,9 +122,11 @@ Interpretation:
 ## What This Proves
 
 - The produced ASCII MACROLIB is a usable DONJON input.
-- The OpenMC-side `NSPH` payload survives the converter and is consumed by
-  DONJON.
-- A real DONJON low-order operator can run from the corrected handoff.
+- The OpenMC-side `NSPH` payload survives the converter; DONJON's `DSPH:` /
+  `MAC:` plumbing for it is verified by the consume smoke.
+- A real DONJON low-order operator can run from the SPH-corrected cross
+  sections (`XS / NSPH`), and with the fixed update direction it moves the
+  recorded diagnostics toward the OpenMC CE reference.
 - Flux-shape diagnostics can be exported and compared against OpenMC reference
   data.
 
