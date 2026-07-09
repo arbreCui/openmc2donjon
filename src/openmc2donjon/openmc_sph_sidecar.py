@@ -38,6 +38,7 @@ def create_openmc_sph_sidecar(
     clip_min: float | None = None,
     clip_max: float | None = None,
     flux_normalization: str = "none",
+    sph_target: str = "flux",
     zero_flux_policy: str = "reject",
     flux_floor_rel: float | None = None,
     freeze_groups: tuple[int, ...] | None = None,
@@ -81,6 +82,7 @@ def create_openmc_sph_sidecar(
         clip_min=clip_min,
         clip_max=clip_max,
         flux_normalization=flux_normalization,
+        sph_target=sph_target,
         zero_flux_policy=zero_flux_policy,
         flux_floor_rel=flux_floor_rel,
         freeze_groups=freeze_groups,
@@ -165,6 +167,7 @@ def write_summary(path: Path, report: OpenmcSphSidecarReport) -> None:
         "clip_min": report.update.clip_min,
         "clip_max": report.update.clip_max,
         "flux_normalization": report.update.flux_normalization,
+        "sph_target": report.update.sph_target,
         "zero_flux_policy": report.update.zero_flux_policy,
         "identity_bin_count": report.update.identity_bin_count,
         "flux_floor_rel": report.update.flux_floor_rel,
@@ -185,6 +188,10 @@ def write_summary(path: Path, report: OpenmcSphSidecarReport) -> None:
         "source_label": report.update.source_label,
         "formula": (
             "sph = previous_sph * "
+            "(normalized_openmc_mg_flux / (previous_sph * openmc_ce_reference_flux)) "
+            "** damping"
+            if report.update.sph_target == "rate"
+            else "sph = previous_sph * "
             "(openmc_ce_reference_flux / normalized_openmc_mg_flux) ** damping"
         ),
     }

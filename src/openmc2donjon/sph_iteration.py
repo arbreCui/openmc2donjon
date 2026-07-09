@@ -20,6 +20,7 @@ from .sph_augment import load_sph_source
 SCHEMA = "openmc2donjon.sph-iteration-table.v1"
 PASS_DECISION = "openmc2donjon_sph_iteration_table_passed"
 FLUX_NORMALIZATIONS = ("none", "total", "power", "auto")
+SPH_TARGETS = ("flux", "rate")
 ZERO_FLUX_POLICIES = ("reject", "identity")
 H_FACTOR_DATASETS = (
     "h_factor",
@@ -108,6 +109,7 @@ class SphUpdateTableReport:
     floored_bin_count: int
     freeze_groups: tuple[int, ...] | None
     frozen_group_bin_count: int
+    sph_target: str
     worst_residual_bins: tuple[SphUpdateBinDiagnostic, ...]
     clipped_bins: tuple[SphUpdateBinDiagnostic, ...]
     source_label: str
@@ -124,6 +126,7 @@ def create_sph_update_table(
     clip_min: float | None = None,
     clip_max: float | None = None,
     flux_normalization: str = "none",
+    sph_target: str = "flux",
     zero_flux_policy: str = "reject",
     flux_floor_rel: float | None = None,
     freeze_groups: tuple[int, ...] | None = None,
@@ -139,9 +142,21 @@ def create_sph_update_table(
 
     The update is multiplicative and damped.  If ``flux_normalization`` is not
     ``"none"``, the low-order flux is first scaled to the reference flux's
-    global normalization:
+    global normalization.  With the default ``sph_target="flux"`` the fixed
+    point matches the corrected low-order flux to the reference:
 
     ``next_sph = previous_sph * (reference_flux / normalized_low_order_flux) ** damping``.
+
+    With ``sph_target="rate"`` the fixed point preserves reaction rates
+    instead (``phi_low_order = sph * reference_flux``, so ``XS/sph`` times the
+    corrected flux reproduces the reference rates):
+
+    ``next_sph = previous_sph * (normalized_low_order_flux / (previous_sph * reference_flux)) ** damping``.
+
+    Rate mode relies on spatial coupling between regions; in an isolated
+    region the rate-mode ratio is independent of the SPH factors (reaction
+    rates are scale-invariant there), so use ``freeze_groups`` or
+    ``flux_floor_rel`` for isolated or weakly-coupled bins.
 
     DONJON's ``DSPH``/``MAC`` path treats ``NSPH`` as a divisor on the
     macroscopic data.  A low-order flux that is too high must therefore produce
@@ -157,6 +172,9 @@ def create_sph_update_table(
     if output_table.exists() and not force:
         raise FileExistsError(f"output already exists; use --force to overwrite: {output_table}")
     flux_normalization = _normalize_flux_normalization(flux_normalization)
+    if sph_target not in SPH_TARGETS:
+        allowed = ", ".join(SPH_TARGETS)
+        raise ValueError(f"--sph-target must be one of: {allowed}")
     if zero_flux_policy not in ZERO_FLUX_POLICIES:
         allowed = ", ".join(ZERO_FLUX_POLICIES)
         raise ValueError(f"--zero-flux-policy must be one of: {allowed}")
@@ -247,18 +265,25 @@ def create_sph_update_table(
         zero_mask=frozen_mask,
     )
     resolved_flux_normalization = str(normalization["flux_normalization"])
-    # The ratio must be reference/low-order: NSPH divides the macroscopic
-    # data, which scales the next MG flux by the applied SPH factor, so this
-    # orientation makes the iteration contract (log-error factor 1-damping);
-    # the inverse orientation amplifies it (factor 1+damping) and diverges.
+    # Flux target: the ratio must be reference/low-order so the divide-apply
+    # loop contracts (log-error factor 1-damping); the inverse orientation
+    # amplifies it (factor 1+damping) and diverges.  Rate target: the fixed
+    # point is phi_low_order = previous_sph * reference_flux, where XS/sph
+    # times the corrected flux reproduces the reference reaction rates.
+    if sph_target == "rate":
+        numerator = normalized_low_order
+        denominator = previous.values * reference.values
+    else:
+        numerator = reference.values
+        denominator = normalized_low_order
     if frozen_mask is None:
-        raw_update = reference.values / normalized_low_order
+        raw_update = numerator / denominator
     else:
         # Frozen bins force raw_update to 1.0 so the updated SPH keeps the
         # previous value there.
         raw_update = np.divide(
-            reference.values,
-            normalized_low_order,
+            numerator,
+            denominator,
             out=np.ones_like(reference.values),
             where=~frozen_mask,
         )
@@ -344,6 +369,7 @@ def create_sph_update_table(
         floored_bin_count=floored_bin_count,
         freeze_groups=freeze_groups,
         frozen_group_bin_count=frozen_group_bin_count,
+        sph_target=sph_target,
         worst_residual_bins=worst_residual_bins,
         clipped_bins=clipped_bins,
         source_label=source_label,
@@ -385,6 +411,8 @@ def print_report(report: SphUpdateTableReport) -> None:
         f"  mixtures={len(report.mixture_names)} groups={report.energy_groups} "
         f"damping={report.damping:g} clipped={report.clipped_count}"
     )
+    if report.sph_target != "flux":
+        print(f"  sph_target: {report.sph_target}")
     if report.zero_flux_policy != "reject":
         print(
             f"  zero_flux_policy: {report.zero_flux_policy} "
@@ -467,6 +495,7 @@ def write_summary(path: Path, report: SphUpdateTableReport) -> None:
         "sph_minimum": report.sph_minimum,
         "sph_maximum": report.sph_maximum,
         "clipped_count": report.clipped_count,
+        "sph_target": report.sph_target,
         "zero_flux_policy": report.zero_flux_policy,
         "identity_bin_count": report.identity_bin_count,
         "flux_floor_rel": report.flux_floor_rel,
@@ -481,12 +510,21 @@ def write_summary(path: Path, report: SphUpdateTableReport) -> None:
             _bin_diagnostic_payload(item) for item in report.clipped_bins
         ],
         "source_label": report.source_label,
-        "formula": (
-            "next_sph = previous_sph * "
-            "(reference_flux / normalized_low_order_flux) ** damping"
-        ),
+        "formula": _update_formula(report.sph_target),
     }
     Path(path).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _update_formula(sph_target: str) -> str:
+    if sph_target == "rate":
+        return (
+            "next_sph = previous_sph * "
+            "(normalized_low_order_flux / (previous_sph * reference_flux)) ** damping"
+        )
+    return (
+        "next_sph = previous_sph * "
+        "(reference_flux / normalized_low_order_flux) ** damping"
+    )
 
 
 def _top_residual_bins(

@@ -1402,6 +1402,233 @@ class SphIterationTests(unittest.TestCase):
             self.assertEqual(payload["freeze_groups"], [2])
             self.assertEqual(payload["frozen_group_bin_count"], 2)
 
+    def test_rate_target_update_targets_reaction_rates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference_flux = root / "reference_flux.csv"
+            low_order_flux = root / "low_order_flux.csv"
+            previous_sph = root / "previous_sph.csv"
+            table = root / "next_sph.csv"
+            summary = root / "summary.json"
+            write_mgxs(mgxs)
+            reference_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,4.0\nfuel,2,9.0\n"
+                "moderator,1,16.0\nmoderator,2,25.0\n",
+                encoding="utf-8",
+            )
+            low_order_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,2.0\nfuel,2,3.0\n"
+                "moderator,1,4.0\nmoderator,2,5.0\n",
+                encoding="utf-8",
+            )
+            previous_sph.write_text(
+                "mixture,g1,g2\nfuel,1.0,0.5\nmoderator,2.0,0.2\n",
+                encoding="utf-8",
+            )
+
+            report = create_sph_update_table(
+                mgxs,
+                table,
+                reference_flux=reference_flux,
+                low_order_flux=low_order_flux,
+                previous_sph=previous_sph,
+                damping=0.5,
+                sph_target="rate",
+                summary_json=summary,
+            )
+
+            # raw = phi_mg / (s_prev * phi_ref):
+            #   fuel g1 2/(1*4)=0.5, fuel g2 3/(0.5*9)=2/3,
+            #   moderator g1 4/(2*16)=1/8, moderator g2 5/(0.2*25)=1 (fixed point).
+            expected = np.array(
+                [
+                    [1.0 * np.sqrt(0.5), 0.5 * np.sqrt(2.0 / 3.0)],
+                    [2.0 * np.sqrt(0.125), 0.2 * 1.0],
+                ]
+            )
+            self.assertEqual(report.sph_target, "rate")
+            actual = _read_sph_table(table)
+            np.testing.assert_allclose(actual, expected, rtol=1.0e-11)
+            # A bin already at the rate-preserving fixed point stays put.
+            self.assertEqual(actual[1, 1], 0.2)
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+            self.assertEqual(payload["sph_target"], "rate")
+            self.assertEqual(
+                payload["formula"],
+                "next_sph = previous_sph * "
+                "(normalized_low_order_flux / (previous_sph * reference_flux)) ** damping",
+            )
+
+    def test_default_flux_target_matches_explicit_flux_target(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference_flux = root / "reference_flux.csv"
+            low_order_flux = root / "low_order_flux.csv"
+            previous_sph = root / "previous_sph.csv"
+            default_table = root / "default_sph.csv"
+            explicit_table = root / "explicit_sph.csv"
+            write_mgxs(mgxs)
+            reference_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,4.0\nfuel,2,9.0\n"
+                "moderator,1,16.0\nmoderator,2,25.0\n",
+                encoding="utf-8",
+            )
+            low_order_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,1.0\nfuel,2,1.0\n"
+                "moderator,1,1.0\nmoderator,2,1.0\n",
+                encoding="utf-8",
+            )
+            previous_sph.write_text(
+                "mixture,g1,g2\nfuel,1.1,1.2\nmoderator,0.9,1.0\n",
+                encoding="utf-8",
+            )
+
+            default_report = create_sph_update_table(
+                mgxs,
+                default_table,
+                reference_flux=reference_flux,
+                low_order_flux=low_order_flux,
+                previous_sph=previous_sph,
+                damping=0.5,
+            )
+            create_sph_update_table(
+                mgxs,
+                explicit_table,
+                reference_flux=reference_flux,
+                low_order_flux=low_order_flux,
+                previous_sph=previous_sph,
+                damping=0.5,
+                sph_target="flux",
+            )
+
+            self.assertEqual(default_report.sph_target, "flux")
+            self.assertEqual(
+                default_table.read_text(encoding="utf-8"),
+                explicit_table.read_text(encoding="utf-8"),
+            )
+            rows = default_table.read_text(encoding="utf-8").strip().splitlines()
+            self.assertIn("fuel,1,2.2", rows)
+            self.assertIn("fuel,2,3.6", rows)
+            self.assertIn("moderator,1,3.6", rows)
+            self.assertIn("moderator,2,5", rows)
+
+            with self.assertRaisesRegex(ValueError, "--sph-target must be one of"):
+                create_sph_update_table(
+                    mgxs,
+                    root / "bogus_sph.csv",
+                    reference_flux=reference_flux,
+                    low_order_flux=low_order_flux,
+                    sph_target="bogus",
+                )
+
+    def test_rate_target_frozen_bins_keep_previous_value(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference_flux = root / "reference_flux.csv"
+            low_order_flux = root / "low_order_flux.csv"
+            previous_sph = root / "previous_sph.csv"
+            table = root / "next_sph.csv"
+            write_mgxs(mgxs)
+            reference_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,4.0\nfuel,2,9.0\n"
+                "moderator,1,16.0\nmoderator,2,25.0\n",
+                encoding="utf-8",
+            )
+            low_order_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,2.0\nfuel,2,3.0\n"
+                "moderator,1,4.0\nmoderator,2,5.0\n",
+                encoding="utf-8",
+            )
+            previous_sph.write_text(
+                "mixture,g1,g2\nfuel,1.0,1.1\nmoderator,2.0,1.2\n",
+                encoding="utf-8",
+            )
+
+            report = create_sph_update_table(
+                mgxs,
+                table,
+                reference_flux=reference_flux,
+                low_order_flux=low_order_flux,
+                previous_sph=previous_sph,
+                sph_target="rate",
+                freeze_groups=(2,),
+            )
+
+            self.assertEqual(report.sph_target, "rate")
+            self.assertEqual(report.frozen_group_bin_count, 2)
+            actual = _read_sph_table(table)
+            # Frozen group 2 keeps the previous values for all mixtures.
+            self.assertEqual(actual[0, 1], 1.1)
+            self.assertEqual(actual[1, 1], 1.2)
+            # Active bins follow the rate update with damping 1.
+            np.testing.assert_allclose(actual[0, 0], 1.0 * (2.0 / 4.0), rtol=1.0e-11)
+            np.testing.assert_allclose(actual[1, 0], 2.0 * (4.0 / 32.0), rtol=1.0e-11)
+
+    def test_cli_openmc_sph_sidecar_accepts_sph_target(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference_flux = root / "openmc_ce_flux.h5"
+            mg_flux = root / "openmc_mg_flux.h5"
+            sidecar = root / "openmc_sph.h5"
+            table = root / "openmc_sph.csv"
+            summary = root / "openmc_sph_summary.json"
+            write_mgxs(mgxs)
+            _write_flux_source(
+                reference_flux,
+                "openmc_volume_flux",
+                values=np.array([[4.0, 9.0], [16.0, 25.0]]),
+            )
+            _write_flux_source(
+                mg_flux,
+                "openmc_mg_flux",
+                values=np.array([[2.0, 3.0], [4.0, 5.0]]),
+            )
+
+            self.assertEqual(
+                cli_main(
+                    [
+                        "make-openmc-sph-sidecar",
+                        str(mgxs),
+                        "-o",
+                        str(sidecar),
+                        "--reference-flux",
+                        f"{reference_flux}::openmc_volume_flux",
+                        "--mg-flux",
+                        f"{mg_flux}::openmc_mg_flux",
+                        "--table-output",
+                        str(table),
+                        "--sph-target",
+                        "rate",
+                        "--summary-json",
+                        str(summary),
+                    ]
+                ),
+                0,
+            )
+
+            # Unity previous SPH: s = phi_mg / phi_ref for the first iteration.
+            expected = np.array([[0.5, 1.0 / 3.0], [0.25, 0.2]])
+            with h5py.File(sidecar, "r") as h5:
+                np.testing.assert_allclose(h5["sph"][:], expected, rtol=1.0e-11)
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+            self.assertEqual(payload["sph_target"], "rate")
+            self.assertEqual(
+                payload["formula"],
+                "sph = previous_sph * "
+                "(normalized_openmc_mg_flux / (previous_sph * openmc_ce_reference_flux)) "
+                "** damping",
+            )
+
 
 def _read_sph_table_by_label(path: Path) -> dict[tuple[str, int], float]:
     rows = path.read_text(encoding="utf-8").strip().splitlines()[1:]

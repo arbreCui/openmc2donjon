@@ -24,7 +24,12 @@ from ..sph_augment import (
     create_table_sph_sidecar,
     create_unity_sph_sidecar,
 )
-from ..sph_iteration import FLUX_NORMALIZATIONS, ZERO_FLUX_POLICIES, create_sph_update_table
+from ..sph_iteration import (
+    FLUX_NORMALIZATIONS,
+    SPH_TARGETS,
+    ZERO_FLUX_POLICIES,
+    create_sph_update_table,
+)
 
 
 def command_specs() -> tuple[CommandSpec, ...]:
@@ -112,6 +117,17 @@ def build_make_openmc_sph_sidecar_parser() -> argparse.ArgumentParser:
         help=(
             "scale MG flux before forming the SPH ratio: none, total, power, "
             "or auto using group-wise H-FACTOR/kappa_fission (default: none)"
+        ),
+    )
+    parser.add_argument(
+        "--sph-target",
+        choices=SPH_TARGETS,
+        default="flux",
+        help=(
+            "SPH fixed-point target: flux matches the corrected MG flux to "
+            "the CE reference; rate preserves reaction rates "
+            "(phi_mg = sph * reference flux) for spatially coupled regions "
+            "(default: flux)"
         ),
     )
     parser.add_argument(
@@ -598,6 +614,7 @@ def make_openmc_sph_sidecar_handler(args: argparse.Namespace) -> int:
             clip_min=args.clip_min,
             clip_max=args.clip_max,
             flux_normalization=args.flux_normalization,
+            sph_target=args.sph_target,
             zero_flux_policy=args.zero_flux_policy,
             flux_floor_rel=args.flux_floor_rel,
             freeze_groups=_parse_freeze_groups(args.freeze_groups),
