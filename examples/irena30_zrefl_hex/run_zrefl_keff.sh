@@ -123,9 +123,9 @@ require_path "$MGXS"
 
 echo
 echo "== Fill zero-flux thermal groups from the MG macrolib =="
-"$PYTHON_BIN" "$EXAMPLE_DIR/fill_zero_flux_groups.py" \
-  --mgxs "$MGXS" \
-  --macrolib "$IRENA30_MACROLIB"
+"$PYTHON_BIN" -m openmc2donjon.cli fill-zero-flux "$MGXS" \
+  --macrolib "$IRENA30_MACROLIB" \
+  --in-place
 
 echo
 echo "== Checked conversion to L_MULTICOMPO =="

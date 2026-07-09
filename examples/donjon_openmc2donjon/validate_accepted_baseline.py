@@ -90,9 +90,21 @@ def c5g7_checks(manifest: dict[str, Any]) -> list[Check]:
     c5g7 = manifest["lines"]["c5g7"]
     attrs = read_h5_attrs(resolve(c5g7["production_mgxs"]))
     checks = [
-        Check("C5G7 domain mode is assembly", attrs.get("domain_mode") == "assembly", str(attrs.get("domain_mode"))),
-        Check("C5G7 group count is locked", attrs.get("energy_groups") == c5g7["energy_groups"], str(attrs.get("energy_groups"))),
-        Check("C5G7 Legendre order is locked", attrs.get("legendre_order") == c5g7["legendre_order"], str(attrs.get("legendre_order"))),
+        Check(
+            "C5G7 domain mode is assembly",
+            attrs.get("domain_mode") == "assembly",
+            str(attrs.get("domain_mode")),
+        ),
+        Check(
+            "C5G7 group count is locked",
+            attrs.get("energy_groups") == c5g7["energy_groups"],
+            str(attrs.get("energy_groups")),
+        ),
+        Check(
+            "C5G7 Legendre order is locked",
+            attrs.get("legendre_order") == c5g7["legendre_order"],
+            str(attrs.get("legendre_order")),
+        ),
         Check(
             "C5G7 real ADF payload is production",
             attrs.get("adf_kind") == "production" and attrs.get("adf_real") == "true",
@@ -101,12 +113,33 @@ def c5g7_checks(manifest: dict[str, Any]) -> list[Check]:
     ]
     for label in ("diffusion", "spn3", "spn3_scat1"):
         row = c5g7["results"][label]
-        checks.append(close_check(f"C5G7 {label} keff is locked", extract_keff(resolve(row["path"])), row["keff"], KEFF_TOL))
+        checks.append(
+            close_check(
+                f"C5G7 {label} keff is locked",
+                extract_keff(resolve(row["path"])),
+                row["keff"],
+                KEFF_TOL,
+            )
+        )
 
     nssf_path = resolve(c5g7["results"]["nssf_2g_adf"]["path"])
     adf_keff, nodf_keff = extract_nssf_pair(nssf_path)
-    checks.append(close_check("C5G7 2g NSSF ADF keff is locked", adf_keff, c5g7["results"]["nssf_2g_adf"]["keff"], ANM_TOL))
-    checks.append(close_check("C5G7 2g NSSF NODF keff is locked", nodf_keff, c5g7["results"]["nssf_2g_nodf"]["keff"], ANM_TOL))
+    checks.append(
+        close_check(
+            "C5G7 2g NSSF ADF keff is locked",
+            adf_keff,
+            c5g7["results"]["nssf_2g_adf"]["keff"],
+            ANM_TOL,
+        )
+    )
+    checks.append(
+        close_check(
+            "C5G7 2g NSSF NODF keff is locked",
+            nodf_keff,
+            c5g7["results"]["nssf_2g_nodf"]["keff"],
+            ANM_TOL,
+        )
+    )
     return checks
 
 
@@ -136,7 +169,11 @@ def hex_checks(manifest: dict[str, Any]) -> list[Check]:
 
 def close_check(name: str, observed: float, expected: float, tolerance: float) -> Check:
     delta = abs(observed - expected)
-    return Check(name, delta <= tolerance, f"observed={observed:.12g} expected={expected:.12g} delta={delta:.3g}")
+    return Check(
+        name,
+        delta <= tolerance,
+        f"observed={observed:.12g} expected={expected:.12g} delta={delta:.3g}",
+    )
 
 
 def read_h5_attrs(path: Path) -> dict[str, Any]:

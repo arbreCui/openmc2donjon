@@ -161,6 +161,7 @@ echo "== CLI smoke =="
 "$PYTHON_BIN" -m openmc2donjon.cli make-sph-sidecar --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli make-sph-update-table --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli augment-sph --help >/dev/null
+"$PYTHON_BIN" -m openmc2donjon.cli fill-zero-flux --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli pygan-doctor --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli pygan-inspect-compo --help >/dev/null
 "$PYTHON_BIN" -m openmc2donjon.cli compare-writers --help >/dev/null

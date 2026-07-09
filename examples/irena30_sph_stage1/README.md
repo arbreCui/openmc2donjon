@@ -44,9 +44,8 @@ in the handoff directory for convergence analysis.
   bins keep their previous SPH value; a one-sided zero is a real CE/MG
   inconsistency and still fails).
 - The DONJON handoff's zero-flux rows are substituted from the IRENA MG
-  macrolib (reusing `examples/irena30_zrefl_hex/fill_zero_flux_groups.py`;
-  the homogenized fissile assembly is the macrolib's `INT` mixture by
-  construction).
+  macrolib (via `openmc2donjon fill-zero-flux`; the homogenized fissile
+  assembly is the macrolib's `INT` mixture by construction).
 - `prepare_mg_case.py` blackens zero-XS groups of the OpenMC-native macro
   library (unit total/absorption): no population ever reaches those
   groups, but a collisionless group would otherwise let a stray particle

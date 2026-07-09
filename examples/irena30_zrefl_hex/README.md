@@ -60,8 +60,8 @@ discretization bias on 17.5 cm fast-reactor hexes).
    flux in the thermal groups of the 33-group structure, so their
    flux-weighted tallies are 0/0 -> 0 at any statistics and the input
    contract rejects the file (`transport_total must be positive`).
-   `fill_zero_flux_groups.py` substitutes the exact material data from the
-   MG macrolib for those groups and records the filled group indices in the
+   `openmc2donjon fill-zero-flux` substitutes the exact material data from
+   the MG macrolib for those groups and records the filled group indices in the
    `zero_flux_filled_groups` mixture attribute. (Track-length estimators
    such as `total`/`absorption` reproduce the macrolib to machine precision
    wherever flux is nonzero; analog scatter-matrix rows stay noisy in

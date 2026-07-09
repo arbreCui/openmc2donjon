@@ -18,7 +18,7 @@ from ._logging import (
     configure_cli_logging_from_args,
     is_cli_logging_flag,
 )
-from .commands import adf, diagnostics, sph, web
+from .commands import adf, diagnostics, fill, sph, web
 from .commands.base import CommandSpec
 from .energy_groups import MESH_RELATIVE_TOLERANCE
 from .macrolib import convert_mgxs_hdf5_to_macrolib
@@ -45,7 +45,9 @@ def build_parser() -> argparse.ArgumentParser:
             "reconstruct homogeneous face fluxes, 'openmc2donjon "
             "make-adf-sidecar <input_h5> ...' to create an ADF "
             "sidecar, 'openmc2donjon augment-adf <input_h5> ...' to inject "
-            "computed discontinuity factors, 'openmc2donjon make-sph-sidecar "
+            "computed discontinuity factors, 'openmc2donjon fill-zero-flux "
+            "<input_h5> --macrolib PATH ...' to substitute macrolib XS into "
+            "zero-flux fast-spectrum groups, 'openmc2donjon make-sph-sidecar "
             "<input_h5> ...', 'openmc2donjon make-sph-update-table "
             "<input_h5> ...', and 'openmc2donjon augment-sph <input_h5> ...' "
             "to carry OpenMC CE/MG SPH equivalence factors, "
@@ -392,6 +394,7 @@ def build_command_parser() -> argparse.ArgumentParser:
 def _command_specs() -> tuple[CommandSpec, ...]:
     return (
         *adf.command_specs(),
+        *fill.command_specs(),
         *sph.command_specs(),
         *diagnostics.command_specs(),
         *web.command_specs(),

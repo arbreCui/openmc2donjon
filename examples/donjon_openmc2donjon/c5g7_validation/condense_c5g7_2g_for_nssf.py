@@ -115,7 +115,9 @@ def condense(input_path: Path, currents_path: Path, output_path: Path, split_ind
         )
 
 
-def _condense_mixture(src, dst, groups: tuple[np.ndarray, np.ndarray], weights: np.ndarray) -> tuple[float, float]:
+def _condense_mixture(
+    src, dst, groups: tuple[np.ndarray, np.ndarray], weights: np.ndarray
+) -> tuple[float, float]:
     total = np.asarray(src["total"][:], dtype=float)
     absorption = np.asarray(src["absorption"][:], dtype=float)
     fission = np.asarray(src["fission"][:], dtype=float)
@@ -160,7 +162,9 @@ def _condense_mixture(src, dst, groups: tuple[np.ndarray, np.ndarray], weights: 
     return float(np.max(np.abs(row_balance))), eig_imag
 
 
-def _condense_vector(values: np.ndarray, groups: tuple[np.ndarray, np.ndarray], weights: np.ndarray) -> np.ndarray:
+def _condense_vector(
+    values: np.ndarray, groups: tuple[np.ndarray, np.ndarray], weights: np.ndarray
+) -> np.ndarray:
     out = []
     for group in groups:
         denom = float(np.sum(weights[group]))
