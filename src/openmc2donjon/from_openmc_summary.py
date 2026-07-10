@@ -8,7 +8,8 @@ from typing import Any
 
 FROM_OPENMC_SUMMARY_SCHEMA_V1 = "openmc2donjon.from-openmc-summary.v1"
 FROM_OPENMC_SUMMARY_SCHEMA_V2 = "openmc2donjon.from-openmc-summary.v2"
-FROM_OPENMC_SUMMARY_SCHEMA = "openmc2donjon.from-openmc-summary.v3"
+FROM_OPENMC_SUMMARY_SCHEMA_V3 = "openmc2donjon.from-openmc-summary.v3"
+FROM_OPENMC_SUMMARY_SCHEMA = "openmc2donjon.from-openmc-summary.v4"
 
 FROM_OPENMC_SUMMARY_V1_KEYS = frozenset(
     {
@@ -49,6 +50,13 @@ FROM_OPENMC_SUMMARY_V3_KEYS = FROM_OPENMC_SUMMARY_V2_KEYS | frozenset(
     }
 )
 
+FROM_OPENMC_SUMMARY_V4_KEYS = FROM_OPENMC_SUMMARY_V3_KEYS | frozenset(
+    {
+        "zero_flux_fill_macrolib",
+        "zero_flux_fill_total_bins",
+    }
+)
+
 
 def validate_from_openmc_summary(payload: Mapping[str, Any]) -> list[str]:
     """Return schema validation errors for any supported from-OpenMC summary."""
@@ -58,7 +66,9 @@ def validate_from_openmc_summary(payload: Mapping[str, Any]) -> list[str]:
         return validate_from_openmc_summary_v1(payload)
     if schema == FROM_OPENMC_SUMMARY_SCHEMA_V2:
         return validate_from_openmc_summary_v2(payload)
-    return validate_from_openmc_summary_v3(payload)
+    if schema == FROM_OPENMC_SUMMARY_SCHEMA_V3:
+        return validate_from_openmc_summary_v3(payload)
+    return validate_from_openmc_summary_v4(payload)
 
 
 def validate_from_openmc_summary_v1(payload: Mapping[str, Any]) -> list[str]:
@@ -90,10 +100,23 @@ def validate_from_openmc_summary_v3(payload: Mapping[str, Any]) -> list[str]:
 
     return _validate_from_openmc_summary(
         payload,
-        schema=FROM_OPENMC_SUMMARY_SCHEMA,
+        schema=FROM_OPENMC_SUMMARY_SCHEMA_V3,
         keys=FROM_OPENMC_SUMMARY_V3_KEYS,
         validate_check_fields=True,
         validate_std_dev_fields=True,
+    )
+
+
+def validate_from_openmc_summary_v4(payload: Mapping[str, Any]) -> list[str]:
+    """Return schema validation errors for a v4 from-OpenMC summary payload."""
+
+    return _validate_from_openmc_summary(
+        payload,
+        schema=FROM_OPENMC_SUMMARY_SCHEMA,
+        keys=FROM_OPENMC_SUMMARY_V4_KEYS,
+        validate_check_fields=True,
+        validate_std_dev_fields=True,
+        validate_fill_fields=True,
     )
 
 
@@ -104,6 +127,7 @@ def _validate_from_openmc_summary(
     keys: frozenset[str],
     validate_check_fields: bool,
     validate_std_dev_fields: bool,
+    validate_fill_fields: bool = False,
 ) -> list[str]:
     """Return schema validation errors for a from-OpenMC summary payload."""
 
@@ -137,6 +161,9 @@ def _validate_from_openmc_summary(
     _validate_statepoint_link(errors, payload)
     _validate_mixture_count(errors, payload)
     _validate_burnup_axis(errors, payload.get("burnup_axis"))
+    if validate_fill_fields:
+        _require_optional_string(errors, payload, "zero_flux_fill_macrolib")
+        _require_optional_number(errors, payload, "zero_flux_fill_total_bins")
     if validate_check_fields:
         _require_bool(errors, payload, "checked")
         _require_optional_bool(errors, payload, "check_passed")

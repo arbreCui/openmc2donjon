@@ -123,6 +123,10 @@ def _validate_args(args: argparse.Namespace, parser: argparse.ArgumentParser) ->
         parser.error(str(exc))
     if args.strict_dry_run and not args.dry_run:
         parser.error("--strict-dry-run requires --dry-run")
+    if args.fill_label_attr is not None and args.fill_macrolib is None:
+        parser.error("--fill-label-attr requires --fill-macrolib")
+    if args.fill_macrolib is not None and not args.fill_macrolib.is_file():
+        parser.error(f"--fill-macrolib does not exist: {args.fill_macrolib}")
 
 
 def _run_dir_config(args: argparse.Namespace) -> RunDirConfig:
@@ -418,6 +422,7 @@ def _run_pipeline(
     recipe_summary = _export_pipeline_hdf5(args, hdf5_path)
     export_summary = recipe_summary.output
 
+    fill_report = _apply_pipeline_fill(args, hdf5_path)
     _apply_pipeline_corrections(args, hdf5_path, recipe_summary, generated)
     if not _run_pipeline_preflight(args, hdf5_path, output_path, hdf5_kept=hdf5_kept):
         return False
@@ -443,6 +448,7 @@ def _run_pipeline(
         legendre_order=export_summary.legendre_order,
         std_dev_dataset_count=export_summary.std_dev_dataset_count,
         std_dev_expected_dataset_count=export_summary.std_dev_expected_dataset_count,
+        fill_report=fill_report,
     )
     return finalize_run_dir(
         _run_dir_config(args),
@@ -476,6 +482,21 @@ def _export_pipeline_hdf5(
         f"{export_summary.std_dev_expected_dataset_count})"
     )
     return recipe_summary
+
+
+def _apply_pipeline_fill(args: argparse.Namespace, hdf5_path: Path):
+    if args.fill_macrolib is None:
+        return None
+    from .zero_flux_fill import DEFAULT_LABEL_ATTR, fill_zero_flux_groups, print_report
+
+    report = fill_zero_flux_groups(
+        hdf5_path,
+        macrolib=args.fill_macrolib,
+        in_place=True,
+        label_attr=args.fill_label_attr or DEFAULT_LABEL_ATTR,
+    )
+    print_report(report)
+    return report
 
 
 def _apply_pipeline_corrections(
@@ -602,6 +623,7 @@ def _write_pipeline_summary(
     legendre_order: int,
     std_dev_dataset_count: int,
     std_dev_expected_dataset_count: int,
+    fill_report=None,
 ) -> dict[str, object]:
     summary = _summary_payload(
         args,
@@ -617,6 +639,12 @@ def _write_pipeline_summary(
         legendre_order=legendre_order,
         std_dev_dataset_count=std_dev_dataset_count,
         std_dev_expected_dataset_count=std_dev_expected_dataset_count,
+    )
+    summary["zero_flux_fill_macrolib"] = (
+        str(fill_report.macrolib) if fill_report is not None else None
+    )
+    summary["zero_flux_fill_total_bins"] = (
+        fill_report.total_filled_bins if fill_report is not None else None
     )
     if args.summary_json is not None:
         _write_json(args.summary_json, summary)

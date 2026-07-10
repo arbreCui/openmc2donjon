@@ -167,6 +167,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="override root adf_source provenance attribute when injecting --adf-source",
     )
     parser.add_argument(
+        "--fill-macrolib",
+        type=Path,
+        default=None,
+        help=(
+            "OpenMC MG macrolib used to fill zero-flux / nonpositive-transport "
+            "bins in the exported HDF5 before checks and conversion "
+            "(fast-spectrum cases; no-op under --dry-run)"
+        ),
+    )
+    parser.add_argument(
+        "--fill-label-attr",
+        default=None,
+        help=(
+            "mixture attribute naming the macrolib material for --fill-macrolib "
+            "(default: irena_mixture_label)"
+        ),
+    )
+    parser.add_argument(
         "--sph-source",
         type=Path,
         default=None,

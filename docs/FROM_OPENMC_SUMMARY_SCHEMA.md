@@ -11,12 +11,15 @@ written, and the compact physics-shape metadata needed for quick checks.
 ## Schema Id
 
 ```text
-openmc2donjon.from-openmc-summary.v3
+openmc2donjon.from-openmc-summary.v4
 ```
 
 The schema id is stored in the top-level `schema` field.
 The validator still accepts legacy v1/v2 summaries; new one-step exports write
-v3 so uncertainty coverage is visible in run manifests.
+v3 so uncertainty coverage is visible in run manifests. v4 adds the
+`zero_flux_fill_*` fields recording the optional fast-spectrum fill
+(`--fill-macrolib`); v1/v2/v3 payloads still validate against their own
+schemas.
 
 ## Example
 
@@ -44,12 +47,14 @@ v3 so uncertainty coverage is visible in run manifests.
   "package_version": "0.1.2",
   "recipe": "/case/export_recipe.py",
   "root_name": "CPO",
-  "schema": "openmc2donjon.from-openmc-summary.v3",
+  "schema": "openmc2donjon.from-openmc-summary.v4",
   "selected_mixtures": null,
   "single_point_burnup": null,
   "state_points": 1,
   "statepoint": "/case/statepoint.120.h5",
   "std_dev_dataset_count": 0,
+  "zero_flux_fill_macrolib": null,
+  "zero_flux_fill_total_bins": null,
   "std_dev_expected_dataset_count": 11
 }
 ```
@@ -70,6 +75,8 @@ v3 so uncertainty coverage is visible in run manifests.
 | `energy_groups` | integer | Number of energy groups exported to HDF5. |
 | `legendre_order` | integer | Highest Legendre scattering order exported. |
 | `std_dev_dataset_count` | integer | Number of OpenMC MGXS `*_std_dev` uncertainty datasets written to the HDF5 handoff. |
+| `zero_flux_fill_macrolib` | string or null | MG macrolib used by `--fill-macrolib` to fill zero-flux/nonpositive-transport bins before checks and conversion; null when the fill was not requested. |
+| `zero_flux_fill_total_bins` | integer or null | Total (mixture, group) bins substituted by the fill; null when the fill was not requested. |
 | `std_dev_expected_dataset_count` | integer | Number of mean MGXS datasets whose source MGXS could have supplied a matching `*_std_dev` dataset. Synthetic zero fission fields for non-fissionable mixtures are not counted. |
 | `mixture_count` | integer | Number of mixtures seen in the HDF5 handoff before optional output filtering. |
 | `mixture_names` | array of strings | Mixture names in HDF5 order. |
@@ -122,7 +129,7 @@ import json
 from pathlib import Path
 
 summary = json.loads(Path("run_summary.json").read_text())
-assert summary["schema"] == "openmc2donjon.from-openmc-summary.v3"
+assert summary["schema"] == "openmc2donjon.from-openmc-summary.v4"
 assert summary["format"] in {"multicompo", "macrolib"}
 assert summary["mixture_count"] == len(summary["mixture_names"])
 assert summary["energy_groups"] > 0

@@ -6,6 +6,7 @@ from openmc2donjon.from_openmc_summary import (
     FROM_OPENMC_SUMMARY_SCHEMA,
     FROM_OPENMC_SUMMARY_SCHEMA_V1,
     FROM_OPENMC_SUMMARY_SCHEMA_V2,
+    FROM_OPENMC_SUMMARY_SCHEMA_V3,
     validate_from_openmc_summary,
 )
 
@@ -36,6 +37,8 @@ def valid_summary() -> dict[str, object]:
         "statepoint": "/case/statepoint.120.h5",
         "std_dev_dataset_count": 6,
         "std_dev_expected_dataset_count": 8,
+        "zero_flux_fill_macrolib": None,
+        "zero_flux_fill_total_bins": None,
     }
 
 
@@ -43,9 +46,27 @@ class FromOpenMCSummaryTests(unittest.TestCase):
     def test_valid_summary(self) -> None:
         self.assertEqual(validate_from_openmc_summary(valid_summary()), [])
 
+    def test_accepts_legacy_v3_summary(self) -> None:
+        payload = valid_summary()
+        payload["schema"] = FROM_OPENMC_SUMMARY_SCHEMA_V3
+        del payload["zero_flux_fill_macrolib"]
+        del payload["zero_flux_fill_total_bins"]
+        self.assertEqual(validate_from_openmc_summary(payload), [])
+
+    def test_v4_fill_fields_validated(self) -> None:
+        payload = valid_summary()
+        payload["zero_flux_fill_macrolib"] = "/data/macrolib.h5"
+        payload["zero_flux_fill_total_bins"] = 626
+        self.assertEqual(validate_from_openmc_summary(payload), [])
+        payload["zero_flux_fill_total_bins"] = "many"
+        errors = validate_from_openmc_summary(payload)
+        self.assertTrue(any("zero_flux_fill_total_bins" in e for e in errors))
+
     def test_accepts_legacy_v1_summary(self) -> None:
         payload = valid_summary()
         payload["schema"] = FROM_OPENMC_SUMMARY_SCHEMA_V1
+        payload.pop("zero_flux_fill_macrolib")
+        payload.pop("zero_flux_fill_total_bins")
         payload.pop("checked")
         payload.pop("check_passed")
         payload.pop("check_summary_json")
@@ -57,6 +78,8 @@ class FromOpenMCSummaryTests(unittest.TestCase):
     def test_accepts_legacy_v2_summary(self) -> None:
         payload = valid_summary()
         payload["schema"] = FROM_OPENMC_SUMMARY_SCHEMA_V2
+        payload.pop("zero_flux_fill_macrolib")
+        payload.pop("zero_flux_fill_total_bins")
         payload.pop("std_dev_dataset_count")
         payload.pop("std_dev_expected_dataset_count")
 

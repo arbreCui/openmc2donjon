@@ -223,6 +223,7 @@ openmc2donjon-from-openmc --recipe export_recipe.py --dry-run --run-dir runs/cas
 Useful references:
 
 - [OpenMC export workflow](docs/OPENMC_EXPORT_WORKFLOW.md)
+- [Fast-spectrum workflow](docs/FAST_SPECTRUM_WORKFLOW.md)
 - [HDF5 input contract](docs/HDF5_INPUT_CONTRACT.md)
 - [Recipe template](examples/openmc_recipe_template/)
 - [Production minicase](examples/production_minicase/)
