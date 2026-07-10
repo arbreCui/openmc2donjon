@@ -69,6 +69,18 @@ numerically; see `docs/HDF5_INPUT_CONTRACT.md`). Two routes work:
    first, then convert to either format for any consumer. The
    MULTICOMPO + `NCR:` production route requires this pre-application.
 
+### Bringing your own DONJON deck
+
+The converter deliberately does not generate DONJON geometry from the
+handoff — the low-order geometry, tracking, and solver are user-supplied
+by design. The web `/donjon` guide turns the converter output path into
+an editable deck skeleton: Cartesian TRIVAT diffusion/SPN, or the
+hexagonal `HEXZ` + `SNT` / TRIVAC `MCFD 1` patterns whose validated
+references are the accepted benchmark decks written by
+`examples/irena30_zrefl_hex/write_donjon_decks.py`. The one contract to
+keep when editing: the `GEO:` MIX numbering must follow the multicompo
+mixture order (the `mixture_names` dataset of the handoff HDF5).
+
 ## 4. Runnable, validated instances
 
 - `examples/irena30_zrefl_hex` — the accepted 91-hex benchmark

@@ -59,16 +59,59 @@ describe("DONJON guide helpers", () => {
 
   it("normalizes invalid DONJON deck URL parameters", () => {
     const params = new URLSearchParams(
-      "nmix=1200&geometry=hex&solver=sn&spn=4&xm=BAD&xp=REFL",
+      "nmix=1200&geometry=hexagon&solver=sn&spn=4&sn=5&side=-2&height=0&xm=BAD&xp=REFL",
     );
     expect(donjonDeckOptionsFromSearchParams(params)).toMatchObject({
       mixtureCount: 999,
       geometry: "car2d",
       solver: "diffusion",
       spnOrder: 3,
+      snOrder: 8,
+      hexSide: 1,
+      hexHeight: 10,
       xMinus: "REFL",
       xPlus: "REFL",
     });
+  });
+
+  it("round-trips hex SNT deck options through guide links", () => {
+    const href = donjonGuideHref({
+      asciiPath: "/runs/case/out.mcompo.txt",
+      format: "multicompo",
+      deckOptions: {
+        mixtureCount: 91,
+        geometry: "hex",
+        solver: "snt",
+        snOrder: 4,
+        hexSide: 10.1036,
+      },
+    });
+    expect(href).toBe(
+      "/donjon?ascii=%2Fruns%2Fcase%2Fout.mcompo.txt&format=multicompo&nmix=91&geometry=hex&solver=snt&sn=4&side=10.1036",
+    );
+    const params = new URLSearchParams(href.split("?")[1]);
+    expect(donjonDeckOptionsFromSearchParams(params)).toMatchObject({
+      mixtureCount: 91,
+      geometry: "hex",
+      solver: "snt",
+      snOrder: 4,
+      hexSide: 10.1036,
+      hexHeight: 10,
+    });
+  });
+
+  it("coerces the SNT solver back to diffusion without hex geometry", () => {
+    expect(
+      normalizeDonjonDeckOptions({ geometry: "car2d", solver: "snt" }),
+    ).toMatchObject({ geometry: "car2d", solver: "diffusion" });
+    const params = new URLSearchParams("geometry=car3d&solver=snt");
+    expect(donjonDeckOptionsFromSearchParams(params)).toMatchObject({
+      geometry: "car3d",
+      solver: "diffusion",
+    });
+    expect(
+      normalizeDonjonDeckOptions({ geometry: "hex", solver: "snt" }),
+    ).toMatchObject({ geometry: "hex", solver: "snt" });
   });
 
   it("infers MACROLIB format from path unless explicit format wins", () => {
@@ -165,6 +208,142 @@ describe("DONJON guide helpers", () => {
     expect(items[3].title).toContain("diffusion");
   });
 
+  it("adds the hex-specific warnings to the deck checklist", () => {
+    const items = donjonDeckChecklist("/runs/case/out.mcompo.txt", "multicompo", {
+      mixtureCount: 91,
+      geometry: "hex",
+      solver: "snt",
+      snOrder: 8,
+    });
+
+    expect(items.map((item) => item.id)).toEqual([
+      "ascii-path",
+      "ncr-mixtures",
+      "geometry-map",
+      "boundary-solver",
+      "hex-ascii-72",
+      "hex-boundary-void",
+      "smoke-first",
+    ]);
+    expect(items[1].body).toContain("mixture_names");
+    expect(items[2].title).toContain("HEXZ");
+    expect(items[2].body).toContain("MIX 1..91");
+    expect(items[3].title).toContain("SN8");
+    expect(items[3].body).toContain("HBC COMPLETE VOID");
+    const ascii72 = items.find((item) => item.id === "hex-ascii-72");
+    expect(ascii72?.body).toContain("72 characters");
+    expect(ascii72?.body).toContain("short absolute path");
+    const boundaryVoid = items.find((item) => item.id === "hex-boundary-void");
+    expect(boundaryVoid?.body).toContain("silently leak");
+    expect(boundaryVoid?.body).toContain("only VOID is validated");
+    expect(boundaryVoid?.body).toContain("cannot be validated in SNT");
+  });
+
+  it("keeps Cartesian deck skeletons byte-identical to the pre-hex output", () => {
+    expect(donjonIngestSnippet("/runs/case/out.mcompo.txt", "multicompo")).toBe(
+      [
+        "MODULE GEO: NCR: TRIVAT: TRIVAA: FLUD: GREP: END: ABORT: ;",
+        "LINKED_LIST CPO MACRO GEOM TRACK SYS FLUX ;",
+        "REAL keff ;",
+        "SEQ_ASCII CPO_ASC :: FILE '/runs/case/out.mcompo.txt' ;",
+        "",
+        "CPO := CPO_ASC ;",
+        "MACRO := NCR: CPO :: EDIT 1 MACRO NMIX 1",
+        "  COMPO CPO CPO",
+        "  MIX 1 USE ENDMIX",
+        ";",
+        "",
+        "* Replace this geometry / tracking block with your low-order model.",
+        "* The one-cell GEOM below is only an ingest smoke model.",
+        "GEOM := GEO: :: CAR2D 1 1",
+        "  EDIT 0 X- REFL X+ VOID Y- REFL Y+ VOID",
+        "  MIX 1 MESHX 0.0 1.0 MESHY 0.0 1.0 ;",
+        "TRACK := TRIVAT: GEOM :: EDIT 1 DUAL 1 1 ;",
+        "SYS := TRIVAA: MACRO TRACK :: EDIT 0 ;",
+        "FLUX := FLUD: SYS TRACK :: EDIT 1 ADI 4 ACCE 5 3 EXTE 200 1.E-6 ;",
+        "GREP: FLUX :: GETVAL 'K-EFFECTIVE ' 1 >>keff<< ;",
+        "ECHO 'OPENMC2DONJON MULTICOMPO DIFFUSION K-EFFECTIVE' keff ;",
+        "END: ;",
+      ].join("\n"),
+    );
+
+    expect(
+      donjonIngestSnippet("/runs/case/out.mcompo.txt", "multicompo", {
+        mixtureCount: 4,
+        geometry: "car3d",
+        solver: "spn",
+        spnOrder: 5,
+        zPlus: "REFL",
+      }),
+    ).toBe(
+      [
+        "MODULE GEO: NCR: TRIVAT: TRIVAA: FLUD: GREP: END: ABORT: ;",
+        "LINKED_LIST CPO MACRO GEOM TRACK SYS FLUX ;",
+        "REAL keff ;",
+        "SEQ_ASCII CPO_ASC :: FILE '/runs/case/out.mcompo.txt' ;",
+        "",
+        "CPO := CPO_ASC ;",
+        "MACRO := NCR: CPO :: EDIT 1 MACRO NMIX 4",
+        "  COMPO CPO CPO",
+        "  MIX 1 USE ENDMIX",
+        "  MIX 2 USE ENDMIX",
+        "  MIX 3 USE ENDMIX",
+        "  MIX 4 USE ENDMIX",
+        ";",
+        "",
+        "* Replace this geometry / tracking block with your low-order model.",
+        "* The one-cell GEOM below references MIX 1 only; expand it to map all 4 mixtures.",
+        "GEOM := GEO: :: CAR3D 1 1 1",
+        "  EDIT 0 X- REFL X+ VOID Y- REFL Y+ VOID Z- REFL Z+ REFL",
+        "  MIX 1 MESHX 0.0 1.0 MESHY 0.0 1.0 MESHZ 0.0 1.0 ;",
+        "TRACK := TRIVAT: GEOM :: EDIT 1 DUAL 1 1 SPN 5 SCAT 1 ;",
+        "SYS := TRIVAA: MACRO TRACK :: EDIT 0 ;",
+        "FLUX := FLUD: SYS TRACK :: EDIT 1 ADI 4 ACCE 5 3 EXTE 200 1.E-6 ;",
+        "GREP: FLUX :: GETVAL 'K-EFFECTIVE ' 1 >>keff<< ;",
+        "ECHO 'OPENMC2DONJON MULTICOMPO SPN5 K-EFFECTIVE' keff ;",
+        "END: ;",
+      ].join("\n"),
+    );
+
+    expect(
+      donjonIngestSnippet("/runs/case/out.macrolib.txt", "macrolib", {
+        mixtureCount: 2,
+      }),
+    ).toBe(
+      [
+        "MODULE GEO: TRIVAT: TRIVAA: FLUD: GREP: END: ABORT: ;",
+        "LINKED_LIST MACRO GEOM TRACK SYS FLUX ;",
+        "REAL keff ;",
+        "SEQ_ASCII MACRO_ASC :: FILE '/runs/case/out.macrolib.txt' ;",
+        "",
+        "MACRO := MACRO_ASC ;",
+        "",
+        "* Replace this geometry / tracking block with your low-order model.",
+        "* The one-cell GEOM below references MIX 1 only; expand it to map all 2 mixtures.",
+        "GEOM := GEO: :: CAR2D 1 1",
+        "  EDIT 0 X- REFL X+ VOID Y- REFL Y+ VOID",
+        "  MIX 1 MESHX 0.0 1.0 MESHY 0.0 1.0 ;",
+        "TRACK := TRIVAT: GEOM :: EDIT 1 DUAL 1 1 ;",
+        "SYS := TRIVAA: MACRO TRACK :: EDIT 0 ;",
+        "FLUX := FLUD: SYS TRACK :: EDIT 1 ADI 4 ACCE 5 3 EXTE 200 1.E-6 ;",
+        "GREP: FLUX :: GETVAL 'K-EFFECTIVE ' 1 >>keff<< ;",
+        "ECHO 'OPENMC2DONJON MACROLIB DIFFUSION K-EFFECTIVE' keff ;",
+        "END: ;",
+      ].join("\n"),
+    );
+
+    expect(donjonIngestOnlySnippet("/runs/case/out.mcompo.txt", "multicompo")).toBe(
+      [
+        "MODULE UTL: END: ABORT: ;",
+        "LINKED_LIST CPO ;",
+        "SEQ_ASCII CPO_ASC :: FILE '/runs/case/out.mcompo.txt' ;",
+        "CPO := CPO_ASC ;",
+        "UTL: CPO :: DUMP ;",
+        "END: ;",
+      ].join("\n"),
+    );
+  });
+
   it("generates configurable MULTICOMPO deck skeletons", () => {
     const snippet = donjonIngestSnippet("/runs/case/out.mcompo.txt", "multicompo", {
       mixtureCount: 4,
@@ -184,6 +363,87 @@ describe("DONJON guide helpers", () => {
     expect(snippet).toContain("GEOM := GEO: :: CAR3D 1 1 1");
     expect(snippet).toContain("Z- VOID Z+ VOID");
     expect(snippet).toContain("TRACK := TRIVAT: GEOM :: EDIT 1 DUAL 1 1 SPN 3 SCAT 1 ;");
+  });
+
+  it("generates the benchmark-shaped hex SNT deck", () => {
+    const snippet = donjonIngestSnippet("/runs/case/out.mcompo.txt", "multicompo", {
+      mixtureCount: 12,
+      geometry: "hex",
+      solver: "snt",
+      snOrder: 8,
+      hexSide: 10.1036,
+      hexHeight: 10,
+    });
+
+    expect(snippet).toBe(
+      [
+        "MODULE GEO: NCR: SNT: ASM: FLU: GREP: END: ABORT: ;",
+        "LINKED_LIST CPO MACRO GEOM TRACK SYSTEM FLUX ;",
+        "REAL keff ;",
+        "SEQ_ASCII CPO_ASC :: FILE '/runs/case/out.mcompo.txt' ;",
+        "",
+        "CPO := CPO_ASC ;",
+        "MACRO := NCR: CPO :: EDIT 1 MACRO NMIX 12",
+        "  COMPO CPO CPO",
+        "  MIX 1 USE ENDMIX",
+        "  MIX 2 USE ENDMIX",
+        "  MIX 3 USE ENDMIX",
+        "  MIX 4 USE ENDMIX",
+        "  MIX 5 USE ENDMIX",
+        "  MIX 6 USE ENDMIX",
+        "  MIX 7 USE ENDMIX",
+        "  MIX 8 USE ENDMIX",
+        "  MIX 9 USE ENDMIX",
+        "  MIX 10 USE ENDMIX",
+        "  MIX 11 USE ENDMIX",
+        "  MIX 12 USE ENDMIX",
+        ";",
+        "",
+        "* Replace this geometry / tracking block with your low-order model.",
+        "* The HEXZ GEOM below assigns MIX 1..12, one mixture per hex position.",
+        "* The MIX order must match the multicompo mixture order (the",
+        "* mixture_names dataset of the handoff HDF5).",
+        "* SIDE is the hexagon edge length in cm.",
+        "GEOM := GEO: :: HEXZ 12 1 EDIT 0",
+        "  Z- REFL Z+ REFL  HBC COMPLETE VOID",
+        "  SIDE 10.1036  SPLITL 2",
+        "  MESHZ 0.0 10.0",
+        "  MIX",
+        "  1 2 3 4 5 6 7 8 9 10",
+        "  11 12",
+        ";",
+        "* SCAT is the scattering anisotropy order + 1 (P1 handoff -> SCAT 2).",
+        "TRACK := SNT: GEOM :: EDIT 0 DIAM 1 SN 8 SCAT 2 ;",
+        "SYSTEM := ASM: MACRO TRACK :: ARM ;",
+        "FLUX := FLU: SYSTEM MACRO TRACK :: EDIT 1 TYPE K EXTE 500 1E-05 ;",
+        "GREP: FLUX :: GETVAL 'K-EFFECTIVE' 1 >>keff<< ;",
+        "ECHO 'OPENMC2DONJON MULTICOMPO SN8 K-EFFECTIVE' keff ;",
+        "END: ;",
+      ].join("\n"),
+    );
+    // SNT/FLU: read K-EFFECTIVE without the trailing space used by FLUD:.
+    expect(snippet).toContain("GETVAL 'K-EFFECTIVE' 1");
+    expect(snippet).not.toContain("GETVAL 'K-EFFECTIVE ' 1");
+  });
+
+  it("generates hex TRIVAC diffusion decks with MCFD 1 and unsplit hexes", () => {
+    const snippet = donjonIngestSnippet("/runs/case/out.mcompo.txt", "multicompo", {
+      mixtureCount: 7,
+      geometry: "hex",
+      solver: "diffusion",
+    });
+
+    expect(snippet).toContain("MODULE GEO: NCR: TRIVAT: TRIVAA: FLUD: GREP: END: ABORT: ;");
+    expect(snippet).toContain("GEOM := GEO: :: HEXZ 7 1 EDIT 0");
+    expect(snippet).toContain("  Z- REFL Z+ REFL  HBC COMPLETE VOID");
+    expect(snippet).toContain("  SIDE 1.0");
+    expect(snippet).toContain("  MESHZ 0.0 10.0");
+    expect(snippet).toContain("TRACK := TRIVAT: GEOM :: EDIT 1 MAXR 20000 MCFD 1 ;");
+    expect(snippet).toContain("FLUX := FLUD: SYS TRACK :: EDIT 1 ACCE 3 3 EXTE 1000 1E-05 ADI 6 ;");
+    expect(snippet).toContain("GREP: FLUX :: GETVAL 'K-EFFECTIVE ' 1 >>keff<< ;");
+    // TRIVAC MCFD requires unsplit hexes: no SPLITL outside the SNT route.
+    expect(snippet).not.toContain("SPLITL");
+    expect(snippet).not.toContain("DUAL 1 1");
   });
 
   it("normalizes deck builder options before rendering", () => {

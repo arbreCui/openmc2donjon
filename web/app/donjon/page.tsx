@@ -107,6 +107,9 @@ function DonjonPageContent() {
   );
   const [solver, setSolver] = useState<DonjonDeckSolver>(initialDeckOptions.solver);
   const [spnOrder, setSpnOrder] = useState(initialDeckOptions.spnOrder);
+  const [snOrder, setSnOrder] = useState(initialDeckOptions.snOrder);
+  const [hexSide, setHexSide] = useState(initialDeckOptions.hexSide);
+  const [hexHeight, setHexHeight] = useState(initialDeckOptions.hexHeight);
   const [boundaries, setBoundaries] = useState({
     xMinus: initialDeckOptions.xMinus,
     xPlus: initialDeckOptions.xPlus,
@@ -129,9 +132,21 @@ function DonjonPageContent() {
       geometry,
       solver,
       spnOrder,
+      snOrder,
+      hexSide,
+      hexHeight,
       ...boundaries,
     }),
-    [boundaries, geometry, mixtureCount, solver, spnOrder],
+    [
+      boundaries,
+      geometry,
+      hexHeight,
+      hexSide,
+      mixtureCount,
+      snOrder,
+      solver,
+      spnOrder,
+    ],
   );
 
   const objectLabel = donjonObjectLabel(format);
@@ -361,11 +376,20 @@ function DonjonPageContent() {
             setMixtureCountEdited(true);
           }}
           geometry={geometry}
-          onGeometryChange={setGeometry}
+          onGeometryChange={(value) => {
+            setGeometry(value);
+            if (value !== "hex" && solver === "snt") setSolver("diffusion");
+          }}
           solver={solver}
           onSolverChange={setSolver}
           spnOrder={spnOrder}
           onSpnOrderChange={setSpnOrder}
+          snOrder={snOrder}
+          onSnOrderChange={setSnOrder}
+          hexSide={hexSide}
+          onHexSideChange={setHexSide}
+          hexHeight={hexHeight}
+          onHexHeightChange={setHexHeight}
           boundaries={boundaries}
           onBoundaryChange={(key, value) =>
             setBoundaries((current) => ({ ...current, [key]: value }))
@@ -705,6 +729,12 @@ function DeckBuilderPanel({
   onSolverChange,
   spnOrder,
   onSpnOrderChange,
+  snOrder,
+  onSnOrderChange,
+  hexSide,
+  onHexSideChange,
+  hexHeight,
+  onHexHeightChange,
   boundaries,
   onBoundaryChange,
 }: {
@@ -719,6 +749,12 @@ function DeckBuilderPanel({
   onSolverChange: (value: DonjonDeckSolver) => void;
   spnOrder: number;
   onSpnOrderChange: (value: number) => void;
+  snOrder: number;
+  onSnOrderChange: (value: number) => void;
+  hexSide: number;
+  onHexSideChange: (value: number) => void;
+  hexHeight: number;
+  onHexHeightChange: (value: number) => void;
   boundaries: Pick<
     DonjonDeckOptions,
     "xMinus" | "xPlus" | "yMinus" | "yPlus" | "zMinus" | "zPlus"
@@ -740,9 +776,9 @@ function DeckBuilderPanel({
             Shape the low-order skeleton before copying it
           </h2>
           <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--fg-2)]">
-            These controls generate the skeleton below. The geometry is still a
-            one-cell smoke model; replace its mesh and mixture map with the real
-            DONJON core deck.
+            {geometry === "hex"
+              ? "These controls generate the skeleton below. The HEXZ block assigns one mixture per hex position in multicompo order; set SIDE and the axial height to the real lattice."
+              : "These controls generate the skeleton below. The geometry is still a one-cell smoke model; replace its mesh and mixture map with the real DONJON core deck."}
           </p>
         </div>
         <span className="rounded border border-cyan-300/20 bg-cyan-300/10 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-cyan-100">
@@ -799,6 +835,7 @@ function DeckBuilderPanel({
           >
             <option value="car2d">CAR2D smoke</option>
             <option value="car3d">CAR3D smoke</option>
+            <option value="hex">HEXZ core</option>
           </select>
         </label>
         <label className="block">
@@ -814,6 +851,9 @@ function DeckBuilderPanel({
           >
             <option value="diffusion">Diffusion</option>
             <option value="spn">SPN</option>
+            <option value="snt" disabled={geometry !== "hex"}>
+              SNT (hex only)
+            </option>
           </select>
         </label>
         <label className="block">
@@ -832,25 +872,87 @@ function DeckBuilderPanel({
         </label>
       </div>
 
-      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
-        {visibleBoundaries.map((field) => (
-          <label key={field.key} className="block">
-            <span className="text-[11px] font-semibold tracking-tight text-[var(--fg-2)]">
-              {field.label}
+      {geometry === "hex" ? (
+        <div className="mt-3 grid gap-3 lg:grid-cols-3">
+          <label className="block">
+            <span className="text-[12px] font-semibold tracking-tight">
+              SN order
             </span>
             <select
-              value={boundaries[field.key]}
-              onChange={(event) =>
-                onBoundaryChange(field.key, event.target.value as DonjonDeckBoundary)
-              }
-              className="mt-1.5 w-full rounded-md border border-[var(--edge)] bg-black/20 px-2 py-1.5 text-[12px] text-[var(--fg-0)]"
+              value={snOrder}
+              disabled={solver !== "snt"}
+              onChange={(event) => onSnOrderChange(Number(event.target.value))}
+              className="mt-2 w-full rounded-md border border-[var(--edge)] bg-black/20 px-3 py-2 text-sm text-[var(--fg-0)] disabled:cursor-not-allowed disabled:opacity-45"
             >
-              <option value="REFL">REFL</option>
-              <option value="VOID">VOID</option>
+              <option value={4}>SN 4</option>
+              <option value={8}>SN 8</option>
+              <option value={16}>SN 16</option>
             </select>
+            <span className="mt-1 block text-[11px] text-[var(--fg-3)]">
+              Discrete-ordinates order for SNT; SN 8 is the validated setting.
+            </span>
           </label>
-        ))}
-      </div>
+          <label className="block">
+            <span className="text-[12px] font-semibold tracking-tight">
+              Hex side (cm)
+            </span>
+            <input
+              type="number"
+              min={0.0001}
+              step={0.0001}
+              value={hexSide}
+              onChange={(event) => onHexSideChange(Number(event.target.value))}
+              className="mt-2 w-full rounded-md border border-[var(--edge)] bg-black/20 px-3 py-2 text-sm text-[var(--fg-0)]"
+            />
+            <span className="mt-1 block text-[11px] text-[var(--fg-3)]">
+              SIDE — the hexagon edge length in cm.
+            </span>
+          </label>
+          <label className="block">
+            <span className="text-[12px] font-semibold tracking-tight">
+              Axial height (cm)
+            </span>
+            <input
+              type="number"
+              min={0.0001}
+              step={0.1}
+              value={hexHeight}
+              onChange={(event) => onHexHeightChange(Number(event.target.value))}
+              className="mt-2 w-full rounded-md border border-[var(--edge)] bg-black/20 px-3 py-2 text-sm text-[var(--fg-0)]"
+            />
+            <span className="mt-1 block text-[11px] text-[var(--fg-3)]">
+              MESHZ upper bound for the single z-plane.
+            </span>
+          </label>
+        </div>
+      ) : null}
+
+      {geometry === "hex" ? (
+        <p className="mt-3 text-[12px] leading-5 text-[var(--fg-2)]">
+          Hexagonal boundaries are fixed: Z- REFL Z+ REFL with HBC COMPLETE
+          VOID — the only outer boundary validated for full-hex SNT decks.
+        </p>
+      ) : (
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
+          {visibleBoundaries.map((field) => (
+            <label key={field.key} className="block">
+              <span className="text-[11px] font-semibold tracking-tight text-[var(--fg-2)]">
+                {field.label}
+              </span>
+              <select
+                value={boundaries[field.key]}
+                onChange={(event) =>
+                  onBoundaryChange(field.key, event.target.value as DonjonDeckBoundary)
+                }
+                className="mt-1.5 w-full rounded-md border border-[var(--edge)] bg-black/20 px-2 py-1.5 text-[12px] text-[var(--fg-0)]"
+              >
+                <option value="REFL">REFL</option>
+                <option value="VOID">VOID</option>
+              </select>
+            </label>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

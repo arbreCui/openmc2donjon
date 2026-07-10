@@ -1,6 +1,6 @@
 export type DonjonGuideFormat = "multicompo" | "macrolib";
-export type DonjonDeckGeometry = "car2d" | "car3d";
-export type DonjonDeckSolver = "diffusion" | "spn";
+export type DonjonDeckGeometry = "car2d" | "car3d" | "hex";
+export type DonjonDeckSolver = "diffusion" | "spn" | "snt";
 export type DonjonDeckBoundary = "REFL" | "VOID";
 
 export interface DonjonDeckOptions {
@@ -8,6 +8,9 @@ export interface DonjonDeckOptions {
   geometry: DonjonDeckGeometry;
   solver: DonjonDeckSolver;
   spnOrder: number;
+  snOrder: number;
+  hexSide: number;
+  hexHeight: number;
   xMinus: DonjonDeckBoundary;
   xPlus: DonjonDeckBoundary;
   yMinus: DonjonDeckBoundary;
@@ -21,6 +24,9 @@ export const DEFAULT_DONJON_DECK_OPTIONS: DonjonDeckOptions = {
   geometry: "car2d",
   solver: "diffusion",
   spnOrder: 3,
+  snOrder: 8,
+  hexSide: 1.0,
+  hexHeight: 10.0,
   xMinus: "REFL",
   xPlus: "VOID",
   yMinus: "REFL",
@@ -136,7 +142,12 @@ export function donjonDeckChecklist(
   const deck = normalizeDonjonDeckOptions(options);
   const trimmedPath = asciiPath.trim();
   const object = donjonObjectLabel(format);
-  const solver = deck.solver === "spn" ? `SPN${deck.spnOrder}` : "diffusion";
+  const solver =
+    deck.solver === "spn"
+      ? `SPN${deck.spnOrder}`
+      : deck.solver === "snt"
+        ? `SN${deck.snOrder}`
+        : "diffusion";
   return [
     {
       id: "ascii-path",
@@ -150,7 +161,7 @@ export function donjonDeckChecklist(
       ? {
           id: "ncr-mixtures",
           title: `NCR extracts ${deck.mixtureCount} mixture${deck.mixtureCount === 1 ? "" : "s"}`,
-          body: `The skeleton uses NMIX ${deck.mixtureCount} and emits one NCR MIX line per extracted mixture. Match this count to the exported domain order.`,
+          body: `The skeleton uses NMIX ${deck.mixtureCount} and emits one NCR MIX line per extracted mixture. Match this count and MIX order to the exported mixture order (the mixture_names dataset of the handoff HDF5).`,
           tone: "ready",
         }
       : {
@@ -159,24 +170,49 @@ export function donjonDeckChecklist(
           body: "The deck loads L_MACROLIB into MACRO without NCR. Geometry MIX numbers refer directly to macrolib mixture indices.",
           tone: "ready",
         },
-    {
-      id: "geometry-map",
-      title: "Replace the one-cell geometry",
-      body:
-        deck.mixtureCount > 1
-          ? `The sample GEOM still maps only MIX 1. Replace it with the real ${deck.geometry.toUpperCase()} mesh and assign all ${deck.mixtureCount} mixture regions.`
-          : `The sample GEOM is a one-cell smoke model. Replace it with the real ${deck.geometry.toUpperCase()} geometry before comparing physics.`,
-      tone: "manual",
-    },
+    deck.geometry === "hex"
+      ? {
+          id: "geometry-map",
+          title: "Check the HEXZ mixture map",
+          body: `The HEXZ GEOM assigns MIX 1..${deck.mixtureCount}, one mixture per hex position, in multicompo order. Set SIDE to the real hexagon edge length in cm and MESHZ to the axial height before comparing physics.`,
+          tone: "manual",
+        }
+      : {
+          id: "geometry-map",
+          title: "Replace the one-cell geometry",
+          body:
+            deck.mixtureCount > 1
+              ? `The sample GEOM still maps only MIX 1. Replace it with the real ${deck.geometry.toUpperCase()} mesh and assign all ${deck.mixtureCount} mixture regions.`
+              : `The sample GEOM is a one-cell smoke model. Replace it with the real ${deck.geometry.toUpperCase()} geometry before comparing physics.`,
+          tone: "manual",
+        },
     {
       id: "boundary-solver",
       title: `Confirm boundaries and ${solver} settings`,
       body:
-        deck.geometry === "car3d"
-          ? `Current boundaries are X- ${deck.xMinus}, X+ ${deck.xPlus}, Y- ${deck.yMinus}, Y+ ${deck.yPlus}, Z- ${deck.zMinus}, Z+ ${deck.zPlus}. Keep them aligned with the OpenMC reference problem.`
-          : `Current boundaries are X- ${deck.xMinus}, X+ ${deck.xPlus}, Y- ${deck.yMinus}, Y+ ${deck.yPlus}. Keep them aligned with the OpenMC reference problem.`,
+        deck.geometry === "hex"
+          ? `Hex boundaries are fixed: Z- REFL Z+ REFL with HBC COMPLETE VOID. Keep the ${solver} options aligned with the OpenMC reference problem.`
+          : deck.geometry === "car3d"
+            ? `Current boundaries are X- ${deck.xMinus}, X+ ${deck.xPlus}, Y- ${deck.yMinus}, Y+ ${deck.yPlus}, Z- ${deck.zMinus}, Z+ ${deck.zPlus}. Keep them aligned with the OpenMC reference problem.`
+            : `Current boundaries are X- ${deck.xMinus}, X+ ${deck.xPlus}, Y- ${deck.yMinus}, Y+ ${deck.yPlus}. Keep them aligned with the OpenMC reference problem.`,
       tone: "review",
     },
+    ...(deck.geometry === "hex"
+      ? ([
+          {
+            id: "hex-ascii-72",
+            title: "Keep the ASCII path under 72 characters",
+            body: "DONJON truncates SEQ_ASCII ... FILE paths at 72 characters. Stage the ASCII handoff on a short absolute path before running the deck.",
+            tone: "review",
+          },
+          {
+            id: "hex-boundary-void",
+            title: "Only VOID is validated on the hex outer boundary",
+            body: "SNT hexagonal HBC COMPLETE REFL and ALBE 1.0 silently leak instead of reflecting; only VOID is validated for full-hex outer boundaries. White-boundary colorset decks cannot be validated in SNT.",
+            tone: "review",
+          },
+        ] satisfies DonjonDeckChecklistItem[])
+      : []),
     {
       id: "smoke-first",
       title: "Run the ingest smoke before the physics deck",
@@ -198,6 +234,9 @@ export function donjonDeckOptionsFromSearchParams(
     geometry: deckGeometryParam(params.get("geometry")),
     solver: deckSolverParam(params.get("solver")),
     spnOrder: numericParam(params.get("spn")),
+    snOrder: numericParam(params.get("sn")),
+    hexSide: numericParam(params.get("side")),
+    hexHeight: numericParam(params.get("height")),
     xMinus: deckBoundaryParam(params.get("xm")),
     xPlus: deckBoundaryParam(params.get("xp")),
     yMinus: deckBoundaryParam(params.get("ym")),
@@ -214,27 +253,33 @@ export function donjonIngestSnippet(
 ): string {
   const path = asciiPath.trim() || placeholderAsciiPath(format);
   const deck = normalizeDonjonDeckOptions(options);
-  const solverLabel = deck.solver === "spn" ? `SPN${deck.spnOrder}` : "DIFFUSION";
+  const solverLabel =
+    deck.solver === "spn"
+      ? `SPN${deck.spnOrder}`
+      : deck.solver === "snt"
+        ? `SN${deck.snOrder}`
+        : "DIFFUSION";
+  const solverModules =
+    deck.solver === "snt" ? "SNT: ASM: FLU:" : "TRIVAT: TRIVAA: FLUD:";
+  const systemName = deck.solver === "snt" ? "SYSTEM" : "SYS";
   if (format === "macrolib") {
     return [
-      "MODULE GEO: TRIVAT: TRIVAA: FLUD: GREP: END: ABORT: ;",
-      "LINKED_LIST MACRO GEOM TRACK SYS FLUX ;",
+      `MODULE GEO: ${solverModules} GREP: END: ABORT: ;`,
+      `LINKED_LIST MACRO GEOM TRACK ${systemName} FLUX ;`,
       "REAL keff ;",
       `SEQ_ASCII MACRO_ASC :: FILE '${path}' ;`,
       "",
       "MACRO := MACRO_ASC ;",
       "",
       ...lowOrderSkeletonLines(deck),
-      "SYS := TRIVAA: MACRO TRACK :: EDIT 0 ;",
-      "FLUX := FLUD: SYS TRACK :: EDIT 1 ADI 4 ACCE 5 3 EXTE 200 1.E-6 ;",
-      "GREP: FLUX :: GETVAL 'K-EFFECTIVE ' 1 >>keff<< ;",
+      ...solveLines(deck),
       `ECHO 'OPENMC2DONJON MACROLIB ${solverLabel} K-EFFECTIVE' keff ;`,
       "END: ;",
     ].join("\n");
   }
   return [
-    "MODULE GEO: NCR: TRIVAT: TRIVAA: FLUD: GREP: END: ABORT: ;",
-    "LINKED_LIST CPO MACRO GEOM TRACK SYS FLUX ;",
+    `MODULE GEO: NCR: ${solverModules} GREP: END: ABORT: ;`,
+    `LINKED_LIST CPO MACRO GEOM TRACK ${systemName} FLUX ;`,
     "REAL keff ;",
     `SEQ_ASCII CPO_ASC :: FILE '${path}' ;`,
     "",
@@ -245,9 +290,7 @@ export function donjonIngestSnippet(
     ";",
     "",
     ...lowOrderSkeletonLines(deck),
-    "SYS := TRIVAA: MACRO TRACK :: EDIT 0 ;",
-    "FLUX := FLUD: SYS TRACK :: EDIT 1 ADI 4 ACCE 5 3 EXTE 200 1.E-6 ;",
-    "GREP: FLUX :: GETVAL 'K-EFFECTIVE ' 1 >>keff<< ;",
+    ...solveLines(deck),
     `ECHO 'OPENMC2DONJON MULTICOMPO ${solverLabel} K-EFFECTIVE' keff ;`,
     "END: ;",
   ].join("\n");
@@ -285,13 +328,23 @@ export function placeholderAsciiPath(format: DonjonGuideFormat): string {
 export function normalizeDonjonDeckOptions(
   options: Partial<DonjonDeckOptions>,
 ): DonjonDeckOptions {
+  const geometry = normalizeGeometry(options.geometry);
   return {
     ...DEFAULT_DONJON_DECK_OPTIONS,
     ...options,
     mixtureCount: normalizeMixtureCount(options.mixtureCount),
     spnOrder: normalizeSpnOrder(options.spnOrder),
-    geometry: normalizeGeometry(options.geometry),
-    solver: normalizeSolver(options.solver),
+    snOrder: normalizeSnOrder(options.snOrder),
+    hexSide: normalizeHexLength(
+      options.hexSide,
+      DEFAULT_DONJON_DECK_OPTIONS.hexSide,
+    ),
+    hexHeight: normalizeHexLength(
+      options.hexHeight,
+      DEFAULT_DONJON_DECK_OPTIONS.hexHeight,
+    ),
+    geometry,
+    solver: normalizeSolver(options.solver, geometry),
     xMinus: normalizeBoundary(
       options.xMinus,
       DEFAULT_DONJON_DECK_OPTIONS.xMinus,
@@ -318,17 +371,40 @@ function ncrMixLines(mixtureCount: number): string[] {
 }
 
 function lowOrderSkeletonLines(options: DonjonDeckOptions): string[] {
+  if (options.geometry === "hex") {
+    return [
+      "* Replace this geometry / tracking block with your low-order model.",
+      `* The HEXZ GEOM below assigns MIX 1..${options.mixtureCount}, one mixture per hex position.`,
+      "* The MIX order must match the multicompo mixture order (the",
+      "* mixture_names dataset of the handoff HDF5).",
+      "* SIDE is the hexagon edge length in cm.",
+      ...geometryLines(options),
+      ...trackingLines(options),
+    ];
+  }
   return [
     "* Replace this geometry / tracking block with your low-order model.",
     options.mixtureCount > 1
       ? `* The one-cell GEOM below references MIX 1 only; expand it to map all ${options.mixtureCount} mixtures.`
       : "* The one-cell GEOM below is only an ingest smoke model.",
     ...geometryLines(options),
-    trackingLine(options),
+    ...trackingLines(options),
   ];
 }
 
 function geometryLines(options: DonjonDeckOptions): string[] {
+  if (options.geometry === "hex") {
+    const splitl = options.solver === "snt" ? "  SPLITL 2" : "";
+    return [
+      `GEOM := GEO: :: HEXZ ${options.mixtureCount} 1 EDIT 0`,
+      "  Z- REFL Z+ REFL  HBC COMPLETE VOID",
+      `  SIDE ${formatCm(options.hexSide)}${splitl}`,
+      `  MESHZ 0.0 ${formatCm(options.hexHeight)}`,
+      "  MIX",
+      ...hexMixNumberLines(options.mixtureCount),
+      ";",
+    ];
+  }
   if (options.geometry === "car3d") {
     return [
       "GEOM := GEO: :: CAR3D 1 1 1",
@@ -343,9 +419,56 @@ function geometryLines(options: DonjonDeckOptions): string[] {
   ];
 }
 
-function trackingLine(options: DonjonDeckOptions): string {
+function trackingLines(options: DonjonDeckOptions): string[] {
+  if (options.solver === "snt") {
+    return [
+      "* SCAT is the scattering anisotropy order + 1 (P1 handoff -> SCAT 2).",
+      `TRACK := SNT: GEOM :: EDIT 0 DIAM 1 SN ${options.snOrder} SCAT 2 ;`,
+    ];
+  }
   const spn = options.solver === "spn" ? ` SPN ${options.spnOrder} SCAT 1` : "";
-  return `TRACK := TRIVAT: GEOM :: EDIT 1 DUAL 1 1${spn} ;`;
+  if (options.geometry === "hex") {
+    return [`TRACK := TRIVAT: GEOM :: EDIT 1 MAXR 20000 MCFD 1${spn} ;`];
+  }
+  return [`TRACK := TRIVAT: GEOM :: EDIT 1 DUAL 1 1${spn} ;`];
+}
+
+function solveLines(options: DonjonDeckOptions): string[] {
+  if (options.solver === "snt") {
+    return [
+      "SYSTEM := ASM: MACRO TRACK :: ARM ;",
+      "FLUX := FLU: SYSTEM MACRO TRACK :: EDIT 1 TYPE K EXTE 500 1E-05 ;",
+      "GREP: FLUX :: GETVAL 'K-EFFECTIVE' 1 >>keff<< ;",
+    ];
+  }
+  if (options.geometry === "hex") {
+    return [
+      "SYS := TRIVAA: MACRO TRACK :: EDIT 0 ;",
+      "FLUX := FLUD: SYS TRACK :: EDIT 1 ACCE 3 3 EXTE 1000 1E-05 ADI 6 ;",
+      "GREP: FLUX :: GETVAL 'K-EFFECTIVE ' 1 >>keff<< ;",
+    ];
+  }
+  return [
+    "SYS := TRIVAA: MACRO TRACK :: EDIT 0 ;",
+    "FLUX := FLUD: SYS TRACK :: EDIT 1 ADI 4 ACCE 5 3 EXTE 200 1.E-6 ;",
+    "GREP: FLUX :: GETVAL 'K-EFFECTIVE ' 1 >>keff<< ;",
+  ];
+}
+
+function hexMixNumberLines(mixtureCount: number): string[] {
+  const lines: string[] = [];
+  for (let start = 1; start <= mixtureCount; start += 10) {
+    const numbers: string[] = [];
+    for (let i = start; i <= Math.min(start + 9, mixtureCount); i += 1) {
+      numbers.push(String(i));
+    }
+    lines.push(`  ${numbers.join(" ")}`);
+  }
+  return lines;
+}
+
+function formatCm(value: number): string {
+  return Number.isInteger(value) ? value.toFixed(1) : String(value);
 }
 
 function normalizeMixtureCount(value: number | undefined): number {
@@ -359,11 +482,26 @@ function normalizeSpnOrder(value: number | undefined): number {
   return order === 5 ? 5 : 3;
 }
 
-function normalizeGeometry(value: DonjonDeckGeometry | undefined): DonjonDeckGeometry {
-  return value === "car3d" ? "car3d" : "car2d";
+function normalizeSnOrder(value: number | undefined): number {
+  if (!Number.isFinite(value)) return DEFAULT_DONJON_DECK_OPTIONS.snOrder;
+  const order = Math.floor(Number(value));
+  return order === 4 || order === 16 ? order : 8;
 }
 
-function normalizeSolver(value: DonjonDeckSolver | undefined): DonjonDeckSolver {
+function normalizeHexLength(value: number | undefined, fallback: number): number {
+  if (!Number.isFinite(value) || Number(value) <= 0) return fallback;
+  return Number(value);
+}
+
+function normalizeGeometry(value: DonjonDeckGeometry | undefined): DonjonDeckGeometry {
+  return value === "car3d" || value === "hex" ? value : "car2d";
+}
+
+function normalizeSolver(
+  value: DonjonDeckSolver | undefined,
+  geometry: DonjonDeckGeometry,
+): DonjonDeckSolver {
+  if (value === "snt") return geometry === "hex" ? "snt" : "diffusion";
   return value === "spn" ? "spn" : "diffusion";
 }
 
@@ -390,6 +528,15 @@ function appendDonjonDeckParams(
   if (deck.solver === "spn" && deck.spnOrder !== defaults.spnOrder) {
     params.set("spn", String(deck.spnOrder));
   }
+  if (deck.solver === "snt" && deck.snOrder !== defaults.snOrder) {
+    params.set("sn", String(deck.snOrder));
+  }
+  if (deck.geometry === "hex" && deck.hexSide !== defaults.hexSide) {
+    params.set("side", String(deck.hexSide));
+  }
+  if (deck.geometry === "hex" && deck.hexHeight !== defaults.hexHeight) {
+    params.set("height", String(deck.hexHeight));
+  }
   if (deck.xMinus !== defaults.xMinus) params.set("xm", deck.xMinus);
   if (deck.xPlus !== defaults.xPlus) params.set("xp", deck.xPlus);
   if (deck.yMinus !== defaults.yMinus) params.set("ym", deck.yMinus);
@@ -405,11 +552,15 @@ function numericParam(value: string | null): number | undefined {
 }
 
 function deckGeometryParam(value: string | null): DonjonDeckGeometry | undefined {
-  return value === "car3d" || value === "car2d" ? value : undefined;
+  return value === "car3d" || value === "car2d" || value === "hex"
+    ? value
+    : undefined;
 }
 
 function deckSolverParam(value: string | null): DonjonDeckSolver | undefined {
-  return value === "spn" || value === "diffusion" ? value : undefined;
+  return value === "spn" || value === "diffusion" || value === "snt"
+    ? value
+    : undefined;
 }
 
 function deckBoundaryParam(value: string | null): DonjonDeckBoundary | undefined {
