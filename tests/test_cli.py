@@ -25,14 +25,14 @@ class CliTests(unittest.TestCase):
         self.assertEqual(stream.getvalue().strip(), "openmc2donjon 0.1.4")
 
     def test_package_version_matches_pyproject(self) -> None:
-        import tomllib
+        import re
 
         import openmc2donjon
 
         pyproject = Path(__file__).resolve().parent.parent / "pyproject.toml"
-        with pyproject.open("rb") as handle:
-            expected = tomllib.load(handle)["project"]["version"]
-        self.assertEqual(openmc2donjon.__version__, expected)
+        match = re.search(r'^version = "([^"]+)"$', pyproject.read_text(), re.MULTILINE)
+        assert match is not None
+        self.assertEqual(openmc2donjon.__version__, match.group(1))
 
     def test_top_level_help_excludes_removed_donjon_sph_loop_commands(self) -> None:
         help_text = _parser_help(["--help"])

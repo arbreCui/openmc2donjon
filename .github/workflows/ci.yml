@@ -80,7 +80,7 @@ jobs:
 
       - name: Run mypy on whitelisted modules
         run: |
-          mypy --no-incremental \
+          mypy --no-incremental --python-version=3.12 \
             src/openmc2donjon/constants.py \
             src/openmc2donjon/scatter.py \
             src/openmc2donjon/energy_groups.py \
