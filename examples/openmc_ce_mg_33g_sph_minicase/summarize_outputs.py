@@ -24,6 +24,18 @@ PRODUCTION_FLUX_REL_STD_DEV = 0.05
 DEMONSTRATION_FLUX_REL_STD_DEV = 0.30
 REACTION_RATE_DATASETS = ("absorption", "fission", "nu_fission")
 REACTION_RATE_REFERENCE_FLOOR = 1.0e-30
+# SPH update policy fields copied verbatim from the final sidecar summary
+# (openmc_sph_summary.json) when present.  Old runs predate these fields;
+# their physics summaries simply omit the keys.
+SPH_UPDATE_POLICY_FIELDS = (
+    "sph_target",
+    "zero_flux_policy",
+    "identity_bin_count",
+    "flux_floor_rel",
+    "floored_bin_count",
+    "freeze_groups",
+    "frozen_group_bin_count",
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -127,10 +139,17 @@ def summarize_handoff(handoff_dir: Path) -> dict[str, Any]:
     augmented_has_sph = _augmented_hdf5_has_sph(paths["augmented_mgxs"], mixture_names)
     sph_iterations = _read_sph_iterations(handoff_dir, sph_summary)
 
+    sph_update_policy = {
+        name: sph_summary[name]
+        for name in SPH_UPDATE_POLICY_FIELDS
+        if name in sph_summary
+    }
+
     return {
         "schema": SUMMARY_SCHEMA,
         "route": "OpenMC CE reference + OpenMC MG same geometry -> OpenMC-side SPH",
         "handoff_dir": str(handoff_dir),
+        **sph_update_policy,
         "mixture_count": len(mixture_names),
         "energy_groups": energy_groups,
         "legendre_order": legendre_order,

@@ -229,6 +229,16 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
         self.assertEqual(payload["sph"]["clipped_count"], 0)
         self.assertAlmostEqual(payload["sph"]["minimum"], 0.872017860823)
         self.assertAlmostEqual(payload["sph"]["maximum"], 1.11109311723)
+        # SPH update policy fields copied from the final sidecar summary of
+        # the two-region production run (--sph-target flux default, reject
+        # zero-flux bins, no flux floor, no frozen groups).
+        self.assertEqual(payload["sph_target"], "flux")
+        self.assertEqual(payload["zero_flux_policy"], "reject")
+        self.assertEqual(payload["identity_bin_count"], 0)
+        self.assertIsNone(payload["flux_floor_rel"])
+        self.assertEqual(payload["floored_bin_count"], 0)
+        self.assertIsNone(payload["freeze_groups"])
+        self.assertEqual(payload["frozen_group_bin_count"], 0)
         self.assertEqual(len(payload["sph_iterations"]), 3)
         self.assertEqual(payload["handoff"]["accepted_sph_consumption_format"], "macrolib")
         self.assertEqual(payload["handoff"]["macrolib_ascii_nsp_block_count"], 33)
@@ -301,12 +311,54 @@ class OpenMCCeMgSphMinicaseExampleTests(unittest.TestCase):
                 0.44,
             )
             self.assertEqual(len(payload["sph_iterations"]), 1)
+            # The sidecar summary in this fixture predates the SPH update
+            # policy fields, so the physics summary must omit them.
+            for name in (
+                "sph_target",
+                "zero_flux_policy",
+                "identity_bin_count",
+                "flux_floor_rel",
+                "floored_bin_count",
+                "freeze_groups",
+                "frozen_group_bin_count",
+            ):
+                self.assertNotIn(name, payload)
             self.assertIn("OpenMC CE/MG SPH Physics Summary", markdown)
             self.assertIn("## Quality", markdown)
             self.assertIn("## SPH Iterations", markdown)
             self.assertIn("## Reaction-Rate Preservation", markdown)
             self.assertIn("Accepted SPH consumption format", markdown)
             self.assertIn("CS_FUEL", markdown)
+
+    def test_summary_copies_sph_update_policy_fields_from_sidecar(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            handoff = Path(tmp)
+            _write_summary_fixture(handoff)
+            sidecar_summary_path = handoff / "openmc_sph_summary.json"
+            sidecar_summary = json.loads(sidecar_summary_path.read_text(encoding="utf-8"))
+            sidecar_summary.update(
+                {
+                    "sph_target": "rate",
+                    "zero_flux_policy": "identity",
+                    "identity_bin_count": 4,
+                    "flux_floor_rel": 1.0e-3,
+                    "floored_bin_count": 6,
+                    "freeze_groups": [1, 31],
+                    "frozen_group_bin_count": 10,
+                }
+            )
+            sidecar_summary_path.write_text(json.dumps(sidecar_summary), encoding="utf-8")
+            module = _load_summary_module()
+
+            summary = module.summarize_handoff(handoff)
+
+            self.assertEqual(summary["sph_target"], "rate")
+            self.assertEqual(summary["zero_flux_policy"], "identity")
+            self.assertEqual(summary["identity_bin_count"], 4)
+            self.assertEqual(summary["flux_floor_rel"], 1.0e-3)
+            self.assertEqual(summary["floored_bin_count"], 6)
+            self.assertEqual(summary["freeze_groups"], [1, 31])
+            self.assertEqual(summary["frozen_group_bin_count"], 10)
 
     def test_summary_records_sph_iteration_history(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import type { AcceptedValidationEntry } from "@/lib/acceptedValidation";
+import { ACCEPTED_VALIDATION_ENTRIES } from "@/lib/acceptedValidation";
 import { ApiError, HealthResponse, api } from "@/lib/api";
 import type { DemoShortcut } from "@/lib/demoShortcuts";
 import { HOME_DEMO_SHORTCUTS } from "@/lib/demoShortcuts";
@@ -69,6 +71,7 @@ export default function Home() {
           <div className="space-y-5">
             <StartHere entries={TASK_ENTRYPOINTS} />
             <WorkflowSummary steps={PRODUCTION_PATH_STEPS} />
+            <AcceptedValidation entries={ACCEPTED_VALIDATION_ENTRIES} />
             <AdvancedTools />
           </div>
 
@@ -172,6 +175,47 @@ function WorkflowSummary({ steps }: { steps: readonly ProductionPathStep[] }) {
           </li>
         ))}
       </ol>
+    </section>
+  );
+}
+
+function AcceptedValidation({
+  entries,
+}: {
+  entries: readonly AcceptedValidationEntry[];
+}) {
+  return (
+    <section className="glass rounded-xl p-5">
+      <h2 className="text-base font-semibold tracking-tight">
+        Accepted validation
+      </h2>
+      <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
+        The route is validated against paired OpenMC references on Cartesian
+        and hexagonal cores, not only on unit tests.
+      </p>
+      <ul className="mt-4 grid gap-3 md:grid-cols-3">
+        {entries.map((entry) => (
+          <li
+            key={entry.id}
+            className="rounded-lg border border-[var(--edge)] bg-black/10 p-3"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <span className="font-mono text-[11px] text-[var(--accent)]">
+                {entry.label}
+              </span>
+              <span className="text-[11px] text-[var(--fg-3)]">
+                {entry.result}
+              </span>
+            </div>
+            <h3 className="mt-2 text-sm font-semibold tracking-tight">
+              {entry.title}
+            </h3>
+            <p className="mt-1 text-[12px] leading-5 text-[var(--fg-2)]">
+              {entry.body}
+            </p>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

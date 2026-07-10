@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import bundledFixture from "../../src/openmc2donjon/web/fixtures/openmc_sph_physics_summary.json";
 import type { OpenmcSphPhysicsSummary } from "./api";
 import {
   formatScatterTreatment,
@@ -37,6 +38,13 @@ const SUMMARY: OpenmcSphPhysicsSummary = {
     factor: 1.0,
     formula: "sph = mg / ce",
   },
+  sph_target: "flux",
+  zero_flux_policy: "reject",
+  identity_bin_count: 0,
+  flux_floor_rel: null,
+  floored_bin_count: 0,
+  freeze_groups: null,
+  frozen_group_bin_count: 0,
   flux_uncertainty: {
     ce_max_relative_std_dev: 0.01,
     mg_max_relative_std_dev: 0.02,
@@ -211,8 +219,44 @@ describe("openmcSphSummary", () => {
     expect(formatScatterTreatment(SUMMARY)).toBe("P3 handoff · H16 MG macro");
   });
 
+  it("populates SPH update policy rows for the fixture-shaped summary", () => {
+    const rows = sphUpdatePolicyRows(SUMMARY);
+
+    expect(rows.map((row) => row.id)).toEqual(["target", "zero-flux"]);
+    expect(rows[0]).toMatchObject({ label: "SPH target", value: "flux" });
+    expect(rows[0].detail).toContain("Flux-matching");
+    expect(rows[1]).toMatchObject({
+      label: "Zero-flux policy",
+      value: "reject",
+    });
+    expect(rows[1].detail).toContain("fail the update");
+  });
+
+  it("renders the SPH update policy block from the bundled mock fixture", () => {
+    const rows = sphUpdatePolicyRows(bundledFixture as OpenmcSphPhysicsSummary);
+
+    expect(rows.map((row) => row.id)).toEqual(["target", "zero-flux"]);
+    expect(rows[0]).toMatchObject({ label: "SPH target", value: "flux" });
+    expect(rows[1]).toMatchObject({
+      label: "Zero-flux policy",
+      value: "reject",
+    });
+    expect(rows[1].detail).toContain("fail the update");
+  });
+
   it("omits SPH update policy rows for summaries without the new fields", () => {
-    expect(sphUpdatePolicyRows(SUMMARY)).toEqual([]);
+    expect(
+      sphUpdatePolicyRows({
+        ...SUMMARY,
+        sph_target: undefined,
+        zero_flux_policy: undefined,
+        identity_bin_count: undefined,
+        flux_floor_rel: undefined,
+        floored_bin_count: undefined,
+        freeze_groups: undefined,
+        frozen_group_bin_count: undefined,
+      }),
+    ).toEqual([]);
   });
 
   it("surfaces the rate-preserving SPH update policy fields when present", () => {
