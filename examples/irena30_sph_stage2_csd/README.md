@@ -99,8 +99,38 @@ results. Consequence: white-boundary colorset decks cannot be validated
 in SNT; DONJON-side checks for this example are done at core level
 (VOID boundary, validated by the accepted benchmark) instead.
 
+## CSD line results (rate mode)
+
+Rate mode on csd_int (freeze {1,31}, damping 0.5, 6 iterations) shows
+the stronger property of rate-preserving SPH: it does not merely avoid
+the flux-mode k drift, it RECOVERS the homogenization k defect — the
+corrected coarse model climbs from -423 pcm (uncorrected) to -78 pcm
+against the CE reference and is still converging (deltas per iteration
++146/+114/+95/+35/+38 pcm). The dominant corrections sit in the B4C
+resonance region (s up to ~1.28 at the near-thermal end, i.e. the
+homogenized absorber over-absorbs where pin self-shielding was lost),
+physically as expected. Group 2 shows the same chi-driven quasi-isolated
+drift as the PNL top groups: the CSD freeze list should be {1, 2, 31}.
+CSD converges slower than PNL (larger defect); 6 iterations are not yet
+converged and the recorded factors are a lower bound on the correction.
+
+Core-level closure (iteration-6 factors on the 6 CSD rod positions of
+the accepted 91-hex ARI benchmark):
+
+| Core solve | uncorrected | CSD-SPH corrected | delta |
+| --- | --- | --- | --- |
+| OpenMC-MG twin | 1.19223 +/- 25 pcm | 1.19392 +/- 24 pcm | +142 pcm |
+| DONJON SN8 | 1.192125 | 1.193048 | +77 pcm |
+
+Both solvers move in the same direction with comparable magnitude (the
+~65 pcm spread is ~2 sigma and grows with the factor size; the PNL
+closure with its small factors agreed to -4 vs +24 +/- 36 pcm). The
+headline physics: restoring B4C self-shielding through rate-SPH is worth
+roughly +100 pcm on the all-rods-in core.
+
 ## Status
 
-PNL (pnl_ext) line: complete under the prescription above. csd_int:
-flux-mode production run recorded (factor spectra physical); rate-mode
-run deferred at user request.
+PNL (pnl_ext) line: complete under the prescription rate + freeze
+{1,31} + 2-3 iterations. CSD (csd_int) line: rate-mode results and
+core-level closure recorded above; recommended prescription rate +
+freeze {1,2,31} + more iterations (>= 8) pending a converged rerun.
