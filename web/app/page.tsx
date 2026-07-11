@@ -7,8 +7,7 @@ import { ACCEPTED_VALIDATION_ENTRIES } from "@/lib/acceptedValidation";
 import { ApiError, HealthResponse, api } from "@/lib/api";
 import type { DemoShortcut } from "@/lib/demoShortcuts";
 import { HOME_DEMO_SHORTCUTS } from "@/lib/demoShortcuts";
-import type { ProductionPathStep } from "@/lib/productionPath";
-import { PRODUCTION_PATH_STEPS } from "@/lib/productionPath";
+import { HOME_HERO } from "@/lib/homeHero";
 import type { TaskEntrypoint } from "@/lib/taskEntrypoints";
 import { TASK_ENTRYPOINTS } from "@/lib/taskEntrypoints";
 
@@ -47,16 +46,13 @@ export default function Home() {
         <header className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
-              Converter-first production handoff
+              {HOME_HERO.kicker}
             </p>
             <h1 className="mt-2 text-4xl font-bold tracking-tight">
-              <span className="grad-text">OpenMC MGXS to DONJON ASCII</span>
+              <span className="grad-text">{HOME_HERO.heading}</span>
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
-              The product center is the direct converter: take an OpenMC MGXS
-              HDF5 handoff, run a no-write production check, write
-              L_MULTICOMPO or L_MACROLIB ASCII, then hand that file to DONJON.
-              If SPH is needed, prepare it upstream with OpenMC CE/MG first.
+              {HOME_HERO.paragraph}
             </p>
           </div>
           <Link
@@ -70,7 +66,6 @@ export default function Home() {
         <div className="grid gap-5 xl:grid-cols-[1fr_340px]">
           <div className="space-y-5">
             <StartHere entries={TASK_ENTRYPOINTS} />
-            <WorkflowSummary steps={PRODUCTION_PATH_STEPS} />
             <AcceptedValidation entries={ACCEPTED_VALIDATION_ENTRIES} />
             <AdvancedTools />
           </div>
@@ -141,40 +136,6 @@ function StartHere({ entries }: { entries: readonly TaskEntrypoint[] }) {
           </Link>
         ))}
       </div>
-    </section>
-  );
-}
-
-function WorkflowSummary({ steps }: { steps: readonly ProductionPathStep[] }) {
-  return (
-    <section className="glass rounded-xl p-5">
-      <h2 className="text-base font-semibold tracking-tight">What happens next</h2>
-      <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
-        The converter does not solve reactor physics. It serializes the
-        homogenized data and optional equivalence factors that already exist in
-        the HDF5 handoff.
-      </p>
-      <ol className="mt-4 grid gap-3 md:grid-cols-3">
-        {steps.map((step) => (
-          <li
-            key={step.id}
-            className="rounded-lg border border-[var(--edge)] bg-black/10 p-3"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <span className="font-mono text-[11px] text-[var(--accent)]">
-                {step.label}
-              </span>
-              <span className="text-[11px] text-[var(--fg-3)]">{step.result}</span>
-            </div>
-            <h3 className="mt-2 text-sm font-semibold tracking-tight">
-              {step.title}
-            </h3>
-            <p className="mt-1 text-[12px] leading-5 text-[var(--fg-2)]">
-              {step.body}
-            </p>
-          </li>
-        ))}
-      </ol>
     </section>
   );
 }

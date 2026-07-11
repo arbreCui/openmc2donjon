@@ -5,17 +5,12 @@ export interface OpenmcSphDemoPreset {
   label: string;
   description: string;
   runRoot: string;
-  mgxs: string;
-  ceStatepoint: string;
   mgStatepoint: string;
-  ceFlux: string;
-  mgFlux: string;
   sphSidecar: string;
   sphTable: string;
   augmentedH5: string;
   ascii: string;
   physicsSummary: string;
-  command: string;
 }
 
 export interface OpenmcSphPlannerPrefill {
@@ -39,29 +34,13 @@ export const MOCK_OPENMC_SPH_DEMO: OpenmcSphDemoPreset = {
   description:
     "Prefill the OpenMC planner with bundled mock paths for the CE/MG SPH route.",
   runRoot: "/mock/home/openmc-runs/openmc-sph-minicase",
-  mgxs: "/mock/home/openmc-runs/openmc-sph-minicase/mgxs_library.h5",
-  ceStatepoint: "/mock/home/openmc-runs/openmc-sph-minicase/ce_statepoint.h5",
   mgStatepoint: "/mock/home/openmc-runs/openmc-sph-minicase/mg_statepoint.h5",
-  ceFlux: "/mock/home/openmc-runs/openmc-sph-minicase/openmc_ce_flux.h5",
-  mgFlux: "/mock/home/openmc-runs/openmc-sph-minicase/openmc_mg_flux.h5",
   sphSidecar: "/mock/home/openmc-runs/openmc-sph-minicase/openmc_sph_sidecar.h5",
   sphTable: "/mock/home/openmc-runs/openmc-sph-minicase/openmc_sph.csv",
   augmentedH5: "/mock/home/openmc-runs/openmc-sph-minicase/mgxs_with_openmc_sph.h5",
   ascii: "/mock/home/openmc-runs/openmc-sph-minicase/out.macrolib.txt",
   physicsSummary: "/mock/home/openmc-runs/openmc-sph-minicase/physics_summary.json",
-  command: "openmc2donjon serve --mock",
 };
-
-const LIVE_OPENMC_SPH_PRODUCTION_COMMAND = [
-  "OPENMC2DONJON_COLORSET_VARIANT=two_region",
-  "RUN_ROOT=/private/tmp/openmc2donjon_two_region_production_20260709",
-  "BATCHES=80 INACTIVE=10 PARTICLES=20000",
-  "MG_BATCHES=80 MG_INACTIVE=10 MG_PARTICLES=20000",
-  "MAX_CE_FLUX_REL_STD=0.06",
-  "MAX_MG_FLUX_REL_STD=0.06",
-  "SPH_ITERATIONS=3",
-  "bash examples/openmc_ce_mg_33g_sph_minicase/run_workflow.sh",
-].join(" \\\n");
 
 export const LIVE_OPENMC_SPH_DEMO: OpenmcSphDemoPreset = {
   id: "live-openmc-sph",
@@ -69,13 +48,8 @@ export const LIVE_OPENMC_SPH_DEMO: OpenmcSphDemoPreset = {
   description:
     "Run the minimal CE/MG colorset where two output regions produce two SPH factors per energy group, then prefill production-quality corrected artifacts.",
   runRoot: "/private/tmp/openmc2donjon_two_region_production_20260709",
-  mgxs: "/private/tmp/openmc2donjon_two_region_production_20260709/handoff/mgxs_library.h5",
-  ceStatepoint:
-    "/private/tmp/openmc2donjon_two_region_production_20260709/ce_case/statepoint.80.h5",
   mgStatepoint:
     "/private/tmp/openmc2donjon_two_region_production_20260709/mg_case_iter03/statepoint.80.h5",
-  ceFlux: "/private/tmp/openmc2donjon_two_region_production_20260709/handoff/openmc_ce_flux.h5",
-  mgFlux: "/private/tmp/openmc2donjon_two_region_production_20260709/handoff/openmc_mg_flux.h5",
   sphSidecar:
     "/private/tmp/openmc2donjon_two_region_production_20260709/handoff/openmc_sph_sidecar.h5",
   sphTable: "/private/tmp/openmc2donjon_two_region_production_20260709/handoff/openmc_sph.csv",
@@ -85,7 +59,6 @@ export const LIVE_OPENMC_SPH_DEMO: OpenmcSphDemoPreset = {
     "/private/tmp/openmc2donjon_two_region_production_20260709/handoff/out_with_openmc_sph.macrolib.txt",
   physicsSummary:
     "/private/tmp/openmc2donjon_two_region_production_20260709/handoff/physics_summary.json",
-  command: LIVE_OPENMC_SPH_PRODUCTION_COMMAND,
 };
 
 export function openmcSphPlannerPrefill(
@@ -108,25 +81,6 @@ export function openmcSphPlannerPrefill(
     statepointPath: preset.id === "mock-openmc-sph" ? preset.mgStatepoint : "",
     loadStatepoint: false,
   };
-}
-
-export function openmcSphFluxExportHref(
-  preset: OpenmcSphDemoPreset,
-  side: "ce" | "mg",
-): string {
-  const params = new URLSearchParams({
-    command: "export-volume-flux",
-    statepoint: side === "ce" ? preset.ceStatepoint : preset.mgStatepoint,
-    output: side === "ce" ? preset.ceFlux : preset.mgFlux,
-    mgxs: preset.mgxs,
-    tally_name: side === "ce" ? "openmc_ce_volume_flux" : "openmc_mg_volume_flux",
-    dataset_name: side === "ce" ? "openmc_volume_flux" : "openmc_mg_flux",
-    summary_json:
-      side === "ce"
-        ? `${preset.runRoot}/openmc_ce_flux_summary.json`
-        : `${preset.runRoot}/openmc_mg_flux_summary.json`,
-  });
-  return `/builder?${params.toString()}`;
 }
 
 export function openmcSphSidecarHref(preset: OpenmcSphDemoPreset): string {

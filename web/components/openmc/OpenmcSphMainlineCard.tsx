@@ -12,10 +12,12 @@ export default function OpenmcSphMainlineCard({
   preset,
   mode,
   onReview,
+  onFill,
 }: {
   preset: OpenmcSphDemoPreset;
   mode: "mock" | "live";
   onReview: () => void;
+  onFill: () => void;
 }) {
   return (
     <section className="mb-5 rounded-xl border border-emerald-300/25 bg-emerald-300/[0.045] p-4">
@@ -34,9 +36,14 @@ export default function OpenmcSphMainlineCard({
             validated MACROLIB NSPH handoff.
           </p>
         </div>
-        <span className="rounded border border-emerald-300/30 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-emerald-300">
-          {mode}
-        </span>
+        <div className="flex shrink-0 items-center gap-3">
+          <span className="rounded border border-emerald-300/30 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-emerald-300">
+            {mode}
+          </span>
+          <button type="button" onClick={onFill} className="btn btn-primary">
+            Fill SPH planner
+          </button>
+        </div>
       </div>
 
       <div className="mt-4 grid gap-3 lg:grid-cols-3">
