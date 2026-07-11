@@ -50,8 +50,22 @@ describe("convertDecision", () => {
     );
     expect(decision.tone).toBe("ready");
     expect(decision.badge).toBe("L_MULTICOMPO");
+    expect(decision.title).toBe("ASCII output ready");
+    expect(decision.body).toContain("confirmed at the output path");
     expect(decision.reasons).toContain("Output size: 1234 bytes.");
     expect(decision.nextAction.body).toContain("Preview the LCM blocks");
+  });
+
+  it("does not claim an on-disk write for a mock fixture conversion", () => {
+    const decision = convertDecision(
+      response({ dry_run: false, converted: true, output_exists: true }),
+      input(),
+      { mockBackend: true },
+    );
+    expect(decision.tone).toBe("ready");
+    expect(decision.body).toContain("mock fixture");
+    expect(decision.body).not.toContain("confirmed at the output path");
+    expect(decision.reasons.join(" ")).toContain("simulated");
   });
 });
 

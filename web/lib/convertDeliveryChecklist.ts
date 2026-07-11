@@ -1,5 +1,5 @@
 import type { ConvertPreflightInput, ConvertResponse } from "./api";
-import { convertBundleHref } from "./convertNextSteps";
+import { convertBundleHref, convertDonjonGuideHref } from "./convertNextSteps";
 
 export type ConvertDeliveryStatus =
   | "done"
@@ -9,7 +9,7 @@ export type ConvertDeliveryStatus =
   | "skipped";
 
 export interface ConvertDeliveryItem {
-  id: "hdf5" | "gates" | "ascii" | "preview" | "bundle";
+  id: "hdf5" | "gates" | "ascii" | "preview" | "bundle" | "donjon";
   label: string;
   title: string;
   body: string;
@@ -28,6 +28,7 @@ export function convertDeliveryChecklist(
     asciiItem(data),
     previewItem(data),
     bundleItem(data),
+    donjonItem(data),
   ];
 }
 
@@ -68,7 +69,7 @@ function gatesItem(
       label: "Checks",
       title: "Production checks not run",
       body:
-        "Enable Preflight and Production checks to record the contract and physics acceptance decision.",
+        "Enable Preflight (--check) and Production checks (--production) to record the contract and physics acceptance decision.",
       status: data.ok ? "skipped" : "pending",
     };
   }
@@ -93,8 +94,8 @@ function asciiItem(data: ConvertResponse): ConvertDeliveryItem {
     return {
       id: "ascii",
       label: "ASCII",
-      title: "No ASCII handoff",
-      body: "The converter stopped before a valid handoff could be produced.",
+      title: "No ASCII output",
+      body: "The converter stopped before a valid output could be produced.",
       status: "blocked",
     };
   }
@@ -104,7 +105,7 @@ function asciiItem(data: ConvertResponse): ConvertDeliveryItem {
       label: "ASCII",
       title: "Ready to write ASCII",
       body:
-        "Dry-run did not write a file. Run Convert to create the DONJON-facing artifact.",
+        "Dry run did not write a file. Run Convert to create the DONJON-facing artifact.",
       status: "ready",
       action: "convert",
     };
@@ -147,7 +148,7 @@ function bundleItem(data: ConvertResponse): ConvertDeliveryItem {
       label: "Bundle",
       title: "Bundle builder is prefilled",
       body:
-        "Package the MGXS HDF5, ASCII output, summaries, and logs as the delivery record.",
+        "Package the MGXS HDF5, ASCII output, summaries, and logs into the manifest-backed bundle.",
       status: "ready",
       href: convertBundleHref(data),
     };
@@ -156,7 +157,28 @@ function bundleItem(data: ConvertResponse): ConvertDeliveryItem {
     id: "bundle",
     label: "Bundle",
     title: "Bundle after conversion",
-    body: "Packaging is useful once the ASCII handoff exists and has been reviewed.",
+    body: "Packaging is useful once the ASCII output exists and has been reviewed.",
+    status: data.ok ? "pending" : "blocked",
+  };
+}
+
+function donjonItem(data: ConvertResponse): ConvertDeliveryItem {
+  if (data.converted && data.output_exists) {
+    return {
+      id: "donjon",
+      label: "DONJON",
+      title: "Generate the DONJON deck",
+      body:
+        "Open the DONJON guide to build the deck skeleton and ingest smoke that consume this ASCII output.",
+      status: "ready",
+      href: convertDonjonGuideHref(data),
+    };
+  }
+  return {
+    id: "donjon",
+    label: "DONJON",
+    title: "DONJON consumes the ASCII",
+    body: "The DONJON guide takes over once a confirmed ASCII output exists.",
     status: data.ok ? "pending" : "blocked",
   };
 }

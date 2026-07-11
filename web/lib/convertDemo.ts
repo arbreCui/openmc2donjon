@@ -64,7 +64,7 @@ export const C5G7_PRODUCTION_DEMO: ConvertDemoPreset = {
   id: "c5g7-production",
   label: "C5G7 production demo",
   description:
-    "Walk through a realistic direct conversion: inspect the OpenMC MGXS HDF5, dry-run production checks, write MULTICOMPO ASCII, then review the handoff artifact.",
+    "Walk through a realistic direct conversion: inspect the OpenMC MGXS HDF5, run a production dry run, write MULTICOMPO ASCII, then review the ASCII output.",
   inputPath: "/mock/home/openmc-runs/c5g7/handoff.h5",
   outputPath: "/mock/home/openmc-runs/c5g7/out.mcompo.txt",
   format: "multicompo",
@@ -124,7 +124,7 @@ export const PRODUCTION_MINICASE_ARTIFACTS: readonly ConvertDemoArtifact[] = [
   {
     id: "bundle",
     label: "Bundle",
-    title: "Portable delivery record",
+    title: "Manifest-backed bundle",
     role: "downstream",
     path: `${parentDir(PRODUCTION_MINICASE_DEMO.outputPath)}/bundle`,
     body: "The bundle builder is prefilled from these paths after the ASCII file exists.",
@@ -182,7 +182,7 @@ export function productionMinicaseAvailability({
       tone: "ready",
       title: "Ready for web repeat",
       body:
-        "The real MGXS handoff is present. Dry-run and convert from this page; " +
+        "The real MGXS handoff is present. Dry run and convert from this page; " +
         "ASCII preview and bundle artifacts appear after those web actions.",
       statusMessage: `${downstreamMissingCount} downstream artifact${
         downstreamMissingCount === 1 ? "" : "s"
@@ -207,11 +207,13 @@ export function convertDemoHref(preset: ConvertDemoPreset): string {
     input: preset.inputPath,
     output: preset.outputPath,
     format: preset.format,
-    check: preset.check ? "1" : "0",
-    production: preset.production ? "1" : "0",
     require_known_mesh: preset.requireKnownMesh ? "1" : "0",
     comment: `${preset.label} web walkthrough`,
   });
+  // check/production now default to true on the form; only carry the params
+  // when a preset needs to downgrade them.
+  if (!preset.check) params.set("check", "0");
+  if (!preset.production) params.set("production", "0");
   return `/convert?${params.toString()}`;
 }
 

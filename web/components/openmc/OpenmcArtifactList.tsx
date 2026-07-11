@@ -15,8 +15,8 @@ export default function OpenmcArtifactList({
         <div>
           <h2 className="text-base font-semibold tracking-tight">Artifacts</h2>
           <p className="mt-1 text-sm text-[var(--fg-2)]">
-            Planned files for the handoff. Inspect HDF5 before conversion; pass
-            the ASCII output to DONJON.
+            Planned files for this workflow. Inspect the MGXS HDF5 before
+            conversion; pass the ASCII output to DONJON.
           </p>
         </div>
         <span className="rounded border border-[var(--edge)] px-2 py-1 font-mono text-[11px] uppercase tracking-wider text-[var(--fg-2)]">

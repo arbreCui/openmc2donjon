@@ -94,7 +94,7 @@ export function openmcSphConvertHref(
     check: "1",
     production: "1",
     require_known_mesh: "0",
-    comment: "OpenMC-side SPH corrected handoff",
+    comment: "OpenMC-side SPH-augmented handoff",
   });
   return `/convert?${params.toString()}`;
 }

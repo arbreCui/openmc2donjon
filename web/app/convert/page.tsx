@@ -9,6 +9,7 @@ import ConvertShowcase from "@/components/convert/ConvertShowcase";
 import LiveMinicaseCard from "@/components/convert/LiveMinicaseCard";
 import MockDemoCard from "@/components/convert/MockDemoCard";
 import ProductionMinicaseMissingHint from "@/components/convert/ProductionMinicaseMissingHint";
+import { convertIntentBannerVisible } from "@/lib/convertIntent";
 import { convertShowcaseDefaultOpen } from "@/lib/convertShowcase";
 import { useConvertPageState } from "@/lib/useConvertPageState";
 
@@ -49,7 +50,9 @@ function ConvertPageContent() {
           </p>
         </header>
 
-        <ConvertIntentBanner intent={model.intent} />
+        {convertIntentBannerVisible(model.intent.intent) ? (
+          <ConvertIntentBanner intent={model.intent} />
+        ) : null}
         {model.backendMode === "checking" ? (
           <BackendModeCard
             tone="loading"
@@ -118,6 +121,7 @@ function ConvertPageContent() {
           <ConvertReport
             state={model.state}
             onConvert={() => void model.run("convert")}
+            mockBackend={model.backendMode === "mock"}
           />
           {model.showMinicaseMissingHint ? (
             <ProductionMinicaseMissingHint

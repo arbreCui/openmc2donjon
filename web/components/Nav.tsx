@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { api } from "@/lib/api";
 import {
   isAnyNavItemActive,
   isNavItemActive,
@@ -14,12 +15,32 @@ import {
 export default function Nav() {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
+  const [mockMode, setMockMode] = useState(false);
   const moreRef = useRef<HTMLLIElement | null>(null);
   const moreActive = isAnyNavItemActive(SECONDARY_NAV_ITEMS, pathname);
 
   useEffect(() => {
     setMoreOpen(false);
   }, [pathname]);
+
+  // Show a small persistent "mock" chip when the backend reports mock
+  // mode. Live or unreachable backends render no chip at all.
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .health()
+      .then((data) => {
+        if (!cancelled) {
+          setMockMode(data.mock_mode);
+        }
+      })
+      .catch(() => {
+        // Unreachable backend: no chip.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Close the More dropdown on any click outside it. Same-pathname
   // navigations (e.g. /builder?command=diff -> /builder?command=bundle)
@@ -43,13 +64,23 @@ export default function Nav() {
       aria-label="Primary"
     >
       <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-3 px-6 py-3 lg:flex-row lg:items-center lg:gap-6">
-        <Link
-          href="/"
-          className="shrink-0 text-sm font-semibold tracking-tight"
-          aria-label="openmc2donjon home"
-        >
-          <span className="grad-text">openmc2donjon</span>
-        </Link>
+        <div className="flex shrink-0 items-center gap-2">
+          <Link
+            href="/"
+            className="text-sm font-semibold tracking-tight"
+            aria-label="openmc2donjon home"
+          >
+            <span className="grad-text">openmc2donjon</span>
+          </Link>
+          {mockMode ? (
+            <span
+              className="rounded-full border border-amber-300/30 bg-amber-300/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-amber-200"
+              title="Backend is running in mock mode"
+            >
+              mock
+            </span>
+          ) : null}
+        </div>
         <ul className="flex w-full flex-wrap items-center gap-1 text-sm lg:w-auto lg:justify-end">
           {PRIMARY_NAV_ITEMS.map((item) => (
             <li key={item.href}>

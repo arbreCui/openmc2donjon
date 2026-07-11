@@ -9,6 +9,7 @@ import type {
   ConvertWriterBackend,
   PyGanBackendStatus,
 } from "@/lib/api";
+import { CONVERT_CHECKS_DEFAULTS } from "@/lib/convertChecks";
 import { convertAdvancedPayload } from "@/lib/convertCommand";
 import {
   C5G7_PRODUCTION_DEMO,
@@ -41,8 +42,14 @@ export function useConvertPageState() {
   const queryFormat = parseConvertFormat(searchParams.get("format"));
   const queryWriterBackend: ConvertWriterBackend =
     searchParams.get("writer_backend") === "pygan" ? "pygan" : "ascii";
-  const queryCheck = queryFlag(searchParams, "check", true);
-  const queryProduction = queryFlag(searchParams, "production", false);
+  // Production checks are the form default; URL params still override, so
+  // demo/SPH deep links that need a downgrade keep working.
+  const queryCheck = queryFlag(searchParams, "check", CONVERT_CHECKS_DEFAULTS.check);
+  const queryProduction = queryFlag(
+    searchParams,
+    "production",
+    CONVERT_CHECKS_DEFAULTS.production,
+  );
   const queryRequireKnownMesh = queryFlag(
     searchParams,
     "require_known_mesh",
@@ -231,7 +238,7 @@ export function useConvertPageState() {
     const trimmedInput = inputPath.trim();
     const trimmedOutput = displayedOutput.trim();
     if (!trimmedInput) {
-      setState({ kind: "error", message: "Enter an input HDF5 path first." });
+      setState({ kind: "error", message: "Enter an MGXS HDF5 path first." });
       return;
     }
     if (!trimmedOutput) {

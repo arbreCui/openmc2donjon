@@ -7,19 +7,25 @@ export interface NavItem {
 
 export const PRIMARY_NAV_ITEMS: readonly NavItem[] = [
   {
-    href: "/convert?intent=direct-convert&format=multicompo&check=1&production=1",
+    href: "/convert?intent=direct-convert&format=multicompo",
     label: "Convert",
     match: ["/convert"],
   },
   {
-    href: "/openmc?workflow=two-step&equivalence=sph&production=1",
+    href: "/openmc?workflow=two-step&production=1",
     label: "OpenMC prep",
     match: ["/openmc"],
   },
   {
     href: "/inspect",
-    label: "Review HDF5",
+    label: "Inspect HDF5",
     match: ["/inspect"],
+  },
+  {
+    href: "/donjon",
+    label: "DONJON",
+    description: "Generate the DONJON deck that consumes your ASCII.",
+    match: ["/donjon"],
   },
 ] as const;
 
@@ -31,33 +37,27 @@ export const SECONDARY_NAV_ITEMS: readonly NavItem[] = [
     match: ["/commands"],
   },
   {
-    href: "/equivalence?kind=adf-sidecar",
-    label: "ADF/SPH sidecars",
-    description: "Build sidecar commands after the main path is chosen.",
-    match: ["/equivalence"],
-  },
-  {
-    href: "/builder?command=bundle",
-    label: "Bundle",
-    description: "Package HDF5, ASCII, reports, and DONJON cards.",
+    href: "/builder",
+    label: "Command builder",
+    description: "Fill inputs and copy the exact CLI for auxiliary commands.",
     match: ["/builder"],
   },
   {
-    href: "/donjon",
-    label: "DONJON",
-    description: "Review consumption paths and input-card guidance.",
-    match: ["/donjon"],
+    href: "/equivalence?kind=adf-sidecar",
+    label: "ADF/SPH sidecars",
+    description: "Build sidecar commands after the main route is chosen.",
+    match: ["/equivalence"],
   },
   {
     href: "/pygan",
-    label: "PyGan option",
-    description: "Optional backend diagnostics; ASCII remains default.",
+    label: "PyGan validation",
+    description: "PyGan writer diagnostics and ASCII-vs-PyGan comparison.",
     match: ["/pygan"],
   },
   {
     href: "/settings",
     label: "Settings",
-    description: "Local browser preferences and default paths.",
+    description: "Default path prefix for path inputs and the file browser.",
     match: ["/settings"],
   },
 ] as const;

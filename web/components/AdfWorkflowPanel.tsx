@@ -1,42 +1,34 @@
 import Link from "next/link";
 import { CopyCliButton } from "@/components/commands/CopyCliButton";
-import { openmcSphWorkflowSteps } from "@/lib/openmcSphWorkflow";
+import { adfWorkflowSteps } from "@/lib/adfWorkflow";
 
-export default function OpenmcSphWorkflowPanel({
+export default function AdfWorkflowPanel({
   activeCommandId,
 }: {
   activeCommandId: string | null;
 }) {
-  const steps = openmcSphWorkflowSteps(activeCommandId);
+  const steps = adfWorkflowSteps(activeCommandId);
   return (
     <section className="mt-4 rounded-lg border border-emerald-300/20 bg-emerald-300/[0.045] p-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-[10px] uppercase tracking-[0.14em] text-emerald-300">
-            OpenMC-side SPH route
+            ADF/DF sidecar route
           </div>
           <h3 className="mt-1 text-sm font-semibold tracking-tight">
-            CE reference and MG macro solve stay in OpenMC
+            Face-flux evidence becomes explicit ADF/DF factors
           </h3>
           <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--fg-2)]">
-            This route does not iterate DONJON for SPH. Run OpenMC twice with the
-            same geometry, compute SPH from the two OpenMC flux fields, attach the
-            factors to the MGXS HDF5, then use the normal converter.
-          </p>
-          <p className="mt-2 max-w-3xl text-[12px] leading-5 text-amber-200/85">
-            Current accepted evidence includes the one-shot two-region production
-            probe: two output regions produce two SPH factors per energy group.
-            The five-region 2D case remains the larger diagnostic. Additional
-            OpenMC MG reruns are available for review, but they are
-            damping-sensitive and should not be treated as the default route.
+            Build the sidecar from face-flux evidence, augment the MGXS HDF5 with
+            the factors, then use the normal converter.
           </p>
         </div>
-        <Link href="/commands/export-volume-flux" className="btn btn-secondary">
-          Flux export guide
+        <Link href="/commands/export-surface-flux" className="btn btn-secondary">
+          Face-flux export guide
         </Link>
       </div>
 
-      <div className="mt-4 grid gap-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="mt-4 grid gap-2 lg:grid-cols-3">
         {steps.map((step, index) => (
           <article
             key={step.id}

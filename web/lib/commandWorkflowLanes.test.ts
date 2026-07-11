@@ -60,4 +60,22 @@ describe("commandWorkflowLanes", () => {
   it("returns an empty list for commands outside the visual workflow lanes", () => {
     expect(commandWorkflowOccurrences("serve")).toEqual([]);
   });
+
+  it("keeps the shared vocabulary: bundle pitch, augment verb, no inject", () => {
+    const direct = COMMAND_WORKFLOW_LANES.find((lane) => lane.id === "direct");
+    const deliver = direct!.steps.find((step) => step.id === "deliver");
+    expect(deliver!.body).toContain("Collect the MGXS HDF5");
+    expect(deliver!.body).toContain("bundle");
+
+    const adf = COMMAND_WORKFLOW_LANES.find((lane) => lane.id === "adf-df");
+    // The one per-page "sidecar" gloss for /commands lives here.
+    expect(adf!.summary).toContain("small companion HDF5");
+
+    for (const lane of COMMAND_WORKFLOW_LANES) {
+      expect(lane.summary.toLowerCase()).not.toContain("inject");
+      for (const step of lane.steps) {
+        expect(step.body.toLowerCase()).not.toContain("inject");
+      }
+    }
+  });
 });

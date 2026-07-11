@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { CopyCliButton } from "@/components/commands/CopyCliButton";
 import { ApiError, api, type BundleInspection } from "@/lib/api";
@@ -12,6 +12,7 @@ import {
   donjonDeckOptionsFromSearchParams,
   donjonDeckFilename,
   donjonDefaultsArtifact,
+  donjonGuideFacts,
   donjonGuideHref,
   donjonIngestOnlySnippet,
   donjonIngestSnippet,
@@ -22,7 +23,6 @@ import {
   inferDonjonFormat,
   placeholderAsciiPath,
   type DonjonBundleArtifact,
-  type DonjonDeckBoundary,
   type DonjonDeckChecklistItem,
   type DonjonDeckGeometry,
   type DonjonDeckOptions,
@@ -42,27 +42,6 @@ type ManifestState =
   | { kind: "missing"; message: string }
   | { kind: "error"; message: string };
 
-type BoundaryKey =
-  | "xMinus"
-  | "xPlus"
-  | "yMinus"
-  | "yPlus"
-  | "zMinus"
-  | "zPlus";
-
-const BOUNDARY_FIELDS: Array<{
-  key: BoundaryKey;
-  label: string;
-  dimension: "xy" | "z";
-}> = [
-  { key: "xMinus", label: "X-", dimension: "xy" },
-  { key: "xPlus", label: "X+", dimension: "xy" },
-  { key: "yMinus", label: "Y-", dimension: "xy" },
-  { key: "yPlus", label: "Y+", dimension: "xy" },
-  { key: "zMinus", label: "Z-", dimension: "z" },
-  { key: "zPlus", label: "Z+", dimension: "z" },
-];
-
 export default function DonjonPage() {
   return (
     <Suspense fallback={<DonjonLoading />}>
@@ -76,7 +55,7 @@ function DonjonLoading() {
     <main className="min-h-[calc(100vh-3.5rem)] px-6 py-12">
       <div className="mx-auto max-w-5xl">
         <section className="glass rounded-xl p-5 text-sm text-[var(--fg-2)]">
-          Loading DONJON handoff guide…
+          Loading DONJON guide…
         </section>
       </div>
     </main>
@@ -90,7 +69,10 @@ function DonjonPageContent() {
   const queryManifest = searchParams.get("manifest") ?? "";
   const queryDeckFilename = searchParams.get("deck") ?? "";
   const queryMixtureCount = searchParams.get("nmix");
-  const initialDeckOptions = donjonDeckOptionsFromSearchParams(searchParams);
+  const initialDeckOptions = useMemo(
+    () => donjonDeckOptionsFromSearchParams(searchParams),
+    [searchParams],
+  );
   const initialFormat = inferDonjonFormat(queryAscii, queryFormat);
   const [asciiPath, setAsciiPath] = useState(queryAscii);
   const [asciiEdited, setAsciiEdited] = useState(Boolean(queryAscii.trim()));
@@ -119,20 +101,29 @@ function DonjonPageContent() {
   const [hexHeightText, setHexHeightText] = useState(
     String(initialDeckOptions.hexHeight),
   );
-  const [boundaries, setBoundaries] = useState({
-    xMinus: initialDeckOptions.xMinus,
-    xPlus: initialDeckOptions.xPlus,
-    yMinus: initialDeckOptions.yMinus,
-    yPlus: initialDeckOptions.yPlus,
-    zMinus: initialDeckOptions.zMinus,
-    zPlus: initialDeckOptions.zPlus,
-  });
-  const [solveDeckFilename, setSolveDeckFilename] = useState(
-    queryDeckFilename.trim() ||
-      donjonDeckFilename(queryAscii, initialFormat, "solve"),
+  // Boundary conditions are no longer editable on the page: the smoke
+  // cell ships the fixed validated default. Deep-link parameters
+  // (xm/xp/ym/yp/zm/zp) are still honored so shared guide URLs keep
+  // reproducing the same deck.
+  const boundaries = useMemo(
+    () => ({
+      xMinus: initialDeckOptions.xMinus,
+      xPlus: initialDeckOptions.xPlus,
+      yMinus: initialDeckOptions.yMinus,
+      yPlus: initialDeckOptions.yPlus,
+      zMinus: initialDeckOptions.zMinus,
+      zPlus: initialDeckOptions.zPlus,
+    }),
+    [initialDeckOptions],
   );
-  const [deckFilenameEdited, setDeckFilenameEdited] = useState(
-    Boolean(queryDeckFilename.trim()),
+  // The solve deck filename is auto-derived from the ASCII path; a
+  // ``deck=`` deep-link parameter (e.g. from the convert page) still
+  // overrides it so shared links keep their filename.
+  const solveDeckFilename = useMemo(
+    () =>
+      queryDeckFilename.trim() ||
+      donjonDeckFilename(asciiPath, format, "solve"),
+    [asciiPath, format, queryDeckFilename],
   );
 
   const deckOptions = useMemo<Partial<DonjonDeckOptions>>(
@@ -158,7 +149,6 @@ function DonjonPageContent() {
     ],
   );
 
-  const objectLabel = donjonObjectLabel(format);
   const shortName = donjonShortName(format);
   const ingestSnippet = useMemo(
     () => donjonIngestSnippet(asciiPath, format, deckOptions),
@@ -190,11 +180,6 @@ function DonjonPageContent() {
     () => donjonDeckChecklist(asciiPath, format, deckOptions),
     [asciiPath, deckOptions, format],
   );
-
-  useEffect(() => {
-    if (deckFilenameEdited) return;
-    setSolveDeckFilename(donjonDeckFilename(asciiPath, format, "solve"));
-  }, [asciiPath, deckFilenameEdited, format]);
 
   useEffect(() => {
     const trimmed = manifestPath.trim();
@@ -258,11 +243,6 @@ function DonjonPageContent() {
     setAsciiPath(artifact.asciiPath);
     setFormat(artifact.format);
     setAsciiEdited(true);
-    if (!deckFilenameEdited) {
-      setSolveDeckFilename(
-        donjonDeckFilename(artifact.asciiPath, artifact.format, "solve"),
-      );
-    }
   }
 
   return (
@@ -273,7 +253,7 @@ function DonjonPageContent() {
             DONJON consumption
           </div>
           <h1 className="mt-2 text-3xl font-bold tracking-tight">
-            <span className="grad-text">Use the ASCII handoff in DONJON</span>
+            <span className="grad-text">Use the ASCII output in DONJON</span>
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
             This page does not run DONJON. It turns the converter output path into
@@ -287,7 +267,7 @@ function DonjonPageContent() {
           <div className="grid gap-3 lg:grid-cols-[1fr_220px]">
             <label className="block">
               <span className="text-sm font-semibold tracking-tight">
-                ASCII handoff path
+                DONJON ASCII path
               </span>
               <input
                 value={asciiPath}
@@ -332,9 +312,6 @@ function DonjonPageContent() {
           />
           <div className="mt-3 flex flex-wrap gap-2">
             <CopyCliButton value={`${origin}${selfHref}`} label="Copy page link" />
-            <Link href="/convert" className="btn btn-secondary">
-              Back to convert
-            </Link>
             {manifestPath.trim() ? (
               <Link
                 href={`/builder?command=validate-bundle&manifest=${encodeURIComponent(
@@ -348,44 +325,25 @@ function DonjonPageContent() {
           </div>
         </section>
 
-        <section className="mt-5 grid gap-4 lg:grid-cols-3">
-          <GuidanceCard
-            eyebrow="object"
-            title={objectLabel}
-            body={
-              format === "multicompo"
-                ? "Use this when the converter wrote mapped domain-wise mixtures. DONJON typically reads it as CPO, then NCR extracts a MACROLIB for the geometry mixture map."
-                : "Use this when the converter wrote a direct one-state macrolib. DONJON can assign the ASCII object directly to MACRO."
-            }
-          />
-          <GuidanceCard
-            eyebrow="mapping"
-            title={
-              format === "multicompo" ? "NCR builds MACRO" : "MACRO is direct"
-            }
-            body={
-              format === "multicompo"
-                ? "Your GEOM MIX numbers must correspond to the mixture indices you select in the NCR MIX lines."
-                : "Your GEOM MIX numbers refer directly to the mixtures stored in the L_MACROLIB object."
-            }
-          />
-          <GuidanceCard
-            eyebrow="solver"
-            title="Geometry stays case-specific"
-            body="The generated skeleton deliberately keeps geometry and tracking minimal. Replace those blocks with the diffusion, SPN, or SN deck for the real case."
-          />
+        <section className="mt-5 rounded-xl border border-[var(--edge)] bg-white/[0.02] p-4">
+          <dl className="grid gap-2">
+            {donjonGuideFacts(format).map((fact) => (
+              <div
+                key={fact.id}
+                className="flex flex-col gap-0.5 sm:flex-row sm:gap-3"
+              >
+                <dt className="w-20 shrink-0 pt-0.5 text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+                  {fact.label}
+                </dt>
+                <dd className="text-[12px] leading-5 text-[var(--fg-2)]">
+                  {fact.body}
+                </dd>
+              </div>
+            ))}
+          </dl>
         </section>
 
         <DeckBuilderPanel
-          solveDeckFilename={solveDeckFilename}
-          onSolveDeckFilenameChange={(value) => {
-            setSolveDeckFilename(value);
-            setDeckFilenameEdited(true);
-          }}
-          onResetSolveDeckFilename={() => {
-            setSolveDeckFilename(donjonDeckFilename(asciiPath, format, "solve"));
-            setDeckFilenameEdited(false);
-          }}
           mixtureCount={mixtureCountText}
           onMixtureCountChange={(value) => {
             setMixtureCountText(value);
@@ -407,11 +365,8 @@ function DonjonPageContent() {
           hexHeight={hexHeightText}
           onHexHeightChange={setHexHeightText}
           boundaries={boundaries}
-          onBoundaryChange={(key, value) =>
-            setBoundaries((current) => ({ ...current, [key]: value }))
-          }
         />
-        <DeckHandoffChecklist items={checklist} />
+        <DeckChecklist items={checklist} />
 
         <section className="mt-5 grid gap-4 lg:grid-cols-[1fr_1fr]">
           <SnippetCard
@@ -428,22 +383,6 @@ function DonjonPageContent() {
             downloadFilename={solveDeckFilename}
             runCommand={donjonRunCommand(solveDeckFilename)}
           />
-        </section>
-
-        <section className="mt-5 rounded-xl border border-[var(--edge)] bg-white/[0.02] p-4">
-          <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
-            production reminder
-          </div>
-          <h2 className="mt-1 text-base font-semibold tracking-tight">
-            The converter does not define the core model by itself
-          </h2>
-          <p className="mt-2 text-sm leading-relaxed text-[var(--fg-2)]">
-            OpenMC supplies the homogenized cross sections. DONJON still needs
-            the deterministic geometry, mixture assignment, tracking options,
-            boundary conditions, and solver choice. For SPH workflows, generate
-            factors upstream from OpenMC CE versus OpenMC MG with the same
-            geometry, then deliver the corrected handoff to this DONJON deck.
-          </p>
         </section>
       </div>
     </main>
@@ -625,25 +564,12 @@ function ManifestDonjonDefaults({
   if (!hasSummaryContext) return null;
   return (
     <div className="mt-2 rounded border border-cyan-300/15 bg-cyan-300/5 p-2 text-[11px] text-cyan-100">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.14em] text-cyan-100/70">
-            conversion summary
-          </div>
-          <div className="mt-1 font-semibold tracking-tight">
-            DONJON inputs inferred from convert_summary.json
-          </div>
+      <div>
+        <div className="text-[10px] uppercase tracking-[0.14em] text-cyan-100/70">
+          conversion summary
         </div>
-        <div className="flex flex-wrap gap-1.5">
-          <SummaryPill tone={defaults.ok === false ? "bad" : "good"}>
-            {conversionStateLabel(defaults)}
-          </SummaryPill>
-          <SummaryPill tone={defaults.production_requested ? "good" : "neutral"}>
-            {defaults.production_requested ? "production gates" : "standard run"}
-          </SummaryPill>
-          <SummaryPill tone={defaults.preflight_ok === false ? "bad" : "good"}>
-            {preflightStateLabel(defaults)}
-          </SummaryPill>
+        <div className="mt-1 font-semibold tracking-tight">
+          DONJON inputs inferred from convert_summary.json
         </div>
       </div>
       <div className="mt-2 grid gap-2 md:grid-cols-2">
@@ -677,26 +603,6 @@ function ManifestDonjonDefaults({
   );
 }
 
-function SummaryPill({
-  children,
-  tone,
-}: {
-  children: ReactNode;
-  tone: "good" | "bad" | "neutral";
-}) {
-  const toneClass =
-    tone === "good"
-      ? "border-emerald-300/20 bg-emerald-300/10 text-emerald-100"
-      : tone === "bad"
-        ? "border-rose-300/25 bg-rose-300/10 text-rose-100"
-        : "border-cyan-300/20 bg-cyan-300/10 text-cyan-100";
-  return (
-    <span className={"rounded border px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] " + toneClass}>
-      {children}
-    </span>
-  );
-}
-
 function SummaryFact({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded border border-cyan-300/10 bg-black/10 px-2 py-1.5">
@@ -708,21 +614,6 @@ function SummaryFact({ label, value }: { label: string; value: string }) {
       </div>
     </div>
   );
-}
-
-function conversionStateLabel(defaults: BundleInspection["donjon_defaults"]) {
-  if (!defaults) return "summary unknown";
-  if (defaults.dry_run) return "dry-run only";
-  if (defaults.converted) return "converted";
-  if (defaults.ok === false) return "conversion failed";
-  return "summary loaded";
-}
-
-function preflightStateLabel(defaults: BundleInspection["donjon_defaults"]) {
-  if (!defaults) return "preflight unknown";
-  if (defaults.preflight_ok === true) return "preflight pass";
-  if (defaults.preflight_ok === false) return "preflight fail";
-  return "preflight n/a";
 }
 
 function ManifestStat({ label, value }: { label: string; value: string }) {
@@ -739,9 +630,6 @@ function ManifestStat({ label, value }: { label: string; value: string }) {
 }
 
 function DeckBuilderPanel({
-  solveDeckFilename,
-  onSolveDeckFilenameChange,
-  onResetSolveDeckFilename,
   mixtureCount,
   onMixtureCountChange,
   geometry,
@@ -757,11 +645,7 @@ function DeckBuilderPanel({
   hexHeight,
   onHexHeightChange,
   boundaries,
-  onBoundaryChange,
 }: {
-  solveDeckFilename: string;
-  onSolveDeckFilenameChange: (value: string) => void;
-  onResetSolveDeckFilename: () => void;
   mixtureCount: string;
   onMixtureCountChange: (value: string) => void;
   geometry: DonjonDeckGeometry;
@@ -780,11 +664,13 @@ function DeckBuilderPanel({
     DonjonDeckOptions,
     "xMinus" | "xPlus" | "yMinus" | "yPlus" | "zMinus" | "zPlus"
   >;
-  onBoundaryChange: (key: BoundaryKey, value: DonjonDeckBoundary) => void;
 }) {
-  const visibleBoundaries = BOUNDARY_FIELDS.filter(
-    (field) => geometry === "car3d" || field.dimension === "xy",
-  );
+  const boundaryLine =
+    `X- ${boundaries.xMinus} X+ ${boundaries.xPlus} ` +
+    `Y- ${boundaries.yMinus} Y+ ${boundaries.yPlus}` +
+    (geometry === "car3d"
+      ? ` Z- ${boundaries.zMinus} Z+ ${boundaries.zPlus}`
+      : "");
 
   return (
     <section className="mt-5 rounded-xl border border-[var(--edge)] bg-black/15 p-4">
@@ -807,26 +693,7 @@ function DeckBuilderPanel({
         </span>
       </div>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-[1.5fr_repeat(4,minmax(0,1fr))]">
-        <label className="block">
-          <span className="text-[12px] font-semibold tracking-tight">
-            Solve deck filename
-          </span>
-          <div className="mt-2 flex gap-2">
-            <input
-              value={solveDeckFilename}
-              onChange={(event) => onSolveDeckFilenameChange(event.target.value)}
-              className="min-w-0 flex-1 rounded-md border border-[var(--edge)] bg-black/20 px-3 py-2 font-mono text-sm text-[var(--fg-0)]"
-            />
-            <button
-              type="button"
-              onClick={onResetSolveDeckFilename}
-              className="btn btn-secondary px-2 py-1 text-[11px]"
-            >
-              Reset
-            </button>
-          </div>
-        </label>
+      <div className="mt-4 grid gap-3 lg:grid-cols-4">
         <label className="block">
           <span className="text-[12px] font-semibold tracking-tight">
             Mixtures to extract
@@ -952,40 +819,26 @@ function DeckBuilderPanel({
       {geometry === "hex" ? (
         <p className="mt-3 text-[12px] leading-5 text-[var(--fg-2)]">
           Hexagonal boundary conditions are fixed by the skeleton — see the
-          outer-boundary card in the handoff checklist below.
+          outer-boundary card in the deck checklist below.
         </p>
       ) : (
-        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
-          {visibleBoundaries.map((field) => (
-            <label key={field.key} className="block">
-              <span className="text-[11px] font-semibold tracking-tight text-[var(--fg-2)]">
-                {field.label}
-              </span>
-              <select
-                value={boundaries[field.key]}
-                onChange={(event) =>
-                  onBoundaryChange(field.key, event.target.value as DonjonDeckBoundary)
-                }
-                className="mt-1.5 w-full rounded-md border border-[var(--edge)] bg-black/20 px-2 py-1.5 text-[12px] text-[var(--fg-0)]"
-              >
-                <option value="REFL">REFL</option>
-                <option value="VOID">VOID</option>
-              </select>
-            </label>
-          ))}
-        </div>
+        <p className="mt-3 text-[12px] leading-5 text-[var(--fg-2)]">
+          Boundary conditions are fixed for the smoke cell:{" "}
+          <span className="font-mono">{boundaryLine}</span> — replace them
+          together with the GEOM block for the real case.
+        </p>
       )}
     </section>
   );
 }
 
-function DeckHandoffChecklist({ items }: { items: DonjonDeckChecklistItem[] }) {
+function DeckChecklist({ items }: { items: DonjonDeckChecklistItem[] }) {
   return (
     <section className="mt-5 rounded-xl border border-[var(--edge)] bg-white/[0.02] p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
-            handoff checklist
+            deck checklist
           </div>
           <h2 className="mt-1 text-base font-semibold tracking-tight">
             Before running the downloaded deck
@@ -1040,26 +893,6 @@ function ChecklistBadge({ tone }: { tone: DonjonDeckChecklistItem["tone"] }) {
     >
       {label}
     </span>
-  );
-}
-
-function GuidanceCard({
-  eyebrow,
-  title,
-  body,
-}: {
-  eyebrow: string;
-  title: string;
-  body: string;
-}) {
-  return (
-    <article className="rounded-lg border border-[var(--edge)] bg-black/15 p-4">
-      <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
-        {eyebrow}
-      </div>
-      <h2 className="mt-1 text-sm font-semibold tracking-tight">{title}</h2>
-      <p className="mt-2 text-[12px] leading-5 text-[var(--fg-2)]">{body}</p>
-    </article>
   );
 }
 

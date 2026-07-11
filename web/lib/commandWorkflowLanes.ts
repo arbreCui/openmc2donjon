@@ -28,7 +28,7 @@ export const COMMAND_WORKFLOW_LANES: readonly WorkflowLane[] = [
     id: "direct",
     title: "Direct converter handoff",
     summary:
-      "Use this when OpenMC already produced the MGXS HDF5 and you want the cleanest path to DONJON ASCII.",
+      "Use this when OpenMC already produced the MGXS HDF5 and you want the cleanest route to DONJON ASCII.",
     steps: [
       {
         id: "handoff",
@@ -40,7 +40,7 @@ export const COMMAND_WORKFLOW_LANES: readonly WorkflowLane[] = [
       {
         id: "inspect",
         title: "Inspect and preflight",
-        body: "Check the HDF5 contract, group structure, mixtures, scatter, and production gates.",
+        body: "Check the HDF5 contract, group structure, mixtures, and scatter; run the production checks before writing.",
         href: "/inspect",
         commandIds: ["inspect", "check", "diff"],
       },
@@ -54,7 +54,7 @@ export const COMMAND_WORKFLOW_LANES: readonly WorkflowLane[] = [
       {
         id: "deliver",
         title: "Bundle and share",
-        body: "Collect source HDF5, ASCII output, summaries, and logs into a reproducible delivery.",
+        body: "Collect the MGXS HDF5, ASCII output, summaries, and logs into a reproducible bundle.",
         href: "/builder?command=bundle",
         commandIds: ["bundle", "validate-bundle"],
       },
@@ -80,7 +80,7 @@ export const COMMAND_WORKFLOW_LANES: readonly WorkflowLane[] = [
     id: "adf-df",
     title: "ADF/DF sidecar equivalence",
     summary:
-      "Use this when face-flux evidence produces explicit ADF/DF factors before conversion.",
+      "Use this when face-flux evidence produces explicit ADF/DF factors before conversion. A sidecar is a small companion HDF5 carrying ADF/DF or SPH factors.",
     steps: [
       {
         id: "drivers",
@@ -109,7 +109,7 @@ export const COMMAND_WORKFLOW_LANES: readonly WorkflowLane[] = [
       {
         id: "augment",
         title: "Augment then convert",
-        body: "Inject the chosen sidecar into the HDF5, then run the same converter path.",
+        body: "Attach the chosen sidecar to the HDF5, then run the same converter route.",
         href: "/equivalence?kind=augment-adf",
         commandIds: ["augment-adf", "direct-convert"],
       },

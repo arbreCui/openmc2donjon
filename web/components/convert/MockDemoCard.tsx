@@ -50,7 +50,7 @@ export default function MockDemoCard({
             className="btn btn-primary"
             disabled={dryRunLoading}
           >
-            {dryRunLoading ? "Checking…" : "Run demo dry-run"}
+            {dryRunLoading ? "Checking…" : "Run demo dry run"}
           </button>
           {canConvert || converted || convertLoading ? (
             <button
@@ -83,7 +83,7 @@ export default function MockDemoCard({
           <span className="ml-2 text-[var(--fg-1)]">
             {converted
               ? "The mock MULTICOMPO artifact is ready for preview and bundling below."
-              : "Run Convert demo output to create the mock MULTICOMPO ASCII handoff."}
+              : "Run Convert demo output to create the mock MULTICOMPO ASCII output."}
           </span>
         </div>
       ) : null}

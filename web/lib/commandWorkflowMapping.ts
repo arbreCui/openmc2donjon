@@ -40,8 +40,8 @@ export function commandWorkflowMapping(
         "Opens the converter page with the output object and check mode selected, then continues to ASCII preview and bundle links after conversion.",
       presets: [
         `Output object: ${format === "macrolib" ? "MACROLIB" : "MULTICOMPO"}`,
-        `Preflight: ${check ? "on" : "off"}`,
-        `Production checks: ${production ? "on" : "off"}`,
+        `Preflight (--check): ${check ? "on" : "off"}`,
+        `Production checks (--production): ${production ? "on" : "off"}`,
       ],
       requiredInputs: [
         "Input MGXS HDF5 path",
@@ -58,14 +58,14 @@ export function commandWorkflowMapping(
     return {
       available: true,
       href: command.web_path,
-      surface: "OpenMC planner",
-      title: "OpenMC production handoff planner",
+      surface: "OpenMC page",
+      title: "OpenMC production handoff workflow",
       summary:
-        "Opens the OpenMC workflow planner with the intended one-step or two-step path already selected.",
+        "Opens the OpenMC prep page with the intended one-step or two-step workflow already selected.",
       presets: [
         `Workflow: ${workflow === "two-step" ? "two-step export then convert" : "one-step export + convert"}`,
         `Equivalence: ${equivalenceLabel(equivalence)}`,
-        `Production checks: ${production ? "on" : "off"}`,
+        `Production checks (--production): ${production ? "on" : "off"}`,
       ],
       requiredInputs: [
         "Recipe Python path",
@@ -160,10 +160,10 @@ function equivalenceLabel(value: string): string {
 }
 
 function equivalenceBuilderLabel(value: string): string {
-  if (value === "augment-adf") return "inject ADF/DF";
+  if (value === "augment-adf") return "augment ADF/DF";
   if (value === "openmc-sph-sidecar") return "compute OpenMC CE/MG SPH sidecar";
   if (value === "sph-sidecar") return "make OpenMC-side SPH sidecar";
-  if (value === "augment-sph") return "inject SPH";
+  if (value === "augment-sph") return "augment SPH";
   return "make ADF/DF sidecar";
 }
 

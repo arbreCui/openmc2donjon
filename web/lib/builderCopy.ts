@@ -58,26 +58,13 @@ export function builderCatalogFailureHint(hasLocalBuilder: boolean): string {
 }
 
 /**
- * Rows for the "command in plain language" panel. The catalog-less
- * fallback deliberately omits "Use when": the workflow-step panel above
- * already renders the stage summary, and repeating the identical
- * sentence in two adjacent panels read as a rendering mistake.
+ * One-line catalog context for the builder form: "Produces: … · Next: …".
+ * Null when the catalog entry is unavailable — a placeholder line would
+ * only repeat what the catalog-failure banner already says.
  */
-export function commandContextRows(
+export function builderProducesNextLine(
   command: CommandCatalogEntry | null,
-): readonly (readonly [string, string])[] {
-  if (command) {
-    return [
-      ["Use when", command.use_when],
-      ["Produces", command.produces],
-      ["After this", command.next_step],
-    ];
-  }
-  return [
-    ["Produces", "A copyable CLI command assembled from the form values."],
-    [
-      "After this",
-      "Run the command locally and keep any generated summaries with the handoff.",
-    ],
-  ];
+): string | null {
+  if (!command) return null;
+  return `Produces: ${command.produces} · Next: ${command.next_step}`;
 }

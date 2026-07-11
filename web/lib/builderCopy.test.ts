@@ -3,7 +3,7 @@ import type { CommandCatalogEntry } from "./api";
 import {
   builderCatalogFailureHint,
   builderFallbackCopy,
-  commandContextRows,
+  builderProducesNextLine,
 } from "./builderCopy";
 
 describe("builderFallbackCopy", () => {
@@ -47,18 +47,17 @@ describe("builderCatalogFailureHint", () => {
   });
 });
 
-describe("commandContextRows", () => {
-  it("uses the catalog guidance when available", () => {
-    const rows = commandContextRows(command("diff"));
-    expect(rows.map(([label]) => label)).toEqual(["Use when", "Produces", "After this"]);
-    expect(rows[0][1]).toBe("diff use");
+describe("builderProducesNextLine", () => {
+  it("renders one compact Produces/Next line from the catalog entry", () => {
+    expect(builderProducesNextLine(command("diff"))).toBe(
+      "Produces: diff output · Next: diff next",
+    );
   });
 
-  it("omits the duplicated stage summary in the catalog-less fallback", () => {
-    // Regression: the fallback "Use when" row repeated the identical
-    // stage.summary sentence rendered by the workflow-step panel above.
-    const rows = commandContextRows(null);
-    expect(rows.map(([label]) => label)).toEqual(["Produces", "After this"]);
+  it("renders nothing without a catalog entry", () => {
+    // The catalog-failure banner already explains the state; a
+    // placeholder context line would just repeat it.
+    expect(builderProducesNextLine(null)).toBeNull();
   });
 });
 

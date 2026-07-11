@@ -16,7 +16,7 @@ export default function AsciiReadinessPanel({
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h4 className="text-sm font-semibold tracking-tight">
-              ASCII handoff readiness
+              ASCII output readiness
             </h4>
             <span className="rounded border border-current/25 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.14em]">
               {readiness.label}

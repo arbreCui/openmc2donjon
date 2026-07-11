@@ -8,6 +8,12 @@ import type {
   OpenmcWorkflowKind,
   OpenmcWorkflowPlan,
 } from "@/lib/api";
+import type { OpenmcSphDemoPreset } from "@/lib/openmcSphDemo";
+import {
+  openmcSphBundleHref,
+  openmcSphConvertHref,
+  openmcSphEvidenceHref,
+} from "@/lib/openmcSphDemo";
 import {
   openmcBundleBuilderHref,
   openmcConvertHref,
@@ -23,6 +29,13 @@ export type OpenmcPlannerState =
   | { kind: "ok"; data: OpenmcWorkflowPlan }
   | { kind: "error"; message: string; status?: number };
 
+export interface OpenmcSphDemoActions {
+  preset: OpenmcSphDemoPreset;
+  mode: "mock" | "live";
+  onFill: () => void;
+  onReview: () => void;
+}
+
 export default function OpenmcProductionPathPanel({
   state,
   workflow,
@@ -33,6 +46,7 @@ export default function OpenmcProductionPathPanel({
   statepointPath,
   loadStatepoint,
   runDir,
+  demo = null,
 }: {
   state: OpenmcPlannerState;
   workflow: OpenmcWorkflowKind;
@@ -43,6 +57,7 @@ export default function OpenmcProductionPathPanel({
   statepointPath: string;
   loadStatepoint: boolean;
   runDir: string;
+  demo?: OpenmcSphDemoActions | null;
 }) {
   const planned = state.kind === "ok" && state.data.ok;
   const plan = state.kind === "ok" ? state.data : null;
@@ -61,6 +76,8 @@ export default function OpenmcProductionPathPanel({
   const object = format === "macrolib" ? "L_MACROLIB" : "L_MULTICOMPO";
   const objectShort = format === "macrolib" ? "MACROLIB" : "MULTICOMPO";
   const isOpenmcSph = equivalence === "sph";
+  const sphDemo = isOpenmcSph && demo ? demo : null;
+  const demoBundleHref = sphDemo ? openmcSphBundleHref(sphDemo.preset) : null;
   const items = isOpenmcSph
     ? [
         {
@@ -69,12 +86,11 @@ export default function OpenmcProductionPathPanel({
           eyebrow: "Run physics",
           title: "Run OpenMC CE/MG SPH",
           body:
-            "Run OpenMC CE as the reference and OpenMC MG on the same geometry/output regions. Export CE/MG fluxes, build SPH(region, group), and inject NSPH into the MGXS handoff.",
-          // A successful plan only means the commands were planned; the
-          // physics run itself has not been executed.
-          status: statuses.plan === "passed" ? "planned" : statuses.plan,
+            "Run OpenMC CE as the reference and OpenMC MG on the same geometry/output regions. Export CE/MG fluxes, build SPH(region, group), and attach NSPH to the MGXS handoff.",
+          status: statuses.plan,
           href: undefined,
           hrefLabel: undefined,
+          onClick: undefined,
         },
         {
           id: "summary",
@@ -84,8 +100,9 @@ export default function OpenmcProductionPathPanel({
           body:
             "Load physics_summary.json and check CE/MG flux uncertainty, SPH factor range, reaction-rate preservation, and NSPH handoff status.",
           status: statuses.run,
-          href: undefined,
-          hrefLabel: undefined,
+          href: sphDemo ? openmcSphEvidenceHref(sphDemo.preset) : undefined,
+          hrefLabel: sphDemo ? "Load demo evidence" : undefined,
+          onClick: sphDemo?.onReview,
         },
         {
           id: "convert",
@@ -94,11 +111,19 @@ export default function OpenmcProductionPathPanel({
           title: `Convert to DONJON ${objectShort}`,
           body:
             format === "macrolib"
-              ? `Use the corrected HDF5 as converter input and write ${object}. For this SPH route, MACROLIB is the DONJON consumption path because NSPH is carried as GROUP/*/NSPH.`
-              : `Use the corrected HDF5 as converter input and write ${object}. Caveat: DONJON NCR: does not consume NSPH records from L_MULTICOMPO — use MACROLIB (GROUP/*/NSPH via DSPH: + MAC:) or pre-apply the factors with apply-sph so the correction reaches DONJON.`,
+              ? `Use the SPH-augmented HDF5 as converter input and write ${object}. For this SPH route, MACROLIB is the DONJON consumption route because NSPH is carried as GROUP/*/NSPH.`
+              : `Use the SPH-augmented HDF5 as converter input and write ${object}. Caveat: DONJON NCR: does not consume NSPH records from L_MULTICOMPO — use MACROLIB (GROUP/*/NSPH via DSPH: + MAC:) or pre-apply the factors with apply-sph so the correction reaches DONJON.`,
           status: statuses.review,
-          href: convertHref ?? inspectHref ?? undefined,
-          hrefLabel: convertHref ? "Open converter" : "Inspect HDF5",
+          href:
+            convertHref ??
+            (sphDemo ? openmcSphConvertHref(sphDemo.preset) : inspectHref) ??
+            undefined,
+          hrefLabel: convertHref
+            ? "Open converter"
+            : sphDemo
+              ? "Open converter (demo prefill)"
+              : "Inspect HDF5",
+          onClick: undefined,
         },
       ]
     : [
@@ -113,6 +138,7 @@ export default function OpenmcProductionPathPanel({
           status: statuses.source,
           href: undefined,
           hrefLabel: undefined,
+          onClick: undefined,
         },
         {
           id: "convert",
@@ -126,17 +152,19 @@ export default function OpenmcProductionPathPanel({
           status: statuses.review,
           href: convertHref ?? inspectHref ?? undefined,
           hrefLabel: convertHref ? "Open converter" : "Inspect HDF5",
+          onClick: undefined,
         },
         {
           id: "bundle",
           label: "03",
           eyebrow: "Bundle",
-          title: "Package DONJON handoff",
+          title: "Package the DONJON bundle",
           body:
             "Use a managed run directory to keep the MGXS input, ASCII output, summaries, and manifest together.",
           status: statuses.bundle,
           href: bundleHref ?? undefined,
           hrefLabel: "Open bundle builder",
+          onClick: undefined,
         },
       ];
 
@@ -145,7 +173,7 @@ export default function OpenmcProductionPathPanel({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="text-[10px] uppercase tracking-[0.14em] text-cyan-200/80">
-            Main line
+            Main workflow
           </div>
           <h2 className="mt-1 text-base font-semibold tracking-tight">
             {isOpenmcSph
@@ -154,14 +182,37 @@ export default function OpenmcProductionPathPanel({
           </h2>
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
             {isOpenmcSph
-              ? "This route prepares the converter input: OpenMC MG is the SPH equivalence operator, DONJON receives precomputed NSPH factors, and DONJON is not used as an SPH feedback loop. The current production demo is one-shot SPH; extra MG reruns are a damping-sensitive review path."
-              : "This route prepares the converter-facing HDF5 from OpenMC inputs. Once planned or exported, open Convert to run production checks and write the ASCII library."}
+              ? "This route prepares the converter input: OpenMC MG is the SPH equivalence operator, DONJON receives precomputed NSPH factors, and DONJON is not used as an SPH feedback loop. The current production demo is one-shot SPH; extra MG reruns are a damping-sensitive review step."
+              : "This route prepares the MGXS HDF5 from OpenMC inputs. Once planned or exported, open Convert to run production checks and write the ASCII library."}
           </p>
+          {demo ? (
+            <p className="mt-1 max-w-3xl text-[12px] leading-5 text-emerald-200/90">
+              Demo: the {demo.mode === "mock" ? "bundled mock" : "live production"}{" "}
+              two-region minicase can prefill this workflow; its per-step links
+              load the evidence, converter, and bundle.
+            </p>
+          ) : null}
         </div>
-        <span className="rounded border border-[var(--edge)] px-2 py-1 font-mono text-[11px] uppercase tracking-wider text-[var(--fg-2)]">
-          {workflow === "one-step" ? "one-step" : "two-step"} ·{" "}
-          {equivalenceLabel(equivalence)}
-        </span>
+        <div className="flex shrink-0 flex-wrap items-center gap-3">
+          <span className="rounded border border-[var(--edge)] px-2 py-1 font-mono text-[11px] uppercase tracking-wider text-[var(--fg-2)]">
+            {workflow === "one-step" ? "one-step" : "two-step"} ·{" "}
+            {equivalenceLabel(equivalence)}
+          </span>
+          {demo ? (
+            <>
+              <span className="rounded border border-emerald-300/30 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-emerald-300">
+                {demo.mode} demo
+              </span>
+              <button
+                type="button"
+                onClick={demo.onFill}
+                className="btn btn-primary"
+              >
+                Fill SPH planner
+              </button>
+            </>
+          ) : null}
+        </div>
       </div>
 
       <div className="mt-4 grid gap-2 lg:grid-cols-3">
@@ -193,6 +244,7 @@ export default function OpenmcProductionPathPanel({
             {item.href && item.hrefLabel ? (
               <Link
                 href={item.href}
+                onClick={item.onClick}
                 className="mt-3 inline-flex text-[12px] font-medium text-[var(--accent-2)] hover:underline"
               >
                 {item.hrefLabel}
@@ -202,13 +254,15 @@ export default function OpenmcProductionPathPanel({
         ))}
       </div>
 
-      {planned && plan ? (
+      {(planned && plan) || demoBundleHref ? (
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <CopyCliButton
-            value={plan.primary_command_text}
-            label="Copy primary command"
-            copiedLabel="Copied"
-          />
+          {planned && plan ? (
+            <CopyCliButton
+              value={plan.primary_command_text}
+              label="Copy primary command"
+              copiedLabel="Copied"
+            />
+          ) : null}
           {workflow === "two-step" && convertHref ? (
             <Link href={convertHref} className="btn btn-secondary">
               Open converter
@@ -221,7 +275,12 @@ export default function OpenmcProductionPathPanel({
           ) : null}
           {bundleHref ? (
             <Link href={bundleHref} className="btn btn-secondary">
-              Bundle handoff
+              Bundle
+            </Link>
+          ) : null}
+          {demoBundleHref ? (
+            <Link href={demoBundleHref} className="btn btn-secondary">
+              Bundle (demo prefill)
             </Link>
           ) : null}
         </div>
@@ -239,10 +298,7 @@ function openmcWalkthroughRunFromState(
 }
 
 function openmcWalkthroughStatusClass(status: OpenmcWalkthroughStatus): string {
-  if (status === "passed") {
-    return "border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-100";
-  }
-  if (status === "ready" || status === "running") {
+  if (status === "ready" || status === "planning") {
     return "border-cyan-300/25 bg-cyan-300/[0.06] text-cyan-100";
   }
   if (status === "planned") {

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { CopyCliButton } from "@/components/commands/CopyCliButton";
+import { WorkflowBreadcrumbs } from "@/components/commands/WorkflowBreadcrumbs";
 import FileBrowserModal from "@/components/inspect/FileBrowserModal";
 import OpenmcSphWorkflowPanel from "@/components/OpenmcSphWorkflowPanel";
 import {
@@ -15,16 +16,16 @@ import {
 import {
   BuilderField,
   BuilderValues,
+  COMMAND_BUILDER_SPECS,
   builderCliIssues,
   builderValuesFromQuery,
   buildCommandCli,
   commandBuilderSpec,
-  commandBuilderStage,
 } from "@/lib/commandBuilder";
 import {
   builderCatalogFailureHint,
   builderFallbackCopy,
-  commandContextRows,
+  builderProducesNextLine,
 } from "@/lib/builderCopy";
 import { bundlePrefillStatus } from "@/lib/builderPrefill";
 import { containingDirectory, outputPathInDirectory } from "@/lib/outputBrowse";
@@ -58,7 +59,59 @@ function BuilderLoading() {
 
 function CommandBuilderPageContent() {
   const searchParams = useSearchParams();
-  const commandId = searchParams.get("command") ?? "diff";
+  const commandId = searchParams.get("command");
+  if (commandId === null) {
+    return <BuilderIndex />;
+  }
+  return <BuilderForm commandId={commandId} />;
+}
+
+/** Bare /builder: a small index of every builder spec, not a silent default form. */
+function BuilderIndex() {
+  return (
+    <main className="min-h-[calc(100vh-3.5rem)] px-6 py-12">
+      <div className="mx-auto max-w-5xl">
+        <header className="mb-8">
+          <div className="text-[11px] uppercase tracking-[0.16em] text-[var(--fg-3)]">
+            Command builder
+          </div>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight">
+            <span className="grad-text">Pick a command to build</span>
+          </h1>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
+            Builders are non-mutating: fill inputs, copy the exact CLI, run it
+            locally. Sidecar commands build a small companion HDF5 carrying
+            ADF/DF or SPH factors.
+          </p>
+        </header>
+        <section className="glass rounded-xl p-4">
+          <div className="grid gap-2">
+            {COMMAND_BUILDER_SPECS.map((spec) => (
+              <Link
+                key={spec.id}
+                href={`/builder?command=${spec.id}`}
+                className="group flex flex-wrap items-center gap-3 rounded-lg border border-[var(--edge)] bg-white/[0.02] px-4 py-3 transition hover:border-[var(--edge-bright)] hover:bg-white/[0.045]"
+              >
+                <code className="font-mono text-[13px] font-semibold text-[var(--fg-0)]">
+                  {spec.id}
+                </code>
+                <span className="min-w-0 flex-1 truncate text-[12px] text-[var(--fg-2)]">
+                  {spec.summary}
+                </span>
+                <span className="text-[12px] font-medium text-[var(--accent-2)] group-hover:underline">
+                  Open builder
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      </div>
+    </main>
+  );
+}
+
+function BuilderForm({ commandId }: { commandId: string }) {
+  const searchParams = useSearchParams();
   const spec = commandBuilderSpec(commandId);
   const [catalogState, setCatalogState] = useState<CatalogState>({ kind: "loading" });
   const [values, setValues] = useState<BuilderValues>(() =>
@@ -102,7 +155,7 @@ function CommandBuilderPageContent() {
 
   const cli = spec ? buildCommandCli(spec, values) : command?.cli ?? "";
   const cliIssues = spec ? builderCliIssues(spec, values) : [];
-  const stage = spec ? commandBuilderStage(spec.id) : null;
+  const producesNextLine = builderProducesNextLine(command);
   // Saved-prefix shortcuts target input files only: directory and
   // output-path fields are not inspect-path material.
   const canUseSavedPrefix =
@@ -185,6 +238,11 @@ function CommandBuilderPageContent() {
                   Builders are non-mutating. The web UI does not execute this command or
                   write files; it only makes the CLI explicit and repeatable.
                 </p>
+                {producesNextLine ? (
+                  <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[var(--fg-3)]">
+                    {producesNextLine}
+                  </p>
+                ) : null}
               </div>
               <div className="flex flex-wrap gap-2">
                 <Link href={`/commands/${spec.id}`} className="btn btn-secondary">
@@ -196,11 +254,11 @@ function CommandBuilderPageContent() {
               </div>
             </div>
 
-            {stage ? <WorkflowHint stage={stage} /> : null}
-            <CommandContextPanel command={command} />
             {isOpenmcSphWorkflowCommand(spec.id) ? (
               <OpenmcSphWorkflowPanel activeCommandId={spec.id} />
-            ) : null}
+            ) : (
+              <WorkflowBreadcrumbs commandId={spec.id} className="mt-4" />
+            )}
 
             {spec.id === "bundle" ? (
               <BundlePrefillPanel status={bundlePrefillStatus(values)} />
@@ -287,69 +345,6 @@ function CommandBuilderPageContent() {
   );
 }
 
-function WorkflowHint({
-  stage,
-}: {
-  stage: ReturnType<typeof commandBuilderStage>;
-}) {
-  return (
-    <div className="mt-4 rounded-lg border border-cyan-300/20 bg-cyan-300/[0.045] p-3">
-      <div className="grid gap-3 md:grid-cols-[180px_1fr_180px] md:items-start">
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.14em] text-cyan-300">
-            workflow step
-          </div>
-          <div className="mt-1 text-sm font-semibold tracking-tight">{stage.label}</div>
-        </div>
-        <p className="text-sm leading-relaxed text-[var(--fg-2)]">{stage.summary}</p>
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
-            fixed reference
-          </div>
-          <div className="mt-1 text-[12px] text-[var(--fg-1)]">{stage.reference}</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function CommandContextPanel({
-  command,
-}: {
-  command: CommandCatalogEntry | null;
-}) {
-  const rows = commandContextRows(command);
-  return (
-    <section className="mt-4 rounded-lg border border-[var(--edge)] bg-white/[0.02] p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
-            command in plain language
-          </div>
-          <h3 className="mt-1 text-sm font-semibold tracking-tight">
-            What this builder is for
-          </h3>
-        </div>
-        {command ? (
-          <span className="rounded border border-current/20 bg-black/15 px-2 py-0.5 text-[11px] text-[var(--fg-2)]">
-            {command.status_label}
-          </span>
-        ) : null}
-      </div>
-      <div className="mt-3 grid gap-2 md:grid-cols-3">
-        {rows.map(([label, body]) => (
-          <div key={label} className="rounded-md border border-[var(--edge)] bg-black/10 p-3">
-            <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
-              {label}
-            </div>
-            <p className="mt-1 text-[12px] leading-5 text-[var(--fg-2)]">{body}</p>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 function BundlePrefillPanel({
   status,
 }: {
@@ -367,7 +362,7 @@ function BundlePrefillPanel({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
-            delivery bundle
+            bundle
           </div>
           <h3 className="mt-1 text-sm font-semibold tracking-tight">
             {status.title}
@@ -414,53 +409,9 @@ function BundlePrefillPanel({
           ))}
         </div>
       ) : null}
-      <div className="mt-4 grid gap-2 md:grid-cols-3">
-        {BUNDLE_WORKFLOW_STEPS.map((step, index) => (
-          <article
-            key={step.title}
-            className="rounded-md border border-[var(--edge)] bg-black/15 px-3 py-2"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-mono text-[11px] text-[var(--fg-3)]">
-                {String(index + 1).padStart(2, "0")}
-              </span>
-              <span className="rounded border border-current/20 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
-                {step.badge}
-              </span>
-            </div>
-            <h4 className="mt-2 text-[12px] font-semibold tracking-tight">
-              {step.title}
-            </h4>
-            <p className="mt-1 text-[11px] leading-4 text-[var(--fg-2)]">
-              {step.body}
-            </p>
-          </article>
-        ))}
-      </div>
     </section>
   );
 }
-
-const BUNDLE_WORKFLOW_STEPS = [
-  {
-    badge: "inputs",
-    title: "Review paths",
-    body:
-      "Keep the OpenMC MGXS source, DONJON ASCII output, summaries, and logs together.",
-  },
-  {
-    badge: "manifest",
-    title: "Run bundle CLI",
-    body:
-      "The command writes the manifest-backed delivery directory on your local filesystem.",
-  },
-  {
-    badge: "handoff",
-    title: "Share or validate",
-    body:
-      "Send the bundle to DONJON users, or run validate-bundle before delivery.",
-  },
-] as const;
 
 function BuilderFieldControl({
   field,

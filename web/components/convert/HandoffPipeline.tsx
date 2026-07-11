@@ -27,7 +27,7 @@ export default function HandoffPipeline({
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold tracking-tight">
-            Handoff pipeline
+            Handoff workflow
           </h2>
           <p className="mt-1 text-sm text-[var(--fg-2)]">
             What the converter is handing from OpenMC to DONJON in this run.
@@ -174,7 +174,7 @@ function consumerTitle(format: ConvertResponse["format"]): string {
 }
 
 function consumerStatus(data: ConvertResponse): string {
-  if (data.converted && data.output_exists) return "handoff";
+  if (data.converted && data.output_exists) return "ready";
   if (data.dry_run && data.ok && !data.output_exists) return "next";
   return data.ok ? "pending" : "blocked";
 }
@@ -187,9 +187,9 @@ function consumerTone(data: ConvertResponse): PipelineTone {
 
 function consumerDetail(data: ConvertResponse): string {
   if (data.format === "macrolib") {
-    return "Use the output as a one-state DRAGON/DONJON macrolib handoff.";
+    return "Use the output as a one-state DRAGON/DONJON macrolib input.";
   }
-  return "Use the output as a MULTICOMPO handoff where each exported mixture maps to a DONJON material index.";
+  return "Use the output as a MULTICOMPO input where each exported mixture maps to a DONJON material index.";
 }
 
 function stageClass(tone: PipelineTone): string {

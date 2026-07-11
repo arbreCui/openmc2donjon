@@ -7,6 +7,7 @@ import {
   ConvertDeliveryStatus,
   convertDeliveryChecklist,
 } from "@/lib/convertDeliveryChecklist";
+import { isCopyCliDestination } from "@/lib/convertNextSteps";
 
 export default function DeliveryChecklist({
   data,
@@ -28,15 +29,15 @@ export default function DeliveryChecklist({
             Delivery checklist
           </h3>
           <p className="mt-1 text-[12px] leading-5 text-[var(--fg-3)]">
-            Production handoff status from HDF5 QA through ASCII preview and
-            bundle packaging.
+            Production handoff status from HDF5 QA through ASCII preview,
+            bundle packaging, and DONJON consumption.
           </p>
         </div>
         <span className="rounded border border-[var(--edge)] px-2 py-1 font-mono text-[11px] uppercase tracking-wider text-[var(--fg-2)]">
           {completed}/{items.length} done · {ready} ready
         </span>
       </div>
-      <div className="mt-3 grid gap-2 lg:grid-cols-5">
+      <div className="mt-3 grid gap-2 md:grid-cols-3 xl:grid-cols-6">
         {items.map((item) => (
           <ChecklistCard key={item.id} item={item} onConvert={onConvert} />
         ))}
@@ -90,7 +91,11 @@ function ChecklistAction({
     );
   }
   if (!item.href) return null;
-  const label = item.href.startsWith("#") ? "Jump" : "Open";
+  const label = item.href.startsWith("#")
+    ? "Jump"
+    : isCopyCliDestination(item.href)
+      ? "Open · CLI"
+      : "Open";
   if (item.href.startsWith("#")) {
     return (
       <a

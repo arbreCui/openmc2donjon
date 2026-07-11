@@ -87,7 +87,7 @@ export default function OpenmcSphPhysicsSummaryCard({
           <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--fg-2)]">
             Load the `physics_summary.json` written by the CE/MG SPH workflow.
             It summarizes OpenMC CE reference flux, OpenMC MG flux on the
-            selected group structure, SPH factors, and the corrected DONJON
+            selected group structure, SPH factors, and the SPH-augmented MGXS
             handoff.
           </p>
         </div>
@@ -186,11 +186,11 @@ function SummaryBody({ state }: { state: SummaryState }) {
           </p>
           {convertHref ? (
             <Link href={convertHref} className="btn btn-primary text-[12px]">
-              Send corrected MGXS to Convert
+              Send SPH-augmented MGXS to Convert
             </Link>
           ) : (
             <span className="rounded border border-amber-300/25 px-2 py-1 text-[11px] text-amber-200">
-              corrected HDF5/output path missing
+              SPH-augmented HDF5/output path missing
             </span>
           )}
         </div>

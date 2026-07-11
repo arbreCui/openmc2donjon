@@ -24,7 +24,7 @@ export default function RunSummaryCard({
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-[12px] text-[var(--fg-3)]">
         <span>
           Copy this when sharing a converter run with a collaborator or
-          attaching evidence to a handoff bundle.
+          attaching evidence to a bundle.
         </span>
         <CopyCliButton
           value={summary}

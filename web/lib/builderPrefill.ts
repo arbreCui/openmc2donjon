@@ -37,7 +37,7 @@ export function bundlePrefillStatus(values: BuilderValues): BundlePrefillStatus 
       prefilled: true,
       title: "Prefilled from a converter result",
       body:
-        "The MGXS source, DONJON ASCII handoff, and any conversion summary are already in the form. Review the bundle directory, copy the CLI, then run it locally to create the delivery record.",
+        "The MGXS source, DONJON ASCII output, and any conversion summary are already in the form. Review the bundle directory, copy the CLI, then run it locally to create the bundle.",
       chips: [...(hasOutputDir ? ["bundle directory"] : []), ...chips],
       manifestPath,
       validateHref: manifestPath ? validateBundleBuilderHref(manifestPath) : undefined,
@@ -49,7 +49,7 @@ export function bundlePrefillStatus(values: BuilderValues): BundlePrefillStatus 
       prefilled: true,
       title: "Bundle builder has prefilled fields",
       body:
-        "Some artifact paths came from the URL. Fill any remaining files you want in the manifest-backed delivery bundle.",
+        "Some artifact paths came from the URL. Fill any remaining files you want in the bundle.",
       chips: [...(hasOutputDir ? ["bundle directory"] : []), ...chips],
       manifestPath,
       validateHref: manifestPath ? validateBundleBuilderHref(manifestPath) : undefined,
@@ -60,7 +60,7 @@ export function bundlePrefillStatus(values: BuilderValues): BundlePrefillStatus 
     prefilled: false,
     title: "Bundle artifacts after conversion",
     body:
-      "Use this builder after the direct converter writes an ASCII handoff. The convert result can prefill MGXS, ASCII, and bundle paths for you.",
+      "Use this builder after the direct converter writes the DONJON ASCII output. The convert result can prefill MGXS, ASCII, and bundle paths for you.",
     chips: [],
   };
 }

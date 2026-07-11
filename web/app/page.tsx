@@ -56,7 +56,7 @@ export default function Home() {
             </p>
           </div>
           <Link
-            href="/convert?intent=direct-convert&format=multicompo&check=1&production=1"
+            href="/convert?intent=direct-convert&format=multicompo"
             className="btn btn-primary shrink-0"
           >
             Start converter
@@ -67,7 +67,7 @@ export default function Home() {
           <div className="space-y-5">
             <StartHere entries={TASK_ENTRYPOINTS} />
             <AcceptedValidation entries={ACCEPTED_VALIDATION_ENTRIES} />
-            <AdvancedTools />
+            <AfterYouConvert />
           </div>
 
           <aside className="space-y-5">
@@ -93,21 +93,12 @@ export default function Home() {
 function StartHere({ entries }: { entries: readonly TaskEntrypoint[] }) {
   return (
     <section className="glass rounded-xl p-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold tracking-tight">
-            Start here
-          </h2>
-          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
-            Most users start with Convert. Use OpenMC SPH only when the HDF5
-            still needs equivalence factors, and Inspect when you only need to
-            understand a file before converting.
-          </p>
-        </div>
-        <span className="rounded border border-[var(--edge)] px-2 py-1 text-[11px] uppercase tracking-wider text-[var(--fg-2)]">
-          3 choices
-        </span>
-      </div>
+      <h2 className="text-base font-semibold tracking-tight">Start here</h2>
+      <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
+        Most users start with Convert. Use OpenMC SPH only when the HDF5
+        still needs equivalence factors, and Inspect when you only need to
+        understand a file before converting.
+      </p>
 
       <div className="mt-4 grid gap-3 lg:grid-cols-3">
         {entries.map((entry, index) => (
@@ -181,34 +172,24 @@ function AcceptedValidation({
   );
 }
 
-function AdvancedTools() {
+function AfterYouConvert() {
   const links = [
     {
-      href: "/commands",
-      title: "Command catalog",
-      body: "Reference map for every CLI command. Use it after the main flow is clear.",
-    },
-    {
-      href: "/equivalence?kind=adf-sidecar",
-      title: "ADF/SPH sidecar builders",
-      body: "Command builders for sidecars. They do not replace the converter path.",
+      href: "/donjon",
+      title: "DONJON deck guide",
+      body: "Generate the editable deck skeleton and run commands that consume the ASCII output — works from the ASCII path directly.",
     },
     {
       href: "/builder?command=bundle",
-      title: "Bundle handoff",
-      body: "Package ASCII, HDF5, reports, and DONJON input cards.",
-    },
-    {
-      href: "/pygan",
-      title: "PyGan option",
-      body: "Optional DRAGON/DONJON integration diagnostics; ASCII is default.",
+      title: "Bundle",
+      body: "Package the run when you want the manifest-backed record — recipients open the bundle on the DONJON page.",
     },
   ] as const;
   return (
-    <details className="glass rounded-xl p-5">
-      <summary className="cursor-pointer text-base font-semibold tracking-tight">
-        Advanced tools
-      </summary>
+    <section className="glass rounded-xl p-5">
+      <h2 className="text-base font-semibold tracking-tight">
+        After you convert
+      </h2>
       <div className="mt-4 grid gap-3 md:grid-cols-2">
         {links.map((link) => (
           <Link
@@ -223,7 +204,7 @@ function AdvancedTools() {
           </Link>
         ))}
       </div>
-    </details>
+    </section>
   );
 }
 
@@ -262,7 +243,6 @@ function DemoPanel({
   shortcuts: readonly DemoShortcut[];
 }) {
   const primary = shortcuts[0];
-  const secondary = shortcuts.slice(1);
   const enabled = state.kind === "ready" && state.mockMode;
   return (
     <section className="glass rounded-xl p-5">
@@ -274,21 +254,10 @@ function DemoPanel({
         Use this when showing the product without hunting for local files.
       </p>
       {enabled ? (
-        <div className="mt-4 space-y-3">
+        <div className="mt-4">
           <Link href={primary.href} className="btn btn-primary w-full">
             {primary.cta}
           </Link>
-          <div className="space-y-2">
-            {secondary.map((shortcut) => (
-              <Link
-                key={shortcut.id}
-                href={shortcut.href}
-                className="block rounded-md border border-[var(--edge)] bg-white/[0.02] px-3 py-2 text-[12px] text-[var(--fg-2)] transition hover:border-[var(--edge-bright)] hover:text-[var(--fg-0)]"
-              >
-                {shortcut.title}
-              </Link>
-            ))}
-          </div>
         </div>
       ) : (
         <div className="mt-4 rounded-lg border border-[var(--edge)] bg-white/[0.025] p-3 text-[12px] leading-5 text-[var(--fg-2)]">

@@ -379,7 +379,7 @@ class OpenmcWorkflowEndpointTests(unittest.TestCase):
         payload = response.json()
         self.assertTrue(payload["ok"])
         labels = [command["label"] for command in payload["commands"]]
-        self.assertEqual(labels, ["Export MGXS HDF5", "Inject ADF/DF", "Convert HDF5 to ASCII"])
+        self.assertEqual(labels, ["Export MGXS HDF5", "Augment ADF/DF", "Convert HDF5 to ASCII"])
         augment_text = payload["commands"][1]["text"]
         convert_text = payload["commands"][2]["text"]
         self.assertIn("augment-adf", augment_text)

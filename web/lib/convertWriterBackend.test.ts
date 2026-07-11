@@ -13,7 +13,7 @@ describe("convert writer backend helpers", () => {
     expect(ascii.id).toBe("ascii");
     expect(ascii.badge).toBe("default");
     expect(ascii.disabled).toBe(false);
-    expect(ascii.body).toContain("normal production path");
+    expect(ascii.body).toContain("normal production route");
     expect(pygan.id).toBe("pygan");
     expect(pygan.disabled).toBe(true);
     expect(pygan.badge).toBe("checking");

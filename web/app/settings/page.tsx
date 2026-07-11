@@ -1,10 +1,10 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { DEFAULT_SETTINGS, useSettings } from "@/lib/settings";
+import { useSettings } from "@/lib/settings";
 
 export default function SettingsPage() {
-  const [settings, update, reset, hydrated] = useSettings();
+  const [settings, update, , hydrated] = useSettings();
   const [draft, setDraft] = useState<string>("");
   const [savedFlash, setSavedFlash] = useState(false);
 
@@ -26,12 +26,6 @@ export default function SettingsPage() {
     event.preventDefault();
     update({ default_inspect_path: draft.trim() });
     setSavedFlash(true);
-  };
-
-  const onReset = () => {
-    reset();
-    setDraft(DEFAULT_SETTINGS.default_inspect_path);
-    setSavedFlash(false);
   };
 
   return (
@@ -58,13 +52,14 @@ export default function SettingsPage() {
               htmlFor="default_inspect_path"
               className="block text-sm font-semibold"
             >
-              Default Inspect path
+              Default path prefix
             </label>
             <p className="mt-1 text-[12px] text-[var(--fg-3)]">
-              Path prefix used by the Inspect, Convert, PyGan,
-              Equivalence, Builder, and OpenMC pages: it appears as the
-              path-input <em>placeholder</em>, is filled in by their
-              &quot;Use saved prefix&quot; buttons, and picks the file
+              Default path prefix for path inputs and the file browser
+              on the Inspect, Convert, PyGan, Equivalence, Builder, and
+              OpenMC pages: it appears as the path-input{" "}
+              <em>placeholder</em>, is filled in by their &quot;Use
+              saved prefix&quot; buttons, and picks the file
               browser&apos;s starting directory. Leave blank to disable.
             </p>
             <input
@@ -97,23 +92,13 @@ export default function SettingsPage() {
                 <span>Loading…</span>
               )}
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={onReset}
-                className="btn btn-secondary"
-                disabled={!hydrated}
-              >
-                Restore defaults
-              </button>
-              <button
-                type="submit"
-                className="btn btn-primary"
-                disabled={!hydrated}
-              >
-                Save
-              </button>
-            </div>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={!hydrated}
+            >
+              Save
+            </button>
           </div>
         </form>
       </div>

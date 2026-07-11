@@ -64,8 +64,8 @@ export const EQUIVALENCE_KINDS: readonly EquivalenceKindInfo[] = [
   {
     kind: "augment-adf",
     commandId: "augment-adf",
-    label: "Inject ADF",
-    title: "Inject ADF/DF into MGXS",
+    label: "Augment ADF",
+    title: "Augment MGXS with ADF/DF",
     summary:
       "Attach computed discontinuity factors to the MGXS HDF5 before conversion. The converter then carries the ADF blocks into DONJON ASCII.",
     outputPlaceholder: "mgxs_with_adf.h5",
@@ -77,7 +77,7 @@ export const EQUIVALENCE_KINDS: readonly EquivalenceKindInfo[] = [
     title: "Build OpenMC-side SPH sidecar",
     summary:
       "Compare OpenMC CE reference flux and OpenMC MG macro flux from the same geometry, then write an auditable SPH table plus HDF5 sidecar.",
-    outputPlaceholder: "sph_sidecar.h5",
+    outputPlaceholder: "openmc_sph.h5",
   },
   {
     kind: "sph-sidecar",
@@ -91,10 +91,10 @@ export const EQUIVALENCE_KINDS: readonly EquivalenceKindInfo[] = [
   {
     kind: "augment-sph",
     commandId: "augment-sph",
-    label: "Inject SPH",
-    title: "Inject SPH into MGXS",
+    label: "Augment SPH",
+    title: "Augment MGXS with SPH",
     summary:
-      "Attach SPH factors to the MGXS HDF5 before conversion. This records NSPH equivalence data for the DONJON handoff.",
+      "Attach SPH factors to the MGXS HDF5 before conversion. This records NSPH equivalence data that the converter carries into the DONJON ASCII.",
     outputPlaceholder: "mgxs_with_sph.h5",
   },
 ] as const;
@@ -225,7 +225,7 @@ function buildOpenmcSphSidecarCli(options: EquivalenceCommandOptions): string {
     "make-openmc-sph-sidecar",
     pathOrPlaceholder(options.inputH5, "<mgxs_library.h5>"),
     "-o",
-    pathOrPlaceholder(options.outputPath, "sph_sidecar.h5"),
+    pathOrPlaceholder(options.outputPath, "openmc_sph.h5"),
     "--reference-flux",
     pathOrPlaceholder(options.referenceFlux, "<openmc_ce_flux.h5::openmc_volume_flux>"),
     "--mg-flux",

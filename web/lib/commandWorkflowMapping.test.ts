@@ -15,8 +15,9 @@ describe("commandWorkflowMapping", () => {
     expect(mapping.available).toBe(true);
     expect(mapping.surface).toBe("Convert page");
     expect(mapping.presets).toContain("Output object: MULTICOMPO");
-    expect(mapping.presets).toContain("Preflight: on");
-    expect(mapping.presets).toContain("Production checks: on");
+    // Flag labels show the flag they toggle.
+    expect(mapping.presets).toContain("Preflight (--check): on");
+    expect(mapping.presets).toContain("Production checks (--production): on");
     expect(mapping.requiredInputs).toContain("Input MGXS HDF5 path");
   });
 
@@ -30,10 +31,10 @@ describe("commandWorkflowMapping", () => {
     );
 
     expect(mapping.surface).toBe("Convert page");
-    expect(mapping.presets).toContain("Production checks: on");
+    expect(mapping.presets).toContain("Production checks (--production): on");
   });
 
-  it("describes OpenMC planner deep links", () => {
+  it("describes OpenMC prep deep links", () => {
     const mapping = commandWorkflowMapping(
       command({
         id: "openmc2donjon-export",
@@ -42,7 +43,11 @@ describe("commandWorkflowMapping", () => {
       }),
     );
 
-    expect(mapping.surface).toBe("OpenMC planner");
+    // "planner" is a retired self-name; the surface matches the file's
+    // own "Convert page"/"Inspect page" convention.
+    expect(mapping.surface).toBe("OpenMC page");
+    expect(mapping.title).not.toContain("planner");
+    expect(mapping.summary).not.toContain("planner");
     expect(mapping.presets).toContain("Workflow: two-step export then convert");
     expect(mapping.presets).toContain("Equivalence: direct");
   });
@@ -75,6 +80,26 @@ describe("commandWorkflowMapping", () => {
     expect(mapping.title).toBe("Sidecar command builder");
     expect(mapping.presets).toContain("Builder: make ADF/DF sidecar");
     expect(mapping.requiredInputs).toContain("ADF sidecar output path");
+  });
+
+  it("labels record-attachment builders with augment, not inject", () => {
+    const augmentSph = commandWorkflowMapping(
+      command({
+        id: "augment-sph",
+        group: "sph",
+        web_path: "/equivalence?kind=augment-sph",
+      }),
+    );
+    expect(augmentSph.presets).toContain("Builder: augment SPH");
+
+    const augmentAdf = commandWorkflowMapping(
+      command({
+        id: "augment-adf",
+        group: "adf",
+        web_path: "/equivalence?kind=augment-adf",
+      }),
+    );
+    expect(augmentAdf.presets).toContain("Builder: augment ADF/DF");
   });
 
   it("gives a CLI-only explanation when no web surface exists", () => {

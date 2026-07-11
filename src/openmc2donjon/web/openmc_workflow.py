@@ -336,7 +336,7 @@ def _steps(request: dict[str, Any]) -> list[dict[str, Any]]:
         steps.append(
             {
                 "id": "adf",
-                "title": "Inject ADF/DF",
+                "title": "Augment ADF/DF",
                 "summary": "Attach discontinuity factors from an ADF sidecar.",
             }
         )
@@ -344,7 +344,7 @@ def _steps(request: dict[str, Any]) -> list[dict[str, Any]]:
         steps.append(
             {
                 "id": "sph",
-                "title": "Inject SPH",
+                "title": "Augment SPH",
                 "summary": "Attach NSPH factors from an SPH sidecar.",
             }
         )
@@ -440,7 +440,7 @@ def _commands(request: dict[str, Any]) -> list[dict[str, Any]]:
             conversion_input = _augmented_hdf5(request, "adf")
             commands.append(
                 _command_payload(
-                    "Inject ADF/DF",
+                    "Augment ADF/DF",
                     _augment_adf_command(request, output_hdf5=conversion_input),
                 )
             )
@@ -448,7 +448,7 @@ def _commands(request: dict[str, Any]) -> list[dict[str, Any]]:
             conversion_input = _augmented_hdf5(request, "sph")
             commands.append(
                 _command_payload(
-                    "Inject SPH",
+                    "Augment SPH",
                     _augment_sph_command(request, output_hdf5=conversion_input),
                 )
             )

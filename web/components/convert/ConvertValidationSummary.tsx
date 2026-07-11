@@ -1,11 +1,8 @@
 import type { ConvertPreflightInput, ConvertResponse } from "@/lib/api";
-import { GateBadge } from "./ConvertReportPrimitives";
 import {
-  buildGates,
   compactEquivalence,
   compactUncertainty,
   decisionTileClass,
-  gateCardClass,
   humanDecision,
   validationLabel,
 } from "./ConvertReportShared";
@@ -35,7 +32,7 @@ export default function ConvertValidationSummary({
           </h2>
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
             A user-facing snapshot of whether this HDF5 handoff is ready to
-            write. Technical gate evidence is kept in the details section.
+            write. Technical check evidence is kept in the details section.
           </p>
         </div>
         <span className="rounded border border-[var(--edge)] px-2 py-1 text-[11px] uppercase tracking-wider text-[var(--fg-2)]">
@@ -47,55 +44,8 @@ export default function ConvertValidationSummary({
           <ValidationTile key={item.label} item={item} />
         ))}
       </div>
-      <ProductionGateHighlights gates={buildGates(data, input)} />
       <ValidationIssuePreview input={input} />
     </section>
-  );
-}
-
-function ProductionGateHighlights({
-  gates,
-}: {
-  gates: ReturnType<typeof buildGates>;
-}) {
-  return (
-    <div className="mt-4 rounded-lg border border-[var(--edge)] bg-black/15 p-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-semibold tracking-tight">
-            Gate highlights
-          </h3>
-          <p className="mt-1 text-[12px] leading-5 text-[var(--fg-3)]">
-            The visible production checks that decide whether the handoff is
-            safe to write or package.
-          </p>
-        </div>
-        <span className="rounded border border-[var(--edge)] px-2 py-1 text-[11px] uppercase tracking-wider text-[var(--fg-2)]">
-          contract + physics
-        </span>
-      </div>
-      <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-5">
-        {gates.map((gate) => (
-          <article
-            key={gate.title}
-            className={"rounded-md border px-3 py-2 " + gateCardClass(gate.status)}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <h4 className="text-[12px] font-semibold tracking-tight">
-                {gate.title}
-              </h4>
-              <GateBadge status={gate.status} />
-            </div>
-            <p className="mt-2 text-[11px] leading-4 text-[var(--fg-2)]">
-              {gate.summary}
-            </p>
-            <div className="mt-2 truncate font-mono text-[11px] text-[var(--fg-1)]">
-              {gate.detail}
-            </div>
-          </article>
-        ))}
-      </div>
-    </div>
   );
 }
 

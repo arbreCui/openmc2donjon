@@ -26,7 +26,8 @@ export default function SphHandoffCard({
           </h2>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
             This converter step does not recompute SPH. It verifies the
-            corrected OpenMC handoff and writes the DONJON-facing ASCII object.
+            SPH-augmented OpenMC handoff and writes the DONJON-facing ASCII
+            object.
           </p>
         </div>
         <span className="rounded border border-current/25 px-2 py-1 text-[10px] uppercase tracking-[0.14em]">
@@ -35,7 +36,7 @@ export default function SphHandoffCard({
       </div>
 
       <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-        <SphTile label="Corrected source" value={status.source} />
+        <SphTile label="Augmented source" value={status.source} />
         <SphTile label="DONJON output" value={status.output} />
         <SphTile label="Production check" value={status.validation} />
         <SphTile label="Next action" value={status.nextAction} />

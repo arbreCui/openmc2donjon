@@ -351,7 +351,7 @@ describe("openmcSphSummary", () => {
     expect(rows[5].detail).toContain("CE flux-shape residual mean 0.05152");
   });
 
-  it("builds a converter deep link for the corrected SPH handoff", () => {
+  it("builds a converter deep link for the SPH-augmented handoff", () => {
     const href = openmcSphConvertHref(SUMMARY);
 
     expect(href).not.toBeNull();
@@ -364,9 +364,13 @@ describe("openmcSphSummary", () => {
     expect(url.searchParams.get("writer_backend")).toBe("ascii");
     expect(url.searchParams.get("check")).toBe("1");
     expect(url.searchParams.get("production")).toBe("1");
+    // Terminology: the augmented file is "SPH-augmented", never "corrected".
+    expect(url.searchParams.get("comment")).toBe(
+      "OpenMC-side SPH-augmented handoff",
+    );
   });
 
-  it("does not build a converter deep link without corrected handoff paths", () => {
+  it("does not build a converter deep link without augmented handoff paths", () => {
     expect(
       openmcSphConvertHref({
         ...SUMMARY,

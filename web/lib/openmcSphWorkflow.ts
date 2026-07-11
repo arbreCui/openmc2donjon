@@ -85,7 +85,7 @@ export const OPENMC_SPH_WORKFLOW_STEPS: readonly OpenmcSphWorkflowStep[] = [
   },
   {
     id: "augment",
-    title: "Inject SPH into HDF5",
+    title: "Augment MGXS with SPH",
     badge: "HDF5",
     body:
       "Attach the accepted SPH sidecar to the converter-facing HDF5. The current production demo uses the one-shot sidecar unless a damped rerun has been explicitly reviewed.",

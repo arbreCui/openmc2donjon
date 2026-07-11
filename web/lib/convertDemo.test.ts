@@ -74,9 +74,13 @@ describe("convert demo presets", () => {
     expect(convertDemoInspectHref(C5G7_PRODUCTION_DEMO)).toBe(
       "/inspect?path=%2Fmock%2Fhome%2Fopenmc-runs%2Fc5g7%2Fhandoff.h5",
     );
+    // check/production are the form defaults now; curated hrefs stay clean.
     expect(convertDemoHref(C5G7_PRODUCTION_DEMO)).toBe(
-      "/convert?intent=direct-convert&input=%2Fmock%2Fhome%2Fopenmc-runs%2Fc5g7%2Fhandoff.h5&output=%2Fmock%2Fhome%2Fopenmc-runs%2Fc5g7%2Fout.mcompo.txt&format=multicompo&check=1&production=1&require_known_mesh=0&comment=C5G7+production+demo+web+walkthrough",
+      "/convert?intent=direct-convert&input=%2Fmock%2Fhome%2Fopenmc-runs%2Fc5g7%2Fhandoff.h5&output=%2Fmock%2Fhome%2Fopenmc-runs%2Fc5g7%2Fout.mcompo.txt&format=multicompo&require_known_mesh=0&comment=C5G7+production+demo+web+walkthrough",
     );
+    expect(
+      convertDemoHref({ ...C5G7_PRODUCTION_DEMO, check: false, production: false }),
+    ).toContain("check=0");
     expect(convertDemoBundleHref(C5G7_PRODUCTION_DEMO)).toBe(
       "/builder?command=bundle&output_dir=%2Fmock%2Fhome%2Fopenmc-runs%2Fc5g7%2Fbundle&mgxs=%2Fmock%2Fhome%2Fopenmc-runs%2Fc5g7%2Fhandoff.h5&mcompo=%2Fmock%2Fhome%2Fopenmc-runs%2Fc5g7%2Fout.mcompo.txt",
     );

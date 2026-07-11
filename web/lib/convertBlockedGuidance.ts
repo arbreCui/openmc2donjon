@@ -20,7 +20,7 @@ export function convertBlockedGuidance(
       badge: "blocked",
       title: "Fix validation before writing",
       body:
-        "The converter did not produce a production-ready ASCII handoff. Review the failed check, fix the input HDF5 or options, then rerun dry-run.",
+        "The converter did not produce a production-ready ASCII output. Review the failed check, fix the MGXS HDF5 or options, then rerun a dry run.",
       primaryFix: "Start with the first HDF5 issue or production gate failure.",
       facts,
       tone: "fail",
@@ -32,7 +32,7 @@ export function convertBlockedGuidance(
       badge: "target exists",
       title: "Choose overwrite or a new output path",
       body:
-        "Dry-run passed, but the target path already exists. The web converter will not replace it until the run options explicitly allow replacement.",
+        "Dry run passed, but the target path already exists. The web converter will not replace it until the run options explicitly allow replacement.",
       primaryFix:
         "Pick a fresh output path, or enable overwrite only if replacing that file is intended.",
       facts,
@@ -55,9 +55,9 @@ export function convertBlockedGuidance(
 
   return {
     badge: "stopped",
-    title: "Rerun dry-run before writing",
+    title: "Rerun a dry run before writing",
     body:
-      "This result is not ready for preview or bundling. Recheck the paths and run dry-run again before converting.",
+      "This result is not ready for preview or bundling. Recheck the paths and run a dry run again before converting.",
     primaryFix: "Use the source inspector and CLI command text to reproduce the request.",
     facts,
     tone: "warn",

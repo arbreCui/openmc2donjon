@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { CopyCliButton } from "@/components/commands/CopyCliButton";
 import type { ConvertPreflightInput, ConvertResponse } from "@/lib/api";
-import { convertNextSteps } from "@/lib/convertNextSteps";
+import { convertNextSteps, isCopyCliDestination } from "@/lib/convertNextSteps";
 import ArtifactAnatomyCard from "./ArtifactAnatomyCard";
 import ConversionSummaryStrip from "./ConversionSummaryStrip";
 import DeliveryChecklist from "./DeliveryChecklist";
@@ -132,7 +132,11 @@ function NextStepsPanel({
 }
 
 function StepLink({ href }: { href: string }) {
-  const label = href.startsWith("#") ? "jump" : "open";
+  const label = href.startsWith("#")
+    ? "jump"
+    : isCopyCliDestination(href)
+      ? "open · CLI"
+      : "open";
   if (href.startsWith("#")) {
     return (
       <a href={href} className="text-[11px] text-[var(--accent-2)] hover:underline">

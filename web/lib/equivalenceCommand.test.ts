@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { COMMAND_BUILDER_SPECS } from "./commandBuilder";
 import {
+  EQUIVALENCE_KINDS,
   buildEquivalenceCli,
   defaultEquivalenceOptions,
+  equivalenceKindInfo,
   parseEquivalenceKind,
 } from "./equivalenceCommand";
+import { OPENMC_SPH_WORKFLOW_STEPS } from "./openmcSphWorkflow";
 
 describe("equivalence command builder", () => {
   it("parses known sidecar kinds with a safe default", () => {
@@ -112,5 +116,59 @@ describe("equivalence command builder", () => {
     expect(buildEquivalenceCli(options)).toBe(
       "openmc2donjon make-openmc-sph-sidecar /tmp/mgxs.h5 -o /tmp/openmc_sph.h5 --reference-flux /tmp/ce_flux.h5::openmc_volume_flux --mg-flux /tmp/mg_flux.h5::openmc_mg_flux --damping 1.0 --flux-normalization none --sph-target rate --flux-floor-rel 1e-3 --freeze-groups 1,31",
     );
+  });
+
+  it("labels record attachment as Augment, never Inject", () => {
+    const augmentAdf = equivalenceKindInfo("augment-adf");
+    const augmentSph = equivalenceKindInfo("augment-sph");
+
+    expect(augmentAdf.label).toBe("Augment ADF");
+    expect(augmentAdf.title).toBe("Augment MGXS with ADF/DF");
+    expect(augmentSph.label).toBe("Augment SPH");
+    expect(augmentSph.title).toBe("Augment MGXS with SPH");
+    // The mono commandIds stay the CLI ground truth.
+    expect(augmentAdf.commandId).toBe("augment-adf");
+    expect(augmentSph.commandId).toBe("augment-sph");
+    for (const info of EQUIVALENCE_KINDS) {
+      expect(`${info.label} ${info.title} ${info.summary}`).not.toMatch(/inject/i);
+    }
+  });
+});
+
+describe("OpenMC-side SPH artifact naming (openmc_sph.*)", () => {
+  // One convention end-to-end: the make-openmc-sph-sidecar output must
+  // match what the apply-sph builder spec and the canned workflow CLIs
+  // already consume, or copied step commands break the chain.
+  const sidecarName = equivalenceKindInfo("openmc-sph-sidecar").outputPlaceholder;
+
+  it("uses openmc_sph.h5 as the form default output", () => {
+    expect(sidecarName).toBe("openmc_sph.h5");
+    expect(defaultEquivalenceOptions("openmc-sph-sidecar").outputPath).toBe(
+      "openmc_sph.h5",
+    );
+  });
+
+  it("agrees with the apply-sph builder spec's --sph-source default", () => {
+    const applySph = COMMAND_BUILDER_SPECS.find((spec) => spec.id === "apply-sph");
+    const sphSource = applySph?.fields.find((field) => field.name === "sph_source");
+
+    expect(sphSource?.placeholder).toBe(sidecarName);
+  });
+
+  it("agrees with the canned OpenMC SPH workflow step CLIs", () => {
+    const make = OPENMC_SPH_WORKFLOW_STEPS.find((step) => step.id === "sph-sidecar");
+    const apply = OPENMC_SPH_WORKFLOW_STEPS.find((step) => step.id === "apply-sph");
+    const augment = OPENMC_SPH_WORKFLOW_STEPS.find((step) => step.id === "augment");
+
+    expect(make?.cli).toContain(`-o ${sidecarName}`);
+    expect(apply?.cli).toContain(`--sph-source ${sidecarName}`);
+    expect(augment?.cli).toContain(`--sph-source ${sidecarName}`);
+  });
+
+  it("does not collide with the different make-sph-sidecar output", () => {
+    expect(equivalenceKindInfo("sph-sidecar").outputPlaceholder).toBe(
+      "sph_sidecar.h5",
+    );
+    expect(equivalenceKindInfo("sph-sidecar").outputPlaceholder).not.toBe(sidecarName);
   });
 });

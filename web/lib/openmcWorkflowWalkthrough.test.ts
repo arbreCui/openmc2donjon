@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { OpenmcWorkflowPlan } from "./api";
 import {
+  OPENMC_SPH_SIDECAR_FORM_HREF,
+  isFailedOpenmcSphSidecarCheck,
   openmcBundleBuilderHref,
   openmcConvertHref,
   openmcInspectHref,
+  openmcSphPrerequisiteCommands,
+  openmcSphSidecarCheckFailed,
   openmcWalkthroughStatuses,
 } from "./openmcWorkflowWalkthrough";
 
@@ -93,11 +97,23 @@ describe("OpenMC workflow walkthrough", () => {
         run: { kind: "ok", ok: true },
       }),
     ).toMatchObject({
-      plan: "passed",
+      plan: "planned",
       run: "ready",
       review: "planned",
       bundle: "planned",
     });
+  });
+
+  it("reports planning, not running, while the plan request is in flight", () => {
+    expect(
+      openmcWalkthroughStatuses({
+        hasRecipe: true,
+        hasStatepoint: true,
+        loadStatepoint: true,
+        hasRunDir: true,
+        run: { kind: "loading" },
+      }),
+    ).toMatchObject({ plan: "planning" });
   });
 
   it("blocks downstream work on failed plans", () => {
@@ -161,5 +177,57 @@ describe("OpenMC workflow walkthrough", () => {
     expect(openmcConvertHref(payload, "macrolib", false)).toContain(
       "input=%2Fruns%2Fcase%2Fmgxs_library_sph.h5",
     );
+  });
+
+  it("flags SPH plans whose sidecar readiness check failed", () => {
+    const failed = plan({
+      ok: false,
+      equivalence: "sph",
+      checks: [
+        {
+          name: "SPH sidecar",
+          status: "fail",
+          message: "Required path is missing.",
+        },
+      ],
+    });
+    expect(openmcSphSidecarCheckFailed(failed)).toBe(true);
+    expect(isFailedOpenmcSphSidecarCheck(failed.checks[0])).toBe(true);
+
+    // A passing sidecar check, or a non-SPH route, must not splice.
+    expect(
+      openmcSphSidecarCheckFailed(
+        plan({
+          equivalence: "sph",
+          checks: [{ name: "SPH sidecar", status: "pass", message: "Ready." }],
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      openmcSphSidecarCheckFailed(
+        plan({
+          equivalence: "direct",
+          checks: [
+            { name: "SPH sidecar", status: "fail", message: "Required path is missing." },
+          ],
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it("splices the three sidecar-building commands as plan prerequisites", () => {
+    const commands = openmcSphPrerequisiteCommands();
+
+    expect(commands.map((command) => command.id)).toEqual([
+      "ce-flux",
+      "mg-flux",
+      "sph-sidecar",
+    ]);
+    for (const command of commands) {
+      expect(command.cli).toMatch(/^openmc2donjon /);
+      expect(command.title.length).toBeGreaterThan(0);
+    }
+    expect(commands[2].cli).toContain("make-openmc-sph-sidecar");
+    expect(OPENMC_SPH_SIDECAR_FORM_HREF).toBe("/equivalence?kind=openmc-sph-sidecar");
   });
 });

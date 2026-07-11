@@ -72,6 +72,10 @@ describe("openmcSphDemo", () => {
     expect(convert.searchParams.get("output")).toBe(MOCK_OPENMC_SPH_DEMO.ascii);
     expect(convert.searchParams.get("format")).toBe("macrolib");
     expect(convert.searchParams.get("production")).toBe("1");
+    // Terminology: the augmented file is "SPH-augmented", never "corrected".
+    expect(convert.searchParams.get("comment")).toBe(
+      "OpenMC-side SPH-augmented handoff",
+    );
 
     const bundle = new URL(
       openmcSphBundleHref(MOCK_OPENMC_SPH_DEMO),
@@ -81,6 +85,12 @@ describe("openmcSphDemo", () => {
     expect(bundle.searchParams.get("command")).toBe("bundle");
     expect(bundle.searchParams.get("mgxs")).toBe(MOCK_OPENMC_SPH_DEMO.augmentedH5);
     expect(bundle.searchParams.get("macrolib")).toBe(MOCK_OPENMC_SPH_DEMO.ascii);
+  });
+
+  it("calls the augmented artifacts SPH-augmented, not corrected", () => {
+    for (const preset of [MOCK_OPENMC_SPH_DEMO, LIVE_OPENMC_SPH_DEMO]) {
+      expect(preset.description).not.toMatch(/corrected/i);
+    }
   });
 
   it("points the live minicase to the repository smoke output directory", () => {

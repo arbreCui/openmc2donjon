@@ -75,7 +75,7 @@ describe("convert run summary", () => {
   it("describes a production dry run without claiming a file was written", () => {
     const summary = buildConvertRunSummary(response(), input());
 
-    expect(summary).toContain("run: dry-run (no file written)");
+    expect(summary).toContain("run: dry run (no file written)");
     expect(summary).toContain("decision: PASS");
     expect(summary).toContain("preflight: pass");
     expect(summary).toContain(

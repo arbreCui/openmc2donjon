@@ -11,6 +11,14 @@ import type {
   ConvertWriterBackend,
   PyGanBackendStatus,
 } from "@/lib/api";
+import {
+  CONVERT_CHECKS_LEVELS,
+  convertChecksFlags,
+  convertChecksLevel,
+  convertChecksLevelDescription,
+  convertChecksLevelLabel,
+  type ConvertChecksLevel,
+} from "@/lib/convertChecks";
 import { buildConvertCliPreview } from "@/lib/convertCommand";
 import {
   outputPathInDirectory,
@@ -143,7 +151,7 @@ export default function ConvertForm({
         <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
           <label className="block">
             <span className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
-              Input HDF5
+              MGXS HDF5
             </span>
             <input
               type="text"
@@ -222,38 +230,20 @@ export default function ConvertForm({
           </button>
         </div>
 
-        <WriterBackendSelector
-          value={writerBackend}
-          onChange={onWriterBackendChange}
-          status={pyganStatus}
-        />
+        <p className="text-[12px] leading-snug text-[var(--fg-3)]">
+          Carrying SPH factors? Choose MACROLIB (DSPH: + MAC:) or pre-apply
+          with apply-sph — NCR: does not read NSPH from MULTICOMPO. Clean XS
+          for NCR:? MULTICOMPO.
+        </p>
 
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          <Toggle
-            label="Validate first"
-            description="Check the HDF5 contract and quick physics consistency before writing."
-            checked={check}
-            onChange={onCheckChange}
-          />
-          <Toggle
-            label="Production checks"
-            description="Use the stricter acceptance preset for production handoffs."
-            checked={production}
-            onChange={onProductionChange}
-          />
-          <Toggle
-            label="Known mesh required"
-            description="Fail unless the energy grid matches a known standard mesh."
-            checked={requireKnownMesh}
-            onChange={onRequireKnownMeshChange}
-          />
-          <Toggle
-            label="Overwrite output"
-            description="Allow Convert to replace an existing ASCII file."
-            checked={overwrite}
-            onChange={onOverwriteChange}
-          />
-        </div>
+        <ChecksControl
+          check={check}
+          production={production}
+          requireKnownMesh={requireKnownMesh}
+          onCheckChange={onCheckChange}
+          onProductionChange={onProductionChange}
+          onRequireKnownMeshChange={onRequireKnownMeshChange}
+        />
 
         <DirectConvertActionPanel
           state={state}
@@ -263,6 +253,8 @@ export default function ConvertForm({
           production={production}
           format={format}
           writerBackend={writerBackend}
+          overwrite={overwrite}
+          onOverwriteChange={onOverwriteChange}
           onConvert={onConvert}
           convertButtonRef={convertButtonRef}
         />
@@ -271,6 +263,13 @@ export default function ConvertForm({
           <summary className="cursor-pointer text-sm font-semibold tracking-tight text-[var(--fg-0)]">
             Advanced converter options
           </summary>
+          <div className="mt-4">
+            <WriterBackendSelector
+              value={writerBackend}
+              onChange={onWriterBackendChange}
+              status={pyganStatus}
+            />
+          </div>
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
             <Field
               label="LCM root name"
@@ -376,6 +375,69 @@ export default function ConvertForm({
         onSelect={applyBrowserPick}
       />
     </>
+  );
+}
+
+function ChecksControl({
+  check,
+  production,
+  requireKnownMesh,
+  onCheckChange,
+  onProductionChange,
+  onRequireKnownMeshChange,
+}: {
+  check: boolean;
+  production: boolean;
+  requireKnownMesh: boolean;
+  onCheckChange: (value: boolean) => void;
+  onProductionChange: (value: boolean) => void;
+  onRequireKnownMeshChange: (value: boolean) => void;
+}) {
+  const level = convertChecksLevel(check, production);
+
+  function applyLevel(next: ConvertChecksLevel) {
+    const flags = convertChecksFlags(next);
+    onCheckChange(flags.check);
+    onProductionChange(flags.production);
+    // "Known mesh required" is scoped to the production preset; clear it when
+    // leaving so no hidden flag leaks into the copied CLI.
+    if (next !== "production" && requireKnownMesh) {
+      onRequireKnownMeshChange(false);
+    }
+  }
+
+  return (
+    <fieldset className="rounded-lg border border-[var(--edge)] bg-white/[0.015] p-3">
+      <legend className="px-1 text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
+        Checks
+      </legend>
+      <div className="grid max-w-md grid-cols-3 overflow-hidden rounded-md border border-[var(--edge)]">
+        {CONVERT_CHECKS_LEVELS.map((option) => (
+          <button
+            key={option}
+            type="button"
+            onClick={() => applyLevel(option)}
+            aria-pressed={level === option}
+            className={segmentClass(level === option)}
+          >
+            {convertChecksLevelLabel(option)}
+          </button>
+        ))}
+      </div>
+      <span className="mt-1 block text-[12px] leading-snug text-[var(--fg-3)]">
+        {convertChecksLevelDescription(level)}
+      </span>
+      {level === "production" ? (
+        <div className="mt-2 max-w-md">
+          <Toggle
+            label="Known mesh required"
+            description="Fail unless the energy grid matches a known standard mesh."
+            checked={requireKnownMesh}
+            onChange={onRequireKnownMeshChange}
+          />
+        </div>
+      ) : null}
+    </fieldset>
   );
 }
 

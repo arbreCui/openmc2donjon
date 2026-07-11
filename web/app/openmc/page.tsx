@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   ApiError,
@@ -15,13 +16,17 @@ import OpenmcArtifactList from "@/components/openmc/OpenmcArtifactList";
 import OpenmcCommandList from "@/components/openmc/OpenmcCommandList";
 import OpenmcEntryPoints from "@/components/openmc/OpenmcEntryPoints";
 import OpenmcProductionPathPanel from "@/components/openmc/OpenmcProductionPathPanel";
-import OpenmcSphMainlineCard from "@/components/openmc/OpenmcSphMainlineCard";
 import OpenmcSphPhysicsSummaryCard from "@/components/openmc/OpenmcSphPhysicsSummaryCard";
 import OpenmcWorkflowSummary from "@/components/openmc/OpenmcWorkflowSummary";
-import OpenmcSphWorkflowPanel from "@/components/OpenmcSphWorkflowPanel";
 import { useSettings } from "@/lib/settings";
 import type { OpenmcEntryPoint } from "@/lib/openmcEntryPoints";
 import { activeOpenmcEntryPoint } from "@/lib/openmcEntryPoints";
+import {
+  OPENMC_SPH_SIDECAR_FORM_HREF,
+  isFailedOpenmcSphSidecarCheck,
+  openmcSphPrerequisiteCommands,
+  openmcSphSidecarCheckFailed,
+} from "@/lib/openmcWorkflowWalkthrough";
 import {
   LIVE_OPENMC_SPH_DEMO,
   MOCK_OPENMC_SPH_DEMO,
@@ -77,7 +82,7 @@ function OpenmcLoading() {
     <main className="min-h-[calc(100vh-3.5rem)] px-6 py-12">
       <div className="mx-auto max-w-5xl">
         <section className="glass rounded-xl p-5 text-sm text-[var(--fg-2)]">
-          Loading OpenMC planner…
+          Loading OpenMC prep…
         </section>
       </div>
     </main>
@@ -297,6 +302,16 @@ function OpenmcPageContent() {
     if (entry.equivalence !== "sph") {
       setSphSource("");
     }
+    // The entry cards mutate form state below the fold; move the viewport to
+    // the surface the click configured so the change is visible.
+    const targetId =
+      entry.id === "openmc-sph" ? "openmc-sph-summary" : "openmc-planner-form";
+    window.setTimeout(() => {
+      document.getElementById(targetId)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 0);
   }
 
   function applyOpenmcSphDemo(preset: OpenmcSphDemoPreset) {
@@ -346,15 +361,6 @@ function OpenmcPageContent() {
           onSelect={applyEntryPoint}
         />
 
-        {sphDemoPreset && sphDemoMode ? (
-          <OpenmcSphMainlineCard
-            preset={sphDemoPreset}
-            mode={sphDemoMode}
-            onReview={() => reviewOpenmcSphDemo(sphDemoPreset)}
-            onFill={() => applyOpenmcSphDemo(sphDemoPreset)}
-          />
-        ) : null}
-
         <OpenmcProductionPathPanel
           state={state}
           workflow={workflow}
@@ -365,6 +371,16 @@ function OpenmcPageContent() {
           statepointPath={statepointPath}
           loadStatepoint={loadStatepoint}
           runDir={runDir}
+          demo={
+            sphDemoPreset && sphDemoMode
+              ? {
+                  preset: sphDemoPreset,
+                  mode: sphDemoMode,
+                  onFill: () => applyOpenmcSphDemo(sphDemoPreset),
+                  onReview: () => reviewOpenmcSphDemo(sphDemoPreset),
+                }
+              : null
+          }
         />
 
         {equivalence === "sph" ? (
@@ -375,18 +391,26 @@ function OpenmcPageContent() {
               onBrowse={() => setBrowserTarget("summary")}
               autoLoadPath={searchParams.get("summary")}
             />
-            <details className="mb-5 mt-4 rounded-xl border border-[var(--edge)] bg-black/15 p-4">
-              <summary className="cursor-pointer text-sm font-semibold tracking-tight text-[var(--fg-1)]">
-                Detailed OpenMC SPH command map
-              </summary>
-              <div className="mt-4">
-                <OpenmcSphWorkflowPanel activeCommandId={null} />
-              </div>
-            </details>
+            <p className="mb-5 mt-3 text-sm">
+              <Link
+                href={OPENMC_SPH_SIDECAR_FORM_HREF}
+                className="font-medium text-[var(--accent-2)] hover:underline"
+              >
+                Full SPH command reference
+              </Link>
+              <span className="text-[var(--fg-3)]">
+                {" "}
+                — the six-command CE/MG SPH map on the sidecar form.
+              </span>
+            </p>
           </>
         ) : null}
 
-        <form className="glass rounded-xl p-4 space-y-4" onSubmit={plan}>
+        <form
+          id="openmc-planner-form"
+          className="glass rounded-xl p-4 space-y-4"
+          onSubmit={plan}
+        >
           <div className="grid gap-3 lg:grid-cols-2">
             <Segmented
               label="Workflow"
@@ -459,7 +483,7 @@ function OpenmcPageContent() {
             value={equivalence}
             onChange={(value) => setEquivalence(value as OpenmcEquivalenceMode)}
             options={[
-              ["direct", "Direct"],
+              ["direct", "None (direct XS)"],
               ["adf", "ADF/DF sidecar"],
               ["sph", "SPH sidecar"],
               ["flux-ratio-adf", "Build flux-ratio ADF"],
@@ -476,13 +500,25 @@ function OpenmcPageContent() {
             />
           ) : null}
           {equivalence === "sph" ? (
-            <TextField
-              label="SPH sidecar"
-              value={sphSource}
-              onChange={setSphSource}
-              onBrowse={() => setBrowserTarget("sph")}
-              placeholder="/path/to/sph_sidecar.h5"
-            />
+            <div>
+              <TextField
+                label="SPH sidecar"
+                value={sphSource}
+                onChange={setSphSource}
+                onBrowse={() => setBrowserTarget("sph")}
+                placeholder="/path/to/sph_sidecar.h5"
+              />
+              <p className="mt-1 text-[12px] text-[var(--fg-3)]">
+                A sidecar is a small companion HDF5 carrying ADF/DF or SPH
+                factors.{" "}
+                <Link
+                  href={OPENMC_SPH_SIDECAR_FORM_HREF}
+                  className="text-[var(--accent-2)] hover:underline"
+                >
+                  Build the SPH sidecar
+                </Link>
+              </p>
+            </div>
           ) : null}
 
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
@@ -491,9 +527,13 @@ function OpenmcPageContent() {
               checked={loadStatepoint}
               onChange={setLoadStatepoint}
             />
-            <Toggle label="Preflight" checked={check} onChange={setCheck} />
             <Toggle
-              label="Production gates"
+              label="Preflight (--check)"
+              checked={check}
+              onChange={setCheck}
+            />
+            <Toggle
+              label="Production checks (--production)"
               checked={production}
               onChange={setProduction}
             />
@@ -580,6 +620,9 @@ function PlanReport({ state }: { state: PlanState }) {
     );
   }
   const plan = state.data;
+  const sphPrerequisites = openmcSphSidecarCheckFailed(plan)
+    ? openmcSphPrerequisiteCommands()
+    : [];
   return (
     <div className="space-y-4">
       <section className="glass rounded-xl p-5">
@@ -590,7 +633,7 @@ function PlanReport({ state }: { state: PlanState }) {
                 plan.ok ? "text-emerald-300" : "text-rose-300"
               }`}
             >
-              {plan.ok ? "READY" : "NEEDS INPUT"}
+              {plan.ok ? "PLAN READY" : "NEEDS INPUT"}
             </div>
             <h2 className="mt-1 text-lg font-semibold tracking-tight">
               {plan.workflow_label}
@@ -604,24 +647,10 @@ function PlanReport({ state }: { state: PlanState }) {
 
       <OpenmcWorkflowSummary plan={plan} />
 
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {plan.steps.map((step, index) => (
-          <article
-            key={step.id}
-            className="rounded-lg border border-[var(--edge)] bg-white/[0.02] p-4"
-          >
-            <div className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
-              {String(index + 1).padStart(2, "0")}
-            </div>
-            <h3 className="mt-1 text-sm font-semibold">{step.title}</h3>
-            <p className="mt-2 text-sm text-[var(--fg-2)]">{step.summary}</p>
-          </article>
-        ))}
-      </section>
-
       <OpenmcCommandList
         commands={plan.commands}
         primaryCommandText={plan.primary_command_text}
+        prerequisites={sphPrerequisites}
       />
 
       <section className="grid gap-4 lg:grid-cols-2">
@@ -632,6 +661,10 @@ function PlanReport({ state }: { state: PlanState }) {
             label: check.name,
             detail: check.message,
             tone: check.status,
+            href: isFailedOpenmcSphSidecarCheck(check)
+              ? OPENMC_SPH_SIDECAR_FORM_HREF
+              : undefined,
+            hrefLabel: "Build the SPH sidecar",
           }))}
         />
         <OpenmcArtifactList artifacts={plan.artifacts} />
@@ -654,7 +687,14 @@ function Cards({
   items,
 }: {
   title: string;
-  items: { key: string; label: string; detail: string; tone: string }[];
+  items: {
+    key: string;
+    label: string;
+    detail: string;
+    tone: string;
+    href?: string;
+    hrefLabel?: string;
+  }[];
 }) {
   return (
     <section className="glass rounded-xl p-5">
@@ -678,6 +718,14 @@ function Cards({
             <div className="mt-1 break-all font-mono text-[12px] text-[var(--fg-2)]">
               {item.detail}
             </div>
+            {item.href && item.hrefLabel ? (
+              <Link
+                href={item.href}
+                className="mt-1 inline-flex text-[12px] font-medium text-[var(--accent-2)] hover:underline"
+              >
+                {item.hrefLabel}
+              </Link>
+            ) : null}
           </div>
         ))}
       </div>

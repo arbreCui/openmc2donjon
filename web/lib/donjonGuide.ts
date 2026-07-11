@@ -202,7 +202,7 @@ export function donjonDeckChecklist(
       // generated deck, not just hex ones.
       id: "ascii-72",
       title: "Keep the ASCII path under 72 characters",
-      body: "DONJON truncates SEQ_ASCII ... FILE paths at 72 characters. Stage the ASCII handoff on a short absolute path before running the deck.",
+      body: "DONJON truncates SEQ_ASCII ... FILE paths at 72 characters. Stage the ASCII output on a short absolute path before running the deck.",
       tone: "review",
     },
     ...(deck.geometry === "hex"
@@ -220,6 +220,60 @@ export function donjonDeckChecklist(
       title: "Run the ingest smoke before the physics deck",
       body: "First run the small UTL:DUMP deck to prove the ASCII object is readable, then run the low-order solve skeleton after replacing the geometry block.",
       tone: "manual",
+    },
+  ];
+}
+
+export interface DonjonGuideFact {
+  id: "object" | "mapping" | "geometry";
+  label: string;
+  body: string;
+}
+
+const DONJON_GEOMETRY_CAVEAT =
+  "The generated skeleton keeps geometry and tracking minimal. OpenMC supplies the homogenized cross sections; DONJON still needs the case-specific geometry, mixture assignment, boundary conditions, and solver — replace the smoke blocks with the real core deck.";
+
+/**
+ * The consumption facts stated once in /donjon's compact strip: what
+ * the ASCII object is, how geometry MIX numbers map to it, and the
+ * geometry caveat. (These folded down from three guidance cards plus a
+ * separate production-reminder section.)
+ */
+export function donjonGuideFacts(format: DonjonGuideFormat): DonjonGuideFact[] {
+  if (format === "macrolib") {
+    return [
+      {
+        id: "object",
+        label: "object",
+        body: "L_MACROLIB — the converter wrote a direct one-state macrolib; DONJON can assign the ASCII object directly to MACRO.",
+      },
+      {
+        id: "mapping",
+        label: "mapping",
+        body: "Your GEOM MIX numbers refer directly to the mixtures stored in the L_MACROLIB object.",
+      },
+      {
+        id: "geometry",
+        label: "geometry",
+        body: DONJON_GEOMETRY_CAVEAT,
+      },
+    ];
+  }
+  return [
+    {
+      id: "object",
+      label: "object",
+      body: "L_MULTICOMPO — DONJON typically reads it as CPO, then NCR extracts a MACROLIB for the geometry mixture map.",
+    },
+    {
+      id: "mapping",
+      label: "mapping",
+      body: "Your GEOM MIX numbers must correspond to the mixture indices you select in the NCR MIX lines.",
+    },
+    {
+      id: "geometry",
+      label: "geometry",
+      body: DONJON_GEOMETRY_CAVEAT,
     },
   ];
 }

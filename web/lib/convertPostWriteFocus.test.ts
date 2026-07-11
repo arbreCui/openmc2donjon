@@ -12,17 +12,16 @@ describe("convertPostWriteFocus", () => {
     ).toBeNull();
   });
 
-  it("focuses ASCII writer output on bundle and DONJON delivery", () => {
+  it("points ASCII writer output at the DONJON input card", () => {
     const focus = convertPostWriteFocus(
       response({ dry_run: false, converted: true, output_exists: true }),
     );
 
-    expect(focus?.badge).toBe("default production path");
-    expect(focus?.title).toContain("DONJON guide");
-    expect(focus?.primaryLabel).toBe("Bundle handoff");
-    expect(focus?.primaryHref).toContain("/builder?command=bundle");
-    expect(focus?.secondaryLabel).toBe("Open DONJON guide");
-    expect(focus?.secondaryHref).toContain("/donjon?");
+    expect(focus?.badge).toBe("default production route");
+    expect(focus?.title).toBe(
+      "Review the ASCII file, then prepare the DONJON input card",
+    );
+    expect(focus?.body).toContain("normal converter route");
   });
 
   it("focuses PyGan writer output on semantic writer comparison", () => {
@@ -37,10 +36,7 @@ describe("convertPostWriteFocus", () => {
 
     expect(focus?.badge).toBe("optional backend evidence");
     expect(focus?.title).toContain("Validate the PyGan writer");
-    expect(focus?.primaryLabel).toBe("Validate PyGan comparison");
-    expect(focus?.primaryHref).toContain("/pygan?input_h5=");
-    expect(focus?.primaryHref).not.toContain("tab=");
-    expect(focus?.secondaryLabel).toBe("Bundle handoff");
+    expect(focus?.body).toContain("writer comparison");
   });
 });
 

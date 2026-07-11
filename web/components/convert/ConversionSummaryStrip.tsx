@@ -42,7 +42,7 @@ function buildSummaryItems(
   return [
     {
       label: "run",
-      value: data.dry_run ? "dry-run" : data.converted ? "converted" : "stopped",
+      value: data.dry_run ? "dry run" : data.converted ? "converted" : "stopped",
       tone: data.dry_run ? "accent" : data.converted ? "pass" : "fail",
     },
     {

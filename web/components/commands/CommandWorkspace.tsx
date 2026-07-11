@@ -9,21 +9,14 @@ import {
   CommandStatus,
   api,
 } from "@/lib/api";
-import TaskLauncher from "@/components/TaskLauncher";
-import { commandCoverage } from "@/lib/commandCoverage";
 import {
   commandGoalCommandIds,
   commandGoals,
   type CommandGoalId,
 } from "@/lib/commandGoals";
 import { commandWorkflowMapping } from "@/lib/commandWorkflowMapping";
-import { TASK_ENTRYPOINTS } from "@/lib/taskEntrypoints";
 import { CommandFilters } from "@/components/commands/CommandFilters";
-import {
-  CommandGroupSection,
-  FeaturedCommand,
-} from "@/components/commands/CommandCards";
-import { CoverageDashboard } from "@/components/commands/CommandCoverageDashboard";
+import { CommandGroupSection } from "@/components/commands/CommandCards";
 import { GoalCommandGuide } from "@/components/commands/CommandGoalGuide";
 import { WorkflowMap } from "@/components/commands/CommandWorkflowMap";
 
@@ -31,8 +24,6 @@ type State =
   | { kind: "loading" }
   | { kind: "ok"; data: CommandCatalog }
   | { kind: "error"; message: string };
-
-const STATUS_ORDER: CommandStatus[] = ["ready", "partial", "planned"];
 
 export default function CommandWorkspace() {
   const [state, setState] = useState<State>({ kind: "loading" });
@@ -71,21 +62,20 @@ export default function CommandWorkspace() {
               lower-level command behind a workflow step.
             </p>
           </div>
-          {state.kind === "ok" ? (
-            <StatusCounts data={state.data} />
-          ) : (
-            <button type="button" onClick={refresh} className="btn btn-secondary">
-              Refresh
-            </button>
-          )}
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Link
+              href="/convert?intent=direct-convert&format=multicompo&check=1&production=1"
+              className="btn btn-primary"
+            >
+              Open converter
+            </Link>
+            {state.kind === "error" ? (
+              <button type="button" onClick={refresh} className="btn btn-secondary">
+                Refresh
+              </button>
+            ) : null}
+          </div>
         </header>
-
-        <TaskLauncher
-          title="Main product paths"
-          summary="These are the routes users should click first. The catalog below is for advanced command lookup and troubleshooting."
-          entries={TASK_ENTRYPOINTS}
-          className="mb-6"
-        />
 
         {state.kind === "loading" ? (
           <section className="glass rounded-lg p-5 text-sm text-[var(--fg-2)]">
@@ -107,26 +97,6 @@ export default function CommandWorkspace() {
         {state.kind === "ok" ? <Catalog data={state.data} /> : null}
       </div>
     </main>
-  );
-}
-
-function StatusCounts({ data }: { data: CommandCatalog }) {
-  return (
-    <div className="grid grid-cols-3 gap-2 text-right text-[12px] tab-num">
-      {STATUS_ORDER.map((status) => (
-        <div
-          key={status}
-          className="rounded-md border border-[var(--edge)] bg-white/[0.03] px-3 py-2"
-        >
-          <div className={statusTextClass(status)}>
-            {data.status_counts[status] ?? 0}
-          </div>
-          <div className="uppercase tracking-wider text-[var(--fg-3)]">
-            {status}
-          </div>
-        </div>
-      ))}
-    </div>
   );
 }
 
@@ -158,7 +128,6 @@ function Catalog({ data }: { data: CommandCatalog }) {
     ],
     [data.commands],
   );
-  const coverage = useMemo(() => commandCoverage(data), [data]);
   const goals = useMemo(() => commandGoals(data.commands), [data.commands]);
   const activeGoal = useMemo(
     () => goals.find((goal) => goal.id === activeGoalId) ?? null,
@@ -188,29 +157,19 @@ function Catalog({ data }: { data: CommandCatalog }) {
       surfaceFilter,
     ],
   );
-  const featured = filteredCommands.find((command) => command.id === "direct-convert");
   const commandsByGroup = useMemo(
-    () => groupCommands(filteredCommands.filter((command) => command.id !== featured?.id)),
-    [featured?.id, filteredCommands],
+    () => groupCommands(filteredCommands),
+    [filteredCommands],
   );
 
   return (
     <div className="space-y-6">
-      <ReferenceNotice />
       <GoalCommandGuide
         goals={goals}
         activeGoalId={activeGoalId}
         onGoalFilterChange={handleGoalFilterChange}
       />
       <WorkflowMap commands={data.commands} />
-      <details className="glass rounded-lg p-5">
-        <summary className="cursor-pointer text-base font-semibold tracking-tight">
-          Web command coverage
-        </summary>
-        <div className="mt-4">
-          <CoverageDashboard coverage={coverage} embedded />
-        </div>
-      </details>
       <CommandFilters
         data={data}
         activeGoal={activeGoal}
@@ -226,7 +185,7 @@ function Catalog({ data }: { data: CommandCatalog }) {
         surfaceOptions={surfaceOptions}
         resultCount={filteredCommands.length}
       />
-      {featured ? <FeaturedCommand command={featured} /> : null}
+      <StatusLegendLine />
       {data.groups.map((group) => {
         const commands = commandsByGroup.get(group.id) ?? [];
         if (commands.length === 0) return null;
@@ -243,39 +202,13 @@ function Catalog({ data }: { data: CommandCatalog }) {
   );
 }
 
-function ReferenceNotice() {
+function StatusLegendLine() {
   return (
-    <section className="rounded-xl border border-amber-300/20 bg-amber-300/[0.045] p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.14em] text-amber-100/80">
-            Advanced page
-          </div>
-          <h2 className="mt-1 text-base font-semibold tracking-tight text-amber-50">
-            This is not the main converter flow
-          </h2>
-          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
-            Use Commands when you need to inspect a CLI flag, copy a lower-level
-            command, or debug a workflow. The product path remains: Convert
-            existing HDF5, or prepare OpenMC inputs before converting.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href="/convert?intent=direct-convert&format=multicompo&check=1&production=1"
-            className="btn btn-primary"
-          >
-            Open converter
-          </Link>
-          <Link
-            href="/openmc?workflow=two-step&equivalence=sph&production=1"
-            className="btn btn-secondary"
-          >
-            Prepare SPH inputs
-          </Link>
-        </div>
-      </div>
-    </section>
+    <p className="text-[12px] leading-5 text-[var(--fg-3)]">
+      <span className="text-emerald-300">Ready</span> = full web flow ·{" "}
+      <span className="text-cyan-300">Builder</span> = web builds the command,
+      CLI executes · CLI only = documented and copyable here.
+    </p>
   );
 }
 
@@ -331,10 +264,4 @@ function commandMatches(
     .join(" ")
     .toLowerCase();
   return haystack.includes(query);
-}
-
-function statusTextClass(status: CommandStatus) {
-  if (status === "ready") return "text-emerald-300";
-  if (status === "partial") return "text-cyan-300";
-  return "text-[var(--fg-1)]";
 }

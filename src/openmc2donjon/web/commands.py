@@ -116,7 +116,7 @@ GROUP_GUIDANCE: dict[str, CommandGuidance] = {
         ),
         produces="SPH sidecars and SPH-augmented HDF5 handoffs.",
         next_step=(
-            "Inject the sidecar into the HDF5, then return to direct conversion."
+            "Augment the HDF5 with the sidecar, then return to direct conversion."
         ),
     ),
     "package": CommandGuidance(
@@ -343,7 +343,7 @@ DETAILS: dict[str, CommandDetail] = {
     ),
     "augment-adf": CommandDetail(
         group="adf",
-        title="Inject ADF/DF",
+        title="Augment ADF/DF",
         summary="Add computed discontinuity factors to an MGXS HDF5 handoff before conversion.",
         status="partial",
         status_label="Command builder ready",
@@ -392,7 +392,7 @@ DETAILS: dict[str, CommandDetail] = {
         ),
         produces="A command that writes an SPH CSV table and sidecar HDF5 when run locally.",
         next_step=(
-            "Inject the sidecar with augment-sph, then convert the augmented HDF5 "
+            "Augment the HDF5 with augment-sph, then convert the augmented file "
             "with --format macrolib for DONJON DSPH/MAC consumption."
         ),
     ),
@@ -441,7 +441,7 @@ DETAILS: dict[str, CommandDetail] = {
     ),
     "augment-sph": CommandDetail(
         group="sph",
-        title="Inject SPH factors",
+        title="Augment with SPH factors",
         summary="Attach SPH factors to an MGXS HDF5 handoff before deterministic conversion.",
         status="partial",
         status_label="Command builder ready",

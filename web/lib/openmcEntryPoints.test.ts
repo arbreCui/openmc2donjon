@@ -25,6 +25,12 @@ describe("openmcEntryPoints", () => {
     expect(sph.secondaryHref).toContain("#openmc-sph-summary");
   });
 
+  it("describes record-attachment as attach, never inject", () => {
+    for (const entry of OPENMC_ENTRY_POINTS) {
+      expect(entry.body).not.toMatch(/inject/i);
+    }
+  });
+
   it("identifies the active entry from the planner state", () => {
     expect(activeOpenmcEntryPoint("two-step", "sph")).toBe("openmc-sph");
     expect(activeOpenmcEntryPoint("one-step", "sph")).toBe("direct-mgxs");

@@ -13,15 +13,23 @@ type ManifestState =
 export default function BundleManifestProbe({
   manifestPath,
   enabled,
+  onManifestReady,
 }: {
   manifestPath: string;
   enabled: boolean;
+  /**
+   * Reports whether the manifest was found on disk, so the parent can gate
+   * manifest-dependent hrefs (e.g. the DONJON guide's manifest= param).
+   * Pass a stable callback (a useState setter): it is an effect dependency.
+   */
+  onManifestReady?: (ready: boolean) => void;
 }) {
   const [state, setState] = useState<ManifestState>({ kind: "idle" });
 
   useEffect(() => {
     if (!enabled) {
       setState({ kind: "idle" });
+      onManifestReady?.(false);
       return;
     }
     let cancelled = false;
@@ -31,9 +39,11 @@ export default function BundleManifestProbe({
       .then((data) => {
         if (cancelled) return;
         setState({ kind: "ready", data });
+        onManifestReady?.(true);
       })
       .catch((err) => {
         if (cancelled) return;
+        onManifestReady?.(false);
         if (err instanceof ApiError && err.status === 404) {
           setState({
             kind: "missing",
@@ -54,7 +64,7 @@ export default function BundleManifestProbe({
     return () => {
       cancelled = true;
     };
-  }, [enabled, manifestPath]);
+  }, [enabled, manifestPath, onManifestReady]);
 
   if (!enabled || state.kind === "idle") return null;
 

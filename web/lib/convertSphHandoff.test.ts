@@ -3,7 +3,7 @@ import type { ConvertPreflightInput, ConvertResponse } from "./api";
 import { convertSphHandoffStatus } from "./convertSphHandoff";
 
 describe("convertSphHandoffStatus", () => {
-  it("summarizes a corrected MACROLIB NSPH handoff", () => {
+  it("summarizes an SPH-augmented MACROLIB NSPH handoff", () => {
     const status = convertSphHandoffStatus(
       response({ format: "macrolib", dry_run: true, converted: false }),
       input({ sph_calculations: 2 }),
@@ -15,6 +15,7 @@ describe("convertSphHandoffStatus", () => {
       tone: "ready",
     });
     expect(status?.source).toContain("2 SPH calculations");
+    expect(status?.source).toContain("SPH-augmented");
     expect(status?.output).toContain("GROUP/*/NSPH");
     expect(status?.nextAction).toContain("Run Convert");
   });

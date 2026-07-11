@@ -60,7 +60,7 @@ export default function ConvertShowcase({
               </span>
             </div>
             <h2 className="mt-1 text-base font-semibold tracking-tight">
-              {objectLabel} ASCII handoff for DONJON
+              {objectLabel} ASCII output for DONJON
             </h2>
             <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
               Dry run reads the same inputs without writing. Convert creates the

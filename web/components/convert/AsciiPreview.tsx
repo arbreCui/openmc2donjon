@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ApiError, TextPreview, api, type ConvertFormat, type ConvertPreflightInput } from "@/lib/api";
 import {
@@ -20,10 +21,13 @@ export default function AsciiPreview({
   path,
   format,
   input,
+  donjonHref,
 }: {
   path: string;
   format?: ConvertFormat;
   input?: ConvertPreflightInput | null;
+  /** Prefilled /donjon guide link rendered as the preview's exit line. */
+  donjonHref?: string;
 }) {
   const [state, setState] = useState<PreviewState>({ kind: "idle" });
 
@@ -60,7 +64,12 @@ export default function AsciiPreview({
       </div>
 
       <div className="mt-3">
-        <PreviewBody state={state} format={format} input={input ?? null} />
+        <PreviewBody
+          state={state}
+          format={format}
+          input={input ?? null}
+          donjonHref={donjonHref}
+        />
       </div>
     </section>
   );
@@ -70,10 +79,12 @@ function PreviewBody({
   state,
   format,
   input,
+  donjonHref,
 }: {
   state: PreviewState;
   format?: ConvertFormat;
   input: ConvertPreflightInput | null;
+  donjonHref?: string;
 }) {
   if (state.kind === "idle" || state.kind === "loading") {
     return (
@@ -174,6 +185,18 @@ function PreviewBody({
       <pre className="max-h-[34rem] overflow-auto rounded-md border border-[var(--edge)] bg-black/25 px-3 py-3 font-mono text-[12px] leading-5 text-[var(--fg-1)]">
         {data.text || "(empty file)"}
       </pre>
+      {donjonHref ? (
+        <p className="text-[13px] text-[var(--fg-2)]">
+          Looks right —{" "}
+          <Link
+            href={donjonHref}
+            className="font-medium text-[var(--accent-2)] hover:underline"
+          >
+            use it in DONJON
+          </Link>
+          .
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -198,7 +221,7 @@ function AsciiReaderGuide({
   const equivalence =
     (input?.adf_faces?.length ?? 0) > 0 || (input?.sph_calculations ?? 0) > 0
       ? "ADF/SPH blocks expected when visible"
-      : "direct XS unless sidecar data was injected";
+      : "direct XS unless sidecar data was attached";
   const steps = [
     {
       label: "Object",

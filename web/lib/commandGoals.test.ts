@@ -50,6 +50,18 @@ describe("commandGoals", () => {
     ]);
   });
 
+  it("uses augment/attach vocabulary and no retired self-names", () => {
+    const goals = commandGoals([]);
+    for (const goal of goals) {
+      const copy =
+        `${goal.title} ${goal.body} ${goal.cta} ${goal.actionHint}`.toLowerCase();
+      // "Augment" (not "inject") is the verb for record attachment.
+      expect(copy).not.toContain("inject");
+      // "planner" is a retired self-name for the OpenMC prep page.
+      expect(copy).not.toContain("planner");
+    }
+  });
+
   it("finds all goals that reuse a command", () => {
     expect(commandGoalsForCommand("bundle").map((goal) => goal.id)).toEqual([
       "direct-convert",

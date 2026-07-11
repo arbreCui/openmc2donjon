@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import AdfWorkflowPanel from "@/components/AdfWorkflowPanel";
 import { CopyCliButton } from "@/components/commands/CopyCliButton";
 import FileBrowserModal from "@/components/inspect/FileBrowserModal";
 import OpenmcSphWorkflowPanel from "@/components/OpenmcSphWorkflowPanel";
@@ -16,6 +17,7 @@ import {
   equivalenceKindInfo,
   parseEquivalenceKind,
 } from "@/lib/equivalenceCommand";
+import { isAdfEquivalenceKind } from "@/lib/adfWorkflow";
 import { equivalenceOptionsForKindSwitch } from "@/lib/equivalenceKindSwitch";
 import { isOpenmcSphEquivalenceKind } from "@/lib/openmcSphWorkflow";
 import { containingDirectory, outputPathInDirectory } from "@/lib/outputBrowse";
@@ -35,7 +37,7 @@ type BrowserTarget =
   | "tableOutput"
   | "table";
 
-const SPH_TABLE_OUTPUT_PLACEHOLDER = "sph_sidecar.sph.csv";
+const SPH_TABLE_OUTPUT_PLACEHOLDER = "openmc_sph.csv";
 
 export default function EquivalencePage() {
   return (
@@ -73,7 +75,8 @@ function EquivalencePageContent() {
   // Tab switches reset per-kind fields (output name, modes, clips,
   // summary JSON, force-overwrite) to the incoming kind's defaults so
   // the CLI preview cannot keep targeting the previous tool's artifact;
-  // the input path is genuinely shared and carries over.
+  // the input path carries over, and switching from a make kind to its
+  // augment sibling seeds the sidecar source from the make tab's output.
   useEffect(() => {
     setOptions((current) => equivalenceOptionsForKindSwitch(current, kind));
     setOutputTouched(false);
@@ -126,11 +129,17 @@ function EquivalencePageContent() {
       <div className="mx-auto max-w-5xl">
         <header className="mb-8">
           <h1 className="text-3xl font-bold tracking-tight">
-            <span className="grad-text">Equivalence sidecars</span>
+            <span className="grad-text">ADF/SPH equivalence sidecars</span>
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
-            Build trustworthy CLI commands for one-shot ADF/DF or SPH sidecar workflows.
-            This web page does not mutate files; run the copied command in a terminal.
+            Build trustworthy CLI commands for one-shot ADF/DF or SPH sidecar
+            workflows — a sidecar is a small companion HDF5 carrying ADF/DF or SPH
+            factors. This web page does not mutate files; run the copied command in
+            a terminal.
+          </p>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
+            Augment attaches factors as records — cross sections unchanged;
+            apply-sph rewrites the cross sections.
           </p>
         </header>
 
@@ -157,11 +166,14 @@ function EquivalencePageContent() {
           {isOpenmcSphEquivalenceKind(kind) ? (
             <OpenmcSphWorkflowPanel activeCommandId={info.commandId} />
           ) : null}
+          {isAdfEquivalenceKind(kind) ? (
+            <AdfWorkflowPanel activeCommandId={info.commandId} />
+          ) : null}
 
           <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_360px]">
             <div className="space-y-4">
               <PathField
-                label="Input MGXS HDF5"
+                label="MGXS HDF5"
                 value={options.inputH5}
                 onChange={(value) => patch({ inputH5: value })}
                 onBrowse={() => setBrowserTarget("inputH5")}
@@ -496,35 +508,11 @@ function OpenmcSphSidecarFields({
           placeholder={SPH_TABLE_OUTPUT_PLACEHOLDER}
           browseLabel="Browse dir…"
         />
-        <PathField
-          label="Previous SPH"
-          value={options.previousSph}
-          onChange={(value) => patch({ previousSph: value })}
-          onBrowse={() => setBrowserTarget("previousSph")}
-          placeholder="previous_sph.csv or previous_sph.h5"
-        />
-        <TextField
-          label="Damping"
-          value={options.damping}
-          onChange={(value) => patch({ damping: value })}
-          placeholder="1.0"
-          mono
-          hint="Use 1.0 for one-shot factors; lower values damp an iterative update."
-        />
-        <SelectField
-          label="Flux normalization"
-          value={options.fluxNormalization}
-          onChange={(value) =>
-            patch({ fluxNormalization: value as "none" | "total" | "power" | "auto" })
-          }
-          options={[
-            ["none", "none"],
-            ["total", "total flux"],
-            ["power", "power weighted"],
-            ["auto", "auto"],
-          ]}
-          hint="Optional global scaling before forming MG/CE flux ratios."
-        />
+      </div>
+      <h4 className="mt-4 text-[12px] font-semibold tracking-tight text-[var(--fg-1)]">
+        Target and spectrum policies
+      </h4>
+      <div className="mt-2 grid gap-3 lg:grid-cols-2">
         <SelectField
           label="SPH target"
           value={options.sphTarget}
@@ -561,6 +549,20 @@ function OpenmcSphSidecarFields({
           mono
           hint="Comma-separated 1-based group indices whose SPH is frozen at the previous value for all mixtures."
         />
+        <SelectField
+          label="Flux normalization"
+          value={options.fluxNormalization}
+          onChange={(value) =>
+            patch({ fluxNormalization: value as "none" | "total" | "power" | "auto" })
+          }
+          options={[
+            ["none", "none"],
+            ["total", "total flux"],
+            ["power", "power weighted"],
+            ["auto", "auto"],
+          ]}
+          hint="Optional global scaling before forming MG/CE flux ratios."
+        />
         <TextField
           label="Clip min"
           value={options.clipMin}
@@ -578,6 +580,28 @@ function OpenmcSphSidecarFields({
           hint="Optional upper clamp."
         />
       </div>
+      <details className="mt-4 rounded-md border border-[var(--edge)] bg-black/10 p-3">
+        <summary className="cursor-pointer text-[12px] font-semibold tracking-tight">
+          Iterative update (review path)
+        </summary>
+        <div className="mt-3 grid gap-3 lg:grid-cols-2">
+          <PathField
+            label="Previous SPH"
+            value={options.previousSph}
+            onChange={(value) => patch({ previousSph: value })}
+            onBrowse={() => setBrowserTarget("previousSph")}
+            placeholder="previous_sph.csv or previous_sph.h5"
+          />
+          <TextField
+            label="Damping"
+            value={options.damping}
+            onChange={(value) => patch({ damping: value })}
+            placeholder="1.0"
+            mono
+            hint="Use 1.0 for one-shot factors; lower values damp an iterative update."
+          />
+        </div>
+      </details>
     </section>
   );
 }

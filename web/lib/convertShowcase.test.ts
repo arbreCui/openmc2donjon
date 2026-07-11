@@ -21,7 +21,7 @@ describe("convert showcase", () => {
     ).toContain("ordered mixture slots");
   });
 
-  it("surfaces production gate mode and known-mesh strictness", () => {
+  it("surfaces production check mode and known-mesh strictness", () => {
     const gates = convertShowcaseFacts({
       format: "multicompo",
       check: true,
@@ -31,6 +31,19 @@ describe("convert showcase", () => {
     }).find((fact) => fact.id === "gates");
     expect(gates?.badge).toBe("strict mesh + production");
     expect(gates?.tone).toBe("pass");
+    // Labels show the flag they map to.
+    expect(gates?.title).toBe("Production checks (--production)");
+  });
+
+  it("labels standard checks with the --check flag", () => {
+    const gates = convertShowcaseFacts({
+      format: "multicompo",
+      check: true,
+      production: false,
+      requireKnownMesh: false,
+      input: null,
+    }).find((fact) => fact.id === "gates");
+    expect(gates?.title).toBe("Preflight (--check)");
   });
 
   it("reports ADF and SPH carry-through after preflight", () => {

@@ -10,7 +10,7 @@ export interface OpenmcSphDemoPreset {
   sphSidecar: string;
   // Raw MGXS export target (pre-SPH). The workflow planner derives the
   // SPH-augmented handoff name by appending `_sph` to this stem, so this
-  // is named such that the injection yields exactly `augmentedH5`.
+  // is named such that the augmentation yields exactly `augmentedH5`.
   exportH5: string;
   augmentedH5: string;
   ascii: string;
@@ -36,7 +36,7 @@ export const MOCK_OPENMC_SPH_DEMO: OpenmcSphDemoPreset = {
   id: "mock-openmc-sph",
   label: "Mock OpenMC-side SPH minicase",
   description:
-    "Prefill the OpenMC planner with bundled mock paths for the CE/MG SPH route.",
+    "Prefill the OpenMC prep form with bundled mock paths for the CE/MG SPH route.",
   runRoot: "/mock/home/openmc-runs/openmc-sph-minicase",
   recipe: "/mock/home/openmc-runs/openmc-sph-minicase/export_recipe.py",
   ceStatepoint: "/mock/home/openmc-runs/openmc-sph-minicase/ce_statepoint.h5",
@@ -51,7 +51,7 @@ export const LIVE_OPENMC_SPH_DEMO: OpenmcSphDemoPreset = {
   id: "live-openmc-sph",
   label: "Two-region OpenMC-side SPH production minicase",
   description:
-    "Run the minimal CE/MG colorset where two output regions produce two SPH factors per energy group, then prefill production-quality corrected artifacts.",
+    "Run the minimal CE/MG colorset where two output regions produce two SPH factors per energy group, then prefill production-quality SPH-augmented artifacts.",
   runRoot: "/private/tmp/openmc2donjon_two_region_production_20260709",
   recipe: "examples/openmc_ce_mg_33g_sph_minicase/export_recipe.py",
   ceStatepoint:
@@ -108,7 +108,7 @@ export function openmcSphConvertHref(preset: OpenmcSphDemoPreset): string {
     check: "1",
     production: "1",
     require_known_mesh: "0",
-    comment: "OpenMC-side SPH corrected handoff",
+    comment: "OpenMC-side SPH-augmented handoff",
   });
   return `/convert?${params.toString()}`;
 }

@@ -1,18 +1,14 @@
 import type { ConvertResponse } from "./api";
-import {
-  convertBundleHref,
-  convertDonjonGuideHref,
-  convertWriterCompareHref,
-} from "./convertNextSteps";
 
+/**
+ * Backend-aware headline for the post-write delivery station ("Deliver to
+ * DONJON" card). The card's own button row carries the actions, so this
+ * module only supplies the copy; DONJON is the default-branch primary.
+ */
 export interface ConvertPostWriteFocus {
   badge: string;
   title: string;
   body: string;
-  primaryLabel: string;
-  primaryHref: string;
-  secondaryLabel: string;
-  secondaryHref: string;
 }
 
 export function convertPostWriteFocus(
@@ -24,25 +20,17 @@ export function convertPostWriteFocus(
       badge: "optional backend evidence",
       title: "Validate the PyGan writer against the default ASCII writer",
       body:
-        "This handoff was serialized through PyGan. Before delivery, run the " +
+        "This output was serialized through PyGan. Before delivery, run the " +
         "writer comparison to regenerate the same LCM tree with both backends " +
         "and compare their semantic payloads.",
-      primaryLabel: "Validate PyGan comparison",
-      primaryHref: convertWriterCompareHref(data),
-      secondaryLabel: "Bundle handoff",
-      secondaryHref: convertBundleHref(data),
     };
   }
   return {
-    badge: "default production path",
-    title: "Review the ASCII file, bundle it, then open the DONJON guide",
+    badge: "default production route",
+    title: "Review the ASCII file, then prepare the DONJON input card",
     body:
       "This is the normal converter route. The built-in ASCII writer created " +
-      "the DONJON-facing handoff; preview the LCM text, package the evidence, " +
-      "then prepare the downstream DONJON input card.",
-    primaryLabel: "Bundle handoff",
-    primaryHref: convertBundleHref(data),
-    secondaryLabel: "Open DONJON guide",
-    secondaryHref: convertDonjonGuideHref(data),
+      "the DONJON-facing output; preview the LCM text, then prepare the " +
+      "downstream DONJON input card.",
   };
 }

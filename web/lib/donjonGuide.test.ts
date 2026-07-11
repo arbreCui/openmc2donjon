@@ -6,6 +6,7 @@ import {
   donjonDeckFilename,
   donjonDeckChecklist,
   donjonDefaultsArtifact,
+  donjonGuideFacts,
   donjonGuideHref,
   donjonIngestOnlySnippet,
   donjonIngestSnippet,
@@ -113,6 +114,34 @@ describe("DONJON guide helpers", () => {
     expect(
       normalizeDonjonDeckOptions({ geometry: "hex", solver: "snt" }),
     ).toMatchObject({ geometry: "hex", solver: "snt" });
+  });
+
+  it("states the consumption facts once per format in the compact strip", () => {
+    const multicompo = donjonGuideFacts("multicompo");
+    expect(multicompo.map((fact) => fact.id)).toEqual([
+      "object",
+      "mapping",
+      "geometry",
+    ]);
+    expect(multicompo[0].body).toContain("L_MULTICOMPO");
+    expect(multicompo[0].body).toContain("NCR extracts a MACROLIB");
+    expect(multicompo[1].body).toContain("NCR MIX lines");
+
+    const macrolib = donjonGuideFacts("macrolib");
+    expect(macrolib.map((fact) => fact.id)).toEqual([
+      "object",
+      "mapping",
+      "geometry",
+    ]);
+    expect(macrolib[0].body).toContain("L_MACROLIB");
+    expect(macrolib[0].body).toContain("directly to MACRO");
+    expect(macrolib[1].body).toContain("refer directly to the mixtures");
+
+    // The geometry caveat merges the former solver guidance card and the
+    // production-reminder section into one sentence, shared by both formats.
+    expect(multicompo[2].body).toBe(macrolib[2].body);
+    expect(multicompo[2].body).toContain("OpenMC supplies the homogenized");
+    expect(multicompo[2].body).toContain("boundary conditions, and solver");
   });
 
   it("infers MACROLIB format from path unless explicit format wins", () => {

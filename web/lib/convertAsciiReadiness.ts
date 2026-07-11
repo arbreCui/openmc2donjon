@@ -30,7 +30,7 @@ export function convertAsciiReadiness(
     return {
       tone: "blocked",
       label: "blocked",
-      title: "No ASCII handoff is ready",
+      title: "No ASCII output is ready",
       body:
         "The converter stopped before producing a valid DRAGON/DONJON ASCII artifact.",
       next: "Review the failed checks, fix the input or options, then rerun a dry run.",
@@ -60,7 +60,7 @@ export function convertAsciiReadiness(
       title: `${objectLabel} will be written by Convert`,
       body:
         "Dry run passed without writing the ASCII file. The preview appears only after Convert creates the artifact.",
-      next: "Run Convert to create the DONJON-facing text handoff, then review the preview below.",
+      next: "Run Convert to create the DONJON-facing text output, then review the preview below.",
       objectLabel,
       objectDescription,
       previewAvailable: false,
@@ -73,8 +73,8 @@ export function convertAsciiReadiness(
       label: "artifact ready",
       title: `${objectLabel} ASCII is ready for review`,
       body:
-        "The converter wrote the ASCII handoff. The preview below checks the signature, visible LCM block tree, and first lines before downstream use.",
-      next: "Review the preview, copy the path or CLI record, then bundle the handoff for DONJON-side consumption.",
+        "The converter wrote the ASCII output. The preview below checks the signature, visible LCM block tree, and first lines before downstream use.",
+      next: "Review the preview, copy the path or CLI record, then package the bundle for DONJON-side consumption.",
       objectLabel,
       objectDescription,
       previewAvailable: true,
@@ -90,7 +90,7 @@ export function convertAsciiReadiness(
       title: "ASCII was written this session, but the file-status probe disagrees",
       body:
         "Convert reported a successful ASCII write, while the file-status probe does not see a file at the target path — check the path.",
-      next: "Check the output path, then refresh file status before delivering the handoff.",
+      next: "Check the output path, then refresh file status before delivering the output.",
       objectLabel,
       objectDescription,
       previewAvailable: false,

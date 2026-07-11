@@ -16,9 +16,26 @@ export function convertObjectLabel(format: ConvertResponse["format"]): string {
 
 export function convertObjectDescription(format: ConvertResponse["format"]): string {
   if (format === "macrolib") {
-    return "Direct one-state macrolib handoff for deterministic solver consumption.";
+    return "Direct one-state macrolib output for deterministic solver consumption.";
   }
-  return "Mapped multicompo handoff for domain-wise mixtures and equivalence metadata.";
+  return "Mapped multicompo output for domain-wise mixtures and equivalence metadata.";
+}
+
+/**
+ * Destinations that only build and copy a CLI command instead of executing
+ * in-app. Buttons and links pointing there carry a small "CLI" marker so the
+ * execute-to-copy boundary is announced at the point of click.
+ */
+const COPY_CLI_DESTINATIONS = ["/builder", "/equivalence", "/donjon"] as const;
+
+export function isCopyCliDestination(href: string): boolean {
+  return COPY_CLI_DESTINATIONS.some(
+    (prefix) =>
+      href === prefix ||
+      href.startsWith(`${prefix}?`) ||
+      href.startsWith(`${prefix}/`) ||
+      href.startsWith(`${prefix}#`),
+  );
 }
 
 export function convertBundleHref(data: ConvertResponse): string {
@@ -46,12 +63,22 @@ export function convertValidateBundleHref(data: ConvertResponse): string {
   return `/builder?${params.toString()}`;
 }
 
-export function convertDonjonGuideHref(data: ConvertResponse): string {
+/**
+ * The DONJON guide works from the ASCII path directly; the optional bundle
+ * manifest is threaded in only once a probe has confirmed it exists, so a
+ * user who skips bundling never lands on a "manifest not found" warning.
+ */
+export function convertDonjonGuideHref(
+  data: ConvertResponse,
+  options?: { manifestConfirmed?: boolean },
+): string {
   const mixtureCount = data.preflight?.inputs[0]?.mixtures ?? undefined;
   return donjonGuideHref({
     asciiPath: data.output_path,
     format: data.format,
-    manifestPath: convertBundleManifestPath(data),
+    manifestPath: options?.manifestConfirmed
+      ? convertBundleManifestPath(data)
+      : null,
     deckFilename: donjonDeckFilename(data.output_path, data.format, "solve"),
     deckOptions: {
       mixtureCount: mixtureCount ?? undefined,
@@ -114,13 +141,13 @@ export function convertNextSteps(
         label: "Fix",
         title: "Resolve failed checks first",
         body:
-          "The converter did not reach an acceptable handoff state. Review issues and warnings, then rerun dry-run before writing output.",
+          "The converter did not reach an acceptable handoff state. Review issues and warnings, then rerun a dry run before writing output.",
         status: "blocked",
       },
       {
         id: "inspect",
         label: "Inspect",
-        title: "Open the input HDF5",
+        title: "Open the MGXS HDF5",
         body: "Use the inspector to look at mixture layout, mesh identity, ADF/SPH coverage, and std_dev visibility.",
         href: inspectHref,
         status: "reference",
@@ -135,7 +162,7 @@ export function convertNextSteps(
         label: "Write",
         title: "Run Convert when the checks look right",
         body:
-          "Dry-run did not write a file. Press Convert to create the ASCII handoff at the selected output path.",
+          "Dry run did not write a file. Press Convert to create the ASCII output at the selected output path.",
         status: "ready",
       },
       {
@@ -157,24 +184,18 @@ export function convertNextSteps(
     ];
   }
 
+  // Canonical data-flow order: preview -> bundle -> DONJON. The bundle's
+  // manifest is upstream input to the DONJON guide (donjon_defaults prefill).
   return [
     {
       id: "preview",
       label: "Preview",
-      title: data.output_exists ? "Review the ASCII handoff" : "Output existence was not confirmed",
+      title: data.output_exists ? "Review the ASCII output" : "Output existence was not confirmed",
       body: data.output_exists
         ? "Scan the generated LCM ASCII signature, visible block tree, and first lines before handing it downstream."
         : "The converter reported success, but the web endpoint could not confirm the output file exists.",
       href: data.output_exists ? "#ascii-output-preview" : undefined,
       status: data.output_exists ? "ready" : "blocked",
-    },
-    {
-      id: "donjon",
-      label: objectLabel,
-      title: `Use ${objectLabel} in DONJON`,
-      body: `${objectDescription} Output path: ${data.output_path}`,
-      href: convertDonjonGuideHref(data),
-      status: "ready",
     },
     ...(data.writer_backend === "pygan"
       ? [
@@ -183,7 +204,7 @@ export function convertNextSteps(
             label: "Validate",
             title: "Compare PyGan and ASCII writers",
             body:
-              "Build a semantic comparison command that regenerates this handoff with both writer backends and checks their LCM trees.",
+              "Build a semantic comparison command that regenerates this output with both writer backends and checks their LCM trees.",
             href: convertWriterCompareHref(data),
             status: "ready" as const,
           },
@@ -194,9 +215,17 @@ export function convertNextSteps(
       label: "Bundle",
       title: "Package the production record",
       body:
-        "Use the bundle builder to collect the input HDF5, ASCII output, summaries, and logs into a manifest-backed handoff.",
+        "Use the bundle builder to collect the MGXS HDF5, ASCII output, summaries, and logs into the manifest-backed bundle.",
       href: convertBundleHref(data),
-      status: "reference",
+      status: "ready",
+    },
+    {
+      id: "donjon",
+      label: objectLabel,
+      title: `Use ${objectLabel} in DONJON`,
+      body: `${objectDescription} Output path: ${data.output_path}`,
+      href: convertDonjonGuideHref(data),
+      status: "ready",
     },
     {
       id: "inspect",

@@ -2,24 +2,24 @@ import Link from "next/link";
 import { CopyCliButton } from "@/components/commands/CopyCliButton";
 import type { ConvertPreflightInput, ConvertResponse } from "@/lib/api";
 import { convertDecision } from "@/lib/convertDecision";
-import {
-  convertBundleHref,
-  convertWriterCompareHref,
-} from "@/lib/convertNextSteps";
-import {
-  convertResultOverview,
-  type ConvertResultOverviewTone,
-} from "@/lib/convertResultOverview";
 import { primaryOutcomeClass } from "./ConvertReportShared";
 
+/**
+ * Card 1 of the post-run report: a pure, immutable render of what the run
+ * reported — verdict, "Why this state", Preview ASCII, and the Copy CLI
+ * reproducibility record. Delivery actions (DONJON guide, Bundle) live in
+ * the OutputActions "Deliver to DONJON" card so the two cards stay disjoint.
+ */
 export default function ConvertOutcomeSummary({
   data,
   input,
   onConvert,
+  mockBackend = false,
 }: {
   data: ConvertResponse;
   input: ConvertPreflightInput | null;
   onConvert?: () => void;
+  mockBackend?: boolean;
 }) {
   const headline = data.dry_run
     ? "Dry run complete"
@@ -41,14 +41,24 @@ export default function ConvertOutcomeSummary({
             {headline}
           </h2>
         </div>
-        <span className="rounded border border-[var(--edge)] px-2 py-1 text-[11px] uppercase tracking-wider text-[var(--fg-2)]">
-          {data.format} / {data.writer_backend}
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          {mockBackend ? (
+            <span className="rounded border border-amber-300/25 bg-amber-300/[0.08] px-2 py-1 text-[11px] uppercase tracking-wider text-amber-200">
+              mock fixture
+            </span>
+          ) : null}
+          <span className="rounded border border-[var(--edge)] px-2 py-1 text-[11px] uppercase tracking-wider text-[var(--fg-2)]">
+            {data.format} / {data.writer_backend}
+          </span>
+        </div>
       </div>
 
-      <ResultOverview data={data} />
-
-      <PrimaryOutcomeActions data={data} input={input} onConvert={onConvert} />
+      <PrimaryOutcomeActions
+        data={data}
+        input={input}
+        onConvert={onConvert}
+        mockBackend={mockBackend}
+      />
     </section>
   );
 }
@@ -57,12 +67,14 @@ function PrimaryOutcomeActions({
   data,
   input,
   onConvert,
+  mockBackend,
 }: {
   data: ConvertResponse;
   input: ConvertPreflightInput | null;
   onConvert?: () => void;
+  mockBackend: boolean;
 }) {
-  const decision = convertDecision(data, input);
+  const decision = convertDecision(data, input, { mockBackend });
   const converted = data.converted && data.output_exists;
   const readyToConvert = data.ok && data.dry_run;
   const stopped = !data.ok || (!data.dry_run && !converted);
@@ -72,7 +84,7 @@ function PrimaryOutcomeActions({
         <div className="min-w-0">
           <div className="text-[10px] uppercase tracking-[0.14em] opacity-75">
             {converted
-              ? "handoff artifact"
+              ? "output artifact"
               : readyToConvert
                 ? "no-write checkpoint"
                 : "converter result"}
@@ -105,16 +117,6 @@ function PrimaryOutcomeActions({
           label="Copy CLI"
           ariaLabel="Copy CLI command"
         />
-        {converted ? (
-          <Link href={convertBundleHref(data)} className="btn btn-secondary">
-            Bundle
-          </Link>
-        ) : null}
-        {converted && data.writer_backend === "pygan" ? (
-          <Link href={convertWriterCompareHref(data)} className="btn btn-secondary">
-            Validate PyGan
-          </Link>
-        ) : null}
         {stopped ? (
           <Link
             href={`/inspect?path=${encodeURIComponent(data.input_path)}`}
@@ -140,41 +142,4 @@ function PrimaryOutcomeActions({
       </details>
     </section>
   );
-}
-
-function ResultOverview({ data }: { data: ConvertResponse }) {
-  const tiles = convertResultOverview(data);
-  return (
-    <div className="mt-4 grid gap-2 lg:grid-cols-3">
-      {tiles.map((tile) => (
-        <article key={tile.id} className={"rounded-lg border px-3 py-2 " + resultTileClass(tile.tone)}>
-          <div className="text-[10px] uppercase tracking-[0.14em] opacity-70">
-            {tile.label}
-          </div>
-          <div
-            className={
-              "mt-1 truncate text-sm font-semibold tracking-tight " +
-              (tile.mono ? "font-mono" : "")
-            }
-            title={tile.value}
-          >
-            {tile.value}
-          </div>
-          <p className="mt-1 text-[12px] leading-5 text-[var(--fg-2)]">
-            {tile.body}
-          </p>
-        </article>
-      ))}
-    </div>
-  );
-}
-
-function resultTileClass(tone: ConvertResultOverviewTone): string {
-  if (tone === "ready") {
-    return "border-emerald-400/20 bg-emerald-400/[0.055] text-emerald-100";
-  }
-  if (tone === "pending") {
-    return "border-cyan-300/25 bg-cyan-300/[0.06] text-cyan-100";
-  }
-  return "border-rose-400/25 bg-rose-400/[0.06] text-rose-100";
 }

@@ -51,7 +51,7 @@ export function buildConvertRunSummary(
 }
 
 function runMode(data: ConvertResponse): string {
-  if (data.dry_run) return "dry-run (no file written)";
+  if (data.dry_run) return "dry run (no file written)";
   if (data.converted) return "converted (ASCII written)";
   return "stopped (no file written)";
 }

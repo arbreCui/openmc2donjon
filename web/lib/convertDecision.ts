@@ -16,6 +16,7 @@ export interface ConvertDecision {
 export function convertDecision(
   data: ConvertResponse,
   input: ConvertPreflightInput | null,
+  options?: { mockBackend?: boolean },
 ): ConvertDecision {
   const objectLabel = convertObjectLabel(data.format);
   const converted = data.converted && data.output_exists;
@@ -23,19 +24,25 @@ export function convertDecision(
     return {
       tone: "ready",
       badge: objectLabel,
-      title: "ASCII handoff ready",
-      body: `${objectLabel} was written and confirmed at the output path.`,
+      title: "ASCII output ready",
+      // A mock-mode write is a fixture, not a file on this machine's disk;
+      // the copy must not claim a confirmed on-disk artifact.
+      body: options?.mockBackend
+        ? `${objectLabel} was written to the backend's mock fixture store (no real file on disk).`
+        : `${objectLabel} was written and confirmed at the output path.`,
       reasons: [
-        "The converter wrote the ASCII file.",
+        options?.mockBackend
+          ? "The mock backend simulated the ASCII write."
+          : "The converter wrote the ASCII file.",
         data.output_size == null
           ? "Output existence was confirmed; size was not reported."
           : `Output size: ${data.output_size} bytes.`,
-        "Preview the ASCII blocks or package the handoff for delivery.",
+        "Preview the ASCII blocks or package the bundle for delivery.",
       ],
       nextAction: {
         label: "Review or deliver",
         body:
-          "The ASCII file now exists. Preview the LCM blocks, bundle the handoff, or copy the CLI command for reproducibility.",
+          "The ASCII file now exists. Preview the LCM blocks, package the bundle, or copy the CLI command for reproducibility.",
       },
     };
   }
@@ -61,7 +68,7 @@ export function convertDecision(
     badge: "blocked",
     title: "Do not convert yet",
     body:
-      "Resolve the failed request or validation result, then rerun dry run before writing an ASCII handoff.",
+      "Resolve the failed request or validation result, then rerun dry run before writing the ASCII output.",
     reasons: blockedReasons(data, input),
     nextAction: {
       label: "Before writing",

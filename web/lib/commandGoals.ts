@@ -35,9 +35,9 @@ export const COMMAND_GOALS: readonly CommandGoalDefinition[] = [
     body:
       "Start here when the high-fidelity OpenMC run still needs to produce the spatially resolved MGXS input.",
     href: "/openmc?workflow=two-step&production=1",
-    cta: "Open OpenMC planner",
+    cta: "Open OpenMC prep",
     actionHint:
-      "Use the planner first if the MGXS HDF5 handoff does not exist yet.",
+      "Prepare the handoff first if the MGXS HDF5 handoff does not exist yet.",
     commandIds: [
       "openmc2donjon-export",
       "openmc2donjon-from-openmc",
@@ -48,11 +48,11 @@ export const COMMAND_GOALS: readonly CommandGoalDefinition[] = [
     eyebrow: "I already have MGXS HDF5",
     title: "Convert HDF5 to DONJON ASCII",
     body:
-      "Follow the direct converter route: dry-run production gates, write L_MULTICOMPO or L_MACROLIB, preview the ASCII blocks, then bundle the handoff.",
+      "Follow the direct converter route: dry-run the production checks, write L_MULTICOMPO or L_MACROLIB, preview the ASCII blocks, then package the bundle.",
     href: "/convert?intent=direct-convert&format=multicompo&check=1&production=1",
     cta: "Open converter",
     actionHint:
-      "The web page guides the same sequence: fill paths, dry-run, convert, preview, bundle.",
+      "The web page guides the same sequence: fill paths, dry run, convert, preview, package the bundle.",
     commandIds: ["direct-convert", "check", "inspect", "bundle"],
   },
   {
@@ -70,9 +70,9 @@ export const COMMAND_GOALS: readonly CommandGoalDefinition[] = [
   {
     id: "equivalence",
     eyebrow: "I need ADF / DF / SPH factors",
-    title: "Build or inject sidecar factors",
+    title: "Build or augment sidecar factors",
     body:
-      "Prepare face-flux or low-order inputs, build ADF/SPH sidecars, inject them into HDF5, then return to the converter.",
+      "Prepare face-flux or low-order inputs, build ADF/SPH sidecars, augment the HDF5 with them, then return to the converter.",
     href: "/equivalence?kind=adf-sidecar",
     cta: "Open equivalence builders",
     actionHint:
@@ -95,7 +95,7 @@ export const COMMAND_GOALS: readonly CommandGoalDefinition[] = [
     eyebrow: "I need SPH factors",
     title: "Carry OpenMC-side SPH to DONJON",
     body:
-      "Use SPH factors generated from OpenMC CE reference tallies versus OpenMC MG macro fluxes on the same geometry/output regions, then inject the accepted factors for DONJON consumption. MG reruns are optional and damping-sensitive.",
+      "Use SPH factors generated from OpenMC CE reference tallies versus OpenMC MG macro fluxes on the same geometry/output regions, then attach the accepted factors for DONJON consumption. MG reruns are optional and damping-sensitive.",
     href: "/equivalence?kind=openmc-sph-sidecar",
     cta: "Open OpenMC SPH builder",
     actionHint:
@@ -113,7 +113,7 @@ export const COMMAND_GOALS: readonly CommandGoalDefinition[] = [
     eyebrow: "I need to deliver the run",
     title: "Bundle and validate production artifacts",
     body:
-      "Collect source HDF5, ASCII output, summaries, logs, and manifest checks before sharing with DONJON users.",
+      "Collect the MGXS HDF5, ASCII output, summaries, logs, and manifest checks before sharing with DONJON users.",
     href: "/builder?command=bundle",
     cta: "Open bundle builder",
     actionHint:

@@ -90,7 +90,7 @@ function gateFact({
   if (production) {
     return {
       id: "gates",
-      title: "Production gates",
+      title: "Production checks (--production)",
       badge: requireKnownMesh ? "strict mesh + production" : "production preset",
       body:
         "Preflight runs hard physics checks before writing: row balance, chi normalization, ADF face consistency, transport/P1 consistency, and audit warnings.",
@@ -100,7 +100,7 @@ function gateFact({
   if (check) {
     return {
       id: "gates",
-      title: "Validation",
+      title: "Preflight (--check)",
       badge: requireKnownMesh ? "standard + known mesh" : "standard checks",
       body:
         "Preflight checks the HDF5 contract and key consistency rules. Enable production checks for stricter handoff acceptance.",
@@ -109,10 +109,10 @@ function gateFact({
   }
   return {
     id: "gates",
-    title: "Validation",
-    badge: "minimal",
+    title: "Checks off",
+    badge: "none",
     body:
-      "Conversion can run with only minimal checks, but dry-run plus production checks is the safer handoff path.",
+      "Conversion can run with no preflight, but a dry run plus production checks is the safer way to hand off.",
     tone: "warn",
   };
 }
@@ -124,7 +124,7 @@ function equivalenceFact(input: ConvertPreflightInput | null): ConvertShowcaseFa
       title: "ADF / SPH carry-through",
       badge: "detected after dry run",
       body:
-        "If the source HDF5 already contains ADF/DF or NSPH sidecar data, the converter carries those blocks into the DONJON handoff.",
+        "If the source HDF5 already carries ADF/DF or NSPH sidecar data — a sidecar is a small companion HDF5 carrying ADF/DF or SPH factors — the converter carries those blocks into the DONJON output.",
       tone: "neutral",
     };
   }

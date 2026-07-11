@@ -1,16 +1,20 @@
 import type {
   ConvertFormat,
   OpenmcWorkflowArtifact,
+  OpenmcWorkflowCheck,
   OpenmcWorkflowPlan,
 } from "./api";
+import { OPENMC_SPH_WORKFLOW_STEPS } from "./openmcSphWorkflow";
 
 export type OpenmcWalkthroughPhase = "source" | "plan" | "run" | "review" | "bundle";
 
+// The page plans commands; it never executes them. The vocabulary is
+// therefore planning-tense only: a successful plan is "planned", an
+// in-flight plan request is "planning".
 export type OpenmcWalkthroughStatus =
   | "needed"
   | "ready"
-  | "running"
-  | "passed"
+  | "planning"
   | "blocked"
   | "planned"
   | "optional";
@@ -44,9 +48,9 @@ export function openmcWalkthroughStatuses({
     plan: failed
       ? "blocked"
       : run.kind === "loading"
-        ? "running"
+        ? "planning"
         : planned
-          ? "passed"
+          ? "planned"
           : sourceReady
             ? "ready"
             : "needed",
@@ -54,6 +58,37 @@ export function openmcWalkthroughStatuses({
     review: failed ? "blocked" : "planned",
     bundle: failed ? "blocked" : hasRunDir ? "planned" : "optional",
   };
+}
+
+export const OPENMC_SPH_SIDECAR_FORM_HREF = "/equivalence?kind=openmc-sph-sidecar";
+
+const OPENMC_SPH_SIDECAR_CHECK_NAME = "SPH sidecar";
+
+export interface OpenmcSphPrerequisiteCommand {
+  id: string;
+  badge: string;
+  title: string;
+  cli: string;
+}
+
+export function isFailedOpenmcSphSidecarCheck(check: OpenmcWorkflowCheck): boolean {
+  return check.name === OPENMC_SPH_SIDECAR_CHECK_NAME && check.status === "fail";
+}
+
+export function openmcSphSidecarCheckFailed(plan: OpenmcWorkflowPlan): boolean {
+  return plan.equivalence === "sph" && plan.checks.some(isFailedOpenmcSphSidecarCheck);
+}
+
+/**
+ * The three commands that build the SPH sidecar this plan consumes. They are
+ * spliced ahead of the plan's own command list when the sidecar readiness
+ * check fails, so "copy these in order" no longer omits its own prerequisite.
+ */
+export function openmcSphPrerequisiteCommands(): OpenmcSphPrerequisiteCommand[] {
+  const wanted: readonly string[] = ["ce-flux", "mg-flux", "sph-sidecar"];
+  return OPENMC_SPH_WORKFLOW_STEPS.filter((step) => wanted.includes(step.id)).map(
+    (step) => ({ id: step.id, badge: step.badge, title: step.title, cli: step.cli }),
+  );
 }
 
 export function openmcInspectHref(plan: OpenmcWorkflowPlan): string | null {

@@ -38,9 +38,9 @@ const COPIES: Record<ConvertIntent, ConvertIntentCopy> = {
   "openmc-sph": {
     intent: "openmc-sph",
     eyebrow: "OpenMC-side SPH",
-    title: "Convert a corrected SPH handoff",
+    title: "Convert an SPH-augmented handoff",
     body:
-      "Use this after OpenMC CE/MG equivalence has produced SPH factors and they have been injected into the HDF5 handoff. This page does not recompute SPH; it verifies the corrected HDF5 and writes the DONJON-facing ASCII. For DONJON SPH consumption, choose MACROLIB so NSPH is written as GROUP/*/NSPH.",
+      "Use this after OpenMC CE/MG equivalence has produced SPH factors and they have been attached to the HDF5 handoff. This page does not recompute SPH; it verifies the SPH-augmented HDF5 and writes the DONJON-facing ASCII. For DONJON SPH consumption, choose MACROLIB so NSPH is written as GROUP/*/NSPH.",
     commandHref: "/commands/augment-sph",
     commandLabel: "augment-sph",
     tone: "sph",
@@ -50,7 +50,7 @@ const COPIES: Record<ConvertIntent, ConvertIntentCopy> = {
     eyebrow: "Converter",
     title: "MGXS HDF5 to DONJON ASCII",
     body:
-      "Choose an OpenMC MGXS HDF5 handoff, inspect the planned command, dry-run the checks, and write L_MULTICOMPO or L_MACROLIB ASCII.",
+      "Choose an OpenMC MGXS HDF5 handoff, inspect the planned command, run a dry run, and write L_MULTICOMPO or L_MACROLIB ASCII.",
     commandHref: null,
     commandLabel: null,
     tone: "neutral",
@@ -66,4 +66,14 @@ export function parseConvertIntent(value: string | null): ConvertIntent {
 
 export function convertIntentCopy(value: string | null): ConvertIntentCopy {
   return COPIES[parseConvertIntent(value)];
+}
+
+/**
+ * The generic and direct-convert banners only restate the page header (nav
+ * and home link with ?intent=direct-convert, making that the default first
+ * impression), so they are suppressed. The check and openmc-sph banners carry
+ * deep-link physics guidance and stay.
+ */
+export function convertIntentBannerVisible(intent: ConvertIntent): boolean {
+  return intent === "check" || intent === "openmc-sph";
 }

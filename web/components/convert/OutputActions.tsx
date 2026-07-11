@@ -25,6 +25,7 @@ import {
   convertBundleOutputDir,
   convertValidateBundleHref,
   convertWriterCompareHref,
+  isCopyCliDestination,
 } from "@/lib/convertNextSteps";
 import { convertOutputMode } from "@/lib/convertOutputMode";
 import { convertPostWriteFocus } from "@/lib/convertPostWriteFocus";
@@ -89,7 +90,6 @@ export default function OutputActions({
         input={input}
         statuses={statuses}
         presence={convertOutputPresence(data, statuses.output)}
-        deliveryItems={deliveryItems}
         actions={actions}
         onRefresh={() => setRefreshToken((value) => value + 1)}
       />
@@ -137,7 +137,7 @@ function BlockedOutputActions({
           </h3>
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
             Preview and bundle stay locked until the request reaches a confirmed
-            ASCII handoff state.
+            ASCII output.
           </p>
         </div>
         <span
@@ -236,7 +236,6 @@ function ConvertedOutputActions({
   input,
   statuses,
   presence,
-  deliveryItems,
   actions,
   onRefresh,
 }: {
@@ -244,7 +243,6 @@ function ConvertedOutputActions({
   input: ConvertPreflightInput | null;
   statuses: ConvertArtifactStatusMap;
   presence: ConvertOutputPresence;
-  deliveryItems: readonly ConvertDeliveryItem[];
   actions: readonly HandoffAction[];
   onRefresh: () => void;
 }) {
@@ -252,17 +250,24 @@ function ConvertedOutputActions({
   const manifestPath = convertBundleManifestPath(data);
   const focus = convertPostWriteFocus(data);
   const conflict = presence === "conflict";
+  // The DONJON guide href carries manifest= only once the probe below has
+  // confirmed the manifest exists (bundling is optional; no amber warning
+  // for a step the user never took).
+  const [manifestReady, setManifestReady] = useState(false);
+  const donjonHref = convertDonjonGuideHref(data, {
+    manifestConfirmed: manifestReady,
+  });
   return (
     <section className="glass rounded-xl p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
           <h3 className="text-base font-semibold tracking-tight">
-            Output ready
+            Deliver to DONJON
           </h3>
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
             {conflict
-              ? "The ASCII handoff was written this session, but the file-status probe disagrees — check the path, then refresh file status."
-              : "The DONJON-facing ASCII handoff exists. Review the text, bundle the delivery record, or prepare the downstream DONJON input."}
+              ? "The ASCII output was written this session, but the file-status probe disagrees — check the path, then refresh file status."
+              : "The DONJON-facing ASCII output exists. The DONJON guide works from the ASCII path directly; bundle for the manifest-backed record."}
           </p>
         </div>
         {conflict ? (
@@ -293,12 +298,13 @@ function ConvertedOutputActions({
               DONJON ASCII
             </div>
             <h4 className="mt-1 text-sm font-semibold tracking-tight">
-              Preview, bundle, then use in DONJON
+              {focus?.title ?? "Use the ASCII output in DONJON"}
             </h4>
-            <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--fg-2)]">
-              The converter has done its job. The next useful checks are the
-              ASCII preview and the manifest-backed bundle.
-            </p>
+            {focus ? (
+              <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--fg-2)]">
+                {focus.body}
+              </p>
+            ) : null}
           </div>
           {focus ? (
             <span className="rounded border border-current/20 bg-black/15 px-2 py-1 text-[11px] uppercase tracking-wider">
@@ -308,23 +314,21 @@ function ConvertedOutputActions({
         </div>
 
         <div className="mt-3 grid gap-2 md:grid-cols-2">
-          <DeliveryPath label="ASCII handoff" value={data.output_path} />
+          <DeliveryPath label="ASCII output" value={data.output_path} />
           <DeliveryPath label="Bundle directory" value={bundleDir} />
           {data.summary_written && data.summary_path ? (
             <DeliveryPath label="Conversion summary" value={data.summary_path} />
           ) : null}
-          <DeliveryPath label="Manifest after bundle" value={manifestPath} />
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2">
-          <a href="#ascii-output-preview" className="btn btn-primary">
-            Preview ASCII
-          </a>
-          <Link href={convertBundleHref(data)} className="btn btn-secondary">
-            Bundle handoff
+          <Link href={donjonHref} className="btn btn-primary">
+            Open DONJON guide
+            <CliChip />
           </Link>
-          <Link href={convertDonjonGuideHref(data)} className="btn btn-secondary">
-            DONJON guide
+          <Link href={convertBundleHref(data)} className="btn btn-secondary">
+            Bundle
+            <CliChip />
           </Link>
           {data.writer_backend === "pygan" ? (
             <Link href={convertWriterCompareHref(data)} className="btn btn-secondary">
@@ -337,18 +341,10 @@ function ConvertedOutputActions({
           >
             Inspect source
           </Link>
-        </div>
-
-        <div className="mt-3 flex flex-wrap gap-2">
           <CopyCliButton
             value={data.output_path}
             label="Copy DONJON path"
             ariaLabel="Copy DONJON path"
-          />
-          <CopyCliButton
-            value={data.cli_command_text}
-            label="Copy CLI"
-            ariaLabel="Copy CLI command"
           />
         </div>
       </section>
@@ -357,15 +353,25 @@ function ConvertedOutputActions({
         <summary className="cursor-pointer select-none text-sm font-semibold tracking-tight text-[var(--fg-0)]">
           Advanced delivery evidence
         </summary>
-        <DeliveryPathStrip items={deliveryItems} />
         <AsciiReadinessPanel data={data} outputStatus={statuses.output} />
-        <DeliveryCommandPanel data={data} statuses={statuses} />
+        <DeliveryCommandPanel
+          data={data}
+          statuses={statuses}
+          donjonHref={donjonHref}
+        />
         <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
           {actions.map((action) => (
             <ActionCard key={action.id} action={action} />
           ))}
         </div>
-        <BundleManifestProbe manifestPath={manifestPath} enabled />
+        <div className="mt-3 grid gap-2 md:grid-cols-2">
+          <DeliveryPath label="Manifest after bundle" value={manifestPath} />
+        </div>
+        <BundleManifestProbe
+          manifestPath={manifestPath}
+          enabled
+          onManifestReady={setManifestReady}
+        />
         <RunSummaryCard data={data} input={input} statuses={statuses} />
       </details>
     </section>
@@ -392,10 +398,10 @@ function DryRunOutputActions({
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
           <h3 className="text-base font-semibold tracking-tight">
-            Dry-run next step
+            Dry run next step
           </h3>
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
-            Dry-run accepted the request and no ASCII file was written. Convert
+            Dry run accepted the request and no ASCII file was written. Convert
             is the only main action left before preview or bundle become
             relevant.
           </p>
@@ -422,7 +428,7 @@ function DryRunOutputActions({
               write target
             </div>
             <h4 className="mt-1 text-sm font-semibold tracking-tight">
-              Convert will create the DONJON ASCII handoff
+              Convert will create the DONJON ASCII output
             </h4>
             <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--fg-2)]">
               The target path is ready for the selected format. After Convert,
@@ -479,16 +485,15 @@ function DryRunOutputActions({
 function DeliveryCommandPanel({
   data,
   statuses,
-  onConvert,
+  donjonHref,
 }: {
   data: ConvertResponse;
   statuses: ConvertArtifactStatusMap;
-  onConvert?: () => void;
+  donjonHref?: string;
 }) {
   const presence = convertOutputPresence(data, statuses.output);
   const outputReady = presence === "confirmed" || presence === "unverified";
   const conflict = presence === "conflict";
-  const canConvertNow = data.dry_run && data.ok && !data.output_exists && onConvert;
   const bundleDir = convertBundleOutputDir(data);
   const manifestPath = convertBundleManifestPath(data);
   const bundleDirReady = fileStatusIsDirectory(statuses.bundle);
@@ -498,33 +503,27 @@ function DeliveryCommandPanel({
         "mt-3 rounded-lg border p-3 " +
         (outputReady
           ? "border-emerald-300/20 bg-emerald-300/[0.055] text-emerald-100"
-          : canConvertNow
-            ? "border-cyan-300/25 bg-cyan-300/[0.06] text-cyan-100"
-            : "border-[var(--edge)] bg-white/[0.02] text-[var(--fg-2)]")
+          : "border-[var(--edge)] bg-white/[0.02] text-[var(--fg-2)]")
       }
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-[10px] uppercase tracking-[0.14em] opacity-70">
-            delivery command chain
+            delivery workflow
           </div>
           <h4 className="mt-1 text-sm font-semibold tracking-tight">
             {outputReady
               ? "Preview, bundle, then validate the manifest"
-              : canConvertNow
-                ? "Convert unlocks preview and bundle delivery"
-                : conflict
-                  ? "ASCII written this session; file-status probe disagrees"
-                  : "Delivery waits for a confirmed ASCII file"}
+              : conflict
+                ? "ASCII written this session; file-status probe disagrees"
+                : "Delivery waits for a confirmed ASCII file"}
           </h4>
           <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--fg-2)]">
             {outputReady
-              ? "The web converter wrote the ASCII handoff. The next local command should collect the HDF5 and ASCII file into a manifest-backed bundle, then validate that manifest."
-              : canConvertNow
-                ? "The dry run accepted this handoff. Run Convert to write the ASCII file, then this panel will expose the bundle and validation builders."
-                : conflict
-                  ? "Convert reported the write, but the probe does not see the file at the target path. Check the path and refresh file status before bundling."
-                  : "Run a successful conversion before packaging the handoff for another workflow or collaborator."}
+              ? "The web converter wrote the ASCII output. The next local command should collect the HDF5 and ASCII file into a manifest-backed bundle, then validate that manifest."
+              : conflict
+                ? "Convert reported the write, but the probe does not see the file at the target path. Check the path and refresh file status before bundling."
+                : "Run a successful conversion before packaging the output for another workflow or collaborator."}
           </p>
         </div>
         {outputReady ? (
@@ -553,23 +552,37 @@ function DeliveryCommandPanel({
               </Link>
             ) : null}
             <Link href={convertBundleHref(data)} className="btn btn-secondary">
-              Open bundle builder
+              Bundle
+              <CliChip />
             </Link>
             <Link href={convertValidateBundleHref(data)} className="btn btn-secondary">
-              Prepare validation command
+              Validate bundle
+              <CliChip />
             </Link>
-            <Link href={convertDonjonGuideHref(data)} className="btn btn-secondary">
+            <Link
+              href={donjonHref ?? convertDonjonGuideHref(data)}
+              className="btn btn-secondary"
+            >
               Open DONJON guide
+              <CliChip />
             </Link>
           </div>
-          <BundleManifestProbe manifestPath={manifestPath} enabled={outputReady} />
         </>
-      ) : canConvertNow ? (
-        <button type="button" onClick={onConvert} className="mt-3 btn btn-primary">
-          Convert now
-        </button>
       ) : null}
     </section>
+  );
+}
+
+/**
+ * Marks a button whose destination only builds and copies a CLI command
+ * (bundle/equivalence builders, the DONJON guide) instead of executing
+ * in-app — the execute-to-copy boundary, announced at the point of click.
+ */
+function CliChip() {
+  return (
+    <span className="ml-1.5 rounded border border-current/30 px-1 py-px text-[9px] uppercase tracking-[0.12em] opacity-75">
+      CLI
+    </span>
   );
 }
 
@@ -598,18 +611,18 @@ function DeliveryPathStrip({
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
           <h4 className="text-sm font-semibold tracking-tight">
-            Handoff path after this result
+            Next steps
           </h4>
           <p className="mt-1 text-[12px] leading-5 text-[var(--fg-3)]">
-            Follow this row left to right: source evidence, gates, ASCII write,
-            preview, then bundle.
+            Follow this row left to right: source evidence, checks, ASCII
+            write, preview, bundle, then DONJON.
           </p>
         </div>
         <span className="rounded border border-[var(--edge)] px-2 py-1 text-[11px] uppercase tracking-wider text-[var(--fg-2)]">
-          delivery route
+          delivery workflow
         </span>
       </div>
-      <ol className="mt-3 grid gap-2 md:grid-cols-5">
+      <ol className="mt-3 grid gap-2 md:grid-cols-3 xl:grid-cols-6">
         {items.map((item, index) => (
           <li key={item.id} className={"rounded-md border px-3 py-2 " + deliveryItemClass(item.status)}>
             <div className="flex items-center justify-between gap-2">
@@ -662,7 +675,7 @@ function DeliveryItemAction({
   }
   return (
     <Link href={item.href} className="mt-2 inline-flex text-[11px] font-medium text-[var(--accent-2)] hover:underline">
-      Open
+      {isCopyCliDestination(item.href) ? "Open · CLI" : "Open"}
     </Link>
   );
 }
@@ -698,7 +711,7 @@ function handoffActions(
   const inspect: HandoffAction = {
     id: "inspect",
     label: "Evidence",
-    title: inputReady ? "Inspect input HDF5" : "Inspect source path",
+    title: inputReady ? "Inspect MGXS HDF5" : "Inspect source path",
     body: inputReady
       ? "Open mixture roster, energy mesh identity, ADF/SPH metadata, and production warnings."
       : "The source path is not confirmed right now; opening the inspector may return a path error.",
@@ -727,14 +740,14 @@ function handoffActions(
   const bundle: HandoffAction = {
     id: "bundle",
     label: bundleDirReady ? "Bundle" : "Bundle target",
-    title: outputReady ? "Bundle handoff" : "Bundle after convert",
+    title: outputReady ? "Bundle the output" : "Bundle after convert",
     body: outputReady
       ? bundleDirReady
         ? "Open the bundle builder with MGXS and ASCII paths filled; an existing bundle directory is present."
         : "Open the bundle builder with MGXS and ASCII paths filled; it will create or update the bundle directory."
       : conflict
         ? "Bundling waits until the file-status probe can see the written ASCII output — check the output path first."
-        : "Package the input, ASCII output, summaries, and logs after conversion succeeds.",
+        : "Package the MGXS HDF5, ASCII output, summaries, and logs after conversion succeeds.",
     href: outputReady ? convertBundleHref(data) : undefined,
     disabled: !outputReady,
     status: outputReady ? "ready" : "blocked",
@@ -746,8 +759,8 @@ function handoffActions(
     label: "PyGan",
     title: outputReady ? "Validate PyGan writer" : "Validate after convert",
     body: outputReady
-      ? "Open a command builder that regenerates this handoff with ASCII and PyGan, then compares their LCM trees semantically."
-      : "PyGan writer validation is available once the converted handoff is confirmed.",
+      ? "Open a command builder that regenerates this output with ASCII and PyGan, then compares their LCM trees semantically."
+      : "PyGan writer validation is available once the converted output is confirmed.",
     href: outputReady ? convertWriterCompareHref(data) : undefined,
     disabled: !outputReady,
     status: outputReady ? "ready" : "blocked",
@@ -863,7 +876,7 @@ function ActionLink({ href }: { href: string }) {
   }
   return (
     <Link href={href} className="text-[11px] text-[var(--accent-2)] hover:underline">
-      open
+      {isCopyCliDestination(href) ? "open · CLI" : "open"}
     </Link>
   );
 }

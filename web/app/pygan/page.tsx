@@ -126,10 +126,10 @@ function PyGanPageContent() {
   const rtolError = toleranceError(rtol);
   const atolError = toleranceError(atol);
   // In the live available state the availability hint repeats the
-  // overview card's "PyGan is importable..." sentence verbatim, so the
+  // Doctor panel's "PyGan is importable..." sentence verbatim, so the
   // hint only renders when it adds something (checking / mock / missing
   // modules).
-  const hintRepeatsOverview =
+  const hintRepeatsDoctorPanel =
     doctorData !== null && doctorData.available && !doctorData.mock_mode;
   const canUseSavedPrefix =
     settingsHydrated && savedPrefix !== "" && !inputH5.startsWith(savedPrefix);
@@ -198,7 +198,6 @@ function PyGanPageContent() {
           </p>
         </header>
 
-        <WriterBackendOverview status={doctorData} />
         <DoctorPanel state={doctor} onMockDemo={applyMockDemo} />
 
         <section className="glass rounded-xl p-5">
@@ -313,7 +312,7 @@ function PyGanPageContent() {
               >
                 {compare.kind === "loading" ? "Comparing…" : "Run compare"}
               </button>
-              {hintRepeatsOverview ? null : (
+              {hintRepeatsDoctorPanel ? null : (
                 <p className="mt-3 text-[12px] leading-5 text-[var(--fg-3)]">
                   {compareAvailability.hint}
                 </p>
@@ -337,83 +336,6 @@ function PyGanPageContent() {
         />
       </div>
     </main>
-  );
-}
-
-function WriterBackendOverview({ status }: { status: PyGanBackendStatus | null }) {
-  const pyganLabel =
-    status === null ? "checking" : status.available ? "available" : "unavailable";
-  const pyganTone =
-    status === null
-      ? "text-[var(--fg-2)]"
-      : status.available
-        ? "text-emerald-300"
-        : "text-amber-300";
-  return (
-    <section className="grid gap-3 md:grid-cols-2">
-      <div className="glass rounded-xl p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="text-[11px] uppercase tracking-[0.16em] text-emerald-300">
-              default
-            </div>
-            <h2 className="mt-1 text-base font-semibold tracking-tight">
-              Built-in ASCII writer
-            </h2>
-          </div>
-          <span className="rounded border border-emerald-300/25 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-emerald-200">
-            ready
-          </span>
-        </div>
-        <p className="mt-3 text-sm leading-relaxed text-[var(--fg-2)]">
-          This is the normal production path for OpenMC MGXS handoffs. It writes
-          <code className="mx-1 font-mono">.mcompo.txt</code>
-          or <code className="mx-1 font-mono">.macrolib.txt</code> without
-          importing DRAGON, DONJON, or PyGan.
-        </p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Link href="/convert" className="btn btn-primary">
-            Open converter
-          </Link>
-          <Link href="/commands/direct-convert" className="btn btn-secondary">
-            CLI help
-          </Link>
-        </div>
-      </div>
-
-      <div className="glass rounded-xl p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="text-[11px] uppercase tracking-[0.16em] text-[var(--accent-2)]">
-              optional
-            </div>
-            <h2 className="mt-1 text-base font-semibold tracking-tight">
-              PyGan writer backend
-            </h2>
-          </div>
-          <span
-            className={
-              "rounded border border-current/25 px-2 py-1 text-[10px] uppercase tracking-[0.14em] " +
-              pyganTone
-            }
-          >
-            {pyganLabel}
-          </span>
-        </div>
-        <p className="mt-3 text-sm leading-relaxed text-[var(--fg-2)]">
-          PyGan writes the same openmc2donjon LCM tree through the local
-          DRAGON/DONJON Python bindings. Use it for environment diagnostics,
-          alternate writer evidence, and ASCII-vs-PyGan semantic comparison.
-        </p>
-        <p className="mt-3 text-[12px] leading-5 text-[var(--fg-3)]">
-          {status === null
-            ? "Checking the backend Python environment."
-            : status.available
-              ? "PyGan is importable from the running backend."
-              : `Missing: ${pyganMissingModulesLabel(status)}.`}
-        </p>
-      </div>
-    </section>
   );
 }
 
@@ -451,11 +373,26 @@ function DoctorPanel({
     <section className="glass rounded-xl p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="text-base font-semibold tracking-tight">
-            Doctor result
-          </h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-base font-semibold tracking-tight">
+              Doctor result
+            </h2>
+            <span
+              className={
+                "rounded border border-current/25 px-2 py-1 text-[10px] uppercase tracking-[0.14em] " +
+                (data.available ? "text-emerald-300" : "text-amber-300")
+              }
+            >
+              {data.available ? "available" : "unavailable"}
+            </span>
+          </div>
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
             {data.role}
+          </p>
+          <p className="mt-1 text-[12px] leading-5 text-[var(--fg-3)]">
+            {data.available
+              ? "PyGan is importable from the running backend."
+              : `Missing: ${pyganMissingModulesLabel(data)}.`}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -464,9 +401,7 @@ function DoctorPanel({
               Fill mock compare
             </button>
           ) : null}
-          <Link href="/builder?command=pygan-doctor" className="btn btn-secondary">
-            Doctor CLI
-          </Link>
+          <CopyCliButton value="openmc2donjon pygan-doctor" label="Doctor CLI" />
         </div>
       </div>
 

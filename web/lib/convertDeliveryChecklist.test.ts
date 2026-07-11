@@ -54,6 +54,7 @@ describe("convertDeliveryChecklist", () => {
       ["ascii", "ready"],
       ["preview", "pending"],
       ["bundle", "pending"],
+      ["donjon", "pending"],
     ]);
     expect(items.find((item) => item.id === "ascii")?.action).toBe("convert");
   });
@@ -75,12 +76,17 @@ describe("convertDeliveryChecklist", () => {
       ["ascii", "done"],
       ["preview", "ready"],
       ["bundle", "ready"],
+      ["donjon", "ready"],
     ]);
     expect(items.find((item) => item.id === "preview")?.href).toBe(
       "#ascii-output-preview",
     );
     expect(items.find((item) => item.id === "bundle")?.href).toContain(
       "mcompo=%2Fruns%2Fcase%2Fout.mcompo.txt",
+    );
+    // The model ends at the product's destination: the DONJON guide.
+    expect(items.find((item) => item.id === "donjon")?.href).toContain(
+      "/donjon?ascii=",
     );
   });
 
@@ -96,6 +102,7 @@ describe("convertDeliveryChecklist", () => {
       ["ascii", "blocked"],
       ["preview", "blocked"],
       ["bundle", "blocked"],
+      ["donjon", "blocked"],
     ]);
   });
 

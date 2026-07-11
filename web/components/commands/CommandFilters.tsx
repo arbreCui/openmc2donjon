@@ -97,7 +97,7 @@ export function CommandFilters({
           options={[
             ["all", "All"],
             ["ready", "Ready"],
-            ["partial", "Partial"],
+            ["partial", "Builder"],
             ["planned", "CLI only"],
           ]}
           onChange={(value) => onStatusFilter(value as CommandStatus | "all")}

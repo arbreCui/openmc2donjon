@@ -27,11 +27,11 @@ export function convertWriterBackendOptions(
       badge: "default",
       title: "Built-in ASCII writer",
       body:
-        "The normal production path. openmc2donjon writes the LCM ASCII file " +
+        "The normal production route. openmc2donjon writes the LCM ASCII file " +
         "directly from the OpenMC MGXS HDF5.",
       detail:
         "No DRAGON/DONJON Python module is imported. Use this for regular " +
-        ".mcompo.txt and .macrolib.txt handoffs.",
+        ".mcompo.txt and .macrolib.txt outputs.",
       disabled: false,
       tone: "default",
     },
