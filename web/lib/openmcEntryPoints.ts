@@ -38,7 +38,8 @@ export const OPENMC_ENTRY_POINTS: readonly OpenmcEntryPoint[] = [
     body:
       "Start here when a colorset or core model needs equivalence before conversion: compare OpenMC CE reference flux against OpenMC MG macro flux on the same geometry/output regions, inject NSPH, then convert to MACROLIB for DONJON.",
     primaryLabel: "Plan CE/MG SPH route",
-    secondaryHref: "/openmc?workflow=two-step&equivalence=sph&format=macrolib",
+    secondaryHref:
+      "/openmc?workflow=two-step&equivalence=sph&format=macrolib#openmc-sph-summary",
     secondaryLabel: "Open SPH summary",
     workflow: "two-step",
     equivalence: "sph",

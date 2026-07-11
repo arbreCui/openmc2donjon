@@ -17,6 +17,16 @@ import {
   pyganCompareAvailability,
   pyganMissingModulesLabel,
 } from "@/lib/pyganBackend";
+import {
+  browserInitialPath,
+  buildCompareCli,
+  parseMixtures,
+  PYGAN_ATOL_DEFAULT,
+  PYGAN_RTOL_DEFAULT,
+  toleranceError,
+  toleranceValue,
+  type PyGanBrowseTarget as BrowseTarget,
+} from "@/lib/pyganCompare";
 import { useSettings } from "@/lib/settings";
 
 type DoctorState =
@@ -29,8 +39,6 @@ type CompareState =
   | { kind: "loading" }
   | { kind: "ok"; data: WriterComparisonResponse }
   | { kind: "error"; message: string; status?: number };
-
-type BrowseTarget = "input" | "summary" | "keep";
 
 const MOCK_INPUT = "/mock/home/openmc-runs/c5g7/handoff.h5";
 const MOCK_SUMMARY = "/mock/home/openmc-runs/c5g7/writer_compare.json";
@@ -115,6 +123,14 @@ function PyGanPageContent() {
   );
   const doctorData = doctor.kind === "ok" ? doctor.data : null;
   const compareAvailability = pyganCompareAvailability(doctorData);
+  const rtolError = toleranceError(rtol);
+  const atolError = toleranceError(atol);
+  // In the live available state the availability hint repeats the
+  // overview card's "PyGan is importable..." sentence verbatim, so the
+  // hint only renders when it adds something (checking / mock / missing
+  // modules).
+  const hintRepeatsOverview =
+    doctorData !== null && doctorData.available && !doctorData.mock_mode;
   const canUseSavedPrefix =
     settingsHydrated && savedPrefix !== "" && !inputH5.startsWith(savedPrefix);
 
@@ -140,8 +156,8 @@ function PyGanPageContent() {
         root_name: rootName.trim() || "CPO",
         comment: comment.trim() || null,
         mixtures: parseMixtures(mixtures),
-        rtol: parseNumberOrDefault(rtol, 1.0e-6),
-        atol: parseNumberOrDefault(atol, 1.0e-8),
+        rtol: toleranceValue(rtol, PYGAN_RTOL_DEFAULT),
+        atol: toleranceValue(atol, PYGAN_ATOL_DEFAULT),
         summary_json: summaryJson.trim() || null,
         keep_dir: keepDir.trim() || null,
       });
@@ -241,8 +257,18 @@ function PyGanPageContent() {
                 onChange={setMixtures}
                 placeholder="M1,M2"
               />
-              <TextField label="Relative tolerance" value={rtol} onChange={setRtol} />
-              <TextField label="Absolute tolerance" value={atol} onChange={setAtol} />
+              <TextField
+                label="Relative tolerance"
+                value={rtol}
+                onChange={setRtol}
+                error={rtolError}
+              />
+              <TextField
+                label="Absolute tolerance"
+                value={atol}
+                onChange={setAtol}
+                error={atolError}
+              />
               <PathField
                 label="Summary JSON"
                 value={summaryJson}
@@ -279,15 +305,19 @@ function PyGanPageContent() {
                 disabled={
                   !inputH5.trim() ||
                   compare.kind === "loading" ||
-                  !compareAvailability.canRun
+                  !compareAvailability.canRun ||
+                  rtolError != null ||
+                  atolError != null
                 }
                 className="btn btn-primary mt-4 w-full disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {compare.kind === "loading" ? "Comparing…" : "Run compare"}
               </button>
-              <p className="mt-3 text-[12px] leading-5 text-[var(--fg-3)]">
-                {compareAvailability.hint}
-              </p>
+              {hintRepeatsOverview ? null : (
+                <p className="mt-3 text-[12px] leading-5 text-[var(--fg-3)]">
+                  {compareAvailability.hint}
+                </p>
+              )}
             </aside>
           </div>
         </section>
@@ -421,10 +451,7 @@ function DoctorPanel({
     <section className="glass rounded-xl p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className={data.available ? "text-sm font-semibold text-emerald-300" : "text-sm font-semibold text-amber-300"}>
-            {data.available ? "PyGan available" : "PyGan unavailable"}
-          </div>
-          <h2 className="mt-1 text-base font-semibold tracking-tight">
+          <h2 className="text-base font-semibold tracking-tight">
             Doctor result
           </h2>
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
@@ -571,11 +598,13 @@ function TextField({
   value,
   onChange,
   placeholder,
+  error,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  error?: string | null;
 }) {
   return (
     <Field label={label}>
@@ -584,7 +613,11 @@ function TextField({
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
         className="input"
+        aria-invalid={error ? true : undefined}
       />
+      {error ? (
+        <div className="mt-1 text-[11px] text-rose-300">{error}</div>
+      ) : null}
     </Field>
   );
 }
@@ -648,69 +681,6 @@ function PathPill({ label, value }: { label: string; value: string }) {
       </div>
     </div>
   );
-}
-
-function parseMixtures(value: string): string[] | null {
-  const items = value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-  return items.length ? items : null;
-}
-
-function parseNumberOrDefault(value: string, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function buildCompareCli({
-  inputH5,
-  format,
-  rootName,
-  comment,
-  mixtures,
-  rtol,
-  atol,
-  summaryJson,
-  keepDir,
-}: {
-  inputH5: string;
-  format: ConvertFormat;
-  rootName: string;
-  comment: string;
-  mixtures: string;
-  rtol: string;
-  atol: string;
-  summaryJson: string;
-  keepDir: string;
-}): string {
-  const tokens = ["openmc2donjon", "compare-writers", inputH5 || "<mgxs_library.h5>", "--format", format];
-  if (rootName.trim() && rootName.trim() !== "CPO") tokens.push("--root-name", rootName.trim());
-  if (comment.trim()) tokens.push("--comment", comment.trim());
-  for (const mixture of parseMixtures(mixtures) ?? []) tokens.push("--mixture", mixture);
-  if (rtol.trim() && rtol.trim() !== "1e-6") tokens.push("--rtol", rtol.trim());
-  if (atol.trim() && atol.trim() !== "1e-8") tokens.push("--atol", atol.trim());
-  if (summaryJson.trim()) tokens.push("--summary-json", summaryJson.trim());
-  if (keepDir.trim()) tokens.push("--keep-dir", keepDir.trim());
-  return tokens.map(shellQuote).join(" ");
-}
-
-function shellQuote(value: string): string {
-  if (/^[A-Za-z0-9_./:=,+@%-]+$/.test(value)) return value;
-  return `'${value.replaceAll("'", "'\"'\"'")}'`;
-}
-
-function browserInitialPath(
-  target: BrowseTarget | null,
-  input: string,
-  summary: string,
-  keep: string,
-  savedPrefix: string,
-): string {
-  if (target === "input") return input || savedPrefix || "/mock/home/openmc-runs";
-  if (target === "summary") return summary || savedPrefix || "/mock/home/openmc-runs";
-  if (target === "keep") return keep || savedPrefix || "/mock/home/openmc-runs";
-  return savedPrefix || "/mock/home/openmc-runs";
 }
 
 function formatSci(value: number): string {

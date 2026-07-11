@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { RefObject } from "react";
 
 import type {
@@ -59,9 +60,17 @@ export default function DirectConvertActionPanel({
             {object} text file at the output path.
           </p>
         </div>
-        <span className="rounded border border-[var(--edge)] px-2 py-1 font-mono text-[11px] uppercase tracking-wider text-[var(--fg-2)]">
-          {object} · {writer} · {checkMode} checks
-        </span>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="rounded border border-[var(--edge)] px-2 py-1 font-mono text-[11px] uppercase tracking-wider text-[var(--fg-2)]">
+            {object} · {writer} · {checkMode} checks
+          </span>
+          <Link
+            href="/commands/direct-convert"
+            className="text-[12px] font-medium text-[var(--accent-2)] hover:underline"
+          >
+            Command notes
+          </Link>
+        </div>
       </div>
 
       <div className="mt-4 grid gap-2 md:grid-cols-3">

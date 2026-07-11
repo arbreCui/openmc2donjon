@@ -26,9 +26,18 @@ class InspectEndpointTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["schema"], INSPECT_SCHEMA)
+        # Mock mode echoes the requested path so the result header names
+        # the file the user asked for.
+        self.assertEqual(payload["path"], "/any.h5")
         self.assertEqual(payload["energy_groups"], 7)
         self.assertEqual(payload["legendre_order"], 1)
         self.assertEqual(payload["mixture_count"], 9)
+        # File-level state points agree with the per-mixture rows, and
+        # the uncertainty story matches mock convert's preflight
+        # (uncertainty checked 72/72 for the same demo file).
+        self.assertEqual(payload["state_points"], 1)
+        self.assertEqual(payload["std_dev_datasets"], 72)
+        self.assertEqual(payload["std_dev_expected_datasets"], 72)
         self.assertEqual(payload["sph_calculations"], 9)
         self.assertEqual(
             tuple(payload["adf_faces"]), ("XMIN", "XMAX", "YMIN", "YMAX")
@@ -80,6 +89,27 @@ class InspectEndpointTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         # Same fixture data, but the mixture field reflects the request.
         self.assertEqual(response.json()["mixture"], "M1_UO2")
+
+    def test_mock_mode_mixture_detail_matches_roster_volume(self) -> None:
+        """Per-mixture detail must agree with the handoff roster rows.
+
+        Regression test for the mock detail card serving the canned
+        M3_MOX_70 volume (9.6) for mixtures whose roster row says
+        otherwise (e.g. M7_REFL is 96.0).
+        """
+
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        handoff = client.get("/api/inspect", params={"path": "/any.h5"}).json()
+        roster = {mix["name"]: mix["volume"] for mix in handoff["mixtures"]}
+
+        for name in ("M7_REFL", "M5_MOD", "M3_MOX_70"):
+            detail = client.get(
+                "/api/inspect/mixture",
+                params={"path": "/any.h5", "mixture": name},
+            ).json()
+            self.assertEqual(detail["volume"], roster[name])
 
     def test_mock_mode_mixture_endpoint_rejects_unknown_mixture(self) -> None:
         from openmc2donjon.web.server import create_app
@@ -403,6 +433,50 @@ class OpenMCSphPhysicsSummaryEndpointTests(unittest.TestCase):
             payload["donjon_consumption"]["expected_g1"],
             1.11109312,
         )
+        # The demo preset and the summary card must name the same
+        # corrected artifacts: the fixture points at the flat minicase
+        # paths, not a nonexistent handoff/ subdirectory.
+        self.assertEqual(
+            payload["handoff"]["ascii_path"],
+            "/mock/home/openmc-runs/openmc-sph-minicase/out.macrolib.txt",
+        )
+        self.assertEqual(
+            payload["handoff"]["augmented_hdf5_path"],
+            "/mock/home/openmc-runs/openmc-sph-minicase/mgxs_with_openmc_sph.h5",
+        )
+
+    def test_mock_summary_fixture_paths_exist_in_mock_tree(self) -> None:
+        """Every /mock path in the fixture resolves in the mock browser.
+
+        Regression test for the fixture's artifact paths 404ing in the
+        mock file browser (handoff/ and mg_case_iterNN directories that
+        never existed in the mock tree).
+        """
+
+        import re
+
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        payload = client.get(
+            "/api/openmc-sph-summary",
+            params={"path": "/mock/home/openmc-runs/openmc-sph-minicase/physics_summary.json"},
+        ).json()
+        paths = sorted(
+            {
+                match.split("::")[0]
+                for match in re.findall(r"/mock/[^\"]*", json.dumps(payload))
+            }
+        )
+        self.assertTrue(paths)
+        missing = [
+            path
+            for path in paths
+            if not client.get("/api/file-status", params={"path": path}).json()[
+                "exists"
+            ]
+        ]
+        self.assertEqual(missing, [])
 
     def test_live_mode_reads_openmc_sph_physics_summary_json(self) -> None:
         from openmc2donjon.web.openmc_sph_summary import (
@@ -578,6 +652,9 @@ class FilesEndpointTests(unittest.TestCase):
         self.assertIn("openmc_mg_flux.h5", names)
         self.assertIn("mgxs_with_openmc_sph.h5", names)
         self.assertIn("physics_summary.json", names)
+        # The SPH demo planner needs a browsable recipe to reach READY.
+        self.assertIn("export_recipe.py", names)
+        self.assertIn("out_uncorrected.macrolib.txt", names)
 
 @unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
 class FileStatusEndpointTests(unittest.TestCase):
@@ -661,9 +738,99 @@ class TextPreviewEndpointTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["schema"], TEXT_PREVIEW_SCHEMA)
         self.assertEqual(payload["path"], "/mock/home/openmc-runs/c5g7/handoff.mcompo.txt")
-        self.assertIn("L_MULTICOMPO", payload["text"])
-        self.assertIn("SCAT00", payload["text"])
+        lines = {line.strip() for line in payload["text"].splitlines()}
+        self.assertIn("L_MULTICOMPO", lines)
+        self.assertIn("SCAT00", lines)
+        # The anatomy scan must agree with mock convert's preflight for
+        # the C5G7 story (ADF 9 mixtures / 4 faces + SPH 9): all the
+        # equivalence and structural blocks the real writer emits are
+        # visible in the "complete" mock preview.
+        for block in (
+            "GLOBAL",
+            "STATE-VECTOR",
+            "MIXTURES",
+            "CALCULATIONS",
+            "TREE",
+            "ISOTOPESLIST",
+            "STRD",
+            "ENERGY",
+            "ADF",
+            "HADF",
+            "NSPH",
+            "L_LIBRARY",
+        ):
+            self.assertIn(block, lines)
+        # STATE-VECTOR shape matches the file being previewed:
+        # 9 mixtures / 7 groups / 9 calculations for C5G7.
+        state_line = payload["text"].splitlines()[
+            payload["text"].splitlines().index("STATE-VECTOR") + 1
+        ]
+        self.assertEqual(state_line.split()[:3], ["9", "7", "9"])
         self.assertFalse(payload["truncated"])
+
+    def test_mock_mode_minicase_macrolib_preview_carries_group_nsp(self) -> None:
+        """The SPH minicase MACROLIB preview matches its physics story.
+
+        Regression test for the mock preview lacking ENERGY/NSPH while
+        the physics-summary fixture claims macrolib_ascii_nsp_block_count
+        of 33 and the preflight reports 2 mixtures / 33 groups.
+        """
+
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.get(
+            "/api/text-preview",
+            params={
+                "path": "/mock/home/openmc-runs/openmc-sph-minicase/out.macrolib.txt"
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        raw_lines = payload["text"].splitlines()
+        lines = {line.strip() for line in raw_lines}
+        self.assertIn("L_MACROLIB", lines)
+        for block in ("STATE-VECTOR", "ENERGY", "VOLUME", "GROUP", "NSPH"):
+            self.assertIn(block, lines)
+        # No ADF: the minicase preflight reports adf_mixtures = 0.
+        self.assertNotIn("ADF", lines)
+        self.assertNotIn("HADF", lines)
+        # One GROUP/*/NSPH block per group, matching the physics-summary
+        # fixture's macrolib_ascii_nsp_block_count of 33.
+        self.assertEqual(sum(1 for line in raw_lines if line.strip() == "NSPH"), 33)
+        # STATE-VECTOR shape: 33 groups / 2 mixtures.
+        state_line = raw_lines[raw_lines.index("STATE-VECTOR") + 1]
+        self.assertEqual(state_line.split()[:2], ["33", "2"])
+        # The complete artifact fits inside the default preview budget.
+        self.assertFalse(payload["truncated"])
+        # The mock browser reports the same size the preview serves.
+        status = client.get(
+            "/api/file-status",
+            params={
+                "path": "/mock/home/openmc-runs/openmc-sph-minicase/out.macrolib.txt"
+            },
+        ).json()
+        self.assertEqual(status["size"], payload["file_size"])
+
+    def test_mock_mode_uncorrected_macrolib_preview_has_no_nsp(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.get(
+            "/api/text-preview",
+            params={
+                "path": (
+                    "/mock/home/openmc-runs/openmc-sph-minicase/"
+                    "out_uncorrected.macrolib.txt"
+                )
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        lines = {line.strip() for line in response.json()["text"].splitlines()}
+        self.assertIn("L_MACROLIB", lines)
+        self.assertNotIn("NSPH", lines)
 
     def test_live_mode_caps_text_preview_by_lines(self) -> None:
         from openmc2donjon.web.server import TEXT_PREVIEW_SCHEMA, create_app

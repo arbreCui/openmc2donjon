@@ -102,6 +102,22 @@ export function commandWorkflowMapping(
     };
   }
 
+  if (parsed.pathname === "/pygan") {
+    return {
+      available: true,
+      href: command.web_path,
+      surface: "PyGan page",
+      title: "PyGan diagnostics and writer comparison",
+      summary:
+        "Opens the PyGan page with the backend module doctor and the ASCII-vs-PyGan writer comparison form.",
+      presets: ["Doctor probe: runs on page load"],
+      requiredInputs: [
+        "Input MGXS HDF5 path (writer comparison only)",
+        "Optional tolerances, summary JSON, keep directory",
+      ],
+    };
+  }
+
   if (parsed.pathname === "/builder") {
     const builderCommand = parsed.searchParams.get("command") ?? "unknown";
     return {

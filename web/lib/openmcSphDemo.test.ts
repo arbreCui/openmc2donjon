@@ -16,10 +16,38 @@ describe("openmcSphDemo", () => {
     expect(prefill.equivalence).toBe("sph");
     expect(prefill.format).toBe("macrolib");
     expect(prefill.production).toBe(true);
-    expect(prefill.keepHdf5Path).toBe(MOCK_OPENMC_SPH_DEMO.augmentedH5);
+    expect(prefill.keepHdf5Path).toBe(MOCK_OPENMC_SPH_DEMO.exportH5);
     expect(prefill.outputPath).toBe(MOCK_OPENMC_SPH_DEMO.ascii);
     expect(prefill.outputPath).toContain(".macrolib.txt");
     expect(prefill.sphSource).toBe(MOCK_OPENMC_SPH_DEMO.sphSidecar);
+  });
+
+  it("keeps the intermediate HDF5 raw so the plan injects SPH exactly once", () => {
+    for (const preset of [MOCK_OPENMC_SPH_DEMO, LIVE_OPENMC_SPH_DEMO]) {
+      const prefill = openmcSphPlannerPrefill(preset);
+
+      // The planned export must not overwrite the corrected artifact, and
+      // the augment step must not re-inject SPH into an already-corrected
+      // file.
+      expect(prefill.keepHdf5Path).not.toBe(preset.augmentedH5);
+      // The backend derives the augmented handoff by appending `_sph` to
+      // the intermediate stem; the result must be the corrected artifact
+      // the rest of the page (and the mock tree / fixture) names.
+      expect(prefill.keepHdf5Path.replace(/\.h5$/, "_sph.h5")).toBe(
+        preset.augmentedH5,
+      );
+    }
+  });
+
+  it("fills the required recipe and a consistent statepoint", () => {
+    const prefill = openmcSphPlannerPrefill(MOCK_OPENMC_SPH_DEMO);
+
+    expect(prefill.recipePath).toBe(
+      "/mock/home/openmc-runs/openmc-sph-minicase/export_recipe.py",
+    );
+    // A filled statepoint field must not be silently ignored.
+    expect(prefill.loadStatepoint).toBe(prefill.statepointPath.trim().length > 0);
+    expect(prefill.statepointPath).toBe(MOCK_OPENMC_SPH_DEMO.ceStatepoint);
   });
 
   it("builds the three-link demo mainline from evidence to converter to bundle", () => {
@@ -59,7 +87,7 @@ describe("openmcSphDemo", () => {
     expect(LIVE_OPENMC_SPH_DEMO.runRoot).toBe(
       "/private/tmp/openmc2donjon_two_region_production_20260709",
     );
-    expect(LIVE_OPENMC_SPH_DEMO.mgStatepoint).toContain("statepoint.80.h5");
+    expect(LIVE_OPENMC_SPH_DEMO.ceStatepoint).toContain("ce_case/statepoint.80.h5");
     expect(LIVE_OPENMC_SPH_DEMO.physicsSummary).toContain("physics_summary.json");
   });
 });

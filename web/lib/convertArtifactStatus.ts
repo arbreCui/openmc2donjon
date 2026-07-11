@@ -12,6 +12,27 @@ export type ConvertArtifactStatusId = (typeof CONVERT_ARTIFACT_STATUS_IDS)[numbe
 export type ConvertArtifactStatusMap = Record<ConvertArtifactStatusId, FileStatusState>;
 export type ConvertArtifactPathMap = Record<ConvertArtifactStatusId, string>;
 
+/**
+ * Single source of truth for whether the written ASCII artifact exists.
+ * The convert response is authoritative for this session's write; the
+ * file-status probe can only downgrade it to a "conflict" when it
+ * positively reports the file missing after the write.
+ */
+export type ConvertOutputPresence =
+  | "confirmed"
+  | "unverified"
+  | "conflict"
+  | "absent";
+
+export function convertOutputPresence(
+  data: ConvertResponse,
+  outputStatus: FileStatusState,
+): ConvertOutputPresence {
+  if (!data.converted || !data.output_exists) return "absent";
+  if (outputStatus.kind !== "ok") return "unverified";
+  return fileStatusIsFile(outputStatus) ? "confirmed" : "conflict";
+}
+
 export function convertArtifactPaths(data: ConvertResponse): ConvertArtifactPathMap {
   return {
     input: data.input_path,
@@ -70,6 +91,7 @@ export async function fetchConvertArtifactStatuses(
 
 export function convertArtifactStatusSummary(
   statuses: ConvertArtifactStatusMap,
+  presence: ConvertOutputPresence = "absent",
 ): string {
   const loading = CONVERT_ARTIFACT_STATUS_IDS.some(
     (id) => statuses[id].kind === "loading",
@@ -88,6 +110,9 @@ export function convertArtifactStatusSummary(
   }
   if (outputReady) {
     return "ASCII output is present; the bundle directory is still a builder target.";
+  }
+  if (presence === "conflict") {
+    return "Convert reported the ASCII write, but the file-status probe does not see the file — check the output path.";
   }
   return "ASCII output is not present yet; preview and bundling wait for conversion.";
 }

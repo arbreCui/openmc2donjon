@@ -9,6 +9,13 @@ import {
   useState,
 } from "react";
 import { ApiError, FileEntry, FileListing, api } from "@/lib/api";
+import {
+  browseDialogTitle,
+  hiddenEntriesNote,
+  labelWithNoun,
+} from "@/lib/fileBrowserCopy";
+import { buildExtensionRegex } from "@/lib/fileBrowserExtensions";
+import { requestedPathParent } from "@/lib/fileBrowserNav";
 import { pathCrumbs } from "@/lib/fileBrowserPath";
 import { RecentHandoff, useRecentHandoffs } from "@/lib/recentHandoffs";
 
@@ -22,13 +29,14 @@ export interface FileBrowserModalProps {
    * common default and the backend will resolve it to the server
    * home (or to the mock-home tree in mock mode). */
   initialPath: string;
-  /** File extensions (without the leading dot, case-insensitive) the
-   * picker should surface. Everything else is filtered out with a
+  /** File extensions (with or without a leading dot, case-insensitive)
+   * the picker should surface. Everything else is filtered out with a
    * footer counting how many got hidden. */
   extensions: readonly string[];
   /** Short noun phrase used in the dialog title and the "hidden"
    * footer: ``"HDF5"`` renders "Browse for HDF5 file" / "N non-HDF5
-   * files hidden". Pass exactly what should land in that slot. */
+   * files hidden". Labels that already end in the file/directory noun
+   * (``"input file"``) are not doubled. */
   fileTypeLabel: string;
   /** Even shorter label for the per-row chip (max ~4 chars).
    * ``"H5"`` for HDF5 callers, ``"JSON"`` for JSON callers. */
@@ -44,20 +52,6 @@ export interface FileBrowserModalProps {
   selectMode?: "file" | "directory";
   onSelect: (path: string) => void;
   onClose: () => void;
-}
-
-/**
- * Compile a list of extensions (``["h5", "hdf5"]``) into a single
- * case-insensitive regex matching any of them at end-of-name. Each
- * extension is escaped so a future caller passing ``"foo.bar"`` (with
- * a literal dot) won't accidentally turn it into a regex metacharacter.
- */
-function buildExtensionRegex(extensions: readonly string[]): RegExp {
-  if (extensions.length === 0) return /^$/;
-  const escaped = extensions.map((ext) =>
-    ext.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-  );
-  return new RegExp(`\\.(${escaped.join("|")})$`, "i");
 }
 
 type State =
@@ -236,10 +230,20 @@ export default function FileBrowserModal({
     return () => window.removeEventListener("keydown", handler);
   }, [open]);
 
+  // Where "↑ parent" goes. A successful listing supplies the
+  // backend-resolved parent; after a failed listing (404 on a typed
+  // path, say) the parent is derived from the *requested* path so the
+  // user can climb out of the error instead of being stuck on it.
+  const parentTarget =
+    state.kind === "ok"
+      ? state.data.parent
+      : state.kind === "error"
+        ? requestedPathParent(state.path)
+        : null;
+
   const goUp = useCallback(() => {
-    if (state.kind !== "ok") return;
-    if (state.data.parent != null) setCurrentPath(state.data.parent);
-  }, [state]);
+    if (parentTarget != null) setCurrentPath(parentTarget);
+  }, [parentTarget]);
 
   // Wrap the parent's ``onSelect`` so the focus-restore effect cleanup
   // can tell "user cancelled" from "user picked a file" and leave the
@@ -289,9 +293,7 @@ export default function FileBrowserModal({
       }}
       role="dialog"
       aria-modal="true"
-      aria-label={`Browse for ${fileTypeLabel} ${
-        selectMode === "directory" ? "directory" : "file"
-      }`}
+      aria-label={browseDialogTitle(fileTypeLabel, selectMode)}
     >
       <div
         ref={dialogRef}
@@ -305,15 +307,13 @@ export default function FileBrowserModal({
         <div className="flex items-baseline justify-between gap-3 px-4 py-3 border-b border-[var(--edge)]">
           <h3 className="text-sm font-semibold tracking-tight">
             <span className="grad-text">
-              Browse for {fileTypeLabel}{" "}
-              {selectMode === "directory" ? "directory" : "file"}
+              {browseDialogTitle(fileTypeLabel, selectMode)}
             </span>
           </h3>
           <button
             type="button"
             onClick={onClose}
             className="btn btn-secondary text-[12px]"
-            aria-label="Close browser"
           >
             Cancel
           </button>
@@ -323,9 +323,7 @@ export default function FileBrowserModal({
           <button
             type="button"
             onClick={goUp}
-            disabled={
-              state.kind !== "ok" || state.data.parent == null
-            }
+            disabled={parentTarget == null}
             className="btn btn-secondary text-[12px]"
             aria-label="Go to parent directory"
           >
@@ -333,7 +331,7 @@ export default function FileBrowserModal({
           </button>
           <PathBreadcrumb
             path={state.kind === "ok" ? state.data.path : state.path}
-            pending={state.kind !== "ok"}
+            pending={state.kind === "loading"}
             onPick={setCurrentPath}
           />
           {selectMode === "directory" && state.kind === "ok" ? (
@@ -341,7 +339,6 @@ export default function FileBrowserModal({
               type="button"
               onClick={() => handleSelect(state.data.path)}
               className="btn btn-primary text-[12px]"
-              aria-label="Use the current directory"
             >
               Use this directory
             </button>
@@ -378,7 +375,7 @@ export default function FileBrowserModal({
             type="submit"
             disabled={!draftCommittable}
             className="btn btn-secondary text-[12px] disabled:opacity-50 disabled:cursor-not-allowed"
-            aria-label="Navigate to typed path"
+            aria-label="Go to typed path"
           >
             Go
           </button>
@@ -390,11 +387,10 @@ export default function FileBrowserModal({
               recent={recent}
               onPick={handleSelect}
               chipLabel={chipLabel}
-              itemLabel={
-                selectMode === "directory"
-                  ? `${fileTypeLabel} directories`
-                  : `${fileTypeLabel} files`
-              }
+              itemLabel={labelWithNoun(
+                fileTypeLabel,
+                selectMode === "directory" ? "directories" : "files",
+              )}
             />
           ) : null}
           <BrowserBody
@@ -462,13 +458,11 @@ function BrowserBody({
         <div>
           {selectMode === "directory"
             ? "No subdirectories here. Use the current directory if it is the intended target."
-            : `No ${fileTypeLabel} files or subdirectories here.`}
+            : `No ${labelWithNoun(fileTypeLabel, "files")} or subdirectories here.`}
         </div>
         {hiddenCount > 0 ? (
           <div className="text-[12px]">
-            ({hiddenCount} non-{fileTypeLabel}{" "}
-            {selectMode === "directory" ? "entry" : "file"}
-            {hiddenCount === 1 ? "" : "s"} hidden.)
+            ({hiddenEntriesNote(hiddenCount, fileTypeLabel, selectMode)})
           </div>
         ) : null}
         {state.data.truncated ? (
@@ -505,9 +499,7 @@ function BrowserBody({
       ))}
       {hiddenCount > 0 ? (
         <li className="px-3 py-2 text-[12px] text-[var(--fg-3)]">
-          {hiddenCount} non-{fileTypeLabel}{" "}
-          {selectMode === "directory" ? "entry" : "file"}
-          {hiddenCount === 1 ? "" : "s"} hidden.
+          {hiddenEntriesNote(hiddenCount, fileTypeLabel, selectMode)}
         </li>
       ) : null}
       {state.data.truncated ? (
@@ -647,11 +639,11 @@ function PathBreadcrumb({
                 {crumb.label}
               </span>
             ) : (
-              // Crumbs are disabled while a fetch is in flight or has
-              // errored, so a user looking at a stale path can't fire
-              // a second navigation on top of it. The effect's
-              // cancellation flag would tolerate overlap, but a
-              // visibly-static breadcrumb is the honest signal.
+              // Crumbs are disabled only while a fetch is in flight,
+              // so a user can't fire a second navigation on top of it.
+              // After a *failed* listing they stay clickable: the
+              // crumbs derive from the requested path, and climbing to
+              // an ancestor is the natural way out of the error card.
               <button
                 type="button"
                 onClick={() => onPick(crumb.path)}

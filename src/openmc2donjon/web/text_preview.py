@@ -134,40 +134,237 @@ def _text_preview_payload(
     }
 
 
+def _is_mock_openmc_sph_path(path: str) -> bool:
+    """True for paths that belong to the bundled OpenMC-side SPH minicase."""
+
+    return "openmc-sph-minicase" in path or "mgxs_with_openmc_sph" in path
+
+
 def _mock_ascii_preview_text(path: str) -> str:
-    object_name = "L_MACROLIB" if path.endswith(".macrolib.txt") else "L_MULTICOMPO"
-    return "\n".join(
-        [
-            "->  1 12  3  1 <-",
-            "SIGNATURE",
-            object_name,
-            "->  1 12  0  0 <-",
-            "GLOBAL",
-            "->  2 12  1 40 <-",
-            "STATE-VECTOR",
-            "         9         7         9         1         0         0         0         0",
-            "         0         1         0      2006         0         0         0         0",
-            "->  2 12 10  9 <-",
-            "MIXTURES",
-            "->  3  0  0 -1 <-       1",
-            "->  4 12  2  7 <-",
-            "NTOT0",
-            "  1.8923400000E+00  1.2857300000E+00  7.3012000000E-01  3.1184000000E-01  1.2820000000E-01",
-            "  9.1080000000E-02  4.3120000000E-02",
-            "->  4 12  2  7 <-",
-            "NUSIGF",
-            "  7.1080000000E-03  1.6210000000E-02  3.0170000000E-02  4.8020000000E-02  6.1990000000E-02",
-            "  7.2140000000E-02  8.0030000000E-02",
-            "->  4 12  1  7 <-",
-            "NJJS00",
-            "         1         2         2         3         3         3         4",
-            "->  4 12  1  7 <-",
-            "IJJS00",
-            "         1         2         3         4         5         6         7",
-            "->  4 12  2 18 <-",
-            "SCAT00",
-            "  1.2500000000E+00  6.8000000000E-02  9.7300000000E-01  1.4300000000E-02  6.2110000000E-01",
-            "  9.8200000000E-03  3.1420000000E-01  2.1100000000E-03  1.2310000000E-01",
-            "-> -4  0  0  0 <-",
-        ]
+    """Synthesize a complete-but-small DONJON ASCII artifact for mock mode.
+
+    The block roster mirrors the real writers (``multicompo.py`` /
+    ``macrolib.py``) so the frontend anatomy scan agrees with the mock
+    convert preflight: the C5G7 story previews as 9 mixtures / 7 groups
+    with ADF + NSPH records carried, and the OpenMC-side SPH minicase
+    previews as 2 mixtures / 33 groups with one GROUP/*/NSPH block per
+    group (matching the physics-summary fixture's
+    ``macrolib_ascii_nsp_block_count``) and no ADF (its preflight
+    reports ``adf_mixtures = 0``). ``*_uncorrected*`` paths drop the
+    NSPH records. The text is deterministic per path so the sizes the
+    mock convert/file endpoints report can stay in lockstep with it.
+    """
+
+    if _is_mock_openmc_sph_path(path):
+        mixtures, groups, calculations, moments, adf = 2, 33, 2, 4, False
+    else:
+        mixtures, groups, calculations, moments, adf = 9, 7, 9, 2, True
+    sph = "uncorrected" not in path
+    if path.endswith(".macrolib.txt"):
+        return _mock_macrolib_text(mixtures, groups, moments, adf=adf, sph=sph)
+    return _mock_multicompo_text(
+        mixtures, groups, calculations, moments, adf=adf, sph=sph
     )
+
+
+def _mock_multicompo_text(
+    mixtures: int,
+    groups: int,
+    calculations: int,
+    moments: int,
+    *,
+    adf: bool,
+    sph: bool,
+) -> str:
+    state = [0] * 40
+    state[0] = mixtures
+    state[1] = groups
+    state[2] = calculations
+    state[3] = calculations
+    state[9] = 1
+    state[11] = 2006
+    state[15] = 3 if adf else 0
+    library_state = [0] * 40
+    library_state[0] = 1
+    library_state[1] = 1
+    library_state[2] = groups
+    library_state[3] = moments
+    library_state[13] = 1
+
+    njjs = [min(index + 1, 2) for index in range(groups)]
+    ijjs = [index + 1 for index in range(groups)]
+    scat = _mock_xs(sum(njjs), 0.5, -0.4 / (sum(njjs) + 1))
+
+    lines = [
+        *_mock_block(1, 3, 1, "SIGNATURE"),
+        "L_MULTICOMPO",
+        *_mock_block(1, 0, 0, "GLOBAL"),
+        *_mock_block(2, 1, 40, "STATE-VECTOR"),
+        *_mock_int_lines(state),
+        *_mock_block(2, 10, mixtures, "MIXTURES"),
+        _mock_list_item(1),
+        *_mock_block(2, 10, calculations, "CALCULATIONS"),
+        _mock_list_item(1),
+        *_mock_block(4, 3, 2, "ISOTOPESLIST"),
+        "MACR",
+        *_mock_block(4, 0, -1, "TREE"),
+        *_mock_block(4, 2, groups, "NTOT0"),
+        *_mock_float_lines(_mock_xs(groups, 0.19, 0.28)),
+        *_mock_block(4, 2, groups, "NUSIGF"),
+        *_mock_float_lines(_mock_xs(groups, 0.007, 0.011)),
+        *_mock_block(4, 2, groups, "STRD"),
+        *_mock_float_lines(_mock_xs(groups, 0.17, 0.25)),
+        *_mock_block(4, 2, groups, "H-FACTOR"),
+        *_mock_float_lines(_mock_xs(groups, 3.2e-12, 1.1e-13)),
+    ]
+    if sph:
+        lines += [
+            *_mock_block(4, 2, groups, "NSPH"),
+            *_mock_float_lines(_mock_sph_factors(groups)),
+        ]
+    lines += [
+        *_mock_block(4, 1, groups, "NJJS00"),
+        *_mock_int_lines(njjs),
+        *_mock_block(4, 1, groups, "IJJS00"),
+        *_mock_int_lines(ijjs),
+        *_mock_block(4, 2, len(scat), "SCAT00"),
+        *_mock_float_lines(scat),
+    ]
+    # One NSPH record per calculation, like the real writer, so the
+    # preview's NSPH count matches the preflight's sph_calculations.
+    for calculation in range(2, calculations + 1):
+        lines.append(_mock_list_item(calculation))
+        if sph:
+            lines += [
+                *_mock_block(4, 2, groups, "NSPH"),
+                *_mock_float_lines(_mock_sph_factors(groups)),
+            ]
+    if adf:
+        lines += [
+            *_mock_block(2, 0, -1, "ADF"),
+            *_mock_block(3, 3, 4, "HADF"),
+            "XMIN    XMAX    YMIN    YMAX",
+        ]
+    lines += [
+        *_mock_block(2, 3, 1, "SIGNATURE"),
+        "L_LIBRARY",
+        *_mock_block(3, 1, 40, "STATE-VECTOR"),
+        *_mock_int_lines(library_state),
+        *_mock_block(3, 2, groups + 1, "ENERGY"),
+        *_mock_float_lines(_mock_energy_bounds(groups)),
+        "-> -4  0  0  0 <-",
+    ]
+    return "\n".join(lines)
+
+
+def _mock_macrolib_text(
+    mixtures: int,
+    groups: int,
+    moments: int,
+    *,
+    adf: bool,
+    sph: bool,
+) -> str:
+    state = [0] * 40
+    state[0] = groups
+    state[1] = mixtures
+    state[2] = moments
+    state[3] = 1
+    state[8] = 1
+    state[11] = 3 if adf else 0
+    state[13] = 1 if sph else 0
+
+    lines = [
+        *_mock_block(1, 3, 1, "SIGNATURE"),
+        "L_MACROLIB",
+        *_mock_block(1, 1, 40, "STATE-VECTOR"),
+        *_mock_int_lines(state),
+        *_mock_block(1, 2, groups + 1, "ENERGY"),
+        *_mock_float_lines(_mock_energy_bounds(groups)),
+        *_mock_block(1, 2, mixtures, "VOLUME"),
+        *_mock_float_lines(_mock_xs(mixtures, 9.6, 0.4)),
+        *_mock_block(1, 10, groups, "GROUP"),
+        _mock_list_item(1),
+        *_mock_block(3, 2, mixtures, "FLUX-INTG"),
+        *_mock_float_lines(_mock_xs(mixtures, 1.0, -0.05)),
+        *_mock_block(3, 2, mixtures, "NTOT0"),
+        *_mock_float_lines(_mock_xs(mixtures, 0.19, 0.03)),
+        *_mock_block(3, 2, mixtures, "DIFF"),
+        *_mock_float_lines(_mock_xs(mixtures, 1.4, -0.02)),
+        *_mock_block(3, 2, mixtures, "H-FACTOR"),
+        *_mock_float_lines(_mock_xs(mixtures, 3.2e-12, 1.1e-13)),
+    ]
+    if sph:
+        lines += [
+            *_mock_block(3, 2, mixtures, "NSPH"),
+            *_mock_float_lines(_mock_sph_factors(mixtures)),
+        ]
+    lines += [
+        *_mock_block(3, 2, mixtures, "SIGS00"),
+        *_mock_float_lines(_mock_xs(mixtures, 0.16, 0.02)),
+        *_mock_block(3, 2, mixtures, "SCAT00"),
+        *_mock_float_lines(_mock_xs(mixtures, 0.15, 0.02)),
+        *_mock_block(3, 1, mixtures, "NJJS00"),
+        *_mock_int_lines([1] * mixtures),
+        *_mock_block(3, 1, mixtures, "IJJS00"),
+        *_mock_int_lines([1] * mixtures),
+    ]
+    # One GROUP/*/NSPH block per remaining group so the preview carries
+    # the full DSPH-consumable NSPH set (kept compact to stay inside
+    # the default preview line budget).
+    for group in range(2, groups + 1):
+        lines.append(_mock_list_item(group))
+        if sph:
+            lines += [
+                *_mock_block(3, 2, mixtures, "NSPH"),
+                *_mock_float_lines(_mock_sph_factors(mixtures)),
+            ]
+    if adf:
+        lines += [
+            *_mock_block(1, 0, -1, "ADF"),
+            *_mock_block(2, 1, 1, "NTYPE"),
+            *_mock_int_lines([4]),
+            *_mock_block(2, 3, 4, "HADF"),
+            "XMIN    XMAX    YMIN    YMAX",
+        ]
+    lines.append("-> -4  0  0  0 <-")
+    return "\n".join(lines)
+
+
+def _mock_block(level: int, type_code: int, count: int, name: str) -> list[str]:
+    return [f"-> {level:2d} 12 {type_code:2d} {count:2d} <-", name]
+
+
+def _mock_list_item(index: int) -> str:
+    return f"->  3  0  0 -1 <-       {index}"
+
+
+def _mock_float_lines(values: list[float]) -> list[str]:
+    return [
+        "".join(f"  {value:.10E}" for value in values[index : index + 5])
+        for index in range(0, len(values), 5)
+    ]
+
+
+def _mock_int_lines(values: list[int]) -> list[str]:
+    return [
+        "".join(f"{value:10d}" for value in values[index : index + 8])
+        for index in range(0, len(values), 8)
+    ]
+
+
+def _mock_xs(count: int, base: float, step: float) -> list[float]:
+    return [base + step * index for index in range(count)]
+
+
+def _mock_energy_bounds(groups: int) -> list[float]:
+    # Descending 10 MeV -> 1e-4 eV mock grid.
+    return [1.0e7 * (1.0e-11 ** (index / groups)) for index in range(groups + 1)]
+
+
+def _mock_sph_factors(count: int) -> list[float]:
+    # Alternate around unity like a real SPH factor vector.
+    return [
+        1.0 + 0.05 * ((-1.0) ** index) * ((index % 4) + 1) / 4.0
+        for index in range(count)
+    ]

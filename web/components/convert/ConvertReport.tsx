@@ -1,8 +1,6 @@
 "use client";
 
-import type { ConvertFormat } from "@/lib/api";
 import AsciiPreview from "./AsciiPreview";
-import ConvertActionProgress from "./ConvertActionProgress";
 import ConvertOutcomeSummary from "./ConvertOutcomeSummary";
 import ConvertRunDetails from "./ConvertRunDetails";
 import type { ConvertRunState } from "./ConvertReportState";
@@ -15,27 +13,11 @@ export type { ConvertRunState } from "./ConvertReportState";
 export default function ConvertReport({
   state,
   onConvert,
-  draftInputPath = "",
-  draftOutputPath = "",
-  format = "multicompo",
 }: {
   state: ConvertRunState;
   onConvert?: () => void;
-  draftInputPath?: string;
-  draftOutputPath?: string;
-  format?: ConvertFormat;
 }) {
-  return (
-    <div className="space-y-4">
-      <ConvertActionProgress
-        state={state}
-        draftInputPath={draftInputPath}
-        draftOutputPath={draftOutputPath}
-        format={format}
-      />
-      <ResultBody state={state} onConvert={onConvert} />
-    </div>
-  );
+  return <ResultBody state={state} onConvert={onConvert} />;
 }
 
 function ResultBody({
@@ -46,17 +28,7 @@ function ResultBody({
   onConvert?: () => void;
 }) {
   if (state.kind === "idle") {
-    return (
-      <section className="glass rounded-xl p-5">
-        <h2 className="text-base font-semibold tracking-tight">
-          Ready for a dry run
-        </h2>
-        <p className="mt-2 max-w-2xl text-sm text-[var(--fg-2)]">
-          Start with a dry run to validate the HDF5 contract, energy mesh,
-          production checks, and output path without writing an ASCII file.
-        </p>
-      </section>
-    );
+    return null;
   }
   if (state.kind === "loading") {
     return (

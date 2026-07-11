@@ -61,9 +61,11 @@ export default function SettingsPage() {
               Default Inspect path
             </label>
             <p className="mt-1 text-[12px] text-[var(--fg-3)]">
-              Pre-filled as a <em>placeholder</em> on the Inspect page so
-              you can see your usual prefix without it being committed
-              into the input. Leave blank to disable.
+              Path prefix used by the Inspect, Convert, PyGan,
+              Equivalence, Builder, and OpenMC pages: it appears as the
+              path-input <em>placeholder</em>, is filled in by their
+              &quot;Use saved prefix&quot; buttons, and picks the file
+              browser&apos;s starting directory. Leave blank to disable.
             </p>
             <input
               id="default_inspect_path"

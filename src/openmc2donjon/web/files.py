@@ -5,16 +5,30 @@ from __future__ import annotations
 from typing import Any
 
 from .filesystem import FilesystemScope
+from .text_preview import _mock_ascii_preview_text
 
 
 FILES_SCHEMA = "openmc2donjon.files.v1"
 FILE_STATUS_SCHEMA = "openmc2donjon.file-status.v1"
 FILES_ENTRY_LIMIT = 500
 
+
+def _mock_ascii_size(path: str) -> int:
+    """Byte size the mock filesystem reports for a synthesized ASCII artifact.
+
+    Kept equal to the text ``/api/text-preview`` serves for the same
+    path so the file browser, the file-status probe, and the preview
+    never disagree about an artifact's size.
+    """
+
+    return len(_mock_ascii_preview_text(path).encode("utf-8"))
+
+
 # Synthetic directory tree returned by the file browser when running in
 # ``--mock``. Three levels deep, mimicking the typical ``$HOME/openmc-runs``
 # layout users will navigate in production.
 _MOCK_HOME = "/mock/home"
+_MOCK_MINICASE = f"{_MOCK_HOME}/openmc-runs/openmc-sph-minicase"
 _MOCK_TREE: dict[str, list[tuple[str, str, int | None]]] = {
     _MOCK_HOME: [
         ("openmc-runs", "dir", None),
@@ -38,7 +52,8 @@ _MOCK_TREE: dict[str, list[tuple[str, str, int | None]]] = {
         ("out.mcompo.txt", "file", 184_320),
         ("convert_summary.json", "file", 8_192),
     ],
-    f"{_MOCK_HOME}/openmc-runs/openmc-sph-minicase": [
+    _MOCK_MINICASE: [
+        ("export_recipe.py", "file", 2_048),
         ("mgxs_library.h5", "file", 96_000),
         ("ce_statepoint.h5", "file", 1_200_000),
         ("mg_statepoint.h5", "file", 1_080_000),
@@ -47,10 +62,20 @@ _MOCK_TREE: dict[str, list[tuple[str, str, int | None]]] = {
         ("openmc_sph_sidecar.h5", "file", 22_000),
         ("openmc_sph.csv", "file", 1_500),
         ("mgxs_with_openmc_sph.h5", "file", 104_000),
-        ("out.mcompo.txt", "file", 36_000),
-        ("out.macrolib.txt", "file", 42_000),
+        ("out.mcompo.txt", "file", _mock_ascii_size(f"{_MOCK_MINICASE}/out.mcompo.txt")),
+        (
+            "out.macrolib.txt",
+            "file",
+            _mock_ascii_size(f"{_MOCK_MINICASE}/out.macrolib.txt"),
+        ),
+        (
+            "out_uncorrected.macrolib.txt",
+            "file",
+            _mock_ascii_size(f"{_MOCK_MINICASE}/out_uncorrected.macrolib.txt"),
+        ),
         ("physics_summary.json", "file", 3_800),
         ("physics_summary.md", "file", 1_600),
+        ("donjon_consume_probe.result", "file", 512),
     ],
     f"{_MOCK_HOME}/openmc-runs/u238_33g": [
         ("mgxs.h5", "file", 1_240_000),
@@ -60,6 +85,19 @@ _MOCK_TREE: dict[str, list[tuple[str, str, int | None]]] = {
         ("tmp_run.h5", "file", 256_000),
     ],
 }
+
+# Artifacts "written" by mock ``POST /api/convert`` during this
+# process's lifetime (resolved path -> size). The file browser and the
+# file-status probe consult it so a mock conversion's outputs actually
+# appear in the mock filesystem instead of contradicting the convert
+# response forever.
+_MOCK_WRITTEN_FILES: dict[str, int] = {}
+
+
+def record_mock_written_file(path: str, size: int) -> None:
+    """Register a mock-converted artifact with the mock filesystem."""
+
+    _MOCK_WRITTEN_FILES[_resolve_mock_path(path)] = size
 
 
 def register_file_routes(
@@ -212,6 +250,20 @@ def _mock_list_dir(raw: str, http_exception: Any) -> dict[str, Any]:
         {"name": name, "kind": kind, "size": size}
         for name, kind, size in _MOCK_TREE[resolved]
     ]
+    # Merge in artifacts written by mock convert; the latest mock write
+    # wins over a static tree entry of the same name.
+    by_name = {entry["name"]: entry for entry in entries}
+    for written_path, size in sorted(_MOCK_WRITTEN_FILES.items()):
+        parent_dir, _, name = written_path.rpartition("/")
+        if parent_dir != resolved:
+            continue
+        existing = by_name.get(name)
+        if existing is None:
+            entry = {"name": name, "kind": "file", "size": size}
+            entries.append(entry)
+            by_name[name] = entry
+        else:
+            existing["size"] = size
     # Parent navigation is honest about the mock universe: only walk
     # up if the would-be parent is itself a node in the tree. That
     # way ``/mock/home`` ends up with ``parent = None`` (disables the
@@ -232,6 +284,14 @@ def _mock_file_status(raw: str) -> dict[str, Any]:
             exists=True,
             kind="dir",
             size=None,
+            detail=None,
+        )
+    if resolved in _MOCK_WRITTEN_FILES:
+        return _file_status_payload(
+            path=resolved,
+            exists=True,
+            kind="file",
+            size=_MOCK_WRITTEN_FILES[resolved],
             detail=None,
         )
     parent, _, name = resolved.rpartition("/")

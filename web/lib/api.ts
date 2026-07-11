@@ -137,8 +137,11 @@ export class ApiError extends Error {
 }
 
 function baseUrl(): string {
+  // `||` (not `??`) so a *blank* NEXT_PUBLIC_API_BASE_URL in
+  // web/.env.local still falls back to the default instead of issuing
+  // every request against the Next server, which has no /api routes.
   return (
-    process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ??
+    process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
     "http://localhost:8000"
   );
 }

@@ -175,11 +175,11 @@ class CommandCatalogEndpointTests(unittest.TestCase):
         )
         self.assertEqual(
             commands["openmc2donjon-export"]["web_path"],
-            "/openmc?intent=export&workflow=two-step",
+            "/openmc?workflow=two-step",
         )
         self.assertEqual(
             commands["openmc2donjon-from-openmc"]["web_path"],
-            "/openmc?intent=from-openmc&workflow=one-step",
+            "/openmc?workflow=one-step",
         )
         self.assertEqual(
             commands["make-adf-sidecar"]["web_path"],
@@ -209,7 +209,7 @@ class CommandCatalogEndpointTests(unittest.TestCase):
         self.assertEqual(commands["pygan-doctor"]["web_path"], "/pygan")
         self.assertEqual(
             commands["compare-writers"]["web_path"],
-            "/pygan?tab=compare",
+            "/pygan",
         )
         self.assertEqual(commands["doctor"]["web_path"], "/builder?command=doctor")
         self.assertEqual(commands["bundle"]["web_path"], "/builder?command=bundle")
@@ -218,7 +218,7 @@ class CommandCatalogEndpointTests(unittest.TestCase):
             "/builder?command=make-low-order-driver",
         )
 
-    def test_catalog_has_a_web_path_for_every_command(self) -> None:
+    def test_catalog_has_a_web_path_for_every_command_except_cli_only(self) -> None:
         from openmc2donjon.web.server import create_app
 
         client = TestClient(create_app(mock_mode=True))
@@ -230,7 +230,32 @@ class CommandCatalogEndpointTests(unittest.TestCase):
             for command in response.json()["commands"]
             if not command.get("web_path")
         ]
-        self.assertEqual(missing, [])
+        # pygan-inspect-compo has no web surface (no builder spec exists),
+        # so it is the only CLI-only entry allowed to omit web_path.
+        self.assertEqual(missing, ["pygan-inspect-compo"])
+
+    def test_catalog_statuses_agree_with_coverage_legend(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.get("/api/commands")
+
+        self.assertEqual(response.status_code, 200)
+        commands = {command["id"]: command for command in response.json()["commands"]}
+
+        # serve only has a command builder, and the legend classifies
+        # builders as partial, not ready.
+        serve = commands["serve"]
+        self.assertEqual(serve["status"], "partial")
+        self.assertEqual(serve["status_label"], "Command builder ready")
+        self.assertEqual(serve["web_path"], "/builder?command=serve")
+
+        # No structured builder spec exists for pygan-inspect-compo, so the
+        # catalog must not advertise one; the legend's CLI-only status applies.
+        inspect_compo = commands["pygan-inspect-compo"]
+        self.assertEqual(inspect_compo["status"], "planned")
+        self.assertEqual(inspect_compo["status_label"], "CLI only")
+        self.assertIsNone(inspect_compo["web_path"])
 
     def test_catalog_entries_include_user_guidance(self) -> None:
         from openmc2donjon.web.server import create_app

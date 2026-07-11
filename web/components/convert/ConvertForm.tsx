@@ -17,7 +17,6 @@ import {
   pickConvertBrowserStart,
 } from "@/lib/convertPaths";
 import type { ConvertRunState } from "./ConvertReportState";
-import ConvertModeReferenceStrip from "./ConvertModeReferenceStrip";
 import DirectConvertActionPanel from "./DirectConvertActionPanel";
 import MixturePicker from "./MixturePicker";
 import WriterBackendSelector from "./WriterBackendSelector";
@@ -256,8 +255,6 @@ export default function ConvertForm({
           />
         </div>
 
-        <ConvertModeReferenceStrip format={format} />
-
         <DirectConvertActionPanel
           state={state}
           inputPath={inputPath}
@@ -311,10 +308,13 @@ export default function ConvertForm({
               placeholder="OpenMC direct homogenization"
               hint="Optional comment written into MULTICOMPO output."
             />
-            <label className="block lg:col-span-2">
-              <div className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
+            <div className="lg:col-span-2">
+              <label
+                htmlFor="convert-mixture-filter"
+                className="block text-[11px] uppercase tracking-wider text-[var(--fg-3)]"
+              >
                 Mixture filter
-              </div>
+              </label>
               <div className="mt-1 space-y-3">
                 <MixturePicker
                   inputPath={inputPath}
@@ -322,6 +322,7 @@ export default function ConvertForm({
                   onChange={onMixturesTextChange}
                 />
                 <textarea
+                  id="convert-mixture-filter"
                   value={mixturesText}
                   onChange={(event) => onMixturesTextChange(event.target.value)}
                   placeholder="ASM_Y01_X01, ASM_Y01_X02"
@@ -332,7 +333,7 @@ export default function ConvertForm({
               <span className="mt-1 block text-[12px] text-[var(--fg-3)]">
                 Optional comma/newline list. Empty means write every mixture.
               </span>
-            </label>
+            </div>
           </div>
         </details>
 

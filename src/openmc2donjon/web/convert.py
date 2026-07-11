@@ -20,7 +20,9 @@ from ..macrolib import convert_mgxs_hdf5_to_macrolib
 from ..mgxs_input_contract import run_preflight
 from ..multicompo import DEFAULT_ROOT_NAME, convert_mgxs_hdf5
 from ..pygan_writer import convert_mgxs_hdf5_with_pygan
+from .files import _mock_file_status, record_mock_written_file
 from .filesystem import FilesystemScope
+from .text_preview import _is_mock_openmc_sph_path, _mock_ascii_preview_text
 
 
 CONVERT_SCHEMA = "openmc2donjon.convert.v1"
@@ -495,36 +497,50 @@ def _convert_cli_command(
 
 
 def _mock_convert_response(request: dict[str, Any]) -> dict[str, Any]:
-    """Return a realistic direct-conversion payload in mock mode."""
+    """Return a realistic direct-conversion payload in mock mode.
+
+    Mock conversions "write" into the in-memory mock filesystem: the
+    default output path is derived from the input path exactly like
+    live mode, non-dry runs register the output (and summary) with the
+    mock file browser / file-status probe, and the reported size equals
+    the text ``/api/text-preview`` serves for the same path — so the
+    UI's existence probes can never contradict this response.
+    """
 
     input_path = Path(str(request["input_path"]))
-    output_path = Path(
-        request["output_path"]
-        or (
-            "/mock/home/openmc-runs/c5g7/handoff.macrolib.txt"
-            if request["format"] == "macrolib"
-            else "/mock/home/openmc-runs/c5g7/handoff.mcompo.txt"
-        )
-    )
+    extension = ".macrolib.txt" if request["format"] == "macrolib" else ".mcompo.txt"
+    output_path = Path(request["output_path"] or input_path.with_suffix(extension))
+    summary_path = _convert_summary_path(output_path)
+    dry_run = bool(request["dry_run"])
+    if not dry_run:
+        text = _mock_ascii_preview_text(str(output_path))
+        record_mock_written_file(str(output_path), len(text.encode("utf-8")))
+    status = _mock_file_status(str(output_path))
     preflight = {
         "schema": "openmc2donjon.mgxs-input-contract.v1",
         "decision": "mgxs_input_contract_passed",
         "output_issue": None,
         "inputs": [_mock_preflight_input(str(input_path))],
     }
-    dry_run = bool(request["dry_run"])
     response = _convert_response(
         request,
         input_path=input_path,
         output_path=output_path,
-        summary_path=_convert_summary_path(output_path),
+        summary_path=summary_path,
         summary_written=not dry_run,
         preflight=preflight,
         preflight_ok=True,
         converted=not dry_run,
-        output_size=None if dry_run else 184_320,
+        output_size=status["size"],
     )
-    response["output_exists"] = not dry_run
+    response["output_exists"] = bool(status["exists"] and status["kind"] == "file")
+    if not dry_run:
+        # Same bytes ``_write_convert_summary`` would produce for this
+        # response, so the summary's probed size is honest too.
+        summary_text = json.dumps(response, indent=2, sort_keys=True) + "\n"
+        record_mock_written_file(
+            str(summary_path), len(summary_text.encode("utf-8"))
+        )
     return response
 
 
@@ -533,7 +549,7 @@ def _write_convert_summary(path: Path, payload: dict[str, Any]) -> None:
 
 
 def _mock_preflight_input(path: str) -> dict[str, Any]:
-    if _is_mock_openmc_sph_handoff(path):
+    if _is_mock_openmc_sph_path(path):
         return _mock_openmc_sph_preflight_input(path)
     return {
         "path": path,
@@ -574,10 +590,6 @@ def _mock_preflight_input(path: str) -> dict[str, Any]:
         "issues": [],
         "warnings": [],
     }
-
-
-def _is_mock_openmc_sph_handoff(path: str) -> bool:
-    return "openmc-sph-minicase" in path or "mgxs_with_openmc_sph" in path
 
 
 def _mock_openmc_sph_preflight_input(path: str) -> dict[str, Any]:

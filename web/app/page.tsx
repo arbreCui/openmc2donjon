@@ -369,7 +369,9 @@ function StatusView({ status }: { status: Status }) {
         <div className="text-[var(--fg-2)]">{status.message}</div>
         <div className="text-[var(--fg-3)] text-[12px]">
           Start it with{" "}
-          <code className="font-mono">openmc2donjon serve</code>.
+          <code className="font-mono">openmc2donjon serve</code> for real
+          files, or <code className="font-mono">openmc2donjon serve --mock</code>{" "}
+          for the bundled demo — run one or the other.
         </div>
       </div>
     );

@@ -38,7 +38,8 @@ describe("convertPostWriteFocus", () => {
     expect(focus?.badge).toBe("optional backend evidence");
     expect(focus?.title).toContain("Validate the PyGan writer");
     expect(focus?.primaryLabel).toBe("Validate PyGan comparison");
-    expect(focus?.primaryHref).toContain("/pygan?tab=compare");
+    expect(focus?.primaryHref).toContain("/pygan?input_h5=");
+    expect(focus?.primaryHref).not.toContain("tab=");
     expect(focus?.secondaryLabel).toBe("Bundle handoff");
   });
 });

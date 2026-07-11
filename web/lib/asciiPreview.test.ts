@@ -100,6 +100,24 @@ NSPH
     });
   });
 
+  it("blames the file, not the preview slice, when a complete preview lacks ENERGY", () => {
+    const text = "SIGNATURE\nL_MACROLIB\nSTATE-VECTOR\nNTOT0\n";
+
+    const complete = analyzeDonjonAsciiPreview(text, { truncated: false });
+    const energy = complete.keyBlocks.find((block) => block.id === "energy");
+    expect(energy?.status).toBe("missing");
+    expect(energy?.detail).toBe("ENERGY is absent from this file.");
+    expect(energy?.detail).not.toContain("preview slice");
+    expect(complete.notes.join(" ")).toContain(
+      "ENERGY block is absent from this file.",
+    );
+
+    const truncated = analyzeDonjonAsciiPreview(text, { truncated: true });
+    expect(
+      truncated.keyBlocks.find((block) => block.id === "energy")?.detail,
+    ).toContain("preview slice");
+  });
+
   it("ignores LCM control markers while building the block tree", () => {
     const analysis = analyzeDonjonAsciiPreview(`
 -> 1 12 0 0 <-

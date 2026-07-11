@@ -52,11 +52,72 @@ class ConvertEndpointTests(unittest.TestCase):
         self.assertIn("--comment", payload["cli_command"])
         self.assertIn("C5G7 dry run", payload["cli_command"])
         self.assertFalse(payload["summary_written"])
+        # The default output is derived from the input directory, and a
+        # dry run reports what the file-status probe will say: nothing
+        # written yet.
+        self.assertEqual(
+            payload["output_path"],
+            "/mock/home/openmc-runs/c5g7/handoff.mcompo.txt",
+        )
+        self.assertFalse(payload["output_exists"])
+        self.assertIsNone(payload["output_size"])
         self.assertEqual(
             payload["summary_path"],
             "/mock/home/openmc-runs/c5g7/convert_summary.json",
         )
         self.assertEqual(payload["preflight"]["inputs"][0]["energy_mesh_id"], "casmo_7")
+
+    def test_mock_mode_write_registers_output_with_mock_filesystem(self) -> None:
+        """A non-dry mock convert must agree with the mock file endpoints.
+
+        Regression test for the mock demo contradiction where the
+        convert response claimed a written artifact (184,320 bytes at a
+        hardcoded path) that the file-status probe and file browser
+        reported as missing forever.
+        """
+
+        from openmc2donjon.web.files import _MOCK_WRITTEN_FILES
+        from openmc2donjon.web.server import create_app
+
+        self.addCleanup(_MOCK_WRITTEN_FILES.clear)
+        client = TestClient(create_app(mock_mode=True))
+        response = client.post(
+            "/api/convert",
+            json={
+                "input_path": "/mock/home/openmc-runs/c5g7/handoff.h5",
+                "format": "multicompo",
+                "dry_run": False,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["converted"])
+        self.assertTrue(payload["output_exists"])
+        output_path = payload["output_path"]
+        self.assertEqual(output_path, "/mock/home/openmc-runs/c5g7/handoff.mcompo.txt")
+
+        status = client.get("/api/file-status", params={"path": output_path}).json()
+        self.assertTrue(status["exists"])
+        self.assertEqual(status["kind"], "file")
+        self.assertEqual(status["size"], payload["output_size"])
+
+        preview = client.get("/api/text-preview", params={"path": output_path}).json()
+        self.assertEqual(preview["file_size"], payload["output_size"])
+        self.assertFalse(preview["truncated"])
+
+        listing = client.get(
+            "/api/files", params={"path": "/mock/home/openmc-runs/c5g7"}
+        ).json()
+        sizes = {entry["name"]: entry["size"] for entry in listing["entries"]}
+        self.assertEqual(sizes.get("handoff.mcompo.txt"), payload["output_size"])
+        self.assertIn("convert_summary.json", sizes)
+
+        summary_status = client.get(
+            "/api/file-status", params={"path": payload["summary_path"]}
+        ).json()
+        self.assertTrue(payload["summary_written"])
+        self.assertTrue(summary_status["exists"])
 
     def test_mock_mode_openmc_sph_handoff_reports_33g_sph_shape(self) -> None:
         from openmc2donjon.web.server import create_app
@@ -65,10 +126,9 @@ class ConvertEndpointTests(unittest.TestCase):
         response = client.post(
             "/api/convert",
             json={
-                "input_path": "/mock/home/openmc-runs/openmc-sph-minicase/handoff/mgxs_with_openmc_sph.h5",
+                "input_path": "/mock/home/openmc-runs/openmc-sph-minicase/mgxs_with_openmc_sph.h5",
                 "output_path": (
-                    "/mock/home/openmc-runs/openmc-sph-minicase/handoff/"
-                    "out_with_openmc_sph.macrolib.txt"
+                    "/mock/home/openmc-runs/openmc-sph-minicase/out.macrolib.txt"
                 ),
                 "format": "macrolib",
                 "dry_run": True,
@@ -486,6 +546,50 @@ class BundleInspectEndpointTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 404)
+
+        missing_dir = client.get(
+            "/api/bundle/inspect",
+            params={"manifest": "/mock/home/not-a-run/bundle/manifest.json"},
+        )
+        self.assertEqual(missing_dir.status_code, 404)
+
+    def test_mock_mode_derives_minicase_bundle_manifest(self) -> None:
+        """Any mock run dir's bundle manifest is served, not only c5g7.
+
+        Regression test for the bundle-validation leg 404ing every
+        manifest except the hardcoded c5g7 one, which dead-ended the
+        OpenMC-SPH minicase chain.
+        """
+
+        from openmc2donjon.web.bundle import BUNDLE_INSPECT_SCHEMA
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.get(
+            "/api/bundle/inspect",
+            params={
+                "manifest": (
+                    "/mock/home/openmc-runs/openmc-sph-minicase/bundle/manifest.json"
+                ),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["schema"], BUNDLE_INSPECT_SCHEMA)
+        self.assertTrue(payload["ok"])
+        labels = {artifact["label"] for artifact in payload["artifacts"]}
+        self.assertIn("mgxs", labels)
+        self.assertIn("macrolib", labels)
+        defaults = payload["donjon_defaults"]
+        # The corrected MACROLIB is the validated DONJON NSPH consume
+        # route, so the derived defaults must point at it.
+        self.assertEqual(defaults["format"], "macrolib")
+        self.assertEqual(
+            defaults["ascii_path"],
+            "/mock/home/openmc-runs/openmc-sph-minicase/bundle/out.macrolib.txt",
+        )
+        self.assertEqual(defaults["mixture_count"], 2)
 
     def test_live_mode_validates_real_bundle_manifest(self) -> None:
         from openmc2donjon.bundle import ArtifactSpec, bundle_artifacts

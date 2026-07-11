@@ -91,6 +91,28 @@ describe("commandWorkflowMapping", () => {
     expect(mapping.requiredInputs).toEqual(["Use the CLI form below"]);
   });
 
+  it("describes PyGan links with a friendly surface instead of the raw pathname", () => {
+    const doctor = commandWorkflowMapping(
+      command({ id: "pygan-doctor", group: "pygan", web_path: "/pygan" }),
+    );
+
+    expect(doctor.available).toBe(true);
+    expect(doctor.surface).toBe("PyGan page");
+    expect(doctor.title).toBe("PyGan diagnostics and writer comparison");
+
+    const compare = commandWorkflowMapping(
+      command({
+        id: "compare-writers",
+        group: "pygan",
+        web_path: "/pygan?tab=compare",
+      }),
+    );
+
+    expect(compare.surface).toBe("PyGan page");
+    // /pygan never reads a "tab" param, so it must not surface as a preset.
+    expect(compare.presets).not.toContain("tab: compare");
+  });
+
   it("describes generic command-builder links", () => {
     const mapping = commandWorkflowMapping(
       command({

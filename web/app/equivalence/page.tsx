@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { CopyCliButton } from "@/components/commands/CopyCliButton";
 import FileBrowserModal from "@/components/inspect/FileBrowserModal";
@@ -16,7 +16,9 @@ import {
   equivalenceKindInfo,
   parseEquivalenceKind,
 } from "@/lib/equivalenceCommand";
+import { equivalenceOptionsForKindSwitch } from "@/lib/equivalenceKindSwitch";
 import { isOpenmcSphEquivalenceKind } from "@/lib/openmcSphWorkflow";
+import { containingDirectory, outputPathInDirectory } from "@/lib/outputBrowse";
 import { useSettings } from "@/lib/settings";
 
 type BrowserTarget =
@@ -32,6 +34,8 @@ type BrowserTarget =
   | "macrolib"
   | "tableOutput"
   | "table";
+
+const SPH_TABLE_OUTPUT_PLACEHOLDER = "sph_sidecar.sph.csv";
 
 export default function EquivalencePage() {
   return (
@@ -66,6 +70,16 @@ function EquivalencePageContent() {
   const savedPrefix = settings.default_inspect_path.trim();
   const firstInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Tab switches reset per-kind fields (output name, modes, clips,
+  // summary JSON, force-overwrite) to the incoming kind's defaults so
+  // the CLI preview cannot keep targeting the previous tool's artifact;
+  // the input path is genuinely shared and carries over.
+  useEffect(() => {
+    setOptions((current) => equivalenceOptionsForKindSwitch(current, kind));
+    setOutputTouched(false);
+    setBrowserTarget(null);
+  }, [kind]);
+
   const activeOptions = useMemo(
     () => ({
       ...options,
@@ -90,6 +104,16 @@ function EquivalencePageContent() {
         outputPath: outputPathInDirectory(path, activeOptions.outputPath, info.outputPlaceholder),
       });
       setOutputTouched(true);
+    } else if (browserTarget === "tableOutput") {
+      // The SPH CSV table is an output too: Browse picks the directory
+      // and the field keeps (or gains) the filename.
+      patch({
+        tableOutput: outputPathInDirectory(
+          path,
+          options.tableOutput,
+          SPH_TABLE_OUTPUT_PLACEHOLDER,
+        ),
+      });
     } else if (browserTarget) {
       patch({ [browserTarget]: path } as Partial<EquivalenceCommandOptions>);
     }
@@ -213,7 +237,7 @@ function EquivalencePageContent() {
                 <div>
                   <h3 className="text-sm font-semibold tracking-tight">CLI preview</h3>
                   <p className="mt-1 text-[12px] text-[var(--fg-3)]">
-                    Copy and run this command locally. No web endpoint writes files here.
+                    Copy and run this command locally.
                   </p>
                 </div>
                 <CopyCliButton value={cli} compact />
@@ -233,10 +257,10 @@ function EquivalencePageContent() {
           open={browserTarget != null}
           initialPath={browserInitialPath(browserTarget, activeOptions, savedPrefix)}
           extensions={browserExtensions(browserTarget)}
-          fileTypeLabel={browserTarget === "outputDir" ? "output directory" : "input file"}
-          chipLabel={browserTarget === "outputDir" ? "DIR" : browserChip(browserTarget)}
+          fileTypeLabel={isOutputTarget(browserTarget) ? "output directory" : "input file"}
+          chipLabel={isOutputTarget(browserTarget) ? "DIR" : browserChip(browserTarget)}
           recentScope={`equivalence-${browserTarget ?? "file"}`}
-          selectMode={browserTarget === "outputDir" ? "directory" : "file"}
+          selectMode={isOutputTarget(browserTarget) ? "directory" : "file"}
           onClose={() => setBrowserTarget(null)}
           onSelect={applyBrowserPick}
         />
@@ -469,7 +493,8 @@ function OpenmcSphSidecarFields({
           value={options.tableOutput}
           onChange={(value) => patch({ tableOutput: value })}
           onBrowse={() => setBrowserTarget("tableOutput")}
-          placeholder="sph_sidecar.sph.csv"
+          placeholder={SPH_TABLE_OUTPUT_PLACEHOLDER}
+          browseLabel="Browse dir…"
         />
         <PathField
           label="Previous SPH"
@@ -602,6 +627,7 @@ function PathField({
   onBrowse,
   placeholder,
   inputRef,
+  browseLabel = "Browse…",
 }: {
   label: string;
   value: string;
@@ -609,6 +635,7 @@ function PathField({
   onBrowse: () => void;
   placeholder: string;
   inputRef?: React.Ref<HTMLInputElement>;
+  browseLabel?: string;
 }) {
   return (
     <label className="block">
@@ -627,7 +654,7 @@ function PathField({
           autoComplete="off"
         />
         <button type="button" onClick={onBrowse} className="btn btn-secondary">
-          Browse…
+          {browseLabel}
         </button>
       </div>
     </label>
@@ -771,13 +798,18 @@ function Toggle({
   );
 }
 
+/** Output-path targets browse for a directory rather than an existing file. */
+function isOutputTarget(target: BrowserTarget | null): boolean {
+  return target === "outputDir" || target === "tableOutput";
+}
+
 function browserInitialPath(
   target: BrowserTarget | null,
   options: EquivalenceCommandOptions,
   savedPrefix: string,
 ): string {
   const value = browserTargetValue(target, options);
-  return browserStart(value || savedPrefix || "~");
+  return containingDirectory(value || savedPrefix || "~");
 }
 
 function browserTargetValue(
@@ -802,41 +834,16 @@ function browserTargetValue(
   return values[target];
 }
 
-function browserStart(path: string): string {
-  const trimmed = path.trim();
-  if (trimmed === "") return "~";
-  if (trimmed.endsWith("/")) return trimmed;
-  const index = trimmed.lastIndexOf("/");
-  if (index <= 0) return "~";
-  return trimmed.slice(0, index);
-}
-
 function browserExtensions(target: BrowserTarget | null): readonly string[] {
-  if (target === "outputDir") return [];
-  if (target === "table" || target === "tableOutput") return ["csv"];
+  if (isOutputTarget(target)) return [];
+  if (target === "table") return ["csv"];
   if (target === "previousSph") return ["h5", "hdf5", "csv"];
   if (target === "macrolib") return ["txt", "mco"];
   return ["h5", "hdf5"];
 }
 
 function browserChip(target: BrowserTarget | null): string {
-  if (target === "table" || target === "tableOutput") return "CSV";
+  if (target === "table") return "CSV";
   if (target === "macrolib") return "TXT";
   return "H5";
-}
-
-function outputPathInDirectory(
-  directory: string,
-  currentOutput: string,
-  fallbackName: string,
-): string {
-  const filename = basename(currentOutput) || fallbackName;
-  return `${directory.replace(/\/+$/, "")}/${filename}`;
-}
-
-function basename(path: string): string {
-  const trimmed = path.trim();
-  if (trimmed === "") return "";
-  const index = trimmed.lastIndexOf("/");
-  return index >= 0 ? trimmed.slice(index + 1) : trimmed;
 }

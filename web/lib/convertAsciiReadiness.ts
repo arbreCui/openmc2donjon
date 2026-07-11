@@ -81,6 +81,22 @@ export function convertAsciiReadiness(
     };
   }
 
+  if (data.converted && data.output_exists) {
+    // The convert response reported a successful write, but the
+    // file-status probe positively reports the file missing.
+    return {
+      tone: "warn",
+      label: "verify path",
+      title: "ASCII was written this session, but the file-status probe disagrees",
+      body:
+        "Convert reported a successful ASCII write, while the file-status probe does not see a file at the target path — check the path.",
+      next: "Check the output path, then refresh file status before delivering the handoff.",
+      objectLabel,
+      objectDescription,
+      previewAvailable: false,
+    };
+  }
+
   return {
     tone: "warn",
     label: "not confirmed",

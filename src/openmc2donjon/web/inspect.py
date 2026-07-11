@@ -51,7 +51,12 @@ def register_inspect_routes(
     @app.get("/api/inspect")
     def api_inspect(path: str = Query(..., min_length=1)) -> dict[str, Any]:
         if mock_mode:
-            return load_fixture("inspect_handoff.json")
+            payload = load_fixture("inspect_handoff.json")
+            # Echo the requested path (live mode echoes the resolved
+            # real path below) so the result header names the file the
+            # user actually asked for.
+            payload["path"] = path
+            return payload
         real_path = _validate_hdf5_path(path, HTTPException, filesystem_scope)
         try:
             report = inspect_file(real_path)
@@ -391,23 +396,11 @@ def _float_attr(attrs: Any, name: str) -> float | None:
 
 
 @lru_cache(maxsize=1)
-def _mock_mixture_names() -> frozenset[str]:
-    """Cached set of mixture names from the bundled handoff fixture."""
+def _mock_mixture_rows() -> dict[str, dict[str, Any]]:
+    """Cached mixture rows from the bundled handoff fixture, by name."""
 
     handoff = load_fixture("inspect_handoff.json")
-    return frozenset(mix["name"] for mix in handoff.get("mixtures", []))
-
-
-@lru_cache(maxsize=1)
-def _mock_non_fissionable_mixtures() -> frozenset[str]:
-    """Cached set of non-fissionable mixture names from the handoff fixture."""
-
-    handoff = load_fixture("inspect_handoff.json")
-    return frozenset(
-        mix["name"]
-        for mix in handoff.get("mixtures", [])
-        if mix.get("fissionable") is False
-    )
+    return {mix["name"]: mix for mix in handoff.get("mixtures", [])}
 
 
 def _mock_mixture(mixture: str, moment: int, http_exception: Any) -> dict[str, Any]:
@@ -419,7 +412,8 @@ def _mock_mixture(mixture: str, moment: int, http_exception: Any) -> dict[str, A
     without shipping a second hand-crafted matrix fixture.
     """
 
-    if mixture not in _mock_mixture_names():
+    row = _mock_mixture_rows().get(mixture)
+    if row is None:
         raise http_exception(
             status_code=404, detail=f"mixture not found: {mixture}"
         )
@@ -432,7 +426,10 @@ def _mock_mixture(mixture: str, moment: int, http_exception: Any) -> dict[str, A
     payload = load_fixture("inspect_mixture.json")
     payload = dict(payload)
     payload["mixture"] = mixture
-    if mixture in _mock_non_fissionable_mixtures():
+    # The per-mixture meta must agree with the roster row the user
+    # clicked, not the canned M3_MOX_70 values.
+    payload["volume"] = row.get("volume", payload["volume"])
+    if row.get("fissionable") is False:
         # Strip the fission family so the frontend exercises the
         # null-series guards in both the spectrum and heatmap.
         xs = dict(payload["cross_sections"])

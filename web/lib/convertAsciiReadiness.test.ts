@@ -80,10 +80,23 @@ describe("convertAsciiReadiness", () => {
     ).toBe("blocked");
 
     const unconfirmed = convertAsciiReadiness(
-      response({ dry_run: false, converted: true, output_exists: true }),
-      { kind: "ok", status: fileStatus("missing") },
+      response({ dry_run: false, converted: true, output_exists: false }),
     );
     expect(unconfirmed.tone).toBe("warn");
     expect(unconfirmed.title).toContain("not confirmed");
+  });
+
+  it("reconciles a reported write against a probe that says missing", () => {
+    const conflict = convertAsciiReadiness(
+      response({ dry_run: false, converted: true, output_exists: true }),
+      { kind: "ok", status: fileStatus("missing") },
+    );
+
+    expect(conflict.tone).toBe("warn");
+    expect(conflict.label).toBe("verify path");
+    expect(conflict.title).toContain("written this session");
+    expect(conflict.title).toContain("file-status probe disagrees");
+    expect(conflict.next).toContain("Check the output path");
+    expect(conflict.previewAvailable).toBe(false);
   });
 });

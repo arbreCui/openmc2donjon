@@ -36,7 +36,7 @@ export default function OpenmcSphWorkflowPanel({
         </Link>
       </div>
 
-      <div className="mt-4 grid gap-2 lg:grid-cols-5">
+      <div className="mt-4 grid gap-2 lg:grid-cols-3 xl:grid-cols-6">
         {steps.map((step, index) => (
           <article
             key={step.id}

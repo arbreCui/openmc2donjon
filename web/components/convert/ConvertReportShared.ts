@@ -1,5 +1,4 @@
 import type { ConvertPreflightInput, ConvertResponse } from "@/lib/api";
-import type { ConvertActionGuideStatus } from "@/lib/convertActionGuide";
 
 export type GateStatus = "pass" | "warn" | "fail" | "skipped";
 
@@ -145,19 +144,6 @@ export function decisionTileClass(
   return "border-[var(--edge)] bg-white/[0.02] text-[var(--fg-1)]";
 }
 
-export function actionGuideClass(status: ConvertActionGuideStatus) {
-  if (status === "done") {
-    return "border-emerald-400/25 bg-emerald-400/10 text-emerald-100";
-  }
-  if (status === "ready" || status === "running") {
-    return "border-cyan-300/30 bg-cyan-300/10 text-cyan-100";
-  }
-  if (status === "blocked") {
-    return "border-rose-400/30 bg-rose-400/10 text-rose-100";
-  }
-  return "border-[var(--edge)] bg-white/[0.02] text-[var(--fg-2)]";
-}
-
 export function gateCardClass(status: GateStatus) {
   if (status === "pass") return "border-emerald-400/20 bg-emerald-400/[0.06]";
   if (status === "warn") return "border-amber-400/25 bg-amber-400/[0.06]";
@@ -170,14 +156,6 @@ export function gateBadgeClass(status: GateStatus) {
   if (status === "warn") return "border-amber-400/30 text-amber-300";
   if (status === "fail") return "border-rose-400/30 text-rose-300";
   return "border-[var(--edge-bright)] text-[var(--fg-2)]";
-}
-
-export function actionGuideStatusLabel(status: ConvertActionGuideStatus) {
-  if (status === "done") return "done";
-  if (status === "ready") return "ready";
-  if (status === "running") return "running";
-  if (status === "blocked") return "blocked";
-  return "waiting";
 }
 
 export function preflightMode(data: ConvertResponse): string {

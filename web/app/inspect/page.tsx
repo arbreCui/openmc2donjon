@@ -15,6 +15,7 @@ import {
   MixtureDetail,
   api,
 } from "@/lib/api";
+import { scatterMomentClickAction } from "@/lib/inspectScatterMoment";
 import { useSettings } from "@/lib/settings";
 import CrossSectionPlot from "@/components/inspect/CrossSectionPlot";
 import FileBrowserModal from "@/components/inspect/FileBrowserModal";
@@ -112,6 +113,10 @@ function InspectPageContent() {
   // survives mixture switches (a user who picked log10 once usually
   // wants log10 for the next mixture too).
   const [scatterMoment, setScatterMoment] = useState(0);
+  // Bumped to re-run the mixture fetch with otherwise-identical inputs
+  // (retry after a failed moment fetch); part of the fetch effect's
+  // dependency key.
+  const [scatterFetchToken, setScatterFetchToken] = useState(0);
   const [scatterScale, setScatterScale] = useState<ScatterScale>("linear");
   const [browserOpen, setBrowserOpen] = useState(false);
   // After the browser modal selects a file we hand keyboard focus to
@@ -166,7 +171,33 @@ function InspectPageContent() {
     setScatterMoment(0);
   }, []);
 
+  const retryScatterFetch = useCallback(() => {
+    setScatterFetchToken((token) => token + 1);
+  }, []);
+
+  const handleScatterMomentChange = useCallback(
+    (moment: number) => {
+      const action = scatterMomentClickAction(
+        moment,
+        scatterMoment,
+        mixtureState.kind === "error" && mixtureState.moment === moment,
+      );
+      if (action === "switch") {
+        setScatterMoment(moment);
+      } else if (action === "retry") {
+        // Re-clicking the failed moment retries it; setting the same
+        // ``scatterMoment`` value alone would bail out of the effect.
+        retryScatterFetch();
+      }
+    },
+    [mixtureState, retryScatterFetch, scatterMoment],
+  );
+
   useEffect(() => {
+    // ``scatterFetchToken`` participates in the dependency key so a
+    // retry re-fires this fetch even though the request inputs are
+    // unchanged.
+    void scatterFetchToken;
     if (state.kind !== "ok" || selectedMixture == null) return;
     const requested = selectedMixture;
     const requestedMoment = scatterMoment;
@@ -200,7 +231,7 @@ function InspectPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [state, selectedMixture, scatterMoment]);
+  }, [state, selectedMixture, scatterMoment, scatterFetchToken]);
 
   return (
     <main className="min-h-[calc(100vh-3.5rem)] px-6 py-12">
@@ -302,8 +333,9 @@ function InspectPageContent() {
               selectedMixture={selectedMixture}
               scatterMoment={scatterMoment}
               scatterScale={scatterScale}
-              onScatterMomentChange={setScatterMoment}
+              onScatterMomentChange={handleScatterMomentChange}
               onScatterScaleChange={setScatterScale}
+              onScatterRetry={retryScatterFetch}
             />
           </section>
         ) : null}
@@ -347,6 +379,7 @@ function MixturePanel({
   scatterScale,
   onScatterMomentChange,
   onScatterScaleChange,
+  onScatterRetry,
 }: {
   handoff: HandoffInspection;
   mixtureState: MixtureState;
@@ -355,6 +388,7 @@ function MixturePanel({
   scatterScale: ScatterScale;
   onScatterMomentChange: (m: number) => void;
   onScatterScaleChange: (s: ScatterScale) => void;
+  onScatterRetry: () => void;
 }) {
   if (selectedMixture == null) {
     return (
@@ -394,7 +428,7 @@ function MixturePanel({
   return (
     <div className="space-y-3">
       {mixtureState.kind === "error" && mixtureState.previous != null ? (
-        <MixtureErrorBanner state={mixtureState} />
+        <MixtureErrorBanner state={mixtureState} onRetry={onScatterRetry} />
       ) : null}
       <MixtureMeta detail={detail} />
       {bounds.length >= 2 ? (
@@ -450,8 +484,10 @@ function MixtureErrorCard({
 
 function MixtureErrorBanner({
   state,
+  onRetry,
 }: {
   state: Extract<MixtureState, { kind: "error" }>;
+  onRetry: () => void;
 }) {
   return (
     <div className="glass rounded-md px-3 py-2 border-rose-500/20 text-[13px] flex items-baseline gap-2 flex-wrap">
@@ -460,8 +496,16 @@ function MixtureErrorBanner({
       </span>
       <span className="text-[var(--fg-1)]">{state.message}</span>
       <span className="text-[var(--fg-3)] text-[12px]">
-        — keeping previous payload (P{state.previous?.scatter?.moment_index ?? 0}).
+        — P{state.moment} did not load; keeping previous payload (P
+        {state.previous?.scatter?.moment_index ?? 0}).
       </span>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="text-[12px] text-[var(--accent-2)] hover:underline"
+      >
+        Retry P{state.moment}
+      </button>
     </div>
   );
 }

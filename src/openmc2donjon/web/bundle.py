@@ -11,7 +11,9 @@ from typing import Any
 from .. import __version__
 from ..bundle import SCHEMA as BUNDLE_SCHEMA
 from ..bundle import VALIDATION_PASS_DECISION, validate_bundle
+from .files import _MOCK_TREE, _mock_list_dir, _resolve_mock_path
 from .filesystem import FilesystemScope
+from .text_preview import _is_mock_openmc_sph_path
 
 
 BUNDLE_INSPECT_SCHEMA = "openmc2donjon.bundle-inspect.v1"
@@ -148,45 +150,141 @@ def _read_json_object(path: Path) -> dict[str, Any]:
 
 
 def _mock_bundle_inspection(raw: str, http_exception: Any) -> dict[str, Any]:
-    resolved = raw.rstrip("/")
-    if resolved != _MOCK_BUNDLE_MANIFEST:
+    resolved = _resolve_mock_path(raw)
+    if resolved == _MOCK_BUNDLE_MANIFEST:
+        return {
+            "schema": BUNDLE_INSPECT_SCHEMA,
+            "manifest_path": _MOCK_BUNDLE_MANIFEST,
+            "manifest_schema": BUNDLE_SCHEMA,
+            "output_dir": _MOCK_BUNDLE_DIR,
+            "package_version": __version__,
+            "created_at_utc": "2026-05-26T00:00:00Z",
+            "ok": True,
+            "decision": VALIDATION_PASS_DECISION,
+            "artifact_count": 3,
+            "messages": [],
+            "artifacts": [
+                _mock_artifact(_MOCK_BUNDLE_DIR, "mgxs", "handoff.h5", 832_000),
+                _mock_artifact(_MOCK_BUNDLE_DIR, "mcompo", "out.mcompo.txt", 184_320),
+                _mock_artifact(
+                    _MOCK_BUNDLE_DIR,
+                    "conversion-summary",
+                    "convert_summary.json",
+                    8_192,
+                ),
+            ],
+            "donjon_defaults": {
+                "format": "multicompo",
+                "ascii_path": f"{_MOCK_BUNDLE_DIR}/out.mcompo.txt",
+                "mixture_count": 9,
+                "summary_path": f"{_MOCK_BUNDLE_DIR}/convert_summary.json",
+                "summary_schema": "openmc2donjon.convert.v1",
+                "ok": True,
+                "converted": True,
+                "dry_run": False,
+                "preflight_ok": True,
+                "preflight_decision": "mgxs_input_contract_passed",
+                "production_requested": True,
+            },
+        }
+    # Any other <run_dir>/bundle/manifest.json is accepted as long as
+    # the run directory exists in the mock tree; the manifest is
+    # derived from that directory's contents (including artifacts
+    # registered by mock convert) so the OpenMC-SPH minicase chain can
+    # reach bundle validation instead of dead-ending on a 404.
+    marker = "/bundle/manifest.json"
+    if not resolved.endswith(marker) or resolved[: -len(marker)] not in _MOCK_TREE:
         raise http_exception(status_code=404, detail=f"path not found: {raw}")
-    return {
-        "schema": BUNDLE_INSPECT_SCHEMA,
-        "manifest_path": _MOCK_BUNDLE_MANIFEST,
-        "manifest_schema": BUNDLE_SCHEMA,
-        "output_dir": _MOCK_BUNDLE_DIR,
-        "package_version": __version__,
-        "created_at_utc": "2026-05-26T00:00:00Z",
-        "ok": True,
-        "decision": VALIDATION_PASS_DECISION,
-        "artifact_count": 3,
-        "messages": [],
-        "artifacts": [
-            _mock_artifact("mgxs", "handoff.h5", 832_000),
-            _mock_artifact("mcompo", "out.mcompo.txt", 184_320),
-            _mock_artifact("conversion-summary", "convert_summary.json", 8_192),
-        ],
-        "donjon_defaults": {
-            "format": "multicompo",
-            "ascii_path": f"{_MOCK_BUNDLE_DIR}/out.mcompo.txt",
-            "mixture_count": 9,
-            "summary_path": f"{_MOCK_BUNDLE_DIR}/convert_summary.json",
-            "summary_schema": "openmc2donjon.convert.v1",
+    run_dir = resolved[: -len(marker)]
+    return _mock_derived_bundle_inspection(run_dir, http_exception)
+
+
+def _mock_derived_bundle_inspection(
+    run_dir: str, http_exception: Any
+) -> dict[str, Any]:
+    bundle_dir = f"{run_dir}/bundle"
+    listing = _mock_list_dir(run_dir, http_exception)
+    files: list[tuple[str, int | None]] = [
+        (entry["name"], entry["size"])
+        for entry in listing["entries"]
+        if entry["kind"] == "file"
+    ]
+    sizes = dict(files)
+
+    h5_names = [name for name, _ in files if name.endswith(".h5")]
+    mgxs_name = next(
+        (name for name in h5_names if "mgxs" in name and "sph" in name),
+        next((name for name in h5_names if "mgxs" in name), None),
+    ) or (h5_names[0] if h5_names else None)
+    ascii_name = next(
+        (
+            name
+            for name, _ in files
+            if name.endswith(".macrolib.txt") and "uncorrected" not in name
+        ),
+        next((name for name, _ in files if name.endswith(".mcompo.txt")), None),
+    )
+    ascii_format = None
+    if ascii_name is not None:
+        ascii_format = "macrolib" if ascii_name.endswith(".macrolib.txt") else "multicompo"
+    summary_name = next(
+        (name for name, _ in files if name == "convert_summary.json"), None
+    )
+
+    artifacts = []
+    if mgxs_name is not None:
+        artifacts.append(_mock_artifact(bundle_dir, "mgxs", mgxs_name, sizes[mgxs_name]))
+    if ascii_name is not None:
+        label = "macrolib" if ascii_format == "macrolib" else "mcompo"
+        artifacts.append(_mock_artifact(bundle_dir, label, ascii_name, sizes[ascii_name]))
+    if summary_name is not None:
+        artifacts.append(
+            _mock_artifact(
+                bundle_dir, "conversion-summary", summary_name, sizes[summary_name]
+            )
+        )
+
+    donjon_defaults = None
+    if ascii_name is not None:
+        donjon_defaults = {
+            "format": ascii_format,
+            "ascii_path": f"{bundle_dir}/{ascii_name}",
+            "mixture_count": 2 if _is_mock_openmc_sph_path(run_dir) else 9,
+            "summary_path": (
+                f"{bundle_dir}/{summary_name}" if summary_name is not None else None
+            ),
+            "summary_schema": (
+                "openmc2donjon.convert.v1" if summary_name is not None else None
+            ),
             "ok": True,
             "converted": True,
             "dry_run": False,
             "preflight_ok": True,
             "preflight_decision": "mgxs_input_contract_passed",
             "production_requested": True,
-        },
+        }
+    return {
+        "schema": BUNDLE_INSPECT_SCHEMA,
+        "manifest_path": f"{bundle_dir}/manifest.json",
+        "manifest_schema": BUNDLE_SCHEMA,
+        "output_dir": bundle_dir,
+        "package_version": __version__,
+        "created_at_utc": "2026-05-26T00:00:00Z",
+        "ok": True,
+        "decision": VALIDATION_PASS_DECISION,
+        "artifact_count": len(artifacts),
+        "messages": [],
+        "artifacts": artifacts,
+        "donjon_defaults": donjon_defaults,
     }
 
 
-def _mock_artifact(label: str, bundled_path: str, size_bytes: int) -> dict[str, Any]:
+def _mock_artifact(
+    bundle_dir: str, label: str, bundled_path: str, size_bytes: int | None
+) -> dict[str, Any]:
     return {
         "label": label,
-        "path": f"{_MOCK_BUNDLE_DIR}/{bundled_path}",
+        "path": f"{bundle_dir}/{bundled_path}",
         "bundled_path": bundled_path,
         "ok": True,
         "messages": [],

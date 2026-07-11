@@ -21,6 +21,8 @@ describe("openmcEntryPoints", () => {
     expect(sph.production).toBe(true);
     expect(sph.secondaryHref).toContain("equivalence=sph");
     expect(sph.secondaryHref).toContain("format=macrolib");
+    // The label promises the summary card, so the href must land on it.
+    expect(sph.secondaryHref).toContain("#openmc-sph-summary");
   });
 
   it("identifies the active entry from the planner state", () => {

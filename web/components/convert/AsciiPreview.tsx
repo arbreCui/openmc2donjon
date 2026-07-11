@@ -93,7 +93,9 @@ function PreviewBody({
     );
   }
   const { data } = state;
-  const analysis = analyzeDonjonAsciiPreview(data.text);
+  const analysis = analyzeDonjonAsciiPreview(data.text, {
+    truncated: data.truncated,
+  });
   const expectedCoverage = format
     ? expectedArtifactBlockCoverage(data.text, format, input)
     : [];

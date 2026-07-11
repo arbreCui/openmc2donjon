@@ -1,26 +1,29 @@
 "use client";
 
 import { useState } from "react";
+import { copyText } from "@/lib/copyText";
 
 export function CopyCliButton({
   value,
   compact = false,
   label = "Copy CLI",
   copiedLabel = "Copied",
+  failedLabel = "Copy failed",
   ariaLabel,
 }: {
   value: string;
   compact?: boolean;
   label?: string;
   copiedLabel?: string;
+  failedLabel?: string;
   ariaLabel?: string;
 }) {
-  const [copied, setCopied] = useState(false);
+  const [feedback, setFeedback] = useState<"copied" | "failed" | null>(null);
 
   async function copy() {
-    await copyText(value);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1400);
+    const copied = await copyText(value);
+    setFeedback(copied ? "copied" : "failed");
+    window.setTimeout(() => setFeedback(null), 1400);
   }
 
   return (
@@ -32,28 +35,11 @@ export function CopyCliButton({
       }
       aria-label={ariaLabel ?? label}
     >
-      {copied ? copiedLabel : label}
+      {feedback === "copied"
+        ? copiedLabel
+        : feedback === "failed"
+          ? failedLabel
+          : label}
     </button>
   );
-}
-
-async function copyText(value: string): Promise<void> {
-  if (navigator.clipboard?.writeText) {
-    try {
-      await navigator.clipboard.writeText(value);
-      return;
-    } catch {
-      // Fall back to a temporary textarea when the browser denies the
-      // async clipboard API on a local/dev origin.
-    }
-  }
-  const element = document.createElement("textarea");
-  element.value = value;
-  element.setAttribute("readonly", "true");
-  element.style.position = "fixed";
-  element.style.opacity = "0";
-  document.body.appendChild(element);
-  element.select();
-  document.execCommand("copy");
-  document.body.removeChild(element);
 }

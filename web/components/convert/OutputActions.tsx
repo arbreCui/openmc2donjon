@@ -7,9 +7,11 @@ import type { ConvertPreflightInput, ConvertResponse } from "@/lib/api";
 import {
   convertArtifactPaths,
   convertArtifactStatusSummary,
+  convertOutputPresence,
   fetchConvertArtifactStatuses,
   loadingConvertArtifactStatuses,
   type ConvertArtifactStatusMap,
+  type ConvertOutputPresence,
 } from "@/lib/convertArtifactStatus";
 import {
   convertDeliveryChecklist,
@@ -62,11 +64,7 @@ export default function OutputActions({
     };
   }, [paths, refreshToken]);
 
-  const notice = outputNotice(data);
   const input = data.preflight?.inputs[0] ?? null;
-  const canConvertNow = data.dry_run && data.ok && !data.output_exists && onConvert;
-  const pathLabel =
-    data.converted && data.output_exists ? "Copy DONJON path" : "Copy target path";
   const actions = handoffActions(data, onConvert, statuses);
   const deliveryItems = convertDeliveryChecklist(data, input);
   const mode = convertOutputMode(data);
@@ -90,19 +88,7 @@ export default function OutputActions({
         data={data}
         input={input}
         statuses={statuses}
-        deliveryItems={deliveryItems}
-        actions={actions}
-        onRefresh={() => setRefreshToken((value) => value + 1)}
-      />
-    );
-  }
-
-  if (mode === "blocked") {
-    return (
-      <BlockedOutputActions
-        data={data}
-        input={input}
-        statuses={statuses}
+        presence={convertOutputPresence(data, statuses.output)}
         deliveryItems={deliveryItems}
         actions={actions}
         onRefresh={() => setRefreshToken((value) => value + 1)}
@@ -111,72 +97,14 @@ export default function OutputActions({
   }
 
   return (
-    <section className="glass rounded-xl p-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <div>
-          <h3 className="text-base font-semibold tracking-tight">
-            Artifacts & next actions
-          </h3>
-          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
-            Use this section to inspect the source evidence, create or preview
-            the ASCII artifact, and package the handoff for delivery.
-          </p>
-        </div>
-        <span className="rounded border border-[var(--edge)] px-2 py-1 font-mono text-[11px] uppercase tracking-wider text-[var(--fg-2)]">
-          {data.converted ? "artifact ready" : data.dry_run ? "dry run" : "stopped"}
-        </span>
-      </div>
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-3 text-[12px] text-[var(--fg-3)]">
-        <span>{convertArtifactStatusSummary(statuses)}</span>
-        <button
-          type="button"
-          onClick={() => setRefreshToken((value) => value + 1)}
-          className="text-[var(--accent-2)] hover:underline"
-        >
-          Refresh file status
-        </button>
-      </div>
-
-      <DeliveryPathStrip items={deliveryItems} onConvert={onConvert} />
-
-      <AsciiReadinessPanel data={data} outputStatus={statuses.output} />
-      <DeliveryCommandPanel data={data} statuses={statuses} onConvert={onConvert} />
-
-      <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-        {actions.map((action) => (
-          <ActionCard key={action.id} action={action} />
-        ))}
-      </div>
-
-      <div className="mt-3 flex flex-wrap gap-2">
-        {canConvertNow ? (
-          <button type="button" onClick={onConvert} className="btn btn-primary">
-            Convert now
-          </button>
-        ) : null}
-        <CopyCliButton
-          value={data.output_path}
-          label={pathLabel}
-          ariaLabel={pathLabel}
-        />
-        <CopyCliButton
-          value={data.cli_command_text}
-          label="Copy CLI"
-          ariaLabel="Copy CLI command"
-        />
-      </div>
-
-      <div
-        className={
-          "mt-3 rounded-md border px-3 py-2 text-sm " + outputNoticeClass(notice.tone)
-        }
-      >
-        <span className="font-semibold">{notice.title}</span>
-        <span className="ml-2 text-[var(--fg-1)]">{notice.body}</span>
-      </div>
-
-      <RunSummaryCard data={data} input={input} statuses={statuses} />
-    </section>
+    <BlockedOutputActions
+      data={data}
+      input={input}
+      statuses={statuses}
+      deliveryItems={deliveryItems}
+      actions={actions}
+      onRefresh={() => setRefreshToken((value) => value + 1)}
+    />
   );
 }
 
@@ -307,6 +235,7 @@ function ConvertedOutputActions({
   data,
   input,
   statuses,
+  presence,
   deliveryItems,
   actions,
   onRefresh,
@@ -314,6 +243,7 @@ function ConvertedOutputActions({
   data: ConvertResponse;
   input: ConvertPreflightInput | null;
   statuses: ConvertArtifactStatusMap;
+  presence: ConvertOutputPresence;
   deliveryItems: readonly ConvertDeliveryItem[];
   actions: readonly HandoffAction[];
   onRefresh: () => void;
@@ -321,6 +251,7 @@ function ConvertedOutputActions({
   const bundleDir = convertBundleOutputDir(data);
   const manifestPath = convertBundleManifestPath(data);
   const focus = convertPostWriteFocus(data);
+  const conflict = presence === "conflict";
   return (
     <section className="glass rounded-xl p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
@@ -329,16 +260,23 @@ function ConvertedOutputActions({
             Output ready
           </h3>
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
-            The DONJON-facing ASCII handoff exists. Review the text, bundle the
-            delivery record, or prepare the downstream DONJON input.
+            {conflict
+              ? "The ASCII handoff was written this session, but the file-status probe disagrees — check the path, then refresh file status."
+              : "The DONJON-facing ASCII handoff exists. Review the text, bundle the delivery record, or prepare the downstream DONJON input."}
           </p>
         </div>
-        <span className="rounded border border-emerald-300/25 px-2 py-1 font-mono text-[11px] uppercase tracking-wider text-emerald-200">
-          artifact ready
-        </span>
+        {conflict ? (
+          <span className="rounded border border-amber-300/25 px-2 py-1 font-mono text-[11px] uppercase tracking-wider text-amber-200">
+            verify output path
+          </span>
+        ) : (
+          <span className="rounded border border-emerald-300/25 px-2 py-1 font-mono text-[11px] uppercase tracking-wider text-emerald-200">
+            artifact ready
+          </span>
+        )}
       </div>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-3 text-[12px] text-[var(--fg-3)]">
-        <span>{convertArtifactStatusSummary(statuses)}</span>
+        <span>{convertArtifactStatusSummary(statuses, presence)}</span>
         <button
           type="button"
           onClick={onRefresh}
@@ -547,9 +485,9 @@ function DeliveryCommandPanel({
   statuses: ConvertArtifactStatusMap;
   onConvert?: () => void;
 }) {
-  const outputKnownMissing =
-    statuses.output.kind === "ok" && !fileStatusIsFile(statuses.output);
-  const outputReady = data.converted && data.output_exists && !outputKnownMissing;
+  const presence = convertOutputPresence(data, statuses.output);
+  const outputReady = presence === "confirmed" || presence === "unverified";
+  const conflict = presence === "conflict";
   const canConvertNow = data.dry_run && data.ok && !data.output_exists && onConvert;
   const bundleDir = convertBundleOutputDir(data);
   const manifestPath = convertBundleManifestPath(data);
@@ -575,14 +513,18 @@ function DeliveryCommandPanel({
               ? "Preview, bundle, then validate the manifest"
               : canConvertNow
                 ? "Convert unlocks preview and bundle delivery"
-                : "Delivery waits for a confirmed ASCII file"}
+                : conflict
+                  ? "ASCII written this session; file-status probe disagrees"
+                  : "Delivery waits for a confirmed ASCII file"}
           </h4>
           <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--fg-2)]">
             {outputReady
               ? "The web converter wrote the ASCII handoff. The next local command should collect the HDF5 and ASCII file into a manifest-backed bundle, then validate that manifest."
               : canConvertNow
                 ? "The dry run accepted this handoff. Run Convert to write the ASCII file, then this panel will expose the bundle and validation builders."
-                : "Run a successful conversion before packaging the handoff for another workflow or collaborator."}
+                : conflict
+                  ? "Convert reported the write, but the probe does not see the file at the target path. Check the path and refresh file status before bundling."
+                  : "Run a successful conversion before packaging the handoff for another workflow or collaborator."}
           </p>
         </div>
         {outputReady ? (
@@ -745,9 +687,12 @@ function handoffActions(
   const inputKnownMissing =
     statuses?.input.kind === "ok" && !fileStatusIsFile(statuses.input);
   const inputReady = !inputKnownMissing;
-  const outputKnownMissing =
-    statuses?.output.kind === "ok" && !fileStatusIsFile(statuses.output);
-  const outputReady = data.converted && data.output_exists && !outputKnownMissing;
+  const presence = convertOutputPresence(
+    data,
+    statuses?.output ?? { kind: "loading" },
+  );
+  const outputReady = presence === "confirmed" || presence === "unverified";
+  const conflict = presence === "conflict";
   const bundleDirReady = fileStatusIsDirectory(statuses?.bundle);
   const canConvertNow = data.dry_run && data.ok && !data.output_exists && onConvert;
   const inspect: HandoffAction = {
@@ -770,7 +715,9 @@ function handoffActions(
       ? "Jump to the LCM ASCII signature, visible block tree, and first lines."
       : canConvertNow
         ? "Dry run passed. Convert writes the ASCII file before preview is available."
-        : "The output file was not confirmed, so the preview cannot be opened yet.",
+        : conflict
+          ? "Convert reported the write, but the file-status probe does not see the file — check the path, then refresh file status."
+          : "The output file was not confirmed, so the preview cannot be opened yet.",
     href: outputReady ? "#ascii-output-preview" : undefined,
     disabled: !outputReady,
     status: outputReady ? "ready" : "blocked",
@@ -785,7 +732,9 @@ function handoffActions(
       ? bundleDirReady
         ? "Open the bundle builder with MGXS and ASCII paths filled; an existing bundle directory is present."
         : "Open the bundle builder with MGXS and ASCII paths filled; it will create or update the bundle directory."
-      : "Package the input, ASCII output, summaries, and logs after conversion succeeds.",
+      : conflict
+        ? "Bundling waits until the file-status probe can see the written ASCII output — check the output path first."
+        : "Package the input, ASCII output, summaries, and logs after conversion succeeds.",
     href: outputReady ? convertBundleHref(data) : undefined,
     disabled: !outputReady,
     status: outputReady ? "ready" : "blocked",
@@ -947,48 +896,3 @@ function deliveryItemClass(
   return "border-[var(--edge)] bg-white/[0.02] text-[var(--fg-2)]";
 }
 
-function outputNotice(data: ConvertResponse): {
-  tone: "pass" | "warn" | "fail" | "neutral";
-  title: string;
-  body: string;
-} {
-  if (data.converted) {
-    return {
-      tone: "pass",
-      title: "Output file written.",
-      body: "Review the ASCII preview, then pass this path to the DONJON-side workflow.",
-    };
-  }
-  if (!data.dry_run) {
-    return {
-      tone: "fail",
-      title: "No output file written.",
-      body: "Fix the failing checks or request error, then run Convert again.",
-    };
-  }
-  if (data.output_exists) {
-    return {
-      tone: "warn",
-      title: "Dry run only; target already exists.",
-      body: "Enable Overwrite output before converting if this file should be replaced.",
-    };
-  }
-  return {
-    tone: "neutral",
-    title: "Dry run only; no file written.",
-    body: "The target path is clear, so Convert will write the ASCII file there.",
-  };
-}
-
-function outputNoticeClass(tone: "pass" | "warn" | "fail" | "neutral") {
-  if (tone === "pass") {
-    return "border-emerald-400/25 bg-emerald-400/10 text-emerald-200";
-  }
-  if (tone === "warn") {
-    return "border-amber-400/25 bg-amber-400/10 text-amber-200";
-  }
-  if (tone === "fail") {
-    return "border-rose-400/25 bg-rose-400/10 text-rose-200";
-  }
-  return "border-[var(--edge)] bg-white/[0.03] text-[var(--fg-2)]";
-}

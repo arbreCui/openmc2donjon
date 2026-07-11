@@ -41,7 +41,7 @@ export const HOME_DEMO_SHORTCUTS: readonly DemoShortcut[] = [
       "Open the two-region CE reference + MG macro route, including the physics summary and corrected MACROLIB NSPH handoff.",
     href: `/openmc?workflow=two-step&equivalence=sph&format=macrolib&production=1&summary=${encodeURIComponent(
       MOCK_OPENMC_SPH_DEMO.physicsSummary,
-    )}`,
+    )}#openmc-sph-summary`,
     cta: "Open SPH minicase",
   },
 ] as const;

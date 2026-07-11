@@ -5,6 +5,7 @@ import {
   convertArtifactStatusMapFromItems,
   convertArtifactStatusSummary,
   convertArtifactStatusText,
+  convertOutputPresence,
   loadingConvertArtifactStatuses,
 } from "./convertArtifactStatus";
 
@@ -80,6 +81,48 @@ describe("convert artifact status helpers", () => {
       { id: "bundle", state: { kind: "ok", status: status("dir") } },
     ]);
     expect(convertArtifactStatusSummary(ready)).toContain("bundle directory");
+  });
+
+  it("reconciles the convert response with the file-status probe", () => {
+    // Response is authoritative: a reported write stays "existing" while the
+    // probe is loading or errored.
+    expect(convertOutputPresence(response(), { kind: "loading" })).toBe(
+      "unverified",
+    );
+    expect(
+      convertOutputPresence(response(), { kind: "error", message: "boom" }),
+    ).toBe("unverified");
+    expect(
+      convertOutputPresence(response(), { kind: "ok", status: status("file") }),
+    ).toBe("confirmed");
+    // Probe positively reporting missing after the write is a conflict, not
+    // an absolute "not present" claim.
+    expect(
+      convertOutputPresence(response(), {
+        kind: "ok",
+        status: status("missing"),
+      }),
+    ).toBe("conflict");
+    expect(
+      convertOutputPresence(response({ converted: false, output_exists: false }), {
+        kind: "ok",
+        status: status("missing"),
+      }),
+    ).toBe("absent");
+  });
+
+  it("summarizes a response/probe conflict as one reconciled state", () => {
+    const probeMissing = convertArtifactStatusMapFromItems([
+      { id: "input", state: { kind: "ok", status: status("file") } },
+      { id: "output", state: { kind: "ok", status: status("missing") } },
+      { id: "bundle", state: { kind: "ok", status: status("missing") } },
+    ]);
+    expect(convertArtifactStatusSummary(probeMissing, "conflict")).toBe(
+      "Convert reported the ASCII write, but the file-status probe does not see the file — check the output path.",
+    );
+    expect(convertArtifactStatusSummary(probeMissing)).toContain(
+      "not present yet",
+    );
   });
 
   it("renders compact status text for copied summaries", () => {

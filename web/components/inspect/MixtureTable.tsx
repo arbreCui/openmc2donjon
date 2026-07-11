@@ -34,6 +34,11 @@ export default function MixtureTable({
         <tbody>
           {mixtures.map((m) => {
             const active = selectedName === m.name;
+            // The whole row stays a pointer target for convenience, but
+            // the accessible/keyboard control is a real <button> in the
+            // name cell: role="button" on the <tr> would strip the
+            // row/cell semantics screen readers need for the columns
+            // (and aria-selected is not supported on that role).
             return (
             <tr
               key={m.name}
@@ -45,22 +50,23 @@ export default function MixtureTable({
                   : "hover:bg-white/[0.03]")
               }
               onClick={interactive ? () => onSelect!(m.name) : undefined}
-              onKeyDown={
-                interactive
-                  ? (e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        onSelect!(m.name);
-                      }
-                    }
-                  : undefined
-              }
-              tabIndex={interactive ? 0 : undefined}
-              aria-selected={interactive ? active : undefined}
-              role={interactive ? "button" : undefined}
             >
               <Td>
-                <span className="font-mono">{m.name}</span>
+                {interactive ? (
+                  <button
+                    type="button"
+                    className="font-mono"
+                    aria-pressed={active}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelect!(m.name);
+                    }}
+                  >
+                    {m.name}
+                  </button>
+                ) : (
+                  <span className="font-mono">{m.name}</span>
+                )}
               </Td>
               <Td>
                 {m.fissionable === null ? (

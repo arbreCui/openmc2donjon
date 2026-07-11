@@ -1,6 +1,30 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "./api";
 
+describe("baseUrl fallback", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("falls back to the localhost default when NEXT_PUBLIC_API_BASE_URL is empty", async () => {
+    vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ status: "ok", mock_mode: false, version: "0.1.0" }),
+        { status: 200 },
+      ),
+    );
+
+    await api.health();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/health",
+      { cache: "no-store" },
+    );
+  });
+});
+
 describe("api.pyganDoctor", () => {
   afterEach(() => {
     vi.restoreAllMocks();

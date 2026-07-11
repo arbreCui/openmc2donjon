@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  deckNumberParam,
   donjonBundleAsciiMismatch,
   donjonDeckOptionsFromSearchParams,
   donjonDeckFilename,
@@ -179,6 +180,7 @@ describe("DONJON guide helpers", () => {
       "ncr-mixtures",
       "geometry-map",
       "boundary-solver",
+      "ascii-72",
       "smoke-first",
     ]);
     expect(items[0]).toMatchObject({ tone: "ready" });
@@ -186,6 +188,9 @@ describe("DONJON guide helpers", () => {
     expect(items[2].body).toContain("assign all 9 mixture regions");
     expect(items[3].title).toContain("SPN5");
     expect(items[3].body).toContain("Z+ REFL");
+    // The SEQ_ASCII 72-character limit applies to every geometry, not
+    // just hex decks.
+    expect(items[4].body).toContain("72 characters");
   });
 
   it("marks missing ASCII path and MACROLIB direct assignment in the checklist", () => {
@@ -221,7 +226,7 @@ describe("DONJON guide helpers", () => {
       "ncr-mixtures",
       "geometry-map",
       "boundary-solver",
-      "hex-ascii-72",
+      "ascii-72",
       "hex-boundary-void",
       "smoke-first",
     ]);
@@ -229,8 +234,10 @@ describe("DONJON guide helpers", () => {
     expect(items[2].title).toContain("HEXZ");
     expect(items[2].body).toContain("MIX 1..91");
     expect(items[3].title).toContain("SN8");
-    expect(items[3].body).toContain("HBC COMPLETE VOID");
-    const ascii72 = items.find((item) => item.id === "hex-ascii-72");
+    // The boundary card is a short pointer; the full boundary rule
+    // lives only in the dedicated hex-boundary-void card.
+    expect(items[3].body).toContain("outer-boundary card");
+    const ascii72 = items.find((item) => item.id === "ascii-72");
     expect(ascii72?.body).toContain("72 characters");
     expect(ascii72?.body).toContain("short absolute path");
     const boundaryVoid = items.find((item) => item.id === "hex-boundary-void");
@@ -541,20 +548,78 @@ describe("DONJON guide helpers", () => {
   });
 
   it("detects artifact paths that differ from convert summary output", () => {
-    const artifact = findDonjonBundleArtifact([
+    const artifacts = [
       {
         label: "mcompo",
         path: "/runs/case/bundle/out.mcompo.txt",
       },
-    ]);
+    ];
     const summaryArtifact = donjonDefaultsArtifact({
       ascii_path: "/runs/case/out.mcompo.txt",
     });
 
-    expect(donjonBundleAsciiMismatch(artifact, summaryArtifact)).toEqual({
-      artifactPath: "/runs/case/bundle/out.mcompo.txt",
+    expect(donjonBundleAsciiMismatch(artifacts, summaryArtifact)).toEqual({
+      artifactPaths: ["/runs/case/bundle/out.mcompo.txt"],
       summaryPath: "/runs/case/out.mcompo.txt",
     });
-    expect(donjonBundleAsciiMismatch(summaryArtifact, summaryArtifact)).toBeNull();
+    expect(donjonBundleAsciiMismatch(artifacts, null)).toBeNull();
+    expect(
+      donjonBundleAsciiMismatch(
+        [{ label: "mgxs", path: "/runs/case/handoff.h5" }],
+        summaryArtifact,
+      ),
+    ).toBeNull();
+  });
+
+  it("does not flag a mismatch when the summary output is any bundled ASCII artifact", () => {
+    // Dual-format bundle: the best-scoring artifact differs from the
+    // summary output, but the summary output IS the other bundled
+    // artifact - not a mismatch.
+    const artifacts = [
+      {
+        label: "macrolib",
+        path: "/runs/case/bundle/out.macrolib.txt",
+        bundled_path: "out.macrolib.txt",
+        ok: true,
+      },
+      {
+        label: "mcompo",
+        path: "/runs/case/bundle/out.mcompo.txt",
+        bundled_path: "out.mcompo.txt",
+        ok: true,
+      },
+    ];
+    const summaryArtifact = donjonDefaultsArtifact({
+      ascii_path: "/runs/case/bundle/out.mcompo.txt",
+    });
+
+    expect(donjonBundleAsciiMismatch(artifacts, summaryArtifact)).toBeNull();
+    expect(
+      donjonBundleAsciiMismatch(
+        artifacts,
+        donjonDefaultsArtifact({ ascii_path: "/runs/case/elsewhere.mcompo.txt" }),
+      ),
+    ).toEqual({
+      artifactPaths: [
+        "/runs/case/bundle/out.macrolib.txt",
+        "/runs/case/bundle/out.mcompo.txt",
+      ],
+      summaryPath: "/runs/case/elsewhere.mcompo.txt",
+    });
+  });
+
+  it("parses raw deck number inputs without coercing empty to zero", () => {
+    expect(deckNumberParam("12")).toBe(12);
+    expect(deckNumberParam("10.1036")).toBe(10.1036);
+    expect(deckNumberParam("")).toBeUndefined();
+    expect(deckNumberParam("  ")).toBeUndefined();
+    expect(deckNumberParam(null)).toBeUndefined();
+    expect(deckNumberParam("abc")).toBeUndefined();
+    // Cleared "Mixtures to extract" field: no value reaches the
+    // normalizer, so checklist and deck both use the default of 1.
+    expect(
+      normalizeDonjonDeckOptions({ mixtureCount: deckNumberParam("") })
+        .mixtureCount,
+    ).toBe(1);
   });
 });

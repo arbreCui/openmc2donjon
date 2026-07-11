@@ -1,5 +1,11 @@
 export type BuilderFieldKind = "path" | "text" | "select" | "toggle";
-export type BrowseMode = "file" | "directory";
+/**
+ * ``"file"`` picks an existing file; ``"directory"`` picks an existing
+ * directory as the value itself; ``"output"`` marks a write-target path
+ * — the picker selects an existing directory and the field keeps (or
+ * gains) a filename, since the output file does not exist yet.
+ */
+export type BrowseMode = "file" | "directory" | "output";
 
 export interface BuilderOption {
   value: string;
@@ -21,6 +27,12 @@ export interface BuilderField {
   options?: BuilderOption[];
   browse?: BrowseMode;
   extensions?: string[];
+  /**
+   * Names of fields that must also be set for this one to be legal on
+   * the CLI (argparse-enforced flag dependencies). Surfaced by
+   * ``builderCliIssues``.
+   */
+  requires?: readonly string[];
 }
 
 export interface CommandBuilderSpec {
@@ -94,7 +106,7 @@ export const COMMAND_BUILDER_SPECS: readonly CommandBuilderSpec[] = [
         undefined,
         true,
       ),
-      optionPath("summary_json", "Summary JSON", "Optional diff summary JSON.", "--summary-json", "diff.json", JSON),
+      optionPath("summary_json", "Summary JSON", "Optional diff summary JSON.", "--summary-json", "diff.json", JSON, false, "output"),
       text("max_diffs", "Max printed diffs", "Optional --max-diffs override.", "--max-diffs"),
       toggle("no_fail", "No fail", "Always exit zero after printing the diff report.", "--no-fail"),
     ],
@@ -122,7 +134,7 @@ export const COMMAND_BUILDER_SPECS: readonly CommandBuilderSpec[] = [
       text("mixture", "Mixture filter", "Comma-separated mixtures; each becomes one --mixture flag.", "--mixture", undefined, true),
       text("rtol", "Relative tolerance", "Semantic real-payload relative tolerance.", "--rtol"),
       text("atol", "Absolute tolerance", "Semantic real-payload absolute tolerance.", "--atol"),
-      optionPath("summary_json", "Summary JSON", "Optional comparison summary JSON.", "--summary-json", "writer_compare.json", JSON),
+      optionPath("summary_json", "Summary JSON", "Optional comparison summary JSON.", "--summary-json", "writer_compare.json", JSON, false, "output"),
       optionPath("keep_dir", "Keep generated files", "Optional directory for ascii.* and pygan.* outputs.", "--keep-dir", "writer_compare", undefined, false, "directory"),
       text("max_issues", "Max printed issues", "Optional --max-issues override.", "--max-issues"),
       toggle("no_fail", "No fail", "Always exit zero after printing the comparison report.", "--no-fail"),
@@ -140,7 +152,7 @@ export const COMMAND_BUILDER_SPECS: readonly CommandBuilderSpec[] = [
     base: ["openmc2donjon", "export-surface-flux"],
     fields: [
       path("statepoint", "Statepoint", "OpenMC statepoint containing the surface tally.", "<statepoint.h5>", 0, H5),
-      optionPath("output", "Surface flux HDF5", "Output HDF5 sidecar.", "-o", "face_flux.h5", H5, true),
+      optionPath("output", "Surface flux HDF5", "Output HDF5 sidecar.", "-o", "face_flux.h5", H5, true, "output"),
       optionPath("mgxs", "MGXS handoff", "Optional MGXS file for energy bounds and mixture names.", "--mgxs", "mgxs_library.h5", H5),
       text("tally_name", "Tally name", "OpenMC tally name; empty keeps CLI default.", "--tally-name"),
       text("mesh_shape", "Mesh shape", "Y,X shape when mixture names are not enough.", "--mesh-shape"),
@@ -149,7 +161,7 @@ export const COMMAND_BUILDER_SPECS: readonly CommandBuilderSpec[] = [
       text("mu_edges", "Mu edges", "Required MuSurfaceFilter bin edges.", "--mu-edges", "-1,-0.5,0.5,1", false, true),
       text("face_area", "Face area", "Optional face area override.", "--face-area"),
       text("faces", "Faces", "Comma-separated output face names.", "--faces", FACES),
-      optionPath("summary_json", "Summary JSON", "Optional export summary JSON.", "--summary-json", "surface_flux_summary.json", JSON),
+      optionPath("summary_json", "Summary JSON", "Optional export summary JSON.", "--summary-json", "surface_flux_summary.json", JSON, false, "output"),
       toggle("force", "Force overwrite", "Allow replacing an existing output file.", "--force"),
     ],
     notes: [
@@ -165,7 +177,7 @@ export const COMMAND_BUILDER_SPECS: readonly CommandBuilderSpec[] = [
     base: ["openmc2donjon", "export-volume-flux"],
     fields: [
       path("statepoint", "Statepoint", "OpenMC statepoint containing the flux tally.", "<statepoint.h5>", 0, H5),
-      optionPath("output", "Flux HDF5", "Output HDF5 source for SPH.", "-o", "openmc_ce_flux.h5", H5, true),
+      optionPath("output", "Flux HDF5", "Output HDF5 source for SPH.", "-o", "openmc_ce_flux.h5", H5, true, "output"),
       optionPath("mgxs", "MGXS handoff", "MGXS file for mixture names and group count.", "--mgxs", "mgxs_library.h5", H5),
       text("tally_name", "Tally name", "OpenMC tally name; empty keeps CLI default.", "--tally-name"),
       text("dataset_name", "Dataset name", "Output dataset name, e.g. openmc_volume_flux or openmc_mg_flux.", "--dataset-name"),
@@ -174,7 +186,7 @@ export const COMMAND_BUILDER_SPECS: readonly CommandBuilderSpec[] = [
       text("energy_groups", "Energy groups", "Group count when --mgxs is not supplied.", "--energy-groups"),
       text("source_group_order", "Source group order", "Metadata label for raw tally order.", "--source-group-order"),
       toggle("allow_zero_flux", "Allow zero flux", "Accept exactly-zero flux bins, e.g. fast-spectrum thermal groups.", "--allow-zero-flux"),
-      optionPath("summary_json", "Summary JSON", "Optional export summary JSON.", "--summary-json", "volume_flux_summary.json", JSON),
+      optionPath("summary_json", "Summary JSON", "Optional export summary JSON.", "--summary-json", "volume_flux_summary.json", JSON, false, "output"),
       toggle("force", "Force overwrite", "Allow replacing an existing output file.", "--force"),
     ],
     notes: [
@@ -195,7 +207,7 @@ export const COMMAND_BUILDER_SPECS: readonly CommandBuilderSpec[] = [
       text("invalid_fill", "Invalid fill", "Optional fill value for invalid bins.", "--invalid-fill"),
       text("clip_min", "Clip min", "Optional lower clip bound.", "--clip-min"),
       text("clip_max", "Clip max", "Optional upper clip bound.", "--clip-max"),
-      optionPath("summary_json", "Summary JSON", "Optional contract summary JSON.", "--summary-json", "face_flux_check.json", JSON),
+      optionPath("summary_json", "Summary JSON", "Optional contract summary JSON.", "--summary-json", "face_flux_check.json", JSON, false, "output"),
       toggle("no_fail", "No fail", "Always exit zero after printing the report.", "--no-fail"),
     ],
     notes: ["Use this before make-adf-sidecar --mode flux-ratio."],
@@ -208,14 +220,14 @@ export const COMMAND_BUILDER_SPECS: readonly CommandBuilderSpec[] = [
     base: ["openmc2donjon", "make-low-order-driver"],
     fields: [
       path("input_h5", "MGXS HDF5", "MGXS handoff used for metadata.", "<mgxs_library.h5>", 0, H5),
-      optionPath("output", "Driver HDF5", "Canonical low-order driver output.", "-o", "driver.h5", H5, true),
+      optionPath("output", "Driver HDF5", "Canonical low-order driver output.", "-o", "driver.h5", H5, true, "output"),
       optionPath("raw_driver", "Raw driver bundle", "Optional raw driver HDF5 bundle.", "--raw-driver", "raw_driver.h5", H5),
       text("volume_flux", "Volume flux source", "HDF5 file or FILE::DATASET.", "--volume-flux"),
       text("net_current", "Net current source", "HDF5 file or FILE::DATASET.", "--net-current"),
       select("net_current_sign_convention", "Current sign", "Raw net-current sign convention.", "--net-current-sign-convention", SIGN_CONVENTION_OPTIONS),
       text("faces", "Faces", "Comma-separated face names.", "--faces", FACES),
       text("source_label", "Source label", "Provenance label stored in output HDF5.", "--source-label"),
-      optionPath("summary_json", "Summary JSON", "Optional summary JSON.", "--summary-json", "driver_summary.json", JSON),
+      optionPath("summary_json", "Summary JSON", "Optional summary JSON.", "--summary-json", "driver_summary.json", JSON, false, "output"),
       toggle("force", "Force overwrite", "Allow replacing an existing output file.", "--force"),
     ],
     notes: ["The canonical driver feeds make-homogeneous-face-flux."],
@@ -230,7 +242,7 @@ export const COMMAND_BUILDER_SPECS: readonly CommandBuilderSpec[] = [
       path("driver_h5", "Driver HDF5", "Canonical low-order driver HDF5.", "<driver.h5>", 1, H5),
       text("faces", "Faces", "Optional expected face names.", "--faces"),
       text("face_widths", "Face widths", "Optional one width or comma-separated widths.", "--face-widths"),
-      optionPath("summary_json", "Summary JSON", "Optional contract summary JSON.", "--summary-json", "driver_check.json", JSON),
+      optionPath("summary_json", "Summary JSON", "Optional contract summary JSON.", "--summary-json", "driver_check.json", JSON, false, "output"),
       toggle("no_fail", "No fail", "Always exit zero after printing the report.", "--no-fail"),
     ],
     notes: ["Run this before reconstructing homogeneous face flux."],
@@ -242,13 +254,13 @@ export const COMMAND_BUILDER_SPECS: readonly CommandBuilderSpec[] = [
     base: ["openmc2donjon", "make-homogeneous-face-flux"],
     fields: [
       path("input_h5", "MGXS HDF5", "MGXS handoff with transport_total.", "<mgxs_library.h5>", 0, H5),
-      optionPath("output", "Homogeneous face flux", "Output HDF5.", "-o", "homogeneous_face_flux.h5", H5, true),
+      optionPath("output", "Homogeneous face flux", "Output HDF5.", "-o", "homogeneous_face_flux.h5", H5, true, "output"),
       text("volume_flux", "Volume flux source", "HDF5 file or FILE::DATASET.", "--volume-flux", "<volume_flux>", false, true),
       text("net_current", "Net current source", "HDF5 file or FILE::DATASET.", "--net-current", "<net_current>", false, true),
       select("net_current_sign_convention", "Current sign", "Raw net-current sign convention.", "--net-current-sign-convention", SIGN_CONVENTION_OPTIONS),
       text("faces", "Faces", "Comma-separated face names.", "--faces", FACES),
       text("face_widths", "Face widths", "One width or comma-separated widths.", "--face-widths"),
-      optionPath("summary_json", "Summary JSON", "Optional summary JSON.", "--summary-json", "homogeneous_face_flux_summary.json", JSON),
+      optionPath("summary_json", "Summary JSON", "Optional summary JSON.", "--summary-json", "homogeneous_face_flux_summary.json", JSON, false, "output"),
       toggle("force", "Force overwrite", "Allow replacing an existing output file.", "--force"),
     ],
     notes: ["The output pairs with exported OpenMC surface flux in make-adf-sidecar."],
@@ -261,7 +273,7 @@ export const COMMAND_BUILDER_SPECS: readonly CommandBuilderSpec[] = [
     base: ["openmc2donjon", "make-sph-update-table"],
     fields: [
       path("input_h5", "MGXS HDF5", "MGXS handoff used for metadata.", "<mgxs_library.h5>", 0, H5),
-      optionPath("output", "SPH table CSV", "Output SPH CSV table.", "-o", "sph_update.csv", [".csv"], true),
+      optionPath("output", "SPH table CSV", "Output SPH CSV table.", "-o", "sph_update.csv", [".csv"], true, "output"),
       text("reference_flux", "OpenMC CE flux", "OpenMC CE reference flux CSV/HDF5 source.", "--reference-flux", "<openmc_ce_flux>", false, true),
       text("low_order_flux", "OpenMC MG flux", "OpenMC MG macro flux CSV/HDF5 source.", "--low-order-flux", "<openmc_mg_flux>", false, true),
       text("previous_sph", "Previous SPH", "Previous SPH CSV or HDF5 sidecar/source.", "--previous-sph"),
@@ -270,7 +282,7 @@ export const COMMAND_BUILDER_SPECS: readonly CommandBuilderSpec[] = [
       text("clip_max", "Clip max", "Optional maximum SPH value.", "--clip-max"),
       select("flux_normalization", "Flux normalization", "Scale low-order flux before ratio.", "--flux-normalization", FLUX_NORMALIZATION_OPTIONS),
       text("source_label", "Source label", "Provenance label recorded in the summary.", "--source-label"),
-      optionPath("summary_json", "Summary JSON", "Optional iteration summary JSON.", "--summary-json", "sph_update_summary.json", JSON),
+      optionPath("summary_json", "Summary JSON", "Optional iteration summary JSON.", "--summary-json", "sph_update_summary.json", JSON, false, "output"),
       toggle("force", "Force overwrite", "Allow replacing the CSV output.", "--force"),
     ],
     notes: ["Use this after the CE and MG OpenMC calculations share the same geometry and output regions."],
@@ -285,8 +297,8 @@ export const COMMAND_BUILDER_SPECS: readonly CommandBuilderSpec[] = [
       path("input_h5", "MGXS HDF5", "Input MGXS handoff to correct.", "mg_case/mgxs_unapplied.h5", 0, H5),
       select("input_format", "Input format", "HDF5 layout to correct.", "--input-format", SPH_APPLY_FORMAT_OPTIONS),
       optionPath("sph_source", "SPH sidecar", "HDF5 sidecar containing SPH/NSPH vectors.", "--sph-source", "openmc_sph.h5", H5, true),
-      optionPath("output", "Corrected MGXS HDF5", "Output HDF5 copy with XS divided by NSPH.", "-o", "mg_case/mgxs.h5", H5, true),
-      optionPath("summary_json", "Summary JSON", "Optional SPH application summary JSON.", "--summary-json", "sph_apply_summary.json", JSON),
+      optionPath("output", "Corrected MGXS HDF5", "Output HDF5 copy with XS divided by NSPH.", "-o", "mg_case/mgxs.h5", H5, true, "output"),
+      optionPath("summary_json", "Summary JSON", "Optional SPH application summary JSON.", "--summary-json", "sph_apply_summary.json", JSON, false, "output"),
       toggle("force", "Force overwrite", "Allow replacing the corrected HDF5 output.", "--force"),
     ],
     notes: [
@@ -322,7 +334,7 @@ export const COMMAND_BUILDER_SPECS: readonly CommandBuilderSpec[] = [
     base: ["openmc2donjon", "validate-bundle"],
     fields: [
       path("manifest", "Manifest JSON", "Bundle manifest JSON.", "manifest.json", 0, JSON),
-      optionPath("summary_json", "Summary JSON", "Optional validation summary JSON.", "--summary-json", "bundle_validation.json", JSON),
+      optionPath("summary_json", "Summary JSON", "Optional validation summary JSON.", "--summary-json", "bundle_validation.json", JSON, false, "output"),
       toggle("no_fail", "No fail", "Always exit zero after printing the report.", "--no-fail"),
     ],
     notes: ["Run this after bundle, before sharing the delivery directory."],
@@ -334,9 +346,15 @@ export const COMMAND_BUILDER_SPECS: readonly CommandBuilderSpec[] = [
     base: ["openmc2donjon", "doctor"],
     fields: [
       optionPath("recipe", "Recipe", "Optional OpenMC export recipe to dry-run.", "--recipe", "recipe.py", [".py"]),
-      optionPath("statepoint", "Statepoint", "Optional OpenMC statepoint path.", "--statepoint", "statepoint.h5", H5),
-      toggle("load_statepoint", "Load statepoint", "Load the statepoint during recipe dry-run.", "--load-statepoint"),
-      optionPath("summary_json", "Summary JSON", "Optional doctor summary JSON.", "--summary-json", "doctor.json", JSON),
+      {
+        ...optionPath("statepoint", "Statepoint", "Optional OpenMC statepoint path; the CLI rejects --statepoint without --recipe.", "--statepoint", "statepoint.h5", H5),
+        requires: ["recipe"],
+      },
+      {
+        ...toggle("load_statepoint", "Load statepoint", "Load the statepoint during recipe dry-run; needs both Recipe and Statepoint.", "--load-statepoint"),
+        requires: ["recipe", "statepoint"],
+      },
+      optionPath("summary_json", "Summary JSON", "Optional doctor summary JSON.", "--summary-json", "doctor.json", JSON, false, "output"),
       toggle("no_fail", "No fail", "Always exit zero after printing the report.", "--no-fail"),
     ],
     notes: ["Use this when a collaborator reports that local commands fail to start."],
@@ -469,7 +487,7 @@ export function buildCommandCli(spec: CommandBuilderSpec, values: BuilderValues)
     const value = stringValue(raw);
     if (field.repeatCsv) {
       for (const item of splitCsv(value)) {
-        tokens.push(field.flag, item);
+        pushFlagValue(tokens, field.flag, item);
       }
       continue;
     }
@@ -479,9 +497,50 @@ export function buildCommandCli(spec: CommandBuilderSpec, values: BuilderValues)
       (field.includeDefault && stringValue(field.defaultValue) !== "");
     if (!shouldEmit) continue;
     const emitted = value || stringValue(field.defaultValue) || field.placeholder || "";
-    if (emitted !== "") tokens.push(field.flag, emitted);
+    if (emitted !== "") pushFlagValue(tokens, field.flag, emitted);
   }
   return tokens.map(shellQuote).join(" ");
+}
+
+/**
+ * Flag dependencies the CLI enforces but the form cannot express as
+ * "required": e.g. doctor rejects --statepoint without --recipe. The
+ * builder page renders these next to the CLI preview so the copied
+ * command does not die on an argparse usage error.
+ */
+export function builderCliIssues(spec: CommandBuilderSpec, values: BuilderValues): string[] {
+  const issues: string[] = [];
+  for (const field of spec.fields) {
+    if (!field.requires || !fieldIsSet(field, values)) continue;
+    for (const depName of field.requires) {
+      const dep = spec.fields.find((candidate) => candidate.name === depName);
+      if (!dep || fieldIsSet(dep, values)) continue;
+      issues.push(
+        `${field.label} requires ${dep.label}: the CLI rejects ${field.flag} without ${dep.flag}.`,
+      );
+    }
+  }
+  return issues;
+}
+
+function fieldIsSet(field: BuilderField, values: BuilderValues): boolean {
+  const raw = values[field.name];
+  if (field.kind === "toggle") return raw === true;
+  return stringValue(raw) !== "";
+}
+
+/**
+ * Emit ``--flag value`` as two tokens, except when the value itself
+ * starts with a dash (mu-edge lists begin at -1): argparse classifies
+ * such a value as an option string and rejects it, so long options use
+ * the unambiguous ``--flag=value`` form instead.
+ */
+function pushFlagValue(tokens: string[], flag: string, value: string): void {
+  if (value.startsWith("-") && flag.startsWith("--")) {
+    tokens.push(`${flag}=${value}`);
+    return;
+  }
+  tokens.push(flag, value);
 }
 
 function path(

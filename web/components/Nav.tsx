@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   isAnyNavItemActive,
   isNavItemActive,
@@ -14,11 +14,28 @@ import {
 export default function Nav() {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLLIElement | null>(null);
   const moreActive = isAnyNavItemActive(SECONDARY_NAV_ITEMS, pathname);
 
   useEffect(() => {
     setMoreOpen(false);
   }, [pathname]);
+
+  // Close the More dropdown on any click outside it. Same-pathname
+  // navigations (e.g. /builder?command=diff -> /builder?command=bundle)
+  // never fire the pathname effect above, so the menu items also close
+  // on click below.
+  useEffect(() => {
+    if (!moreOpen) return;
+    function handlePointerDown(event: PointerEvent) {
+      const node = moreRef.current;
+      if (node && event.target instanceof Node && !node.contains(event.target)) {
+        setMoreOpen(false);
+      }
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [moreOpen]);
 
   return (
     <nav
@@ -39,15 +56,21 @@ export default function Nav() {
               <NavLink item={item} active={isNavItemActive(item, pathname)} />
             </li>
           ))}
-          <li className="relative">
+          <li
+            className="relative"
+            ref={moreRef}
+            onKeyDown={(event) => {
+              // Handled at the <li> level so Escape also closes the
+              // menu when focus sits on a menu item, not only on the
+              // toggle button.
+              if (event.key === "Escape") {
+                setMoreOpen(false);
+              }
+            }}
+          >
             <button
               type="button"
               onClick={() => setMoreOpen((value) => !value)}
-              onKeyDown={(event) => {
-                if (event.key === "Escape") {
-                  setMoreOpen(false);
-                }
-              }}
               className={
                 navClass(moreActive || moreOpen) +
                 " inline-flex items-center gap-1.5"
@@ -76,6 +99,7 @@ export default function Nav() {
                       key={item.href}
                       href={item.href}
                       role="menuitem"
+                      onClick={() => setMoreOpen(false)}
                       className={
                         "block rounded-md border px-3 py-2 transition " +
                         (active

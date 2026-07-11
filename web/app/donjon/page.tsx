@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { CopyCliButton } from "@/components/commands/CopyCliButton";
 import { ApiError, api, type BundleInspection } from "@/lib/api";
 import {
+  deckNumberParam,
   donjonBundleAsciiMismatch,
   donjonDeckChecklist,
   donjonDeckOptionsFromSearchParams,
@@ -98,7 +99,13 @@ function DonjonPageContent() {
   const [manifestState, setManifestState] = useState<ManifestState>({
     kind: "idle",
   });
-  const [mixtureCount, setMixtureCount] = useState(initialDeckOptions.mixtureCount);
+  // Numeric fields keep the raw text the user typed; ``deckNumberParam``
+  // + ``normalizeDonjonDeckOptions`` turn it into the effective value in
+  // ONE place, so the checklist and the generated deck always agree with
+  // the field (an emptied field shows the placeholder default, not 0).
+  const [mixtureCountText, setMixtureCountText] = useState(
+    String(initialDeckOptions.mixtureCount),
+  );
   const [mixtureCountEdited, setMixtureCountEdited] = useState(
     queryMixtureCount !== null,
   );
@@ -108,8 +115,10 @@ function DonjonPageContent() {
   const [solver, setSolver] = useState<DonjonDeckSolver>(initialDeckOptions.solver);
   const [spnOrder, setSpnOrder] = useState(initialDeckOptions.spnOrder);
   const [snOrder, setSnOrder] = useState(initialDeckOptions.snOrder);
-  const [hexSide, setHexSide] = useState(initialDeckOptions.hexSide);
-  const [hexHeight, setHexHeight] = useState(initialDeckOptions.hexHeight);
+  const [hexSideText, setHexSideText] = useState(String(initialDeckOptions.hexSide));
+  const [hexHeightText, setHexHeightText] = useState(
+    String(initialDeckOptions.hexHeight),
+  );
   const [boundaries, setBoundaries] = useState({
     xMinus: initialDeckOptions.xMinus,
     xPlus: initialDeckOptions.xPlus,
@@ -126,23 +135,23 @@ function DonjonPageContent() {
     Boolean(queryDeckFilename.trim()),
   );
 
-  const deckOptions = useMemo<DonjonDeckOptions>(
+  const deckOptions = useMemo<Partial<DonjonDeckOptions>>(
     () => ({
-      mixtureCount,
+      mixtureCount: deckNumberParam(mixtureCountText),
       geometry,
       solver,
       spnOrder,
       snOrder,
-      hexSide,
-      hexHeight,
+      hexSide: deckNumberParam(hexSideText),
+      hexHeight: deckNumberParam(hexHeightText),
       ...boundaries,
     }),
     [
       boundaries,
       geometry,
-      hexHeight,
-      hexSide,
-      mixtureCount,
+      hexHeightText,
+      hexSideText,
+      mixtureCountText,
       snOrder,
       solver,
       spnOrder,
@@ -170,6 +179,13 @@ function DonjonPageContent() {
     deckFilename: solveDeckFilename,
     deckOptions,
   });
+  // "Copy page link" must yield a full URL, not a relative path;
+  // ``window`` is only readable after mount (this page is also
+  // server-rendered), so pick the origin up in an effect.
+  const [origin, setOrigin] = useState("");
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
   const checklist = useMemo(
     () => donjonDeckChecklist(asciiPath, format, deckOptions),
     [asciiPath, deckOptions, format],
@@ -235,7 +251,7 @@ function DonjonPageContent() {
     if (mixtureCountEdited) return;
     const nextMixtureCount = manifestState.data.donjon_defaults?.mixture_count;
     if (typeof nextMixtureCount !== "number") return;
-    setMixtureCount(nextMixtureCount);
+    setMixtureCountText(String(nextMixtureCount));
   }, [manifestState, mixtureCountEdited]);
 
   function applyManifestArtifact(artifact: DonjonBundleArtifact) {
@@ -315,7 +331,7 @@ function DonjonPageContent() {
             selectedAsciiPath={asciiPath}
           />
           <div className="mt-3 flex flex-wrap gap-2">
-            <CopyCliButton value={selfHref} label="Copy page link" />
+            <CopyCliButton value={`${origin}${selfHref}`} label="Copy page link" />
             <Link href="/convert" className="btn btn-secondary">
               Back to convert
             </Link>
@@ -370,9 +386,9 @@ function DonjonPageContent() {
             setSolveDeckFilename(donjonDeckFilename(asciiPath, format, "solve"));
             setDeckFilenameEdited(false);
           }}
-          mixtureCount={mixtureCount}
+          mixtureCount={mixtureCountText}
           onMixtureCountChange={(value) => {
-            setMixtureCount(value);
+            setMixtureCountText(value);
             setMixtureCountEdited(true);
           }}
           geometry={geometry}
@@ -386,10 +402,10 @@ function DonjonPageContent() {
           onSpnOrderChange={setSpnOrder}
           snOrder={snOrder}
           onSnOrderChange={setSnOrder}
-          hexSide={hexSide}
-          onHexSideChange={setHexSide}
-          hexHeight={hexHeight}
-          onHexHeightChange={setHexHeight}
+          hexSide={hexSideText}
+          onHexSideChange={setHexSideText}
+          hexHeight={hexHeightText}
+          onHexHeightChange={setHexHeightText}
           boundaries={boundaries}
           onBoundaryChange={(key, value) =>
             setBoundaries((current) => ({ ...current, [key]: value }))
@@ -461,7 +477,10 @@ function ManifestCasePanel({
 
   const artifact = state.artifact;
   const summaryArtifact = state.summaryArtifact;
-  const mismatch = donjonBundleAsciiMismatch(artifact, summaryArtifact);
+  // Compare the summary output against ALL bundled ASCII artifacts: a
+  // bundle can carry both a MULTICOMPO and a MACROLIB, and pointing at
+  // either one is not a mismatch.
+  const mismatch = donjonBundleAsciiMismatch(state.data.artifacts, summaryArtifact);
   const artifactCount = `${state.data.artifact_count} artifact${
     state.data.artifact_count === 1 ? "" : "s"
   }`;
@@ -495,15 +514,17 @@ function ManifestCasePanel({
             summary/artifact mismatch
           </div>
           <p className="mt-1 leading-5">
-            The bundle contains one DONJON ASCII artifact, but the conversion
-            summary points to a different output path. Use the bundled artifact
+            The conversion summary points to an output path that is not one of
+            the bundle&apos;s DONJON ASCII artifacts. Use a bundled artifact
             for a self-contained package, or choose the summary output if you
             are working in the original run directory.
           </p>
           <div className="mt-1 grid gap-1 font-mono text-[11px] text-amber-100/80">
-            <span className="truncate" title={mismatch.artifactPath}>
-              artifact: {mismatch.artifactPath}
-            </span>
+            {mismatch.artifactPaths.map((artifactPath) => (
+              <span key={artifactPath} className="truncate" title={artifactPath}>
+                artifact: {artifactPath}
+              </span>
+            ))}
             <span className="truncate" title={mismatch.summaryPath}>
               summary: {mismatch.summaryPath}
             </span>
@@ -741,8 +762,8 @@ function DeckBuilderPanel({
   solveDeckFilename: string;
   onSolveDeckFilenameChange: (value: string) => void;
   onResetSolveDeckFilename: () => void;
-  mixtureCount: number;
-  onMixtureCountChange: (value: number) => void;
+  mixtureCount: string;
+  onMixtureCountChange: (value: string) => void;
   geometry: DonjonDeckGeometry;
   onGeometryChange: (value: DonjonDeckGeometry) => void;
   solver: DonjonDeckSolver;
@@ -751,10 +772,10 @@ function DeckBuilderPanel({
   onSpnOrderChange: (value: number) => void;
   snOrder: number;
   onSnOrderChange: (value: number) => void;
-  hexSide: number;
-  onHexSideChange: (value: number) => void;
-  hexHeight: number;
-  onHexHeightChange: (value: number) => void;
+  hexSide: string;
+  onHexSideChange: (value: string) => void;
+  hexHeight: string;
+  onHexHeightChange: (value: string) => void;
   boundaries: Pick<
     DonjonDeckOptions,
     "xMinus" | "xPlus" | "yMinus" | "yPlus" | "zMinus" | "zPlus"
@@ -816,9 +837,8 @@ function DeckBuilderPanel({
             max={999}
             step={1}
             value={mixtureCount}
-            onChange={(event) =>
-              onMixtureCountChange(Number(event.target.value))
-            }
+            placeholder="1"
+            onChange={(event) => onMixtureCountChange(event.target.value)}
             className="mt-2 w-full rounded-md border border-[var(--edge)] bg-black/20 px-3 py-2 text-sm text-[var(--fg-0)]"
           />
         </label>
@@ -901,7 +921,8 @@ function DeckBuilderPanel({
               min={0.0001}
               step={0.0001}
               value={hexSide}
-              onChange={(event) => onHexSideChange(Number(event.target.value))}
+              placeholder="1.0"
+              onChange={(event) => onHexSideChange(event.target.value)}
               className="mt-2 w-full rounded-md border border-[var(--edge)] bg-black/20 px-3 py-2 text-sm text-[var(--fg-0)]"
             />
             <span className="mt-1 block text-[11px] text-[var(--fg-3)]">
@@ -917,7 +938,8 @@ function DeckBuilderPanel({
               min={0.0001}
               step={0.1}
               value={hexHeight}
-              onChange={(event) => onHexHeightChange(Number(event.target.value))}
+              placeholder="10.0"
+              onChange={(event) => onHexHeightChange(event.target.value)}
               className="mt-2 w-full rounded-md border border-[var(--edge)] bg-black/20 px-3 py-2 text-sm text-[var(--fg-0)]"
             />
             <span className="mt-1 block text-[11px] text-[var(--fg-3)]">
@@ -929,8 +951,8 @@ function DeckBuilderPanel({
 
       {geometry === "hex" ? (
         <p className="mt-3 text-[12px] leading-5 text-[var(--fg-2)]">
-          Hexagonal boundaries are fixed: Z- REFL Z+ REFL with HBC COMPLETE
-          VOID — the only outer boundary validated for full-hex SNT decks.
+          Hexagonal boundary conditions are fixed by the skeleton — see the
+          outer-boundary card in the handoff checklist below.
         </p>
       ) : (
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-6">

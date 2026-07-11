@@ -32,6 +32,18 @@ describe("convertSphHandoffStatus", () => {
     expect(status?.output).toContain("validated DONJON NSPH consume smoke uses L_MACROLIB");
   });
 
+  it("does not urge writing an NSPH handoff via MULTICOMPO", () => {
+    const status = convertSphHandoffStatus(
+      response({ format: "multicompo", dry_run: true, converted: false }),
+      input({ sph_calculations: 2 }),
+    );
+
+    expect(status?.nextAction).not.toContain("NSPH-bearing ASCII handoff");
+    expect(status?.nextAction).toContain("inert metadata");
+    expect(status?.nextAction).toContain("MACROLIB (DSPH: + MAC:)");
+    expect(status?.nextAction).toContain("apply-sph");
+  });
+
   it("stays hidden for direct handoffs without SPH", () => {
     expect(convertSphHandoffStatus(response(), input({ sph_calculations: 0 }))).toBeNull();
     expect(convertSphHandoffStatus(response(), null)).toBeNull();

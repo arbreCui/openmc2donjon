@@ -157,8 +157,10 @@ describe("convert next steps", () => {
       "inspect",
     ]);
     expect(steps[2].href).toBe(
-      "/pygan?tab=compare&input_h5=%2Fruns%2Fcase%2Fmgxs_library.h5&format=multicompo&summary_json=%2Fruns%2Fcase%2Fwriter_compare.json&keep_dir=%2Fruns%2Fcase%2Fwriter_compare",
+      "/pygan?input_h5=%2Fruns%2Fcase%2Fmgxs_library.h5&format=multicompo&summary_json=%2Fruns%2Fcase%2Fwriter_compare.json&keep_dir=%2Fruns%2Fcase%2Fwriter_compare",
     );
+    // /pygan never reads a "tab" query param; the link must not carry one.
+    expect(steps[2].href).not.toContain("tab=");
     expect(convertWriterCompareHref(converted)).toBe(steps[2].href);
     expect(
       convertWriterCompareHref(

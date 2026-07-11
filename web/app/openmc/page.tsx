@@ -116,6 +116,7 @@ function OpenmcPageContent() {
   const [hFactorText, setHFactorText] = useState("");
   const [state, setState] = useState<PlanState>({ kind: "idle" });
   const [backendMode, setBackendMode] = useState<BackendMode>("checking");
+  const [liveDemoAvailable, setLiveDemoAvailable] = useState(false);
   const [browserTarget, setBrowserTarget] = useState<BrowserTarget | null>(null);
   const planButtonRef = useRef<HTMLButtonElement | null>(null);
   const [settings, , , settingsHydrated] = useSettings();
@@ -147,18 +148,38 @@ function OpenmcPageContent() {
   const sphDemoPreset =
     backendMode === "mock"
       ? MOCK_OPENMC_SPH_DEMO
-      : backendMode === "live"
+      : backendMode === "live" && liveDemoAvailable
         ? LIVE_OPENMC_SPH_DEMO
         : null;
   const sphDemoMode =
-    backendMode === "mock" || backendMode === "live" ? backendMode : null;
+    sphDemoPreset == null ? null : backendMode === "mock" ? "mock" : "live";
 
   useEffect(() => {
     let cancelled = false;
     api
       .health()
       .then((health) => {
-        if (!cancelled) setBackendMode(health.mock_mode ? "mock" : "live");
+        if (cancelled) return;
+        setBackendMode(health.mock_mode ? "mock" : "live");
+        if (health.mock_mode) return;
+        // The live demo card prefills absolute paths from a specific
+        // production run; only offer it when those artifacts exist on the
+        // backend host.
+        Promise.all([
+          api.fileStatus(LIVE_OPENMC_SPH_DEMO.physicsSummary),
+          api.fileStatus(LIVE_OPENMC_SPH_DEMO.augmentedH5),
+        ])
+          .then((statuses) => {
+            if (cancelled) return;
+            setLiveDemoAvailable(
+              statuses.every(
+                (status) => status.exists && status.kind === "file",
+              ),
+            );
+          })
+          .catch(() => {
+            if (!cancelled) setLiveDemoAvailable(false);
+          });
       })
       .catch(() => {
         if (!cancelled) setBackendMode("unavailable");
@@ -167,6 +188,29 @@ function OpenmcPageContent() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    // Re-sync form state from query params on same-route navigations
+    // (e.g. the "Open SPH summary" entry-point link); useState initializers
+    // only run on mount. Only params present in the URL override state.
+    const workflowParam = searchParams.get("workflow");
+    if (workflowParam != null) setWorkflow(parseOpenmcWorkflow(workflowParam));
+    const equivalenceParam = searchParams.get("equivalence");
+    if (equivalenceParam != null) {
+      setEquivalence(parseOpenmcEquivalence(equivalenceParam));
+    }
+    const formatParam = searchParams.get("format");
+    if (formatParam != null) {
+      setFormat(parseConvertFormat(formatParam));
+    } else if (parseOpenmcEquivalence(equivalenceParam) === "sph") {
+      setFormat("macrolib");
+    }
+    const summaryParam = searchParams.get("summary");
+    if (summaryParam != null) setPhysicsSummaryPath(summaryParam);
+    if (searchParams.get("production") != null) {
+      setProduction(queryFlag(searchParams, "production", false));
+    }
+  }, [searchParams]);
 
   async function plan(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -329,13 +373,14 @@ function OpenmcPageContent() {
               path={physicsSummaryPath}
               onPathChange={setPhysicsSummaryPath}
               onBrowse={() => setBrowserTarget("summary")}
+              autoLoadPath={searchParams.get("summary")}
             />
             <details className="mb-5 mt-4 rounded-xl border border-[var(--edge)] bg-black/15 p-4">
               <summary className="cursor-pointer text-sm font-semibold tracking-tight text-[var(--fg-1)]">
                 Detailed OpenMC SPH command map
               </summary>
               <div className="mt-4">
-                <OpenmcSphWorkflowPanel activeCommandId="export-volume-flux" />
+                <OpenmcSphWorkflowPanel activeCommandId={null} />
               </div>
             </details>
           </>

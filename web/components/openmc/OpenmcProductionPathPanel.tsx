@@ -59,6 +59,7 @@ export default function OpenmcProductionPathPanel({
   const bundleHref =
     planned && plan ? openmcBundleBuilderHref(plan, format) : null;
   const object = format === "macrolib" ? "L_MACROLIB" : "L_MULTICOMPO";
+  const objectShort = format === "macrolib" ? "MACROLIB" : "MULTICOMPO";
   const isOpenmcSph = equivalence === "sph";
   const items = isOpenmcSph
     ? [
@@ -69,7 +70,9 @@ export default function OpenmcProductionPathPanel({
           title: "Run OpenMC CE/MG SPH",
           body:
             "Run OpenMC CE as the reference and OpenMC MG on the same geometry/output regions. Export CE/MG fluxes, build SPH(region, group), and inject NSPH into the MGXS handoff.",
-          status: statuses.plan,
+          // A successful plan only means the commands were planned; the
+          // physics run itself has not been executed.
+          status: statuses.plan === "passed" ? "planned" : statuses.plan,
           href: undefined,
           hrefLabel: undefined,
         },
@@ -88,9 +91,11 @@ export default function OpenmcProductionPathPanel({
           id: "convert",
           label: "03",
           eyebrow: "Converter",
-          title: "Convert to DONJON MACROLIB",
+          title: `Convert to DONJON ${objectShort}`,
           body:
-            `Use the corrected HDF5 as converter input and write ${object}. For this SPH route, MACROLIB is the DONJON consumption path because NSPH is carried as GROUP/*/NSPH.`,
+            format === "macrolib"
+              ? `Use the corrected HDF5 as converter input and write ${object}. For this SPH route, MACROLIB is the DONJON consumption path because NSPH is carried as GROUP/*/NSPH.`
+              : `Use the corrected HDF5 as converter input and write ${object}. Caveat: DONJON NCR: does not consume NSPH records from L_MULTICOMPO — use MACROLIB (GROUP/*/NSPH via DSPH: + MAC:) or pre-apply the factors with apply-sph so the correction reaches DONJON.`,
           status: statuses.review,
           href: convertHref ?? inspectHref ?? undefined,
           hrefLabel: convertHref ? "Open converter" : "Inspect HDF5",
@@ -144,7 +149,7 @@ export default function OpenmcProductionPathPanel({
           </div>
           <h2 className="mt-1 text-base font-semibold tracking-tight">
             {isOpenmcSph
-              ? "Three steps before the converter writes MACROLIB"
+              ? `Three steps before the converter writes ${objectShort}`
               : "Three steps before the converter writes DONJON ASCII"}
           </h2>
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">

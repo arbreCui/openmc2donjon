@@ -5,9 +5,13 @@ export interface OpenmcSphDemoPreset {
   label: string;
   description: string;
   runRoot: string;
-  mgStatepoint: string;
+  recipe: string;
+  ceStatepoint: string;
   sphSidecar: string;
-  sphTable: string;
+  // Raw MGXS export target (pre-SPH). The workflow planner derives the
+  // SPH-augmented handoff name by appending `_sph` to this stem, so this
+  // is named such that the injection yields exactly `augmentedH5`.
+  exportH5: string;
   augmentedH5: string;
   ascii: string;
   physicsSummary: string;
@@ -34,9 +38,10 @@ export const MOCK_OPENMC_SPH_DEMO: OpenmcSphDemoPreset = {
   description:
     "Prefill the OpenMC planner with bundled mock paths for the CE/MG SPH route.",
   runRoot: "/mock/home/openmc-runs/openmc-sph-minicase",
-  mgStatepoint: "/mock/home/openmc-runs/openmc-sph-minicase/mg_statepoint.h5",
+  recipe: "/mock/home/openmc-runs/openmc-sph-minicase/export_recipe.py",
+  ceStatepoint: "/mock/home/openmc-runs/openmc-sph-minicase/ce_statepoint.h5",
   sphSidecar: "/mock/home/openmc-runs/openmc-sph-minicase/openmc_sph_sidecar.h5",
-  sphTable: "/mock/home/openmc-runs/openmc-sph-minicase/openmc_sph.csv",
+  exportH5: "/mock/home/openmc-runs/openmc-sph-minicase/mgxs_with_openmc.h5",
   augmentedH5: "/mock/home/openmc-runs/openmc-sph-minicase/mgxs_with_openmc_sph.h5",
   ascii: "/mock/home/openmc-runs/openmc-sph-minicase/out.macrolib.txt",
   physicsSummary: "/mock/home/openmc-runs/openmc-sph-minicase/physics_summary.json",
@@ -48,11 +53,13 @@ export const LIVE_OPENMC_SPH_DEMO: OpenmcSphDemoPreset = {
   description:
     "Run the minimal CE/MG colorset where two output regions produce two SPH factors per energy group, then prefill production-quality corrected artifacts.",
   runRoot: "/private/tmp/openmc2donjon_two_region_production_20260709",
-  mgStatepoint:
-    "/private/tmp/openmc2donjon_two_region_production_20260709/mg_case_iter03/statepoint.80.h5",
+  recipe: "examples/openmc_ce_mg_33g_sph_minicase/export_recipe.py",
+  ceStatepoint:
+    "/private/tmp/openmc2donjon_two_region_production_20260709/ce_case/statepoint.80.h5",
   sphSidecar:
     "/private/tmp/openmc2donjon_two_region_production_20260709/handoff/openmc_sph_sidecar.h5",
-  sphTable: "/private/tmp/openmc2donjon_two_region_production_20260709/handoff/openmc_sph.csv",
+  exportH5:
+    "/private/tmp/openmc2donjon_two_region_production_20260709/handoff/mgxs_with_openmc.h5",
   augmentedH5:
     "/private/tmp/openmc2donjon_two_region_production_20260709/handoff/mgxs_with_openmc_sph.h5",
   ascii:
@@ -71,23 +78,13 @@ export function openmcSphPlannerPrefill(
     production: true,
     check: true,
     runDir: preset.runRoot,
-    keepHdf5Path: preset.augmentedH5,
+    keepHdf5Path: preset.exportH5,
     outputPath: preset.ascii,
     sphSource: preset.sphSidecar,
-    recipePath:
-      preset.id === "live-openmc-sph"
-        ? "examples/openmc_ce_mg_33g_sph_minicase/export_recipe.py"
-        : "",
-    statepointPath: preset.id === "mock-openmc-sph" ? preset.mgStatepoint : "",
-    loadStatepoint: false,
+    recipePath: preset.recipe,
+    statepointPath: preset.ceStatepoint,
+    loadStatepoint: true,
   };
-}
-
-export function openmcSphSidecarHref(preset: OpenmcSphDemoPreset): string {
-  const params = new URLSearchParams({
-    kind: "openmc-sph-sidecar",
-  });
-  return `/equivalence?${params.toString()}#${encodeURIComponent(preset.sphSidecar)}`;
 }
 
 export function openmcSphEvidenceHref(preset: OpenmcSphDemoPreset): string {

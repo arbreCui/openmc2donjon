@@ -15,12 +15,19 @@ import {
 import {
   BuilderField,
   BuilderValues,
+  builderCliIssues,
   builderValuesFromQuery,
   buildCommandCli,
   commandBuilderSpec,
   commandBuilderStage,
 } from "@/lib/commandBuilder";
+import {
+  builderCatalogFailureHint,
+  builderFallbackCopy,
+  commandContextRows,
+} from "@/lib/builderCopy";
 import { bundlePrefillStatus } from "@/lib/builderPrefill";
+import { containingDirectory, outputPathInDirectory } from "@/lib/outputBrowse";
 import { isOpenmcSphWorkflowCommand } from "@/lib/openmcSphWorkflow";
 import { useSettings } from "@/lib/settings";
 
@@ -94,14 +101,17 @@ function CommandBuilderPageContent() {
   );
 
   const cli = spec ? buildCommandCli(spec, values) : command?.cli ?? "";
+  const cliIssues = spec ? builderCliIssues(spec, values) : [];
   const stage = spec ? commandBuilderStage(spec.id) : null;
+  // Saved-prefix shortcuts target input files only: directory and
+  // output-path fields are not inspect-path material.
   const canUseSavedPrefix =
     settingsHydrated &&
     savedPrefix !== "" &&
     spec?.fields.some(
       (field) =>
         field.kind === "path" &&
-        field.browse !== "directory" &&
+        field.browse === "file" &&
         !String(values[field.name] ?? "").startsWith(savedPrefix),
     );
 
@@ -114,7 +124,7 @@ function CommandBuilderPageContent() {
     const firstPath = spec.fields.find(
       (field) =>
         field.kind === "path" &&
-        field.browse !== "directory" &&
+        field.browse === "file" &&
         !String(values[field.name] ?? "").startsWith(savedPrefix),
     );
     if (!firstPath) return;
@@ -122,7 +132,20 @@ function CommandBuilderPageContent() {
   }
 
   function applyBrowserPick(path: string) {
-    if (browserField) patch(browserField.name, path);
+    if (browserField) {
+      // Output fields browse for a *directory* (the file does not exist
+      // yet); the picked directory keeps the current filename, falling
+      // back to the field's default filename.
+      const value =
+        browserField.browse === "output"
+          ? outputPathInDirectory(
+              path,
+              String(values[browserField.name] ?? ""),
+              browserField.placeholder ?? "",
+            )
+          : path;
+      patch(browserField.name, value);
+    }
     setBrowserField(null);
   }
 
@@ -137,15 +160,14 @@ function CommandBuilderPageContent() {
             <span className="grad-text">{spec?.title ?? commandId}</span>
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
-            {spec?.summary ??
-              "This command does not have a structured web builder yet. Use the catalog CLI below as the source of truth."}
+            {spec?.summary ?? "This command does not have a structured web builder yet."}
           </p>
         </header>
 
         {catalogState.kind === "error" ? (
           <section className="mb-5 rounded-lg border border-amber-300/20 bg-amber-300/[0.06] p-4 text-sm text-amber-100">
-            Command catalog failed: {catalogState.message}. The local builder can still
-            assemble its CLI preview.
+            Command catalog failed: {catalogState.message}.{" "}
+            {builderCatalogFailureHint(spec != null)}
           </section>
         ) : null}
 
@@ -175,7 +197,7 @@ function CommandBuilderPageContent() {
             </div>
 
             {stage ? <WorkflowHint stage={stage} /> : null}
-            {stage ? <CommandContextPanel command={command} stage={stage} /> : null}
+            <CommandContextPanel command={command} />
             {isOpenmcSphWorkflowCommand(spec.id) ? (
               <OpenmcSphWorkflowPanel activeCommandId={spec.id} />
             ) : null}
@@ -224,22 +246,39 @@ function CommandBuilderPageContent() {
                 <pre className="mt-3 overflow-x-auto rounded-md border border-[var(--edge)] bg-black/25 px-3 py-2 text-[12px] text-[var(--fg-1)]">
                   {cli}
                 </pre>
+                {cliIssues.length > 0 ? (
+                  <div className="mt-3 rounded-md border border-rose-400/25 bg-rose-400/[0.07] px-3 py-2 text-[12px] leading-relaxed text-rose-100">
+                    {cliIssues.map((issue) => (
+                      <div key={issue}>{issue}</div>
+                    ))}
+                  </div>
+                ) : null}
                 <CommandGuidance notes={spec.notes} />
               </aside>
             </div>
           </section>
         ) : (
-          <FallbackCommand command={command} commandId={commandId} />
+          <FallbackCommand
+            catalog={catalogState.kind}
+            command={command}
+            commandId={commandId}
+          />
         )}
 
         <FileBrowserModal
           open={browserField != null}
           initialPath={browserInitialPath(browserField, values, savedPrefix)}
-          extensions={browserField?.extensions ?? []}
-          fileTypeLabel={browserField?.browse === "directory" ? "directory" : "input file"}
-          chipLabel={browserField?.browse === "directory" ? "DIR" : "FILE"}
+          extensions={browserField?.browse === "file" ? browserField.extensions ?? [] : []}
+          fileTypeLabel={
+            browserField?.browse === "directory"
+              ? "directory"
+              : browserField?.browse === "output"
+                ? "output directory"
+                : "input file"
+          }
+          chipLabel={browserField?.browse === "file" ? "FILE" : "DIR"}
           recentScope={`builder-${spec?.id ?? "unknown"}-${browserField?.name ?? "path"}`}
-          selectMode={browserField?.browse === "directory" ? "directory" : "file"}
+          selectMode={browserField?.browse === "file" ? "file" : "directory"}
           onClose={() => setBrowserField(null)}
           onSelect={applyBrowserPick}
         />
@@ -276,22 +315,10 @@ function WorkflowHint({
 
 function CommandContextPanel({
   command,
-  stage,
 }: {
   command: CommandCatalogEntry | null;
-  stage: ReturnType<typeof commandBuilderStage>;
 }) {
-  const rows = command
-    ? [
-        ["Use when", command.use_when],
-        ["Produces", command.produces],
-        ["After this", command.next_step],
-      ]
-    : [
-        ["Use when", stage.summary],
-        ["Produces", "A copyable CLI command assembled from the form values."],
-        ["After this", "Run the command locally and keep any generated summaries with the handoff."],
-      ];
+  const rows = commandContextRows(command);
   return (
     <section className="mt-4 rounded-lg border border-[var(--edge)] bg-white/[0.02] p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -494,7 +521,7 @@ function BuilderFieldControl({
         )}
         {onBrowse ? (
           <button type="button" onClick={onBrowse} className="btn btn-secondary shrink-0">
-            Browse
+            {field.browse === "file" ? "Browse" : "Browse dir"}
           </button>
         ) : null}
       </span>
@@ -519,23 +546,31 @@ function CommandGuidance({
 }
 
 function FallbackCommand({
+  catalog,
   command,
   commandId,
 }: {
+  catalog: CatalogState["kind"];
   command: CommandCatalogEntry | null;
   commandId: string;
 }) {
-  const cli = command?.cli ?? `openmc2donjon ${commandId}`;
+  const copy = builderFallbackCopy(catalog, command, commandId);
   return (
     <section className="glass rounded-xl p-5">
       <h2 className="text-lg font-semibold tracking-tight">CLI fallback</h2>
-      <p className="mt-2 text-sm text-[var(--fg-2)]">
-        This command is visible in the catalog, but no structured builder exists yet.
-      </p>
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--edge)] bg-black/15 p-4">
-        <pre className="overflow-x-auto text-[12px] text-[var(--fg-1)]">{cli}</pre>
-        <CopyCliButton value={cli} compact />
-      </div>
+      <p className="mt-2 text-sm text-[var(--fg-2)]">{copy.message}</p>
+      {copy.cli != null ? (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--edge)] bg-black/15 p-4">
+          <pre className="overflow-x-auto text-[12px] text-[var(--fg-1)]">{copy.cli}</pre>
+          <CopyCliButton value={copy.cli} compact />
+        </div>
+      ) : (
+        <div className="mt-4">
+          <Link href="/commands" className="btn btn-secondary">
+            All commands
+          </Link>
+        </div>
+      )}
     </section>
   );
 }
@@ -547,6 +582,8 @@ function browserInitialPath(
 ): string {
   if (!field) return savedPrefix || "~";
   const value = String(values[field.name] ?? "").trim();
-  if (value !== "") return value;
-  return savedPrefix || "~";
+  if (value === "") return savedPrefix || "~";
+  // Output values are file paths but the picker lists directories, so
+  // start in the directory containing the current value.
+  return field.browse === "output" ? containingDirectory(value) : value;
 }

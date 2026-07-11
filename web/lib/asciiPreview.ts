@@ -50,13 +50,17 @@ const MACROLIB_SIGNATURE = "L_MACROLIB";
 const MAX_BLOCK_TREE_ITEMS = 18;
 const BLOCK_HEADER_RE = /^\s*->\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+<-/;
 
-export function analyzeDonjonAsciiPreview(text: string): AsciiPreviewAnalysis {
+export function analyzeDonjonAsciiPreview(
+  text: string,
+  options?: { truncated?: boolean },
+): AsciiPreviewAnalysis {
+  const truncated = options?.truncated ?? true;
   const lineSet = normalizedLineSet(text);
   const signature = signatureFromText(text);
   const format = formatFromSignature(signature);
   const allBlocks = parseLcmBlocks(text);
   const blockTree = allBlocks.slice(0, MAX_BLOCK_TREE_ITEMS);
-  const keyBlocks = keyBlockSummary({ lineSet, signature, format });
+  const keyBlocks = keyBlockSummary({ lineSet, signature, format, truncated });
   const blockHits = [
     blockHit("signature", "SIGNATURE", lineSet.has("SIGNATURE")),
     blockHit("state", "STATE-VECTOR", lineSet.has("STATE-VECTOR")),
@@ -85,7 +89,7 @@ export function analyzeDonjonAsciiPreview(text: string): AsciiPreviewAnalysis {
     blockHits,
     blockTree,
     blockTreeTruncated: allBlocks.length > blockTree.length,
-    notes: analysisNotes({ signature, likelyDonjonAscii, blockHits }),
+    notes: analysisNotes({ signature, likelyDonjonAscii, blockHits, truncated }),
   };
 }
 
@@ -93,10 +97,12 @@ function keyBlockSummary({
   lineSet,
   signature,
   format,
+  truncated,
 }: {
   lineSet: ReadonlySet<string>;
   signature: string | null;
   format: DonjonAsciiFormat;
+  truncated: boolean;
 }): KeyBlockSummary[] {
   const scatBlocks = matchingLines(lineSet, /^SCAT\d+$/);
   const njjsBlocks = matchingLines(lineSet, /^NJJS\d+$/);
@@ -135,7 +141,9 @@ function keyBlockSummary({
       status: lineSet.has("ENERGY") ? "present" : "missing",
       detail: lineSet.has("ENERGY")
         ? "ENERGY boundaries are visible for group interpretation."
-        : "ENERGY was not visible in this preview slice.",
+        : truncated
+          ? "ENERGY was not visible in this preview slice."
+          : "ENERGY is absent from this file.",
     },
     {
       id: "total-xs",
@@ -288,10 +296,12 @@ function analysisNotes({
   signature,
   likelyDonjonAscii,
   blockHits,
+  truncated,
 }: {
   signature: string | null;
   likelyDonjonAscii: boolean;
   blockHits: BlockHit[];
+  truncated: boolean;
 }): string[] {
   const notes: string[] = [];
   if (!signature) {
@@ -300,7 +310,11 @@ function analysisNotes({
     notes.push(`Found ${signature}, but not a top-level MULTICOMPO/MACROLIB signature.`);
   }
   if (!blockHits.find((hit) => hit.id === "energy")?.present) {
-    notes.push("ENERGY block was not visible in this bounded preview slice.");
+    notes.push(
+      truncated
+        ? "ENERGY block was not visible in this bounded preview slice."
+        : "ENERGY block is absent from this file.",
+    );
   }
   if (!blockHits.find((hit) => hit.id === "scatter")?.present) {
     notes.push("Complete NJJS00/IJJS00/SCAT00 sparse-scatter triplet not visible.");

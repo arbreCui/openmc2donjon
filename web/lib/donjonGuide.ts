@@ -75,7 +75,7 @@ export interface DonjonBundleDefaultsLike {
 }
 
 export interface DonjonAsciiMismatch {
-  artifactPath: string;
+  artifactPaths: string[];
   summaryPath: string;
 }
 
@@ -191,20 +191,22 @@ export function donjonDeckChecklist(
       title: `Confirm boundaries and ${solver} settings`,
       body:
         deck.geometry === "hex"
-          ? `Hex boundaries are fixed: Z- REFL Z+ REFL with HBC COMPLETE VOID. Keep the ${solver} options aligned with the OpenMC reference problem.`
+          ? `Hex boundaries are fixed — see the outer-boundary card below. Keep the ${solver} options aligned with the OpenMC reference problem.`
           : deck.geometry === "car3d"
             ? `Current boundaries are X- ${deck.xMinus}, X+ ${deck.xPlus}, Y- ${deck.yMinus}, Y+ ${deck.yPlus}, Z- ${deck.zMinus}, Z+ ${deck.zPlus}. Keep them aligned with the OpenMC reference problem.`
             : `Current boundaries are X- ${deck.xMinus}, X+ ${deck.xPlus}, Y- ${deck.yMinus}, Y+ ${deck.yPlus}. Keep them aligned with the OpenMC reference problem.`,
       tone: "review",
     },
+    {
+      // The 72-character SEQ_ASCII FILE limit applies to every
+      // generated deck, not just hex ones.
+      id: "ascii-72",
+      title: "Keep the ASCII path under 72 characters",
+      body: "DONJON truncates SEQ_ASCII ... FILE paths at 72 characters. Stage the ASCII handoff on a short absolute path before running the deck.",
+      tone: "review",
+    },
     ...(deck.geometry === "hex"
       ? ([
-          {
-            id: "hex-ascii-72",
-            title: "Keep the ASCII path under 72 characters",
-            body: "DONJON truncates SEQ_ASCII ... FILE paths at 72 characters. Stage the ASCII handoff on a short absolute path before running the deck.",
-            tone: "review",
-          },
           {
             id: "hex-boundary-void",
             title: "Only VOID is validated on the hex outer boundary",
@@ -230,13 +232,13 @@ export function donjonDeckOptionsFromSearchParams(
   params: DonjonDeckSearchParams,
 ): DonjonDeckOptions {
   return normalizeDonjonDeckOptions({
-    mixtureCount: numericParam(params.get("nmix")),
+    mixtureCount: deckNumberParam(params.get("nmix")),
     geometry: deckGeometryParam(params.get("geometry")),
     solver: deckSolverParam(params.get("solver")),
-    spnOrder: numericParam(params.get("spn")),
-    snOrder: numericParam(params.get("sn")),
-    hexSide: numericParam(params.get("side")),
-    hexHeight: numericParam(params.get("height")),
+    spnOrder: deckNumberParam(params.get("spn")),
+    snOrder: deckNumberParam(params.get("sn")),
+    hexSide: deckNumberParam(params.get("side")),
+    hexHeight: deckNumberParam(params.get("height")),
     xMinus: deckBoundaryParam(params.get("xm")),
     xPlus: deckBoundaryParam(params.get("xp")),
     yMinus: deckBoundaryParam(params.get("ym")),
@@ -545,7 +547,13 @@ function appendDonjonDeckParams(
   if (deck.zPlus !== defaults.zPlus) params.set("zp", deck.zPlus);
 }
 
-function numericParam(value: string | null): number | undefined {
+/**
+ * Parse a raw numeric field (URL parameter or form input text) into a
+ * number, or ``undefined`` when empty/unparsable so
+ * ``normalizeDonjonDeckOptions`` falls back to the default instead of
+ * silently coercing "" to 0.
+ */
+export function deckNumberParam(value: string | null): number | undefined {
   if (value === null || value.trim() === "") return undefined;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
@@ -675,13 +683,20 @@ export function donjonDefaultsArtifact(
 }
 
 export function donjonBundleAsciiMismatch(
-  artifact: DonjonBundleArtifact | null,
+  artifacts: readonly DonjonBundleArtifactLike[],
   summaryArtifact: DonjonBundleArtifact | null,
 ): DonjonAsciiMismatch | null {
-  if (!artifact || !summaryArtifact) return null;
-  if (artifact.asciiPath === summaryArtifact.asciiPath) return null;
+  if (!summaryArtifact) return null;
+  // A bundle can carry more than one DONJON ASCII artifact at once
+  // (e.g. both a MULTICOMPO and a MACROLIB), so the summary output only
+  // mismatches when it is not any of them.
+  const asciiPaths = artifacts
+    .filter((artifact) => classifyDonjonArtifact(artifact) !== null)
+    .map((artifact) => artifact.path);
+  if (asciiPaths.length === 0) return null;
+  if (asciiPaths.includes(summaryArtifact.asciiPath)) return null;
   return {
-    artifactPath: artifact.asciiPath,
+    artifactPaths: asciiPaths,
     summaryPath: summaryArtifact.asciiPath,
   };
 }

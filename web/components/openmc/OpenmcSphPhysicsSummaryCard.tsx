@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ApiError, OpenmcSphPhysicsSummary, api } from "@/lib/api";
 import {
@@ -24,12 +24,34 @@ export default function OpenmcSphPhysicsSummaryCard({
   path,
   onPathChange,
   onBrowse,
+  autoLoadPath = null,
 }: {
   path: string;
   onPathChange: (path: string) => void;
   onBrowse: () => void;
+  autoLoadPath?: string | null;
 }) {
   const [state, setState] = useState<SummaryState>({ kind: "idle" });
+
+  useEffect(() => {
+    // Deep links (?summary=...) promise the loaded evidence, so load it
+    // without requiring a manual click on "Load summary".
+    const trimmed = (autoLoadPath ?? "").trim();
+    if (!trimmed) return;
+    let cancelled = false;
+    setState({ kind: "loading" });
+    api
+      .openmcSphSummary(trimmed)
+      .then((data) => {
+        if (!cancelled) setState({ kind: "ok", data });
+      })
+      .catch((err) => {
+        if (!cancelled) setState(toErrorState(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [autoLoadPath]);
 
   async function load() {
     const trimmed = path.trim();
@@ -75,6 +97,7 @@ export default function OpenmcSphPhysicsSummaryCard({
         <input
           value={path}
           onChange={(event) => onPathChange(event.target.value)}
+          aria-label="Physics summary JSON path"
           className="w-full min-w-0 rounded-md border border-[var(--edge)] bg-black/20 px-3 py-2 font-mono text-[12px] text-[var(--fg-0)]"
           placeholder="/path/to/handoff/physics_summary.json"
         />
@@ -321,7 +344,10 @@ function SummaryBody({ state }: { state: SummaryState }) {
       <div className="rounded-md border border-[var(--edge)] bg-black/15 p-3 text-[12px] text-[var(--fg-2)]">
         SPH is carried as DONJON `NSPH` equivalence factors. The report says
         `applied_to_xs = {String(summary.sph.applied_to_xs)}`, so the macro
-        cross sections were not silently multiplied in the HDF5.
+        cross sections{" "}
+        {summary.sph.applied_to_xs
+          ? "in this HDF5 were already divided by the SPH factors (apply-sph route)."
+          : "were not silently multiplied in the HDF5."}
       </div>
     </div>
   );

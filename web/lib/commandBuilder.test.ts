@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  builderCliIssues,
   builderValuesFromQuery,
   buildCommandCli,
   commandBuilderStage,
@@ -148,5 +149,62 @@ describe("commandBuilder", () => {
     expect(stage.label).toBe("OpenMC-side SPH");
     expect(stage.summary).toContain("CE reference");
     expect(stage.reference).toContain("OpenMC MG");
+  });
+
+  it("emits the equals form for values that begin with a dash", () => {
+    // Regression: `--mu-edges -1,-0.5,0.5,1` is rejected by argparse
+    // (the leading dash classifies the value as an option string), and
+    // physically valid mu bin edges always start at -1.
+    const spec = commandBuilderSpec("export-surface-flux");
+    expect(spec).not.toBeNull();
+    const values = defaultBuilderValues(spec!);
+    values.statepoint = "/runs/case/statepoint.h5";
+
+    const cli = buildCommandCli(spec!, values);
+
+    expect(cli).toContain("--mu-edges=-1,-0.5,0.5,1");
+    expect(cli).not.toContain("--mu-edges -1");
+
+    values.mu_edges = "-1,0,1";
+    expect(buildCommandCli(spec!, values)).toContain("--mu-edges=-1,0,1");
+  });
+
+  it("flags argparse dependencies the doctor CLI enforces", () => {
+    // Regression: the doctor form marked Statepoint freestanding-
+    // optional, but the CLI rejects --statepoint without --recipe.
+    const spec = commandBuilderSpec("doctor");
+    expect(spec).not.toBeNull();
+
+    const values = defaultBuilderValues(spec!);
+    expect(builderCliIssues(spec!, values)).toEqual([]);
+
+    values.statepoint = "/runs/case/statepoint.h5";
+    expect(builderCliIssues(spec!, values)).toEqual([
+      "Statepoint requires Recipe: the CLI rejects --statepoint without --recipe.",
+    ]);
+
+    values.recipe = "/runs/case/recipe.py";
+    expect(builderCliIssues(spec!, values)).toEqual([]);
+
+    const toggled = defaultBuilderValues(spec!);
+    toggled.load_statepoint = true;
+    expect(builderCliIssues(spec!, toggled)).toEqual([
+      "Load statepoint requires Recipe: the CLI rejects --load-statepoint without --recipe.",
+      "Load statepoint requires Statepoint: the CLI rejects --load-statepoint without --statepoint.",
+    ]);
+  });
+
+  it("marks write-target paths as output-browse fields", () => {
+    // The builder page keys its directory-select picker ("Browse for
+    // output directory") off browse === "output"; input paths stay in
+    // file-select mode.
+    const spec = commandBuilderSpec("export-surface-flux");
+    expect(spec).not.toBeNull();
+    const field = (name: string) => spec!.fields.find((f) => f.name === name);
+
+    expect(field("output")?.browse).toBe("output");
+    expect(field("summary_json")?.browse).toBe("output");
+    expect(field("statepoint")?.browse).toBe("file");
+    expect(field("mgxs")?.browse).toBe("file");
   });
 });

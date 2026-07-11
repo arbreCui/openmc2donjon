@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { convertActionGuideSteps } from "./convertActionGuide";
 import {
   C5G7_PRODUCTION_DEMO,
   convertDemoBundleHref,
@@ -33,46 +32,6 @@ describe("mock converter user flow", () => {
       check: true,
       production: true,
     });
-
-    expect(
-      convertActionGuideSteps({
-        inputPath: C5G7_PRODUCTION_DEMO.inputPath,
-        outputPath: C5G7_PRODUCTION_DEMO.outputPath,
-        format: C5G7_PRODUCTION_DEMO.format,
-        run: {
-          kind: "ok",
-          ok: true,
-          dryRun: true,
-          converted: false,
-          outputExists: false,
-          preflightOk: true,
-        },
-      }).map((step) => [step.id, step.status]),
-    ).toEqual([
-      ["dry-run", "done"],
-      ["convert", "ready"],
-      ["review", "waiting"],
-    ]);
-
-    expect(
-      convertActionGuideSteps({
-        inputPath: C5G7_PRODUCTION_DEMO.inputPath,
-        outputPath: C5G7_PRODUCTION_DEMO.outputPath,
-        format: C5G7_PRODUCTION_DEMO.format,
-        run: {
-          kind: "ok",
-          ok: true,
-          dryRun: false,
-          converted: true,
-          outputExists: true,
-          preflightOk: true,
-        },
-      }).map((step) => [step.id, step.status]),
-    ).toEqual([
-      ["dry-run", "done"],
-      ["convert", "done"],
-      ["review", "ready"],
-    ]);
 
     expect(convertDemoInspectHref(C5G7_PRODUCTION_DEMO)).toContain("/inspect?");
     expect(convertDemoPreviewHref(C5G7_PRODUCTION_DEMO)).toBe(

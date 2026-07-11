@@ -33,7 +33,9 @@ export function convertSphHandoffStatus(
     nextAction: converted
       ? "Preview the ASCII, then use the DONJON guide or bundle the handoff."
       : data.dry_run && data.ok
-        ? "Run Convert to write the NSPH-bearing ASCII handoff."
+        ? macrolib
+          ? "Run Convert to write the NSPH-bearing ASCII handoff."
+          : "Run Convert only if you want the MULTICOMPO archive: its NSPH records ride along as inert metadata that DONJON NCR: does not consume. For DONJON consumption, switch to MACROLIB (DSPH: + MAC:) or pre-apply SPH with apply-sph."
         : "Run a production dry-run before writing the final handoff.",
   };
 }

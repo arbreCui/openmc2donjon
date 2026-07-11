@@ -21,5 +21,6 @@ describe("home demo shortcuts", () => {
     expect(sph.href).toContain("equivalence=sph");
     expect(sph.href).toContain("format=macrolib");
     expect(sph.href).toContain("summary=%2Fmock%2Fhome%2Fopenmc-runs%2Fopenmc-sph-minicase%2Fphysics_summary.json");
+    expect(sph.href).toContain("#openmc-sph-summary");
   });
 });
