@@ -283,7 +283,7 @@ export function convertDemoWalkthrough(
       id: "inspect",
       label: "01",
       title: "Inspect input",
-      body: "Confirm mixture roster, group structure, ADF/SPH coverage, and std_dev visibility.",
+      body: "Confirm mixture roster, group structure, SPH/ADF coverage, and std_dev visibility.",
       href: convertDemoInspectHref(preset),
     },
     {

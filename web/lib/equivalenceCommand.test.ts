@@ -16,7 +16,7 @@ describe("equivalence command builder", () => {
     expect(parseEquivalenceKind("openmc-sph-sidecar")).toBe("openmc-sph-sidecar");
     expect(parseEquivalenceKind("sph-sidecar")).toBe("sph-sidecar");
     expect(parseEquivalenceKind("augment-sph")).toBe("augment-sph");
-    expect(parseEquivalenceKind("bad")).toBe("adf-sidecar");
+    expect(parseEquivalenceKind("bad")).toBe("openmc-sph-sidecar");
   });
 
   it("builds a flux-ratio ADF sidecar command", () => {

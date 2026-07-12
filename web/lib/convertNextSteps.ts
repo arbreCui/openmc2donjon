@@ -148,7 +148,7 @@ export function convertNextSteps(
         id: "inspect",
         label: "Inspect",
         title: "Open the MGXS HDF5",
-        body: "Use the inspector to look at mixture layout, mesh identity, ADF/SPH coverage, and std_dev visibility.",
+        body: "Use the inspector to look at mixture layout, mesh identity, SPH/ADF coverage, and std_dev visibility.",
         href: inspectHref,
         status: "reference",
       },

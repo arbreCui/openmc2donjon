@@ -96,7 +96,7 @@ export function commandWorkflowMapping(
       surface: "Equivalence page",
       title: "Sidecar command builder",
       summary:
-        "Opens a non-mutating web form that builds the matching ADF/SPH sidecar or augmentation CLI command.",
+        "Opens a non-mutating web form that builds the matching SPH/ADF sidecar or augmentation CLI command.",
       presets: [`Builder: ${equivalenceBuilderLabel(kind)}`],
       requiredInputs: equivalenceRequiredInputs(kind),
     };

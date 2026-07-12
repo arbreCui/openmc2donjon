@@ -31,7 +31,7 @@ export const TASK_ENTRYPOINTS: readonly TaskEntrypoint[] = [
     eyebrow: "Need to understand a file",
     title: "Inspect HDF5 or output",
     body:
-      "Look at mixtures, energy groups, ADF/SPH metadata, spectra, and generated ASCII previews.",
+      "Look at mixtures, energy groups, SPH/ADF metadata, spectra, and generated ASCII previews.",
     href: "/inspect",
     cta: "Open inspector",
   },

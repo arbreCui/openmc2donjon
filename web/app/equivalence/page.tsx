@@ -129,13 +129,14 @@ function EquivalencePageContent() {
       <div className="mx-auto max-w-5xl">
         <header className="mb-8">
           <h1 className="text-3xl font-bold tracking-tight">
-            <span className="grad-text">ADF/SPH equivalence sidecars</span>
+            <span className="grad-text">Equivalence sidecars</span>
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
-            Build trustworthy CLI commands for one-shot ADF/DF or SPH sidecar
-            workflows — a sidecar is a small companion HDF5 carrying ADF/DF or SPH
-            factors. This web page does not mutate files; run the copied command in
-            a terminal.
+            Build trustworthy CLI commands for one-shot sidecar workflows — a
+            sidecar is a small companion HDF5 carrying SPH or ADF/DF factors.
+            The product&apos;s equivalence route is OpenMC CE/MG SPH; ADF/DF
+            sidecars ride along as converter data. This web page does not mutate
+            files; run the copied command in a terminal.
           </p>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
             Augment attaches factors as records — cross sections unchanged;
@@ -258,7 +259,7 @@ function EquivalencePageContent() {
                 {cli}
               </pre>
               <div className="mt-3 rounded-md border border-amber-300/20 bg-amber-300/[0.06] px-3 py-2 text-[12px] leading-relaxed text-amber-100">
-                ADF/SPH factors are physics inputs. This builder helps avoid flag mistakes;
+                SPH/ADF factors are physics inputs. This builder helps avoid flag mistakes;
                 it does not judge whether the sidecar values are physically appropriate.
               </div>
             </aside>

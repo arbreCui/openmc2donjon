@@ -53,24 +53,6 @@ export interface EquivalenceKindInfo {
 
 export const EQUIVALENCE_KINDS: readonly EquivalenceKindInfo[] = [
   {
-    kind: "adf-sidecar",
-    commandId: "make-adf-sidecar",
-    label: "ADF sidecar",
-    title: "Build ADF/DF sidecar",
-    summary:
-      "Generate an ADF/DF HDF5 sidecar from an MGXS handoff. Unity mode is for plumbing; flux-ratio mode needs heterogeneous and homogeneous face flux.",
-    outputPlaceholder: "adf_sidecar.h5",
-  },
-  {
-    kind: "augment-adf",
-    commandId: "augment-adf",
-    label: "Augment ADF",
-    title: "Augment MGXS with ADF/DF",
-    summary:
-      "Attach computed discontinuity factors to the MGXS HDF5 before conversion. The converter then carries the ADF blocks into DONJON ASCII.",
-    outputPlaceholder: "mgxs_with_adf.h5",
-  },
-  {
     kind: "openmc-sph-sidecar",
     commandId: "make-openmc-sph-sidecar",
     label: "OpenMC SPH",
@@ -97,6 +79,24 @@ export const EQUIVALENCE_KINDS: readonly EquivalenceKindInfo[] = [
       "Attach SPH factors to the MGXS HDF5 before conversion. This records NSPH equivalence data that the converter carries into the DONJON ASCII.",
     outputPlaceholder: "mgxs_with_sph.h5",
   },
+  {
+    kind: "adf-sidecar",
+    commandId: "make-adf-sidecar",
+    label: "ADF sidecar",
+    title: "Build ADF/DF sidecar",
+    summary:
+      "Generate an ADF/DF HDF5 sidecar from an MGXS handoff. Unity mode is for plumbing; flux-ratio mode needs heterogeneous and homogeneous face flux.",
+    outputPlaceholder: "adf_sidecar.h5",
+  },
+  {
+    kind: "augment-adf",
+    commandId: "augment-adf",
+    label: "Augment ADF",
+    title: "Augment MGXS with ADF/DF",
+    summary:
+      "Attach computed discontinuity factors to the MGXS HDF5 before conversion. The converter then carries the ADF blocks into DONJON ASCII.",
+    outputPlaceholder: "mgxs_with_adf.h5",
+  },
 ] as const;
 
 export function parseEquivalenceKind(value: string | null): EquivalenceKind {
@@ -109,7 +109,7 @@ export function parseEquivalenceKind(value: string | null): EquivalenceKind {
   ) {
     return value;
   }
-  return "adf-sidecar";
+  return "openmc-sph-sidecar";
 }
 
 export function equivalenceKindInfo(kind: EquivalenceKind): EquivalenceKindInfo {

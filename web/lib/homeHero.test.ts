@@ -16,7 +16,7 @@ describe("home hero", () => {
       "L_MULTICOMPO or L_MACROLIB library DONJON consumes",
     );
     expect(HOME_HERO.paragraph).toContain(
-      "SPH/ADF equivalence prepared upstream",
+      "SPH equivalence prepared upstream from paired OpenMC fine/coarse models",
     );
     expect(HOME_HERO.paragraph).toContain(
       "serializes homogenized data and equivalence factors; it does not solve reactor physics.",

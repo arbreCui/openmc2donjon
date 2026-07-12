@@ -72,7 +72,7 @@ export const COMMAND_GOALS: readonly CommandGoalDefinition[] = [
     eyebrow: "I need ADF / DF / SPH factors",
     title: "Build or augment sidecar factors",
     body:
-      "Prepare face-flux or low-order inputs, build ADF/SPH sidecars, augment the HDF5 with them, then return to the converter.",
+      "Prepare face-flux or low-order inputs, build SPH/ADF sidecars, augment the HDF5 with them, then return to the converter.",
     href: "/equivalence?kind=adf-sidecar",
     cta: "Open equivalence builders",
     actionHint:

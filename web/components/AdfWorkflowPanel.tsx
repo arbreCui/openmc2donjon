@@ -13,14 +13,15 @@ export default function AdfWorkflowPanel({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-[10px] uppercase tracking-[0.14em] text-emerald-300">
-            ADF/DF sidecar route
+            ADF/DF carriage
           </div>
           <h3 className="mt-1 text-sm font-semibold tracking-tight">
             Face-flux evidence becomes explicit ADF/DF factors
           </h3>
           <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--fg-2)]">
             Build the sidecar from face-flux evidence, augment the MGXS HDF5 with
-            the factors, then use the normal converter.
+            the factors, then use the normal converter. The converter carries
+            ADF/DF as data; the product&apos;s equivalence route is OpenMC CE/MG SPH.
           </p>
         </div>
         <Link href="/commands/export-surface-flux" className="btn btn-secondary">

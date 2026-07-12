@@ -17,7 +17,7 @@ describe("navigation", () => {
     expect(SECONDARY_NAV_ITEMS.map((item) => item.label)).toEqual([
       "Commands",
       "Command builder",
-      "ADF/SPH sidecars",
+      "SPH/ADF sidecars",
       "PyGan validation",
       "Settings",
     ]);

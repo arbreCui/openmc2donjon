@@ -43,9 +43,9 @@ export const SECONDARY_NAV_ITEMS: readonly NavItem[] = [
     match: ["/builder"],
   },
   {
-    href: "/equivalence?kind=adf-sidecar",
-    label: "ADF/SPH sidecars",
-    description: "Build sidecar commands after the main route is chosen.",
+    href: "/equivalence",
+    label: "SPH/ADF sidecars",
+    description: "Build SPH sidecar commands; ADF/DF rides along as converter data.",
     match: ["/equivalence"],
   },
   {

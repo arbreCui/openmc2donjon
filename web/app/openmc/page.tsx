@@ -484,8 +484,8 @@ function OpenmcPageContent() {
             onChange={(value) => setEquivalence(value as OpenmcEquivalenceMode)}
             options={[
               ["direct", "None (direct XS)"],
-              ["adf", "ADF/DF sidecar"],
               ["sph", "SPH sidecar"],
+              ["adf", "ADF/DF sidecar"],
               ["flux-ratio-adf", "Build flux-ratio ADF"],
             ]}
           />

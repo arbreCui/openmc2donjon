@@ -11,7 +11,7 @@ export interface AdfWorkflowStep {
 }
 
 /**
- * The ADF/DF sidecar route as an ordered command workflow, mirroring the
+ * The ADF/DF carriage steps as an ordered command workflow, mirroring the
  * OpenMC-side SPH panel's step model. The canned CLIs chain by filename
  * (adf_sidecar.h5 -> mgxs_with_adf.h5 -> DONJON ASCII) and the make/augment
  * steps are pinned to the /equivalence form defaults by adfWorkflow.test.ts.
