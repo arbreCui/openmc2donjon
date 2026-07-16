@@ -41,7 +41,8 @@ describe("workflow query parsers", () => {
   it("parses OpenMC workflow and equivalence values with safe defaults", () => {
     expect(parseOpenmcWorkflow("two-step")).toBe("two-step");
     expect(parseOpenmcWorkflow("one-step")).toBe("one-step");
-    expect(parseOpenmcWorkflow("bad")).toBe("one-step");
+    expect(parseOpenmcWorkflow("bad")).toBe("two-step");
+    expect(parseOpenmcWorkflow(null)).toBe("two-step");
 
     expect(parseOpenmcEquivalence("adf")).toBe("adf");
     expect(parseOpenmcEquivalence("sph")).toBe("sph");

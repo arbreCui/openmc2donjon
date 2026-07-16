@@ -2,11 +2,21 @@ export interface HomeHero {
   kicker: string;
   heading: string;
   paragraph: string;
+  supporting: string;
 }
 
+export const HOME_FLOW = [
+  { label: "MGXS HDF5", qualifier: "bring one or prepare with OpenMC" },
+  { label: "Converter", qualifier: "required handoff boundary" },
+  { label: "L_MULTICOMPO / L_MACROLIB", qualifier: "object + receipt" },
+  { label: "SPH · Project · DONJON", qualifier: "optional model-specific work" },
+] as const;
+
 export const HOME_HERO: HomeHero = {
-  kicker: "Monte Carlo lattice physics for DONJON",
-  heading: "Monte Carlo cross sections for DONJON core calculations",
+  kicker: "OpenMC → DRAGON / DONJON handoff",
+  heading: "Convert OpenMC MGXS into a traceable DRAGON/DONJON object.",
   paragraph:
-    "Take an OpenMC MGXS handoff, check it against the production contract, and write the L_MULTICOMPO or L_MACROLIB library DONJON consumes — with SPH equivalence prepared upstream from paired OpenMC fine/coarse models when it is needed. The converter serializes homogenized data and equivalence factors; it does not solve reactor physics.",
+    "Converter is the required handoff boundary. It checks a declared MGXS HDF5 and its mapping, then writes an L_MULTICOMPO or L_MACROLIB object with a hash-linked receipt.",
+  supporting:
+    "Bring an existing handoff or prepare one with OpenMC. When needed, solve native DRAGON SPH on a declared coarse model, coordinate multi-component or repeated workflows in Project, and run downstream DONJON calculations. Built-in ASCII is the default writer; PyGan/LCM is optional.",
 } as const;

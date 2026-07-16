@@ -50,8 +50,8 @@ export default function CommandDetailPage() {
   }, [id, state]);
 
   return (
-    <main className="min-h-[calc(100vh-3.5rem)] px-6 py-12">
-      <div className="mx-auto max-w-4xl">
+    <main className="app-page">
+      <div className="app-container max-w-4xl">
         <Link
           href="/commands"
           className="text-sm text-[var(--fg-2)] hover:text-[var(--fg-0)]"

@@ -373,9 +373,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--production",
         action="store_true",
         help=(
-            "run post-export preflight with production defaults: volume, "
+            "run the canonical non-relaxable post-export preflight: volume, "
             "transport_total, fissionable H-FACTOR, domain provenance, "
-            "physics consistency gates, and production uncertainty gate"
+            "physics consistency gates, uncertainty limits, and complete "
+            "std-dev coverage"
         ),
     )
     parser.add_argument(

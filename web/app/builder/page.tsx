@@ -47,8 +47,8 @@ export default function CommandBuilderPage() {
 
 function BuilderLoading() {
   return (
-    <main className="min-h-[calc(100vh-3.5rem)] px-6 py-12">
-      <div className="mx-auto max-w-5xl">
+    <main className="app-page">
+      <div className="app-container max-w-5xl">
         <section className="glass rounded-xl p-5 text-sm text-[var(--fg-2)]">
           Loading command builder…
         </section>
@@ -69,8 +69,8 @@ function CommandBuilderPageContent() {
 /** Bare /builder: a small index of every builder spec, not a silent default form. */
 function BuilderIndex() {
   return (
-    <main className="min-h-[calc(100vh-3.5rem)] px-6 py-12">
-      <div className="mx-auto max-w-5xl">
+    <main className="app-page">
+      <div className="app-container max-w-5xl">
         <header className="mb-8">
           <div className="text-[11px] uppercase tracking-[0.16em] text-[var(--fg-3)]">
             Command builder
@@ -203,8 +203,8 @@ function BuilderForm({ commandId }: { commandId: string }) {
   }
 
   return (
-    <main className="min-h-[calc(100vh-3.5rem)] px-6 py-12">
-      <div className="mx-auto max-w-5xl">
+    <main className="app-page">
+      <div className="app-container max-w-5xl">
         <header className="mb-8">
           <div className="text-[11px] uppercase tracking-[0.16em] text-[var(--fg-3)]">
             Command builder
@@ -268,7 +268,7 @@ function BuilderForm({ commandId }: { commandId: string }) {
               <button
                 type="button"
                 onClick={applySavedPrefix}
-                className="mt-4 text-[12px] text-[var(--accent-2)] hover:underline"
+                className="btn-link mt-3"
               >
                 Use saved prefix: <code className="font-mono">{savedPrefix}</code>
               </button>
@@ -383,7 +383,7 @@ function BundlePrefillPanel({
             </Link>
           ) : null}
           <Link href="/commands/direct-convert" className="btn btn-secondary">
-            Direct convert notes
+            Converter notes
           </Link>
         </div>
       </div>

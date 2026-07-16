@@ -61,6 +61,28 @@ def blacken_zero_flux_groups(mgxs_path: Path) -> int:
     return patched
 
 
+def zero_total_xs_bins(mgxs_path: Path) -> list[str]:
+    """Return every OpenMC-native macro/group bin with exactly zero total XS."""
+
+    import h5py
+    import numpy as np
+
+    bins: list[str] = []
+    with h5py.File(mgxs_path, "r") as h5:
+        for name, xsdata in h5.items():
+            if not isinstance(xsdata, h5py.Group):
+                continue
+            for temp, tables in xsdata.items():
+                if not isinstance(tables, h5py.Group) or "total" not in tables:
+                    continue
+                total = np.asarray(tables["total"][:], dtype=float).reshape(-1)
+                bins.extend(
+                    f"{name}/{temp}/g{int(index) + 1}"
+                    for index in np.where(total == 0.0)[0]
+                )
+    return bins
+
+
 def strip_material_cell_translations(geometry) -> int:
     """Remove translations left on cells whose fill became a macro material.
 
@@ -91,6 +113,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--raw-mgxs-name", default="mgxs_unapplied.h5")
     parser.add_argument("--sph-apply-summary-json", type=Path, default=None)
     parser.add_argument("--summary-json", type=Path, default=None)
+    parser.add_argument(
+        "--zero-xs-policy",
+        choices=("blacken", "reject"),
+        default="blacken",
+        help=(
+            "handling of exactly-zero total-XS macro bins: blacken preserves "
+            "the archived exploratory behavior; reject is required by the "
+            "strict physical closure"
+        ),
+    )
     args = parser.parse_args(argv)
 
     if not args.ce_statepoint.exists():
@@ -140,8 +172,17 @@ def main(argv: list[str] | None = None) -> int:
         )
         if args.sph_apply_summary_json is not None:
             write_sph_apply_summary(args.sph_apply_summary_json, sph_apply_report)
-    blackened = blacken_zero_flux_groups(mgxs_path)
-    if blackened:
+    zero_bins = zero_total_xs_bins(mgxs_path)
+    blackened = 0
+    if zero_bins and args.zero_xs_policy == "reject":
+        preview = ", ".join(zero_bins[:12])
+        remainder = "" if len(zero_bins) <= 12 else f" (+{len(zero_bins) - 12} more)"
+        raise SystemExit(
+            "strict MG preparation rejects exactly-zero total-XS bins: "
+            f"{preview}{remainder}"
+        )
+    if zero_bins:
+        blackened = blacken_zero_flux_groups(mgxs_path)
         print(f"blackened {blackened} zero-XS (group) bins in {mgxs_path.name}")
 
     print(f"wrote IRENA SPH Stage 2 MG case: {mg_dir}")
@@ -156,6 +197,9 @@ def main(argv: list[str] | None = None) -> int:
             "raw_mgxs": str(raw_mgxs_path) if args.sph_source is not None else None,
             "sph_source": None if args.sph_source is None else str(args.sph_source),
             "sph_applied": args.sph_source is not None,
+            "zero_xs_policy": args.zero_xs_policy,
+            "zero_total_xs_bin_count": len(zero_bins),
+            "blackened_bin_count": blackened,
             "mg_case_dir": str(mg_dir),
         }
         args.summary_json.parent.mkdir(parents=True, exist_ok=True)

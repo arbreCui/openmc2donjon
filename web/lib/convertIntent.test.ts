@@ -2,13 +2,13 @@ import { describe, expect, it } from "vitest";
 import { convertIntentBannerVisible, convertIntentCopy } from "./convertIntent";
 
 describe("convertIntentCopy", () => {
-  it("explains that openmc-sph conversion consumes an SPH-augmented handoff", () => {
+  it("explains that openmc-sph conversion consumes an SPH-applied handoff", () => {
     const copy = convertIntentCopy("openmc-sph");
 
-    expect(copy.title).toBe("Convert an SPH-augmented handoff");
+    expect(copy.title).toBe("Convert an SPH-applied handoff");
     expect(copy.body).toContain("does not recompute SPH");
-    expect(copy.body).toContain("SPH-augmented HDF5");
-    expect(copy.body).toContain("GROUP/*/NSPH");
+    expect(copy.body).toContain("apply-sph");
+    expect(copy.commandLabel).toBe("apply-sph");
     expect(copy.tone).toBe("sph");
   });
 });

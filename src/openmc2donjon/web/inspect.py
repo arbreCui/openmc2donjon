@@ -9,8 +9,10 @@ from typing import Any
 import numpy as np
 
 from ..energy_groups import identify_mesh
+from ..mgxs_input_contract import scatter_axes as contract_scatter_axes
 from ..mgxs_inspect import _report_payload, inspect_file
 from ..mgxs_physics_checks import scatter_moment_matrix
+from ..openmc_provenance import read_openmc_provenance
 from .filesystem import FilesystemScope
 from .fixtures import load_fixture
 
@@ -56,6 +58,10 @@ def register_inspect_routes(
             # real path below) so the result header names the file the
             # user actually asked for.
             payload["path"] = path
+            # The requested path is deliberately not read in mock mode.  Carry
+            # that fact in the result itself so a screenshot or exported UI
+            # state cannot be mistaken for evidence from the named file.
+            payload["mock_mode"] = True
             return payload
         real_path = _validate_hdf5_path(path, HTTPException, filesystem_scope)
         try:
@@ -66,6 +72,7 @@ def register_inspect_routes(
             ) from exc
         payload = _report_payload(report)
         payload["schema"] = INSPECT_SCHEMA
+        payload["mock_mode"] = False
         bounds, mesh_match = _read_bounds_and_mesh(real_path)
         payload["energy_bounds"] = bounds
         payload["mesh_match"] = mesh_match
@@ -75,6 +82,7 @@ def register_inspect_routes(
         # at least sees what KIND of HDF5 they pointed at instead of
         # a bare "0 mixtures, FAIL".
         payload.update(_read_top_level_peek(real_path))
+        payload["openmc_provenance"] = read_openmc_provenance(real_path)
         return payload
 
     @app.get("/api/inspect/mixture")
@@ -311,6 +319,7 @@ def _read_mixture_detail(
 
         scatter_payload = _scatter_moment_payload(
             mix_group,
+            h5=h5,
             ngroups=ngroups,
             legendre_order=legendre_order,
             moment=moment,
@@ -343,6 +352,7 @@ def _read_mixture_detail(
 def _scatter_moment_payload(
     mix_group: Any,
     *,
+    h5: Any,
     ngroups: int | None,
     legendre_order: int | None,
     moment: int,
@@ -363,7 +373,7 @@ def _scatter_moment_payload(
         if isinstance(axes_raw, (bytes, bytearray))
         else axes_raw
         if isinstance(axes_raw, str)
-        else None
+        else contract_scatter_axes(mix_group, h5)
     )
     arr = np.asarray(dataset[:], dtype=float)
     shape = list(arr.shape)

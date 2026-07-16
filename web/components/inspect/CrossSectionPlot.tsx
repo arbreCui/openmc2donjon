@@ -76,6 +76,11 @@ export default function CrossSectionPlot({
   return (
     <div className={className ?? "glass rounded-xl p-3"}>
       <div ref={ref} className="h-80 w-full" />
+      <p className="px-2 pt-2 text-[11px] leading-4 text-[var(--fg-3)]">
+        Energy is shown in eV. Cross-section units are those recorded by the
+        MGXS handoff contract (normally cm⁻¹ for macroscopic data); this file
+        does not carry a separate per-dataset unit label.
+      </p>
     </div>
   );
 }
@@ -160,7 +165,7 @@ function buildLayout(mixtureName: string): Partial<Layout> {
     },
     yaxis: {
       type: "log",
-      title: { text: "Cross section", font: { color: "#8b90a3", size: 11 } },
+      title: { text: "Cross section (contract units)", font: { color: "#8b90a3", size: 11 } },
       gridcolor: "rgba(255,255,255,0.05)",
       zeroline: false,
       color: "#8b90a3",

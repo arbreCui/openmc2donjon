@@ -170,26 +170,26 @@ function artifactDetail(data: ConvertResponse): string {
 }
 
 function consumerTitle(format: ConvertResponse["format"]): string {
-  return format === "macrolib" ? "Direct macrolib input" : "Mapped domain library";
+  return format === "macrolib" ? "Direct macrolib input" : "Target component CPO";
 }
 
 function consumerStatus(data: ConvertResponse): string {
-  if (data.converted && data.output_exists) return "ready";
+  if (data.converted && data.output_exists) return "input available";
   if (data.dry_run && data.ok && !data.output_exists) return "next";
   return data.ok ? "pending" : "blocked";
 }
 
 function consumerTone(data: ConvertResponse): PipelineTone {
-  if (data.converted && data.output_exists) return "pass";
+  if (data.converted && data.output_exists) return "neutral";
   if (data.dry_run && data.ok && !data.output_exists) return "neutral";
   return data.ok ? "neutral" : "fail";
 }
 
 function consumerDetail(data: ConvertResponse): string {
   if (data.format === "macrolib") {
-    return "Use the output as a one-state DRAGON/DONJON macrolib input.";
+    return "This output can now be supplied to a one-state DRAGON/DONJON model. Any required SPH solve and downstream physics acceptance remain separate gates.";
   }
-  return "Use the output as a MULTICOMPO input where each exported mixture maps to a DONJON material index.";
+  return "Keep this output with its Converter receipt. A project manifest defines the component mapping, other required outputs, and the downstream physics-acceptance gate.";
 }
 
 function stageClass(tone: PipelineTone): string {

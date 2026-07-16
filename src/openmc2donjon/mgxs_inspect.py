@@ -65,6 +65,10 @@ class Hdf5Inspection:
     adf_mixtures: int = 0
     adf_faces: tuple[str, ...] = ()
     sph_calculations: int = 0
+    sph_applied: bool = False
+    sph_applied_source: str | None = None
+    sph_apply_operator: str | None = None
+    sph_kind: str | None = None
     std_dev_datasets: int = 0
     std_dev_expected_datasets: int = 0
     scatter_axes: tuple[str, ...] = ()
@@ -114,6 +118,10 @@ def _inspect_open_h5(h5: h5py.File, report: Hdf5Inspection) -> None:
     report.root_attr_keys = tuple(sorted(str(key) for key in h5.attrs))
     report.energy_groups = _int_attr(h5.attrs, "energy_groups")
     report.legendre_order = _int_attr(h5.attrs, "legendre_order")
+    report.sph_applied = _root_bool_attr(h5.attrs, "sph_applied")
+    report.sph_applied_source = _root_text_attr(h5.attrs, "sph_applied_source")
+    report.sph_apply_operator = _root_text_attr(h5.attrs, "sph_apply_operator")
+    report.sph_kind = _root_text_attr(h5.attrs, "sph_kind")
     if "energy_bounds" in h5 and isinstance(h5["energy_bounds"], h5py.Dataset):
         energy = h5["energy_bounds"]
         report.energy_bounds_shape = tuple(int(value) for value in energy.shape)
@@ -290,6 +298,12 @@ def print_report(
         "        scatter="
         f"axes={_render_list(report.scatter_axes)} shapes={_render_shapes(report.scatter_shapes)}"
     )
+    if report.sph_applied:
+        print(
+            "        sph_applied=yes "
+            f"kind={report.sph_kind or 'unspecified'} "
+            f"operator={report.sph_apply_operator or 'unspecified'}"
+        )
     if report.adf_mixtures:
         print(
             "        adf="
@@ -353,6 +367,10 @@ def _report_payload(report: Hdf5Inspection) -> dict[str, Any]:
         "adf_mixtures": report.adf_mixtures,
         "adf_faces": list(report.adf_faces),
         "sph_calculations": report.sph_calculations,
+        "sph_applied": report.sph_applied,
+        "sph_applied_source": report.sph_applied_source,
+        "sph_apply_operator": report.sph_apply_operator,
+        "sph_kind": report.sph_kind,
         "std_dev_datasets": report.std_dev_datasets,
         "std_dev_expected_datasets": report.std_dev_expected_datasets,
         "scatter_axes": list(report.scatter_axes),
@@ -471,6 +489,22 @@ def _int_attr(attrs: h5py.AttributeManager, name: str) -> int | None:
     if name not in attrs:
         return None
     return int(attrs[name])
+
+
+def _root_bool_attr(attrs: h5py.AttributeManager, name: str) -> bool:
+    if name not in attrs:
+        return False
+    value = attrs[name]
+    if isinstance(value, (bytes, str)):
+        return _attr_text(value).strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def _root_text_attr(attrs: h5py.AttributeManager, name: str) -> str | None:
+    if name not in attrs:
+        return None
+    text = _attr_text(attrs[name]).strip()
+    return text or None
 
 
 def _attr_with_parent(attrs: h5py.AttributeManager, parent_attrs, name: str) -> Any | None:

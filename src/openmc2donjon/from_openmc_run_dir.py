@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
+import json
 from pathlib import Path
+from typing import Any, Mapping
 
 from . import __version__
 from .bundle import (
@@ -13,6 +15,19 @@ from .bundle import (
     validate_bundle,
 )
 from .handoff_summary import write_handoff_summary
+from .openmc_provenance import file_sha256
+
+
+_MAX_AUTO_BUNDLED_SOURCE_BYTES = 64 * 1024 * 1024
+_AUTO_BUNDLED_SOURCE_SUFFIXES = {
+    ".json",
+    ".py",
+    ".toml",
+    ".txt",
+    ".xml",
+    ".yaml",
+    ".yml",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,12 +158,22 @@ def finalize_run_dir(
     if config.run_dir is None:
         return True
 
+    provenance_path = config.run_dir / "openmc_provenance.json"
+    provenance = summary.get("openmc_provenance")
+    if not isinstance(provenance, Mapping):
+        raise ValueError("run summary is missing OpenMC provenance")
+    provenance_path.write_text(
+        json.dumps(provenance, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
     manifest_path = config.run_dir / "manifest.json"
     _write_run_dir_manifest(
         config,
         hdf5_path,
         output_path,
         recipe_path,
+        summary=summary,
+        provenance_path=provenance_path,
         generated=generated,
     )
     report = None
@@ -234,6 +259,7 @@ def _managed_run_dir_paths(
         config.keep_hdf5,
         output_path,
         config.summary_json,
+        run_dir / "openmc_provenance.json",
         run_dir / "manifest.json",
     ]
     if not config.no_validate_bundle:
@@ -257,6 +283,8 @@ def _write_run_dir_manifest(
     output_path: Path,
     recipe_path: Path,
     *,
+    summary: Mapping[str, object],
+    provenance_path: Path,
     generated: GeneratedArtifacts,
 ) -> None:
     artifacts = [ArtifactSpec(label="mgxs", source=hdf5_path)]
@@ -282,11 +310,103 @@ def _write_run_dir_manifest(
     artifacts.extend(generated.sph_artifacts)
     artifacts.extend(extra_artifacts_from_config(config))
     artifacts.append(ArtifactSpec(label="recipe", source=recipe_path))
+    artifacts.append(
+        ArtifactSpec(label="openmc-provenance", source=provenance_path)
+    )
+    artifacts.extend(
+        _portable_provenance_artifacts(summary, existing=artifacts)
+    )
     bundle_artifacts(
         output_dir=config.run_dir,
         artifacts=artifacts,
         force=True,
     )
+
+
+def _portable_provenance_artifacts(
+    summary: Mapping[str, object],
+    *,
+    existing: list[ArtifactSpec],
+) -> list[ArtifactSpec]:
+    """Return small source-definition files that make a run bundle replayable.
+
+    Statepoints and nuclear-data libraries are hash-bound but deliberately not
+    copied by default because they can be many gigabytes. The model XML,
+    imported source files declared by the recipe, and cross_sections.xml are
+    portable and belong in the standard research bundle.
+    """
+
+    provenance = summary.get("openmc_provenance")
+    if not isinstance(provenance, Mapping):
+        return []
+    seen = {_resolved(spec.source) for spec in existing}
+    candidates: list[tuple[str, Any, Any, Any]] = []
+    raw_artifacts = provenance.get("artifacts")
+    if isinstance(raw_artifacts, list):
+        for item in raw_artifacts:
+            if not isinstance(item, Mapping):
+                continue
+            role = str(item.get("role") or "source")
+            if role in {"recipe", "statepoint"}:
+                continue
+            candidates.append(
+                (
+                    role,
+                    item.get("path"),
+                    item.get("sha256"),
+                    item.get("size_bytes"),
+                )
+            )
+    nuclear_data = provenance.get("nuclear_data")
+    if isinstance(nuclear_data, Mapping):
+        cross_sections = nuclear_data.get("cross_sections")
+        if isinstance(cross_sections, Mapping):
+            candidates.append(
+                (
+                    "cross-sections",
+                    cross_sections.get("path"),
+                    cross_sections.get("sha256"),
+                    cross_sections.get("size_bytes"),
+                )
+            )
+
+    result: list[ArtifactSpec] = []
+    used_labels = {spec.label for spec in existing}
+    for role, raw_path, expected_sha256, expected_size in candidates:
+        if not isinstance(raw_path, str) or not raw_path:
+            continue
+        path = Path(raw_path)
+        resolved = _resolved(path)
+        if resolved in seen or not path.is_file():
+            continue
+        if (
+            path.suffix.lower() not in _AUTO_BUNDLED_SOURCE_SUFFIXES
+            or path.stat().st_size > _MAX_AUTO_BUNDLED_SOURCE_BYTES
+        ):
+            continue
+        actual_size = path.stat().st_size
+        actual_sha256 = file_sha256(path)
+        if expected_size != actual_size or expected_sha256 != actual_sha256:
+            raise ValueError(
+                f"OpenMC provenance source changed after collection: {path}"
+            )
+        label_base = "openmc-" + role.lower().replace("_", "-").replace(" ", "-")
+        label = label_base
+        suffix = 2
+        while label in used_labels:
+            label = f"{label_base}-{suffix}"
+            suffix += 1
+        result.append(ArtifactSpec(label=label, source=path))
+        used_labels.add(label)
+        seen.add(resolved)
+    return result
+
+
+def _resolved(path: Path) -> Path:
+    try:
+        return path.resolve()
+    except OSError:
+        return path.absolute()
 
 
 def _append_run_dir_copy(

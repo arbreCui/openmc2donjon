@@ -110,6 +110,8 @@ export default function ScatterHeatmap({
         Rows are incoming (<code className="font-mono">from</code>) groups;
         columns are outgoing (<code className="font-mono">to</code>) groups.{" "}
         <code className="font-mono">g1</code> is the highest-energy group.{" "}
+        Scatter values use the same cross-section units recorded by the MGXS
+        handoff; no separate dataset unit label is present. {" "}
         {scale === "log10"
           ? "Colour bar shows σ on a log₁₀ scale; zero or non-positive cells are shown in grey (Legendre moments above P₀ can be negative)."
           : "Colour bar shows σ directly; switch to log₁₀ to see weak couplings off the diagonal."}
@@ -142,7 +144,7 @@ function MomentSelector({
             onClick={() => onChange(m)}
             aria-pressed={active}
             className={
-              "px-2.5 py-1 rounded transition " +
+              "control-segment px-2.5 py-1 rounded transition " +
               (active
                 ? "bg-[var(--accent)]/15 text-[var(--fg-0)]"
                 : "text-[var(--fg-2)] hover:text-[var(--fg-0)]")
@@ -182,7 +184,7 @@ function ScaleToggle({
             onClick={() => onChange(option.value)}
             aria-pressed={active}
             className={
-              "px-2.5 py-1 rounded transition " +
+              "control-segment px-2.5 py-1 rounded transition " +
               (active
                 ? "bg-[var(--accent)]/15 text-[var(--fg-0)]"
                 : "text-[var(--fg-2)] hover:text-[var(--fg-0)]")

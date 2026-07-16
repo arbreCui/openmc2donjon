@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import {
   HandoffAttrValue,
   HandoffInspection,
@@ -12,11 +13,24 @@ import {
   type InspectProductionStat,
 } from "@/lib/inspectSummary";
 import { formatEnergy } from "./formatEnergy";
+import OpenmcProvenanceCard from "@/components/OpenmcProvenanceCard";
 
 export default function Summary({ data }: { data: HandoffInspection }) {
   const production = inspectProductionStats(data);
+  const isMgxsHandoff = data.ok;
   return (
     <div className="glass rounded-xl p-5">
+      {data.mock_mode === true ? (
+        <div className="mb-4 rounded-md border border-amber-300/30 bg-amber-300/[0.08] p-3 text-[12px] text-amber-100">
+          <strong className="block uppercase tracking-[0.12em]">
+            Demonstration fixture — not the requested file
+          </strong>
+          <span className="mt-1 block text-amber-100/80">
+            This backend is in mock mode. The values below come from the bundled
+            fixture; the path is shown only to preview the interface.
+          </span>
+        </div>
+      ) : null}
       <div className="flex items-baseline justify-between gap-4 flex-wrap">
         <div className="min-w-0">
           <div className="text-[12px] uppercase tracking-wider text-[var(--fg-3)]">
@@ -25,88 +39,103 @@ export default function Summary({ data }: { data: HandoffInspection }) {
           <div className="font-mono text-sm break-all">{data.path}</div>
         </div>
         <div className="flex items-center gap-3 text-sm">
-          <OkBadge ok={data.ok} />
-          <MeshBadge match={data.mesh_match} hint={production.mesh} />
+          <ReadableHdf5Badge isMgxsHandoff={isMgxsHandoff} />
         </div>
       </div>
 
-      <dl className="mt-5 grid grid-cols-2 sm:grid-cols-5 gap-4 tab-num text-sm">
-        <Stat label="Mixtures" value={data.mixture_count} />
-        <Stat label="Energy groups" value={data.energy_groups ?? "—"} />
-        <Stat
-          label="Legendre"
-          value={
-            data.legendre_order == null ? "—" : `P${data.legendre_order}`
-          }
-        />
-        <Stat
-          label="State points"
-          value={data.state_points ?? data.calculation_count}
-        />
-        <Stat
-          label="Fissionable"
-          value={`${data.fissionable_mixtures} / ${data.mixture_count}`}
-        />
-        <Stat
-          label="ADF mixtures"
-          value={`${data.adf_mixtures} / ${data.mixture_count}`}
-        />
-        <Stat label="SPH calcs" value={data.sph_calculations} />
-        <Stat
-          label="Transport"
-          value={production.transport.value}
-          tone={production.transport.tone}
-          detail={production.transport.detail}
-        />
-        <Stat
-          label="H-factor"
-          value={production.hFactor.value}
-          tone={production.hFactor.tone}
-          detail={production.hFactor.detail}
-        />
-        <Stat
-          label="std_dev"
-          value={production.stdDev.value}
-          tone={production.stdDev.tone}
-          detail={production.stdDev.detail}
-        />
-      </dl>
+      {isMgxsHandoff ? (
+        <dl className="mt-5 grid grid-cols-2 gap-4 text-sm tab-num sm:grid-cols-5">
+          <Stat label="Mixtures" value={data.mixture_count} />
+          <Stat label="Energy groups" value={data.energy_groups ?? "—"} />
+          <Stat
+            label="Legendre"
+            value={
+              data.legendre_order == null ? "—" : `P${data.legendre_order}`
+            }
+          />
+          <Stat
+            label="State points"
+            value={data.state_points ?? data.calculation_count}
+          />
+          <Stat
+            label="Fissionable"
+            value={`${data.fissionable_mixtures} / ${data.mixture_count}`}
+          />
+          <Stat
+            label="ADF mixtures"
+            value={`${data.adf_mixtures} / ${data.mixture_count}`}
+          />
+          <Stat
+            label="SPH"
+            value={data.sph_applied ? "applied" : data.sph_calculations}
+            tone={
+              data.sph_applied || data.sph_calculations > 0
+                ? "pass"
+                : undefined
+            }
+            detail={
+              data.sph_applied
+                ? `Cross sections already corrected${data.sph_kind ? ` · ${data.sph_kind}` : ""}.`
+                : undefined
+            }
+          />
+          <Stat
+            label="Scatter"
+            value={data.scatter_shapes.length > 0 ? "available" : "—"}
+          />
+        </dl>
+      ) : (
+        <p className="mt-4 rounded-md border border-sky-300/20 bg-sky-300/[0.05] p-3 text-[12px] leading-5 text-sky-100">
+          The file is readable HDF5, but it does not match the
+          openmc2donjon MGXS handoff schema. Its root metadata and structure are
+          shown below; this is not a file-read failure.
+        </p>
+      )}
 
-      <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4 text-[13px] tab-num">
-        <DetailRow
-          label="Energy range"
-          value={
-            data.energy_min != null && data.energy_max != null
-              ? `${formatEnergy(data.energy_min)} — ${formatEnergy(
-                  data.energy_max,
-                )}`
-              : "—"
-          }
-        />
-        <DetailRow
-          label="Bounds shape"
-          value={
-            data.energy_bounds_shape
-              ? `[${data.energy_bounds_shape.join(", ")}]`
-              : "—"
-          }
-        />
-        <DetailRow
-          label="ADF faces"
-          value={data.adf_faces.length ? data.adf_faces.join(", ") : "—"}
-        />
-        <DetailRow
-          label="Scatter axes"
-          value={
-            data.scatter_axes.length ? data.scatter_axes.join(", ") : "—"
-          }
-        />
-      </div>
+      {isMgxsHandoff ? (
+        <div className="mt-5 grid grid-cols-1 gap-4 text-[13px] tab-num sm:grid-cols-2">
+          <DetailRow
+            label="Energy range"
+            value={
+              data.energy_min != null && data.energy_max != null
+                ? `${formatEnergy(data.energy_min)} — ${formatEnergy(
+                    data.energy_max,
+                  )}`
+                : "—"
+            }
+          />
+          <DetailRow
+            label="Bounds shape"
+            value={
+              data.energy_bounds_shape
+                ? `[${data.energy_bounds_shape.join(", ")}]`
+                : "—"
+            }
+          />
+          <DetailRow
+            label="ADF faces"
+            value={data.adf_faces.length ? data.adf_faces.join(", ") : "—"}
+          />
+          <DetailRow
+            label="Scatter axes"
+            value={
+              data.scatter_axes.length ? data.scatter_axes.join(", ") : "—"
+            }
+          />
+        </div>
+      ) : null}
+
+      {data.openmc_provenance ? (
+        <div className="mt-5">
+          <OpenmcProvenanceCard provenance={data.openmc_provenance} />
+        </div>
+      ) : null}
 
       {data.issues.length > 0 ? (
         <div className="mt-5 text-[13px]">
           <div className="text-amber-300 font-semibold mb-1">
-            Issues ({data.issues.length})
+            {isMgxsHandoff ? "Inspection notes" : "MGXS contract notes"} (
+            {data.issues.length})
           </div>
           <ul className="list-disc pl-5 space-y-0.5 text-[var(--fg-1)]">
             {data.issues.map((issue, index) => (
@@ -128,21 +157,45 @@ export default function Summary({ data }: { data: HandoffInspection }) {
         />
       ) : null}
 
-      {data.ok ? (
-        <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-[var(--edge)] pt-4">
-          <Link
-            href={inspectConvertHref(data.path, data.sph_calculations)}
-            className="btn btn-primary"
-          >
-            Convert this HDF5
-          </Link>
-          <Link
-            href={inspectDiffHref(data.path)}
-            className="text-[12px] text-[var(--accent-2)] hover:underline"
-          >
-            Diff against a reference
-          </Link>
-        </div>
+      {isMgxsHandoff ? (
+        <details className="mt-5 border-t border-[var(--edge)] pt-4 text-[13px]">
+          <summary className="cursor-pointer select-none text-[var(--fg-2)] hover:text-[var(--fg-0)]">
+            Optional: Converter readiness and next steps
+          </summary>
+          <p className="mt-2 text-[12px] leading-5 text-[var(--fg-3)]">
+            These checks matter only if you later choose to convert this file.
+            They do not affect read-only visualization.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <ReadinessStat label="Energy mesh" stat={production.mesh}>
+              <MeshBadge match={data.mesh_match} hint={production.mesh} />
+            </ReadinessStat>
+            <ReadinessStat
+              label="Transport total"
+              stat={production.transport}
+            />
+            <ReadinessStat label="H-factor" stat={production.hFactor} />
+            <ReadinessStat label="std_dev" stat={production.stdDev} />
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <Link
+              href={inspectConvertHref(
+                data.path,
+                data.sph_calculations,
+                data.sph_applied,
+              )}
+              className="btn btn-secondary"
+            >
+              Open in Converter
+            </Link>
+            <Link
+              href={inspectDiffHref(data.path)}
+              className="text-[12px] text-[var(--accent-2)] hover:underline"
+            >
+              Diff against a reference
+            </Link>
+          </div>
+        </details>
       ) : null}
     </div>
   );
@@ -288,11 +341,44 @@ function formatAttrValue(value: HandoffAttrValue): string {
   return String(value);
 }
 
-function OkBadge({ ok }: { ok: boolean }) {
-  return ok ? (
-    <span className="text-emerald-300 font-semibold">OK</span>
+function ReadableHdf5Badge({ isMgxsHandoff }: { isMgxsHandoff: boolean }) {
+  return isMgxsHandoff ? (
+    <span className="rounded border border-emerald-300/25 bg-emerald-300/[0.06] px-2 py-1 text-[11px] font-semibold text-emerald-200">
+      READABLE HDF5 · MGXS HANDOFF
+    </span>
   ) : (
-    <span className="text-rose-300 font-semibold">FAIL</span>
+    <span className="rounded border border-sky-300/25 bg-sky-300/[0.06] px-2 py-1 text-[11px] font-semibold text-sky-100">
+      READABLE HDF5 · NOT AN MGXS HANDOFF
+    </span>
+  );
+}
+
+function ReadinessStat({
+  label,
+  stat,
+  children,
+}: {
+  label: string;
+  stat: InspectProductionStat;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="min-w-[150px] flex-1 rounded border border-[var(--edge)] bg-black/15 p-2">
+      <div className="text-[10px] uppercase tracking-[0.12em] text-[var(--fg-3)]">
+        {label}
+      </div>
+      <div
+        className={
+          "mt-1 text-[12px] font-semibold " +
+          (stat.tone === "pass" ? "text-emerald-200" : "text-amber-200")
+        }
+      >
+        {children ?? stat.value}
+      </div>
+      <div className="mt-1 text-[10px] leading-4 text-[var(--fg-3)]">
+        {stat.detail}
+      </div>
+    </div>
   );
 }
 

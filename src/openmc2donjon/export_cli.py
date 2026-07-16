@@ -178,6 +178,15 @@ def main(argv: list[str] | None = None) -> int:
                 f"(std_dev {summary.std_dev_dataset_count}/"
                 f"{summary.std_dev_expected_dataset_count})"
             )
+            capabilities = recipe_summary.provenance.get("capabilities", {})
+            print(
+                "  OpenMC provenance: "
+                f"{recipe_summary.provenance.get('status', 'incomplete')} "
+                f"reference_bound={str(bool(capabilities.get('reference_bound'))).lower()} "
+                "transport_reproducible="
+                f"{str(bool(capabilities.get('transport_reproducible'))).lower()} "
+                f"sha256={str(recipe_summary.provenance.get('digest_sha256'))[:12]}"
+            )
             return 0
     except StatepointLoadError as exc:
         logger.error("%s: error: %s", parser.prog, exc)

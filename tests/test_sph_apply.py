@@ -93,6 +93,13 @@ class SphApplyTests(unittest.TestCase):
             with h5py.File(output, "r") as h5:
                 self.assertTrue(bool(h5.attrs["sph_applied"]))
                 self.assertEqual(h5.attrs["sph_apply_operator"], "divide-xs-by-nsph")
+                self.assertEqual(
+                    h5.attrs["sph_derivation"],
+                    "rate-preserving-ce-mg-fixed-point",
+                )
+                self.assertAlmostEqual(float(h5.attrs["sph_max_update_residual"]), 0.01)
+                self.assertEqual(h5.attrs["sph_zero_flux_policy"], "reject")
+                self.assertEqual(int(h5.attrs["sph_clipped_count"]), 0)
                 fuel = h5["mixtures/fuel"]
                 moderator = h5["mixtures/moderator"]
                 np.testing.assert_allclose(fuel["total"][:], [5.0, 40.0])
@@ -283,6 +290,17 @@ def _write_sidecar(path: Path, *, mixture_names: tuple[str, ...] = ("fuel", "mod
         h5.attrs["sph_kind"] = "openmc-ce-mg"
         h5.attrs["sph_real"] = True
         h5.attrs["sph_applied"] = False
+        h5.attrs["sph_derivation"] = "rate-preserving-ce-mg-fixed-point"
+        h5.attrs["sph_target"] = "rate"
+        h5.attrs["sph_flux_normalization"] = "power"
+        h5.attrs["sph_raw_update_minimum"] = 0.99
+        h5.attrs["sph_raw_update_maximum"] = 1.01
+        h5.attrs["sph_max_update_residual"] = 0.01
+        h5.attrs["sph_zero_flux_policy"] = "reject"
+        h5.attrs["sph_identity_bin_count"] = 0
+        h5.attrs["sph_floored_bin_count"] = 0
+        h5.attrs["sph_frozen_group_bin_count"] = 0
+        h5.attrs["sph_clipped_count"] = 0
         dataset = h5.create_dataset("sph", data=values[: len(mixture_names)])
         dataset.attrs["mixture_names"] = np.asarray(mixture_names, dtype="S")
         dataset.attrs["group_order"] = "mgxs_donjon"

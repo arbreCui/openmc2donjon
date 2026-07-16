@@ -33,7 +33,7 @@ export function parseConvertIntent(value: string | null): ConvertIntent {
 }
 
 export function parseOpenmcWorkflow(value: string | null): OpenmcWorkflowKind {
-  return value === "two-step" ? "two-step" : "one-step";
+  return value === "one-step" ? "one-step" : "two-step";
 }
 
 export function parseOpenmcEquivalence(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from typing import Any
 
@@ -110,8 +111,11 @@ def _text_preview_payload(
 ) -> dict[str, Any]:
     byte_truncated = len(raw) > max_bytes
     preview_raw = raw[:max_bytes]
-    text = preview_raw.decode("utf-8", errors="replace")
-    lines = text.splitlines()
+    try:
+        text = preview_raw.decode("utf-8", errors="strict")
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"file is not valid UTF-8 text: {path}") from exc
+    lines = text.splitlines(keepends=True)
     line_truncated = len(lines) > max_lines
     visible_lines = lines[:max_lines]
     truncated_by: list[str] = []
@@ -130,7 +134,12 @@ def _text_preview_payload(
         "max_lines": max_lines,
         "truncated": bool(truncated_by),
         "truncated_by": truncated_by,
-        "text": "\n".join(visible_lines),
+        "sha256": (
+            hashlib.sha256(preview_raw).hexdigest()
+            if not byte_truncated and file_size == len(preview_raw)
+            else None
+        ),
+        "text": "".join(visible_lines),
     }
 
 

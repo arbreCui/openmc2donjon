@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { CopyCliButton } from "@/components/commands/CopyCliButton";
 import type { ConvertPreflightInput, ConvertResponse } from "@/lib/api";
-import { convertNextSteps, isCopyCliDestination } from "@/lib/convertNextSteps";
+import {
+  convertNextSteps,
+  isCopyCliDestination,
+  type ConvertDownstreamDestination,
+} from "@/lib/convertNextSteps";
 import ArtifactAnatomyCard from "./ArtifactAnatomyCard";
 import ConversionSummaryStrip from "./ConversionSummaryStrip";
 import DeliveryChecklist from "./DeliveryChecklist";
@@ -19,20 +23,22 @@ import {
   humanDecision,
   nextStepClass,
   preflightMode,
+  uncertaintyGateStatus,
 } from "./ConvertReportShared";
 
 export default function ConvertRunDetails({
   data,
   input,
   onConvert,
+  downstream,
 }: {
   data: ConvertResponse;
   input: ConvertPreflightInput | null;
   onConvert?: () => void;
+  downstream?: ConvertDownstreamDestination | null;
 }) {
   return (
     <details
-      open={!data.ok}
       className="mt-4 rounded-lg border border-[var(--edge)] bg-black/10 p-3 [&_summary::-webkit-details-marker]:hidden"
     >
       <summary className="cursor-pointer list-none">
@@ -60,8 +66,8 @@ export default function ConvertRunDetails({
         {input ? <PreflightDecisionPanel data={data} input={input} /> : null}
         {input ? <CheckCards data={data} input={input} /> : null}
         {input ? <InputStats input={input} /> : null}
-        <DeliveryChecklist data={data} input={input} onConvert={onConvert} />
-        <NextStepsPanel data={data} input={input} />
+        <DeliveryChecklist data={data} input={input} onConvert={onConvert} downstream={downstream} />
+        <NextStepsPanel data={data} input={input} downstream={downstream} />
       </div>
     </details>
   );
@@ -91,11 +97,13 @@ function CliEquivalentBlock({ command }: { command: string }) {
 function NextStepsPanel({
   data,
   input,
+  downstream,
 }: {
   data: ConvertResponse;
   input: ConvertPreflightInput | null;
+  downstream?: ConvertDownstreamDestination | null;
 }) {
-  const steps = convertNextSteps(data, input);
+  const steps = convertNextSteps(data, input, { downstream });
   return (
     <section className="mt-4 rounded-lg border border-[var(--edge)] bg-black/10 p-3">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
@@ -153,6 +161,7 @@ function StepLink({ href }: { href: string }) {
 
 function ProductionEvidenceStrip({ input }: { input: ConvertPreflightInput }) {
   const uncertaintyCoverage = coverage(input);
+  const uncertaintyStatus = uncertaintyGateStatus(input);
   const items = [
     {
       label: "Energy mesh",
@@ -165,21 +174,19 @@ function ProductionEvidenceStrip({ input }: { input: ConvertPreflightInput }) {
     {
       label: "std_dev coverage",
       value: uncertaintyCoverage ?? "not reported",
-      tone:
-        input.uncertainty?.expected_datasets == null ||
-        input.uncertainty.expected_datasets === input.uncertainty.datasets
-          ? "pass"
-          : "warn",
+      tone: uncertaintyStatus,
       detail: "OpenMC tally uncertainty visibility for production review.",
     },
     {
       label: "max std_dev / mean",
       value:
         input.uncertainty?.max_rel == null
-          ? "-"
+          ? "not evaluated"
           : formatRelative(input.uncertainty.max_rel),
       tone:
-        input.uncertainty?.max_rel == null || input.uncertainty.max_rel <= 0.05
+        input.uncertainty?.max_rel == null
+          ? "skipped"
+          : input.uncertainty.max_rel <= 0.05
           ? "pass"
           : "warn",
       detail: "Default warning level is 5e-2 unless the run overrides it.",
@@ -203,7 +210,11 @@ function ProductionEvidenceStrip({ input }: { input: ConvertPreflightInput }) {
               "rounded-md border px-3 py-2 " +
               (item.tone === "pass"
                 ? "border-emerald-400/20 bg-emerald-400/[0.05]"
-                : "border-amber-400/25 bg-amber-400/[0.06]")
+                : item.tone === "fail"
+                  ? "border-rose-400/25 bg-rose-400/[0.06]"
+                  : item.tone === "skipped"
+                    ? "border-[var(--edge)] bg-black/10"
+                    : "border-amber-400/25 bg-amber-400/[0.06]")
             }
           >
             <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">

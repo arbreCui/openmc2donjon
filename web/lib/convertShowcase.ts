@@ -40,7 +40,8 @@ export function convertShowcaseObjectLabel(format: ConvertFormat): string {
 export function convertShowcaseDefaultOpen(
   runKind: ConvertShowcaseRunKind,
 ): boolean {
-  return runKind === "idle";
+  void runKind;
+  return false;
 }
 
 function outputObjectFact(format: ConvertFormat): ConvertShowcaseFact {
@@ -93,7 +94,7 @@ function gateFact({
       title: "Production checks (--production)",
       badge: requireKnownMesh ? "strict mesh + production" : "production preset",
       body:
-        "Preflight runs hard physics checks before writing: row balance, chi normalization, ADF face consistency, transport/P1 consistency, and audit warnings.",
+        "Preflight runs hard physics checks before writing: row balance, chi normalization, equivalence-record layout, transport/P1 consistency, and audit warnings.",
       tone: "pass",
     };
   }
@@ -121,53 +122,42 @@ function equivalenceFact(input: ConvertPreflightInput | null): ConvertShowcaseFa
   if (input == null) {
     return {
       id: "equivalence",
-      title: "ADF / SPH carry-through",
-      badge: "detected after dry run",
+      title: "Optional equivalence data",
+      badge: "reported after dry run",
       body:
-        "If the source HDF5 already carries ADF/DF or NSPH sidecar data — a sidecar is a small companion HDF5 carrying ADF/DF or SPH factors — the converter carries those blocks into the DONJON output.",
+        "Converter reports SPH or other equivalence provenance when it is present. A normal conversion does not require SPH unless the selected physics contract says so.",
       tone: "neutral",
     };
   }
 
-  const adfMixtures = input.adf_mixtures ?? 0;
-  const adfFaces = input.adf_faces?.length ?? 0;
   const sph = input.sph_calculations ?? 0;
-  if (adfMixtures > 0 && adfFaces > 0 && sph > 0) {
+  if (input.sph_applied) {
     return {
       id: "equivalence",
-      title: "ADF / SPH carry-through",
-      badge: `${adfMixtures} ADF mix · ${sph} SPH`,
-      body: `Carries ADF/DF over ${adfFaces} face type(s) and ${sph} NSPH calculation record(s) from the source handoff.`,
-      tone: "pass",
-    };
-  }
-  if (adfMixtures > 0 && adfFaces > 0) {
-    return {
-      id: "equivalence",
-      title: "ADF carry-through",
-      badge: `${adfMixtures} mix · ${adfFaces} face type(s)`,
+      title: "SPH already applied",
+      badge: input.sph_kind?.trim() || "XS divided by NSPH",
       body:
-        "Carries ADF/DF data from the source HDF5. No NSPH calculation records were reported by preflight.",
+        "apply-sph provenance is present. Converter writes the already corrected cross sections; DONJON does not need to consume NSPH records separately.",
       tone: "pass",
     };
   }
   if (sph > 0) {
     return {
       id: "equivalence",
-      title: "SPH carry-through",
+      title: "SPH records attached",
       badge: `${sph} calculation record(s)`,
       body:
-        "Carries NSPH equivalence factors from the source HDF5. No ADF/DF face data was reported by preflight.",
+        "Carries attached NSPH equivalence records into a compatible DONJON object; cross sections in this HDF5 have not been rewritten.",
       tone: "pass",
     };
   }
   return {
     id: "equivalence",
-    title: "Equivalence data",
-    badge: "direct XS only",
+    title: "No SPH records",
+    badge: "direct cross sections",
     body:
-      "No ADF/DF or NSPH records were reported by the current preflight. Use the sidecar builders before conversion if equivalence factors are needed.",
-    tone: "warn",
+      "The HDF5 contains no NSPH records. This is valid for direct-conversion routes that do not declare SPH as a required physics contract.",
+    tone: "neutral",
   };
 }
 

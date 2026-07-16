@@ -26,7 +26,7 @@ def main(argv: list[str] | None = None) -> int:
             seed=args.seed,
         ),
     )
-    print(f"wrote IRENA SPH Stage 2 CSD colorset CE case: {args.case_dir}")
+    print(f"wrote IRENA native-SPH colorset CE case: {args.case_dir}")
     return 0
 
 

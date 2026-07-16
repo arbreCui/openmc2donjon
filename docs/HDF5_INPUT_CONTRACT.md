@@ -80,6 +80,52 @@ Required datasets:
 | --- | --- | --- |
 | `/energy_bounds` | `(G + 1,)` | eV, ascending low-to-high |
 
+## OpenMC Fine-Reference Provenance
+
+Recipe/statepoint exports embed a canonical record at:
+
+```text
+/provenance/openmc/record_json
+```
+
+The root mirrors only its schema, status, and SHA256 in
+`openmc_provenance_schema`, `openmc_provenance_status`, and
+`openmc_provenance_sha256`. The full JSON binds the recipe and loaded
+statepoint bytes, OpenMC/openmc2donjon versions, model inputs, run controls,
+and the actually selected nuclear-data libraries when those sources are
+available.
+
+The record also stores `handoff.payload_sha256`, a canonical digest of every
+scientific HDF5 path, attribute, dtype, shape, and value outside
+`/provenance/openmc`. Inspector and production preflight recompute it. Copying
+a valid source record onto different MGXS data, or changing an XS/flux/energy
+dataset after export, therefore invalidates the frozen reference.
+
+The three capability flags have deliberately different meanings:
+
+| Capability | Meaning |
+| --- | --- |
+| `reference_bound` | The frozen MGXS reference is tied to a verified recipe and real OpenMC statepoint by content hash. This is what downstream Converter/native DRAGON SPH needs. |
+| `export_replayable` | The statepoint-to-MGXS export can be reconstructed from recorded source definitions and versions. |
+| `transport_reproducible` | The original OpenMC transport inputs, run controls, and used nuclear-data content are fully identified. This is the publication-level claim. |
+
+`export_replayable` and `transport_reproducible` additionally require the
+recipe to attest input closure. The recipe's `provenance_files()` manifest must
+include imported Python modules, CAD/DAGMC and mesh inputs, external sources,
+weight windows, and every other file capable of changing the model or tallies.
+OpenMC statepoint and settings values are recorded separately; disagreements
+are errors rather than silently choosing one source.
+The replay gate requires run mode, histories/batches, inactive and
+generations-per-batch for eigenvalue runs, plus RNG seed and stride. MPI ranks
+and thread count are retained when a run receipt supplies them, but are
+reported as execution topology rather than substituted from the current shell.
+
+Native DRAGON SPH never reruns OpenMC and does not require the original local
+paths to remain present. It consumes the frozen reference HDF5 and its verified
+embedded digest. A managed run directory copies small model source files by
+default; large statepoints and nuclear-data libraries remain external but are
+hash-bound.
+
 The converter writes DONJON `ENERGY` as `energy_bounds[::-1]`. Cross-section
 arrays are kept in OpenMC group-index order, which is high energy to low energy
 for the group structures used here.

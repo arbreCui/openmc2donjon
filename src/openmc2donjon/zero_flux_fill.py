@@ -9,7 +9,10 @@ to machine precision wherever flux is nonzero, so the substitution is
 consistent by construction).
 
 For each mixture and each group g with total == 0, or transport_total <= 0
-when that dataset is present:
+when that dataset is present, or one of the opt-in noise criteria is met:
+
+- total_std_dev > threshold * total
+- sum(P0 scatter row) > (1 + threshold) * total
 
 - total, absorption, fission, nu_fission        <- macrolib material data
 - scatter_matrix[:, g, :] (all shared orders)    <- macrolib scatter rows
@@ -35,8 +38,13 @@ from typing import Any
 
 import numpy as np
 
+from .openmc_provenance import (
+    provenance_before_hdf5_mutation,
+    refresh_openmc_provenance_after_hdf5_mutation,
+)
 
-SCHEMA = "openmc2donjon.zero-flux-fill.v1"
+
+SCHEMA = "openmc2donjon.zero-flux-fill.v2"
 DEFAULT_LABEL_ATTR = "irena_mixture_label"
 
 
@@ -46,6 +54,8 @@ class ZeroFluxFillReport:
     macrolib: Path
     output_h5: Path
     label_attr: str
+    max_total_rel_std_dev: float | None
+    max_scatter_row_overshoot_rel: float | None
     mixture_count: int
     filled_per_mixture: tuple[tuple[str, int], ...]
     total_filled_bins: int
@@ -60,6 +70,11 @@ def print_report(report: ZeroFluxFillReport) -> None:
     print(f"  macrolib: {report.macrolib}")
     print(f"  output: {report.output_h5}")
     print(f"  label attribute: {report.label_attr}")
+    print(f"  max total relative std_dev: {report.max_total_rel_std_dev}")
+    print(
+        "  max P0 scatter-row overshoot: "
+        f"{report.max_scatter_row_overshoot_rel}"
+    )
     print(f"  mixtures: {report.mixture_count}")
     print(f"  mixtures filled: {len(report.filled_per_mixture)}")
     print(f"  filled (mixture, group) bins: {report.total_filled_bins}")
@@ -91,6 +106,8 @@ def summary_payload(report: ZeroFluxFillReport) -> dict[str, Any]:
         "macrolib": str(report.macrolib),
         "output_h5": str(report.output_h5),
         "label_attr": report.label_attr,
+        "max_total_rel_std_dev": report.max_total_rel_std_dev,
+        "max_scatter_row_overshoot_rel": report.max_scatter_row_overshoot_rel,
         "mixtures": report.mixture_count,
         "filled_per_mixture": {name: count for name, count in report.filled_per_mixture},
         "total_filled_bins": report.total_filled_bins,
@@ -105,18 +122,37 @@ def fill_zero_flux_groups(
     in_place: bool = False,
     label_attr: str = DEFAULT_LABEL_ATTR,
     force: bool = False,
+    max_total_rel_std_dev: float | None = None,
+    max_scatter_row_overshoot_rel: float | None = None,
 ) -> ZeroFluxFillReport:
     """Substitute macrolib XS into zero-flux (mixture, group) bins.
 
     By default the input file is copied to ``output_h5`` and the copy is
     edited; pass ``in_place=True`` (and no ``output_h5``) to edit the input
     file directly.
+
+    ``max_total_rel_std_dev`` opts in a noise criterion: bins whose total XS
+    carries a relative standard deviation above the threshold are filled as
+    well. Micro-flux bins can collect a handful of scores (flux > 0, so the
+    zero-flux criterion misses them) whose rate/flux ratio explodes into
+    unphysical cross sections (degenerate single-score bins carry
+    rel std = sqrt(2)); the macrolib value is strictly better there.
+
+    ``max_scatter_row_overshoot_rel`` opts in a solver-stability criterion
+    for ordinary scattering matrices: a P0 out-scatter row that exceeds the
+    total cross section by more than the requested relative tolerance is
+    unphysical and can make a deterministic source iteration diverge before
+    statistical uncertainty alone identifies the bad bin.
     """
 
     import h5py
 
     input_h5 = Path(input_h5)
     macrolib = Path(macrolib)
+    _validate_threshold("max_total_rel_std_dev", max_total_rel_std_dev)
+    _validate_threshold(
+        "max_scatter_row_overshoot_rel", max_scatter_row_overshoot_rel
+    )
     if not input_h5.exists():
         raise FileNotFoundError(f"input HDF5 does not exist: {input_h5}")
     if not macrolib.exists():
@@ -136,6 +172,7 @@ def fill_zero_flux_groups(
 
     library = _load_macrolib(macrolib)
     by_name = {xsdata.name: xsdata for xsdata in library.xsdatas}
+    openmc_provenance = provenance_before_hdf5_mutation(input_h5)
 
     if not in_place:
         target_h5.parent.mkdir(parents=True, exist_ok=True)
@@ -164,6 +201,21 @@ def fill_zero_flux_groups(
                 # the P1-corrected transport value is still zero or negative
                 # noise; substitute those bins from the macrolib as well.
                 fill_mask |= group["transport_total"][:] <= 0.0
+            if max_total_rel_std_dev is not None and "total_std_dev" in group:
+                std = group["total_std_dev"][:]
+                with np.errstate(divide="ignore", invalid="ignore"):
+                    rel = np.where(total > 0.0, std / total, 0.0)
+                fill_mask |= rel > max_total_rel_std_dev
+            if max_scatter_row_overshoot_rel is not None:
+                matrix = group["scatter_matrix"][:]
+                p0_outscatter = matrix[0].sum(axis=1)
+                with np.errstate(divide="ignore", invalid="ignore"):
+                    overshoot_rel = np.where(
+                        total > 0.0,
+                        (p0_outscatter - total) / total,
+                        0.0,
+                    )
+                fill_mask |= overshoot_rel > max_scatter_row_overshoot_rel
             fill = np.where(fill_mask)[0]
             if not len(fill):
                 continue
@@ -195,19 +247,42 @@ def fill_zero_flux_groups(
                     correction = np.zeros_like(mac_total)
                 _fill_dataset(group, fill, "transport_total", mac_total - correction)
 
-            group.attrs["zero_flux_filled_groups"] = fill.astype(np.int64)
+            # Preserve provenance when a file is filled in more than one pass
+            # (for example zero-flux first and an opt-in noise criterion
+            # later).  Replacing the attribute would make earlier substituted
+            # groups indistinguishable from untouched Monte Carlo data.
+            previous_fill = np.asarray(
+                group.attrs.get("zero_flux_filled_groups", ()), dtype=np.int64
+            )
+            group.attrs["zero_flux_filled_groups"] = np.union1d(
+                previous_fill, fill
+            ).astype(np.int64)
             group.attrs["zero_flux_fill_source"] = str(macrolib)
             filled_per_mixture.append((name, len(fill)))
+
+    refresh_openmc_provenance_after_hdf5_mutation(
+        target_h5,
+        openmc_provenance,
+    )
 
     return ZeroFluxFillReport(
         input_h5=input_h5,
         macrolib=macrolib,
         output_h5=target_h5,
         label_attr=label_attr,
+        max_total_rel_std_dev=max_total_rel_std_dev,
+        max_scatter_row_overshoot_rel=max_scatter_row_overshoot_rel,
         mixture_count=mixture_count,
         filled_per_mixture=tuple(filled_per_mixture),
         total_filled_bins=sum(count for _name, count in filled_per_mixture),
     )
+
+
+def _validate_threshold(name: str, value: float | None) -> None:
+    if value is None:
+        return
+    if not np.isfinite(value) or value < 0.0:
+        raise ValueError(f"{name} must be finite and non-negative")
 
 
 def _load_macrolib(macrolib: Path) -> Any:

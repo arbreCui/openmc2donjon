@@ -48,6 +48,7 @@ from .openmc_statepoint import (
     dry_run_openmc_statepoint_recipe,
     export_openmc_statepoint_recipe,
 )
+from .openmc_provenance import file_sha256, write_openmc_provenance
 from .recipe_dry_run_report import (
     print_recipe_dry_run_summary,
     print_strict_dry_run_decision,
@@ -107,6 +108,28 @@ def _normalize_args(args: argparse.Namespace) -> None:
 
 
 def _validate_args(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    if args.production and args.no_uncertainty_check:
+        parser.error(
+            "--production cannot be combined with --no-uncertainty-check; "
+            "the canonical production policy requires uncertainty checks and "
+            "complete std-dev coverage"
+        )
+    if args.production and args.h_factor_default is not None:
+        parser.error(
+            "--production cannot be combined with --h-factor-default; "
+            "the OpenMC export must provide physical group-wise H-FACTOR / "
+            "kappa-fission data"
+        )
+    if (
+        args.production
+        and not args.dry_run
+        and (args.no_load_statepoint or args.statepoint is None)
+    ):
+        parser.error(
+            "--production requires --statepoint and cannot use "
+            "--no-load-statepoint; a formal handoff must be bound to the CE "
+            "transport reference"
+        )
     try:
         validate_run_dir_config(_run_dir_config(args))
     except ValueError as exc:
@@ -301,9 +324,11 @@ def _print_dry_run_checks(args: argparse.Namespace) -> None:
             ),
             transport_p1_fail=getattr(args, "transport_p1_fail", None),
             uncertainty_warn=None if args.no_uncertainty_check else args.uncertainty_warn,
+            uncertainty_fail=None if args.no_uncertainty_check else args.uncertainty_fail,
             uncertainty_production_fail=(
                 None if args.no_uncertainty_check else args.uncertainty_production_fail
             ),
+            uncertainty_mean_abs_floor=args.uncertainty_mean_abs_floor,
             require_std_dev_coverage=(
                 False if args.no_uncertainty_check else args.require_std_dev_coverage
             ),
@@ -385,11 +410,11 @@ def _print_dry_run_checks(args: argparse.Namespace) -> None:
         else:
             print(
                 "    uncertainty_warn: "
-                f"{_render_optional_value(args.uncertainty_warn)}"
+                f"{_render_optional_value(settings['uncertainty_warn'])}"
             )
             print(
                 "    uncertainty_fail: "
-                f"{_render_optional_value(args.uncertainty_fail)}"
+                f"{_render_optional_value(settings['uncertainty_fail'])}"
             )
             print(
                 "    uncertainty_production_fail: "
@@ -397,7 +422,7 @@ def _print_dry_run_checks(args: argparse.Namespace) -> None:
             )
             print(
                 "    uncertainty_mean_abs_floor: "
-                f"{_render_optional_value(args.uncertainty_mean_abs_floor)}"
+                f"{_render_optional_value(settings['uncertainty_mean_abs_floor'])}"
             )
             print(
                 "    require_std_dev_coverage: "
@@ -424,6 +449,10 @@ def _run_pipeline(
 
     fill_report = _apply_pipeline_fill(args, hdf5_path)
     _apply_pipeline_corrections(args, hdf5_path, recipe_summary, generated)
+    # ADF/SPH/fill steps intentionally change the handoff. Refresh the
+    # self-excluding payload binding only after the final scientific HDF5
+    # content is in place, before production preflight consumes it.
+    write_openmc_provenance(hdf5_path, recipe_summary.provenance)
     if not _run_pipeline_preflight(args, hdf5_path, output_path, hdf5_kept=hdf5_kept):
         return False
 
@@ -448,6 +477,7 @@ def _run_pipeline(
         legendre_order=export_summary.legendre_order,
         std_dev_dataset_count=export_summary.std_dev_dataset_count,
         std_dev_expected_dataset_count=export_summary.std_dev_expected_dataset_count,
+        openmc_provenance=dict(recipe_summary.provenance),
         fill_report=fill_report,
     )
     return finalize_run_dir(
@@ -480,6 +510,15 @@ def _export_pipeline_hdf5(
         f"from recipe {recipe_summary.recipe_path} "
         f"(std_dev {export_summary.std_dev_dataset_count}/"
         f"{export_summary.std_dev_expected_dataset_count})"
+    )
+    capabilities = recipe_summary.provenance.get("capabilities", {})
+    print(
+        "  OpenMC provenance: "
+        f"{recipe_summary.provenance.get('status', 'incomplete')} "
+        f"reference_bound={str(bool(capabilities.get('reference_bound'))).lower()} "
+        "transport_reproducible="
+        f"{str(bool(capabilities.get('transport_reproducible'))).lower()} "
+        f"sha256={str(recipe_summary.provenance.get('digest_sha256'))[:12]}"
     )
     return recipe_summary
 
@@ -623,6 +662,7 @@ def _write_pipeline_summary(
     legendre_order: int,
     std_dev_dataset_count: int,
     std_dev_expected_dataset_count: int,
+    openmc_provenance: dict[str, object],
     fill_report=None,
 ) -> dict[str, object]:
     summary = _summary_payload(
@@ -639,7 +679,10 @@ def _write_pipeline_summary(
         legendre_order=legendre_order,
         std_dev_dataset_count=std_dev_dataset_count,
         std_dev_expected_dataset_count=std_dev_expected_dataset_count,
+        openmc_provenance=openmc_provenance,
     )
+    summary["hdf5_sha256"] = file_sha256(hdf5_path)
+    summary["output_sha256"] = file_sha256(output_path)
     summary["zero_flux_fill_macrolib"] = (
         str(fill_report.macrolib) if fill_report is not None else None
     )
@@ -683,6 +726,7 @@ def _summary_payload(
     legendre_order: int,
     std_dev_dataset_count: int,
     std_dev_expected_dataset_count: int,
+    openmc_provenance: dict[str, object],
 ) -> dict[str, object]:
     burnup_summary: dict[str, object] = {"present": burnup_values is not None}
     if burnup_values is not None:
@@ -723,6 +767,7 @@ def _summary_payload(
         "root_name": args.root_name if args.format == "multicompo" else None,
         "single_point_burnup": args.burnup,
         "h_factor_default": args.h_factor_default,
+        "openmc_provenance": openmc_provenance,
     }
 
 

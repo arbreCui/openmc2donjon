@@ -7,23 +7,23 @@ import {
   ApiError,
   ConvertFormat,
   OpenmcEquivalenceMode,
-  OpenmcWorkflowKind,
   OpenmcWorkflowPlan,
+  OpenmcExportExecutionResponse,
   api,
 } from "@/lib/api";
 import FileBrowserModal from "@/components/inspect/FileBrowserModal";
 import OpenmcArtifactList from "@/components/openmc/OpenmcArtifactList";
 import OpenmcCommandList from "@/components/openmc/OpenmcCommandList";
-import OpenmcEntryPoints from "@/components/openmc/OpenmcEntryPoints";
 import OpenmcProductionPathPanel from "@/components/openmc/OpenmcProductionPathPanel";
 import OpenmcSphPhysicsSummaryCard from "@/components/openmc/OpenmcSphPhysicsSummaryCard";
+import OpenmcProvenanceCard from "@/components/OpenmcProvenanceCard";
 import OpenmcWorkflowSummary from "@/components/openmc/OpenmcWorkflowSummary";
+import { FormStep, WorkflowPageHeader } from "@/components/ui/Workflow";
 import { useSettings } from "@/lib/settings";
-import type { OpenmcEntryPoint } from "@/lib/openmcEntryPoints";
-import { activeOpenmcEntryPoint } from "@/lib/openmcEntryPoints";
 import {
   OPENMC_SPH_SIDECAR_FORM_HREF,
   isFailedOpenmcSphSidecarCheck,
+  openmcDirectConvertHref,
   openmcSphPrerequisiteCommands,
   openmcSphSidecarCheckFailed,
 } from "@/lib/openmcWorkflowWalkthrough";
@@ -36,9 +36,18 @@ import {
 import {
   parseConvertFormat,
   parseOpenmcEquivalence,
-  parseOpenmcWorkflow,
   queryFlag,
 } from "@/lib/workflowQuery";
+import {
+  colorsetDefinition,
+  isWithdrawnColorsetWorkflow,
+} from "@/lib/colorsetWorkflow";
+import {
+  colorsetProjectPaths,
+  projectPath,
+  projectRootFromSearchParams,
+  type ProjectComponentRouteContext,
+} from "@/lib/projectWorkspace";
 
 type PlanState =
   | { kind: "idle" }
@@ -47,6 +56,12 @@ type PlanState =
   | { kind: "error"; message: string; status?: number };
 
 type BackendMode = "checking" | "mock" | "live" | "unavailable";
+
+type ExportExecutionState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "ok"; data: OpenmcExportExecutionResponse }
+  | { kind: "error"; message: string };
 
 type BrowserTarget =
   | "recipe"
@@ -68,6 +83,7 @@ interface BrowserConfig {
 }
 
 const FALLBACK_RUN_DIR = "/path/to/openmc2donjon-run";
+const RECIPE_TEMPLATE_PATH = "examples/openmc_recipe_template/export_recipe.py";
 
 export default function OpenmcPage() {
   return (
@@ -79,8 +95,8 @@ export default function OpenmcPage() {
 
 function OpenmcLoading() {
   return (
-    <main className="min-h-[calc(100vh-3.5rem)] px-6 py-12">
-      <div className="mx-auto max-w-5xl">
+    <main className="app-page">
+      <div className="app-container max-w-5xl">
         <section className="glass rounded-xl p-5 text-sm text-[var(--fg-2)]">
           Loading OpenMC prep…
         </section>
@@ -91,21 +107,38 @@ function OpenmcLoading() {
 
 function OpenmcPageContent() {
   const searchParams = useSearchParams();
-  const initialEquivalence = parseOpenmcEquivalence(searchParams.get("equivalence"));
-  const [workflow, setWorkflow] = useState<OpenmcWorkflowKind>(
-    parseOpenmcWorkflow(searchParams.get("workflow")),
+  const isIrenaColorset = isWithdrawnColorsetWorkflow(
+    searchParams.get("colorset"),
+    searchParams.get("contract"),
   );
+  const activeColorset = colorsetDefinition(searchParams.get("colorset"));
+  const projectRoot = projectRootFromSearchParams(searchParams);
+  const componentId = searchParams.get("component");
+  const contract = searchParams.get("contract");
+  const projectContext: ProjectComponentRouteContext = {
+    projectRoot,
+    componentId,
+    contract,
+  };
+  const projectPaths = isIrenaColorset ? colorsetProjectPaths(projectRoot, activeColorset) : null;
+  const initialEquivalence = parseOpenmcEquivalence(searchParams.get("equivalence"));
   const [equivalence, setEquivalence] = useState<OpenmcEquivalenceMode>(initialEquivalence);
   const [format, setFormat] = useState<ConvertFormat>(
     searchParams.get("format") == null && initialEquivalence === "sph"
-      ? "macrolib"
+      ? "multicompo"
       : parseConvertFormat(searchParams.get("format")),
   );
-  const [recipePath, setRecipePath] = useState("");
-  const [statepointPath, setStatepointPath] = useState("");
-  const [runDir, setRunDir] = useState("");
-  const [outputPath, setOutputPath] = useState("");
-  const [keepHdf5Path, setKeepHdf5Path] = useState("");
+  const [recipePath, setRecipePath] = useState(
+    projectRoot && projectPaths ? projectPath(projectPaths.directory, "export_recipe.py") : "",
+  );
+  const [statepointPath, setStatepointPath] = useState(
+    projectRoot && projectPaths ? projectPath(projectPaths.directory, "ce_statepoint.h5") : "",
+  );
+  const [runDir, setRunDir] = useState(projectPaths?.directory ?? "");
+  const [outputPath, setOutputPath] = useState(searchParams.get("output") ?? "");
+  const [keepHdf5Path, setKeepHdf5Path] = useState(
+    searchParams.get("input") ?? projectPaths?.mgxs ?? "",
+  );
   const [adfSource, setAdfSource] = useState("");
   const [sphSource, setSphSource] = useState("");
   const [physicsSummaryPath, setPhysicsSummaryPath] = useState(
@@ -114,13 +147,20 @@ function OpenmcPageContent() {
   const [loadStatepoint, setLoadStatepoint] = useState(true);
   const [check, setCheck] = useState(true);
   const [production, setProduction] = useState(
-    queryFlag(searchParams, "production", false),
+    isIrenaColorset ? false : queryFlag(searchParams, "production", true),
   );
-  const [requireKnownMesh, setRequireKnownMesh] = useState(false);
+  const [requireKnownMesh, setRequireKnownMesh] = useState(
+    isIrenaColorset
+      ? false
+      : queryFlag(searchParams, "require_known_mesh", false),
+  );
   const [strictDryRun, setStrictDryRun] = useState(false);
   const [hFactorText, setHFactorText] = useState("");
   const [state, setState] = useState<PlanState>({ kind: "idle" });
+  const [submittedPlanKey, setSubmittedPlanKey] = useState<string | null>(null);
   const [backendMode, setBackendMode] = useState<BackendMode>("checking");
+  const [exportState, setExportState] = useState<ExportExecutionState>({ kind: "idle" });
+  const [overwriteExport, setOverwriteExport] = useState(false);
   const [liveDemoAvailable, setLiveDemoAvailable] = useState(false);
   const [browserTarget, setBrowserTarget] = useState<BrowserTarget | null>(null);
   const planButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -135,6 +175,43 @@ function OpenmcPageContent() {
     () => defaultHdf5Path(runDir || savedPrefix),
     [runDir, savedPrefix],
   );
+  const directConverterHref = openmcDirectConvertHref(
+    keepHdf5Path || (runDir.trim() ? derivedHdf5 : ""),
+    outputPath || (runDir.trim() ? derivedOutput : ""),
+    format,
+    production,
+    projectContext,
+  );
+  const planInputKey = JSON.stringify({
+    equivalence,
+    format,
+    recipePath: recipePath.trim(),
+    statepointPath: statepointPath.trim(),
+    loadStatepoint,
+    runDir: runDir.trim(),
+    outputPath: outputPath.trim() || derivedOutput,
+    keepHdf5Path: keepHdf5Path.trim() || derivedHdf5,
+    check,
+    production,
+    requireKnownMesh,
+    strictDryRun,
+    hFactorText: hFactorText.trim(),
+    adfSource: adfSource.trim(),
+    sphSource: sphSource.trim(),
+  });
+  const planMatchesInputs = submittedPlanKey === planInputKey;
+  const activePlanState: PlanState = planMatchesInputs
+    ? state
+    : state.kind === "loading"
+      ? state
+      : { kind: "idle" };
+  const missingPlanInputs = [
+    recipePath.trim() ? null : "recipe",
+    (production || loadStatepoint) && !statepointPath.trim() ? "CE statepoint" : null,
+    runDir.trim() ? null : "run folder",
+    production && hFactorText.trim() ? "remove the H-factor fallback" : null,
+  ].filter((item): item is string => item != null);
+  const planReady = !isIrenaColorset && missingPlanInputs.length === 0;
   const browserConfig = browserTarget
     ? openmcBrowserConfig(browserTarget, {
         recipePath,
@@ -198,8 +275,6 @@ function OpenmcPageContent() {
     // Re-sync form state from query params on same-route navigations
     // (e.g. the "Open SPH summary" entry-point link); useState initializers
     // only run on mount. Only params present in the URL override state.
-    const workflowParam = searchParams.get("workflow");
-    if (workflowParam != null) setWorkflow(parseOpenmcWorkflow(workflowParam));
     const equivalenceParam = searchParams.get("equivalence");
     if (equivalenceParam != null) {
       setEquivalence(parseOpenmcEquivalence(equivalenceParam));
@@ -208,17 +283,37 @@ function OpenmcPageContent() {
     if (formatParam != null) {
       setFormat(parseConvertFormat(formatParam));
     } else if (parseOpenmcEquivalence(equivalenceParam) === "sph") {
-      setFormat("macrolib");
+      setFormat("multicompo");
     }
     const summaryParam = searchParams.get("summary");
     if (summaryParam != null) setPhysicsSummaryPath(summaryParam);
-    if (searchParams.get("production") != null) {
+    const inputParam = searchParams.get("input");
+    if (inputParam != null) setKeepHdf5Path(inputParam);
+    const outputParam = searchParams.get("output");
+    if (outputParam != null) setOutputPath(outputParam);
+    if (isIrenaColorset) {
+      setProduction(false);
+      setRequireKnownMesh(false);
+    } else if (searchParams.get("production") != null) {
       setProduction(queryFlag(searchParams, "production", false));
     }
-  }, [searchParams]);
+    if (!isIrenaColorset && searchParams.get("require_known_mesh") != null) {
+      setRequireKnownMesh(queryFlag(searchParams, "require_known_mesh", false));
+    }
+  }, [isIrenaColorset, searchParams]);
 
   async function plan(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setSubmittedPlanKey(planInputKey);
+    setExportState({ kind: "idle" });
+    if (isIrenaColorset) {
+      setState({
+        kind: "error",
+        message:
+          "The historical IRENA five-colorset workflow is withdrawn and cannot create an OpenMC production plan.",
+      });
+      return;
+    }
     const hFactorDefault = parseOptionalNumber(hFactorText);
     if (hFactorDefault === "invalid") {
       setState({
@@ -227,10 +322,27 @@ function OpenmcPageContent() {
       });
       return;
     }
+    if (production && (!loadStatepoint || !statepointPath.trim())) {
+      setState({
+        kind: "error",
+        message:
+          "A formal production export requires a real CE statepoint. Recipe-only mode is a non-production command scaffold.",
+      });
+      return;
+    }
+    if (production && hFactorDefault != null) {
+      setState({
+        kind: "error",
+        message:
+          "Production forbids an H-factor fallback. Export physical group-wise H-FACTOR / kappa-fission data instead.",
+      });
+      return;
+    }
     setState({ kind: "loading" });
     try {
       const data = await api.openmcWorkflowPlan({
-        workflow,
+        workflow: "two-step",
+        plan_scope: "export",
         recipe_path: recipePath,
         statepoint_path: statepointPath,
         load_statepoint: loadStatepoint,
@@ -252,6 +364,45 @@ function OpenmcPageContent() {
       setState({ kind: "ok", data });
     } catch (err) {
       setState(toErrorState(err));
+    }
+  }
+
+  async function runExport() {
+    if (isIrenaColorset) {
+      setExportState({
+        kind: "error",
+        message:
+          "The historical IRENA five-colorset workflow is diagnostic only; export execution is disabled.",
+      });
+      return;
+    }
+    if (!planMatchesInputs || state.kind !== "ok" || !state.data.ok) {
+      setExportState({
+        kind: "error",
+        message: "The form changed after planning. Create a fresh plan before writing the HDF5.",
+      });
+      return;
+    }
+    setExportState({ kind: "loading" });
+    try {
+      const data = await api.executeOpenmcExport({
+        recipe_path: recipePath,
+        statepoint_path: statepointPath,
+        load_statepoint: loadStatepoint,
+        output_path: keepHdf5Path || derivedHdf5,
+        overwrite: overwriteExport,
+      });
+      setExportState({ kind: "ok", data });
+    } catch (error) {
+      setExportState({
+        kind: "error",
+        message:
+          error instanceof ApiError
+            ? error.detail ?? error.message
+            : error instanceof Error
+              ? error.message
+              : "OpenMC export failed",
+      });
     }
   }
 
@@ -288,35 +439,24 @@ function OpenmcPageContent() {
     planButtonRef.current?.focus();
   }
 
-  function applyEntryPoint(entry: OpenmcEntryPoint) {
-    setWorkflow(entry.workflow);
-    setEquivalence(entry.equivalence);
-    if (entry.equivalence === "sph") {
-      setFormat("macrolib");
+  function updateLoadStatepoint(value: boolean) {
+    setLoadStatepoint(value);
+    if (!value) {
+      setProduction(false);
+      setRequireKnownMesh(false);
     }
-    setProduction(entry.production);
-    setCheck(entry.check);
-    if (entry.equivalence !== "adf" && entry.equivalence !== "flux-ratio-adf") {
-      setAdfSource("");
+  }
+
+  function updateProduction(value: boolean) {
+    setProduction(value);
+    if (value) {
+      setLoadStatepoint(true);
+      setHFactorText("");
     }
-    if (entry.equivalence !== "sph") {
-      setSphSource("");
-    }
-    // The entry cards mutate form state below the fold; move the viewport to
-    // the surface the click configured so the change is visible.
-    const targetId =
-      entry.id === "openmc-sph" ? "openmc-sph-summary" : "openmc-planner-form";
-    window.setTimeout(() => {
-      document.getElementById(targetId)?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    }, 0);
   }
 
   function applyOpenmcSphDemo(preset: OpenmcSphDemoPreset) {
     const prefill = openmcSphPlannerPrefill(preset);
-    setWorkflow(prefill.workflow);
     setEquivalence(prefill.equivalence);
     setFormat(prefill.format);
     setProduction(prefill.production);
@@ -343,227 +483,274 @@ function OpenmcPageContent() {
   }
 
   return (
-    <main className="min-h-[calc(100vh-3.5rem)] px-6 py-12">
-      <div className="mx-auto max-w-5xl">
-        <header className="mb-8">
-          <h1 className="text-3xl font-bold tracking-tight">
-            <span className="grad-text">Prepare OpenMC handoff inputs</span>
-          </h1>
-          <p className="mt-2 max-w-3xl text-sm text-[var(--fg-2)]">
-            Use this page only when the converter input is not ready yet:
-            export an OpenMC MGXS HDF5 from a recipe/statepoint, or prepare
-            OpenMC-side CE/MG SPH factors before conversion.
-          </p>
-        </header>
-
-        <OpenmcEntryPoints
-          active={activeOpenmcEntryPoint(workflow, equivalence)}
-          onSelect={applyEntryPoint}
-        />
-
-        <OpenmcProductionPathPanel
-          state={state}
-          workflow={workflow}
-          equivalence={equivalence}
-          format={format}
-          production={production}
-          recipePath={recipePath}
-          statepointPath={statepointPath}
-          loadStatepoint={loadStatepoint}
-          runDir={runDir}
-          demo={
-            sphDemoPreset && sphDemoMode
-              ? {
-                  preset: sphDemoPreset,
-                  mode: sphDemoMode,
-                  onFill: () => applyOpenmcSphDemo(sphDemoPreset),
-                  onReview: () => reviewOpenmcSphDemo(sphDemoPreset),
-                }
-              : null
+    <main className="app-page">
+      <div className="app-container max-w-5xl">
+        <WorkflowPageHeader
+          step="Handoff"
+          eyebrow={isIrenaColorset ? `Withdrawn IRENA diagnostic · ${activeColorset.id}` : "OpenMC source"}
+          title={isIrenaColorset ? "Review one archived fine/coarse colorset pair" : "Prepare an OpenMC MGXS handoff"}
+          description={isIrenaColorset ? `The old seven-domain ${activeColorset.target}/${activeColorset.neighbors} setup is retained only to inspect historical paths and summaries. It cannot create a production OpenMC plan.` : "Prepare one HDF5 for the assembly, component, domain set, or larger model you actually need. The recipe owns its energy structure and domains; Converter does not impose a geometry or domain count."}
+          input={isIrenaColorset ? "Archived seven-assembly recipe and evidence paths" : production ? "Validated export recipe + CE statepoint" : "Export recipe; statepoint optional only for a non-production scaffold"}
+          output={isIrenaColorset ? "No production artifact; diagnostic review only" : "Model-defined MGXS HDF5"}
+          actions={
+            <Link
+              href={isIrenaColorset ? "/donjon?mode=irena30-fullcore" : directConverterHref}
+              className="btn btn-secondary"
+            >
+              {isIrenaColorset ? "Open current IRENA route" : "Already have an HDF5"}
+            </Link>
           }
         />
 
-        {equivalence === "sph" ? (
-          <>
-            <OpenmcSphPhysicsSummaryCard
-              path={physicsSummaryPath}
-              onPathChange={setPhysicsSummaryPath}
-              onBrowse={() => setBrowserTarget("summary")}
-              autoLoadPath={searchParams.get("summary")}
-            />
-            <p className="mb-5 mt-3 text-sm">
-              <Link
-                href={OPENMC_SPH_SIDECAR_FORM_HREF}
-                className="font-medium text-[var(--accent-2)] hover:underline"
+        <section className={`mb-5 rounded-xl border p-4 ${isIrenaColorset ? "border-amber-300/25 bg-amber-300/[0.055]" : "border-emerald-300/20 bg-emerald-300/[0.055]"}`}>
+          <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--accent)]">
+            {isIrenaColorset ? "WITHDRAWN DIAGNOSTIC ONLY" : "Generic handoff path"}
+          </div>
+          <p className="mt-2 text-sm font-semibold text-[var(--fg-0)]">
+            {isIrenaColorset ? `${activeColorset.id} cannot enter a production chain.` : "Export one handoff for the model and domains you actually need."}
+          </p>
+          <p className="mt-1 text-[12px] leading-5 text-[var(--fg-2)]">
+            {isIrenaColorset ? "The five-colorset experiment is not a full-core equivalence model. Any production=1 value in an old bookmark is ignored, planning and export are disabled, and no Converter action is generated from this page." : "A standalone user can stop with one assembly or component HDF5. A project may coordinate one handoff or many; physical SPH is used only when that model requires it."}
+          </p>
+        </section>
+
+        {!isIrenaColorset ? (
+          <section className="mb-5 grid gap-3 lg:grid-cols-2">
+            <article className="rounded-xl border border-cyan-300/20 bg-cyan-300/[0.04] p-4">
+              <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-cyan-200">
+                What this page starts from
+              </div>
+              <h2 className="mt-2 text-sm font-semibold">OpenMC has already produced a statepoint</h2>
+              <p className="mt-1 text-[12px] leading-5 text-[var(--fg-2)]">
+                Supply the statepoint and a recipe that declares groups, domains,
+                tallies, and export metadata. The backend then writes the MGXS
+                handoff; it does not rerun transport.
+              </p>
+            </article>
+            <article className="rounded-xl border border-amber-300/20 bg-amber-300/[0.04] p-4">
+              <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-amber-200">
+                Only have a CE model or XML files?
+              </div>
+              <p className="mt-2 text-[12px] leading-5 text-[var(--fg-2)]">
+                Run the OpenMC transport model first. Then adapt the repository
+                recipe template to bind that model&apos;s domains and tallies; a raw
+                statepoint, summary.h5, or arbitrary MGXS library is not silently
+                treated as a Converter-ready handoff.
+              </p>
+              <button
+                type="button"
+                onClick={() => setRecipePath(RECIPE_TEMPLATE_PATH)}
+                className="btn-link mt-2"
               >
-                Full SPH command reference
-              </Link>
-              <span className="text-[var(--fg-3)]">
-                {" "}
-                — the six-command CE/MG SPH map on the sidecar form.
-              </span>
-            </p>
-          </>
+                Fill repository recipe template
+              </button>
+            </article>
+          </section>
         ) : null}
 
         <form
           id="openmc-planner-form"
-          className="glass rounded-xl p-4 space-y-4"
+          className="surface space-y-3 p-4 sm:p-5"
           onSubmit={plan}
         >
-          <div className="grid gap-3 lg:grid-cols-2">
-            <Segmented
-              label="Workflow"
-              value={workflow}
-              onChange={(value) => setWorkflow(value as OpenmcWorkflowKind)}
-              options={[
-                ["one-step", "One-step"],
-                ["two-step", "Two-step"],
-              ]}
-            />
-            <Segmented
-              label="Output object"
-              value={format}
-              onChange={(value) => setFormat(value as ConvertFormat)}
-              options={[
-                ["multicompo", "MULTICOMPO"],
-                ["macrolib", "MACROLIB"],
-              ]}
-            />
-          </div>
-
-          <div className="grid gap-3 lg:grid-cols-2">
-            <TextField
-              label="Recipe Python"
-              value={recipePath}
-              onChange={setRecipePath}
-              onBrowse={() => setBrowserTarget("recipe")}
-              placeholder={
-                settingsHydrated && savedPrefix
-                  ? `${savedPrefix.replace(/\/?$/, "/")}export_recipe.py`
-                  : "/path/to/export_recipe.py"
-              }
-            />
-            <TextField
-              label="Statepoint HDF5"
-              value={statepointPath}
-              onChange={setStatepointPath}
-              onBrowse={() => setBrowserTarget("statepoint")}
-              placeholder="/path/to/statepoint.h5"
-              disabled={!loadStatepoint}
-            />
-          </div>
-
-          <div className="grid gap-3 lg:grid-cols-3">
-            <TextField
-              label="Run directory"
-              value={runDir}
-              onChange={setRunDir}
-              onBrowse={() => setBrowserTarget("run-dir")}
-              placeholder={runDirPlaceholder}
-            />
-            <TextField
-              label="Intermediate HDF5"
-              value={keepHdf5Path}
-              onChange={setKeepHdf5Path}
-              onBrowse={() => setBrowserTarget("hdf5")}
-              placeholder={derivedHdf5}
-            />
-            <TextField
-              label="Output ASCII"
-              value={outputPath}
-              onChange={setOutputPath}
-              onBrowse={() => setBrowserTarget("output")}
-              placeholder={derivedOutput}
-            />
-          </div>
-
-          <Segmented
-            label="Equivalence method"
-            value={equivalence}
-            onChange={(value) => setEquivalence(value as OpenmcEquivalenceMode)}
-            options={[
-              ["direct", "None (direct XS)"],
-              ["sph", "SPH sidecar"],
-              ["adf", "ADF/DF sidecar"],
-              ["flux-ratio-adf", "Build flux-ratio ADF"],
-            ]}
-          />
-
-          {equivalence === "adf" ? (
-            <TextField
-              label="ADF sidecar"
-              value={adfSource}
-              onChange={setAdfSource}
-              onBrowse={() => setBrowserTarget("adf")}
-              placeholder="/path/to/adf_sidecar.h5"
-            />
-          ) : null}
-          {equivalence === "sph" ? (
-            <div>
-              <TextField
-                label="SPH sidecar"
-                value={sphSource}
-                onChange={setSphSource}
-                onBrowse={() => setBrowserTarget("sph")}
-                placeholder="/path/to/sph_sidecar.h5"
-              />
-              <p className="mt-1 text-[12px] text-[var(--fg-3)]">
-                A sidecar is a small companion HDF5 carrying ADF/DF or SPH
-                factors.{" "}
-                <Link
-                  href={OPENMC_SPH_SIDECAR_FORM_HREF}
-                  className="text-[var(--accent-2)] hover:underline"
-                >
-                  Build the SPH sidecar
-                </Link>
-              </p>
+          <section className="rounded-lg border border-[var(--edge)] bg-black/10 p-3 text-[12px] leading-5 text-[var(--fg-2)]">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-semibold text-[var(--fg-1)]">OpenMC prepares the HDF5 handoff</span>
+              <span className="rounded border border-[var(--edge)] px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-[var(--fg-3)]">
+                backend: {backendMode}
+              </span>
             </div>
-          ) : null}
+            <p className="mt-1">
+              This page does not write DONJON ASCII. After export, Converter validates the handoff and lets you choose L_MULTICOMPO or L_MACROLIB and the ASCII or PyGan writer.
+            </p>
+          </section>
 
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-            <Toggle
-              label="Load statepoint"
-              checked={loadStatepoint}
-              onChange={setLoadStatepoint}
-            />
-            <Toggle
-              label="Preflight (--check)"
-              checked={check}
+          <FormStep
+            number="1"
+            title="Select the OpenMC source"
+            description={isIrenaColorset ? `The IRENA recipe defines seven assembly domains: center ${activeColorset.target} first and six ${activeColorset.neighbors} neighbors.` : "The recipe defines the domains and tallies required by your model. Converter preserves their declared order but does not prescribe the count."}
+          >
+            <div className="grid gap-3 lg:grid-cols-2">
+              <TextField
+                label="Recipe Python"
+                value={recipePath}
+                onChange={setRecipePath}
+                onBrowse={() => setBrowserTarget("recipe")}
+                placeholder={
+                  settingsHydrated && savedPrefix
+                    ? `${savedPrefix.replace(/\/?$/, "/")}export_recipe.py`
+                    : "/path/to/export_recipe.py"
+                }
+              />
+              <div className="rounded-lg border border-[var(--edge)] bg-black/10 p-3">
+                <fieldset>
+                  <legend className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+                    Source mode
+                  </legend>
+                  <div className="mt-2 grid grid-cols-2 overflow-hidden rounded-md border border-[var(--edge)]">
+                    <button
+                      type="button"
+                      onClick={() => updateLoadStatepoint(true)}
+                      aria-pressed={loadStatepoint}
+                      className={sourceModeClass(loadStatepoint)}
+                    >
+                      Recipe + statepoint
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateLoadStatepoint(false)}
+                      aria-pressed={!loadStatepoint}
+                      className={sourceModeClass(!loadStatepoint)}
+                    >
+                      Recipe scaffold only
+                    </button>
+                  </div>
+                </fieldset>
+                {loadStatepoint ? (
+                  <div className="mt-3">
+                    <TextField
+                      label="CE statepoint HDF5"
+                      value={statepointPath}
+                      onChange={setStatepointPath}
+                      onBrowse={() => setBrowserTarget("statepoint")}
+                      placeholder="/path/to/statepoint.h5"
+                    />
+                  </div>
+                ) : (
+                  <p className="mt-3 text-[11px] leading-5 text-[var(--fg-3)]">
+                    Non-production only. This can prepare a command scaffold or
+                    call a recipe that explicitly owns already-loaded MGXS data;
+                    it cannot claim a reproducible CE transport reference.
+                  </p>
+                )}
+              </div>
+            </div>
+          </FormStep>
+
+          <FormStep
+            number="2"
+            title="Choose the run folder"
+            description="All generated artifacts use predictable names inside this folder."
+          >
+            <div className="grid gap-3">
+              <TextField
+                label="Run directory"
+                value={runDir}
+                onChange={setRunDir}
+                onBrowse={() => setBrowserTarget("run-dir")}
+                placeholder={runDirPlaceholder}
+              />
+            </div>
+            <div className="mt-3 grid gap-2 text-[12px] text-[var(--fg-2)] sm:grid-cols-2">
+              <div className="rounded-md border border-[var(--edge)] bg-black/10 px-3 py-2">
+                HDF5 <span className="ml-2 font-mono text-[var(--fg-1)]">{keepHdf5Path || derivedHdf5}</span>
+              </div>
+              <div className="rounded-md border border-[var(--edge)] bg-black/10 px-3 py-2">
+                Next: open this HDF5 in Converter and choose the downstream object there.
+              </div>
+            </div>
+            <details className="mt-3 rounded-lg border border-[var(--edge)] bg-black/10 p-3">
+              <summary className="cursor-pointer text-[12px] font-semibold text-[var(--fg-2)]">
+                Override artifact filenames
+              </summary>
+              <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                <TextField
+                  label="Intermediate HDF5"
+                  value={keepHdf5Path}
+                  onChange={setKeepHdf5Path}
+                  onBrowse={() => setBrowserTarget("hdf5")}
+                  placeholder={derivedHdf5}
+                />
+              </div>
+            </details>
+          </FormStep>
+
+          <section className="rounded-lg border border-cyan-300/20 bg-cyan-300/[0.045] px-3 py-3 text-[12px] leading-5 text-[var(--fg-2)]">
+            {isIrenaColorset ? <>Historical artifact names remain visible for diagnosis. There is no production SPH or Converter continuation from this withdrawn route.</> : <>This step stops at an MGXS HDF5. Continue directly to <Link href={directConverterHref} className="font-semibold text-[var(--accent-2)] hover:underline">Converter</Link>, or run the equivalence method required by your project.</>}
+          </section>
+
+          <details className="rounded-lg border border-[var(--edge)] bg-black/10 p-3">
+            <summary className="cursor-pointer text-[12px] font-semibold text-[var(--fg-2)]">
+              Advanced production checks
+            </summary>
+            <div className="mt-3">
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Toggle
+                label="Preflight (--check)"
+                checked={check}
               onChange={setCheck}
             />
-            <Toggle
-              label="Production checks (--production)"
-              checked={production}
-              onChange={setProduction}
-            />
-            <Toggle
-              label="Known mesh required"
-              checked={requireKnownMesh}
-              onChange={setRequireKnownMesh}
-            />
-            <Toggle
-              label="Strict dry run"
-              checked={strictDryRun}
-              onChange={setStrictDryRun}
-            />
+              <Toggle
+                label="Production checks (--production)"
+                checked={production}
+                onChange={updateProduction}
+                disabled={isIrenaColorset}
+              />
+            </div>
+            <details className="mt-3 rounded-lg border border-[var(--edge)] bg-black/10 p-3">
+              <summary className="cursor-pointer text-[12px] font-semibold text-[var(--fg-2)]">
+                Advanced checks and fallback values
+              </summary>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <Toggle
+                  label="Known mesh required"
+                  checked={requireKnownMesh}
+                  onChange={setRequireKnownMesh}
+                  disabled={isIrenaColorset}
+                />
+                <Toggle
+                  label="Strict dry run"
+                  checked={strictDryRun}
+                  onChange={setStrictDryRun}
+                />
+              </div>
+              <div className="mt-3">
+                <TextField
+                  label="H-factor default"
+                  value={hFactorText}
+                  onChange={setHFactorText}
+                  placeholder="optional; prefer group-wise kappa-fission in HDF5"
+                  disabled={production}
+                />
+                <p className="mt-1 text-[11px] leading-5 text-[var(--fg-3)]">
+                  {production
+                    ? "Disabled: production requires physical group-wise H-FACTOR / kappa-fission data in the HDF5."
+                    : "Diagnostic plumbing only; it is never accepted as production physics."}
+                </p>
+              </div>
+            </details>
+            </div>
+          </details>
+
+          <div className="flex flex-col gap-3 rounded-xl border border-emerald-300/20 bg-emerald-300/[0.055] p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <span className="step-dot">3</span>
+              <div>
+              <div className="text-sm font-bold">Create the OpenMC plan</div>
+              <div className="mt-1 text-[12px] text-[var(--fg-2)]">
+                {planReady
+                  ? "Ready: generate the export command and artifact map. Nothing runs yet."
+                  : isIrenaColorset
+                    ? "Disabled: this five-colorset route is withdrawn diagnostic only."
+                    : `Missing: ${missingPlanInputs.join(", ")}.`}
+              </div>
+              </div>
+            </div>
+            <button
+              ref={planButtonRef}
+              type="submit"
+              className="btn btn-primary shrink-0"
+              disabled={!planReady || state.kind === "loading"}
+            >
+              {state.kind === "loading"
+                ? "Creating plan…"
+                : isIrenaColorset
+                  ? "Production planning withdrawn"
+                : planReady
+                  ? "Create OpenMC plan"
+                  : "Fill required inputs first"}
+            </button>
           </div>
-
-          <TextField
-            label="H-factor default"
-            value={hFactorText}
-            onChange={setHFactorText}
-            placeholder="optional; prefer group-wise kappa-fission in HDF5"
-          />
-
-          <button
-            ref={planButtonRef}
-            type="submit"
-            className="btn btn-primary"
-            disabled={state.kind === "loading"}
-          >
-            {state.kind === "loading" ? "Planning…" : "Plan workflow"}
-          </button>
         </form>
 
         {browserConfig ? (
@@ -581,26 +768,134 @@ function OpenmcPageContent() {
         ) : null}
 
         <section className="mt-6">
-          <PlanReport state={state} />
+          <PlanReport state={activePlanState} exportState={exportState} />
         </section>
+
+        {activePlanState.kind === "ok" && activePlanState.data.ok ? (
+          <section className="mt-5 rounded-xl border border-emerald-300/20 bg-emerald-300/[0.045] p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-emerald-300">
+                  Execute step 01
+                </div>
+                <h2 className="mt-1 text-base font-semibold">Run the planned OpenMC export</h2>
+                <p className="mt-1 text-[12px] leading-5 text-[var(--fg-2)]">
+                  This invokes the named recipe exporter in the backend and writes only the MGXS HDF5. It does not run an arbitrary shell command.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-primary shrink-0"
+                onClick={() => void runExport()}
+                disabled={exportState.kind === "loading"}
+              >
+                {exportState.kind === "loading" ? "Exporting…" : "Run OpenMC export"}
+              </button>
+            </div>
+            <label className="mt-3 flex items-center gap-2 text-[12px] text-[var(--fg-2)]">
+              <input
+                type="checkbox"
+                checked={overwriteExport}
+                onChange={(event) => setOverwriteExport(event.target.checked)}
+                className="accent-emerald-500"
+              />
+              Replace the output HDF5 if it already exists
+            </label>
+            {exportState.kind === "ok" ? (
+              <div className="mt-3 space-y-3">
+                <div
+                  className={`rounded-md border bg-black/10 px-3 py-2 text-[12px] ${
+                    exportState.data.mock_mode
+                      ? "border-amber-300/20 text-amber-100"
+                      : "border-emerald-300/20 text-emerald-100"
+                  }`}
+                >
+                  {exportState.data.mock_mode ? (
+                    <>
+                      Simulation only — OpenMC was not executed and no HDF5 was
+                      written. The values below are interface placeholders, not
+                      scientific evidence.
+                    </>
+                  ) : (
+                    <>
+                      Exported {exportState.data.mixtures} mixtures ·{" "}
+                      {exportState.data.energy_groups} groups · P
+                      {exportState.data.legendre_order} · std_dev{" "}
+                      {exportState.data.std_dev_datasets}/
+                      {exportState.data.std_dev_expected} ·{" "}
+                      <code>{exportState.data.output_path}</code>
+                    </>
+                  )}
+                </div>
+                <OpenmcProvenanceCard
+                  provenance={exportState.data.openmc_provenance}
+                />
+              </div>
+            ) : exportState.kind === "error" ? (
+              <div className="mt-3 rounded-md border border-rose-300/20 bg-rose-300/[0.06] px-3 py-2 text-[12px] text-rose-100">
+                {exportState.message}
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
+        {activePlanState.kind === "ok" ? (
+          <OpenmcProductionPathPanel
+            state={activePlanState}
+            exportState={exportState}
+            equivalence={equivalence}
+            format={format}
+            production={production}
+            recipePath={recipePath}
+            statepointPath={statepointPath}
+            loadStatepoint={loadStatepoint}
+            runDir={runDir}
+            projectContext={projectContext}
+            demo={
+              sphDemoPreset && sphDemoMode
+                ? {
+                    preset: sphDemoPreset,
+                    mode: sphDemoMode,
+                    onFill: () => applyOpenmcSphDemo(sphDemoPreset),
+                    onReview: () => reviewOpenmcSphDemo(sphDemoPreset),
+                  }
+                : null
+            }
+          />
+        ) : null}
+
+        {equivalence === "sph" ? (
+          <details
+            id="openmc-sph-summary"
+            className="surface mt-6 p-4"
+          >
+            <summary className="cursor-pointer text-sm font-bold tracking-tight">
+              Review an existing SPH physics summary
+            </summary>
+            <div className="mt-4">
+              <OpenmcSphPhysicsSummaryCard
+                path={physicsSummaryPath}
+                onPathChange={setPhysicsSummaryPath}
+                onBrowse={() => setBrowserTarget("summary")}
+                autoLoadPath={searchParams.get("summary")}
+              />
+            </div>
+          </details>
+        ) : null}
       </div>
     </main>
   );
 }
 
-function PlanReport({ state }: { state: PlanState }) {
+function PlanReport({
+  state,
+  exportState,
+}: {
+  state: PlanState;
+  exportState: ExportExecutionState;
+}) {
   if (state.kind === "idle") {
-    return (
-      <section className="glass rounded-xl p-5">
-        <h2 className="text-base font-semibold tracking-tight">
-          Ready to plan
-        </h2>
-        <p className="mt-2 text-sm text-[var(--fg-2)]">
-          This planner does not execute OpenMC. It gives you the exact CLI
-          commands and artifact map for a production handoff.
-        </p>
-      </section>
-    );
+    return null;
   }
   if (state.kind === "loading") {
     return (
@@ -667,7 +962,14 @@ function PlanReport({ state }: { state: PlanState }) {
             hrefLabel: "Build the SPH sidecar",
           }))}
         />
-        <OpenmcArtifactList artifacts={plan.artifacts} />
+        <OpenmcArtifactList
+          artifacts={plan.artifacts}
+          writtenHdf5Path={
+            exportState.kind === "ok" && !exportState.data.mock_mode
+              ? exportState.data.output_path
+              : null
+          }
+        />
       </section>
 
       <section className="glass rounded-xl p-5">
@@ -733,41 +1035,6 @@ function Cards({
   );
 }
 
-function Segmented({
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: [string, string][];
-}) {
-  return (
-    <fieldset>
-      <legend className="text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
-        {label}
-      </legend>
-      <div
-        className="mt-1 grid overflow-hidden rounded-md border border-[var(--edge)]"
-        style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
-      >
-        {options.map(([id, text]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => onChange(id)}
-            className={segmentClass(value === id)}
-          >
-            {text}
-          </button>
-        ))}
-      </div>
-    </fieldset>
-  );
-}
-
 function TextField({
   label,
   value,
@@ -823,10 +1090,12 @@ function Toggle({
   label,
   checked,
   onChange,
+  disabled = false,
 }: {
   label: string;
   checked: boolean;
   onChange: (value: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
     <label className="flex items-center gap-2 rounded-md border border-[var(--edge)] bg-white/[0.02] px-3 py-2 text-sm text-[var(--fg-1)]">
@@ -834,19 +1103,11 @@ function Toggle({
         type="checkbox"
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
+        disabled={disabled}
         className="accent-emerald-500"
       />
       <span>{label}</span>
     </label>
-  );
-}
-
-function segmentClass(active: boolean): string {
-  return (
-    "px-3 py-2 text-[12px] font-semibold uppercase tracking-wider transition " +
-    (active
-      ? "bg-emerald-400/15 text-emerald-200"
-      : "bg-white/[0.02] text-[var(--fg-2)] hover:text-[var(--fg-0)]")
   );
 }
 
@@ -855,6 +1116,15 @@ function toneClass(tone: string): string {
   if (tone === "warn") return "border-amber-400/30 text-amber-300";
   if (tone === "fail") return "border-rose-400/30 text-rose-300";
   return "border-[var(--edge-bright)] text-[var(--fg-2)]";
+}
+
+function sourceModeClass(active: boolean): string {
+  return (
+    "control-segment px-3 py-2 text-[11px] font-semibold transition " +
+    (active
+      ? "bg-emerald-300/10 text-emerald-100"
+      : "bg-black/10 text-[var(--fg-3)] hover:bg-white/[0.04] hover:text-[var(--fg-1)]")
+  );
 }
 
 function defaultAsciiPath(base: string, format: ConvertFormat): string {

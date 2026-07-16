@@ -11,7 +11,6 @@ load that ordered block stream into a PyGan LCM tree and export it.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 import tempfile
 from typing import Any, Iterable, Sequence
@@ -19,7 +18,12 @@ from typing import Any, Iterable, Sequence
 import numpy as np
 
 from . import lcm_ascii
-from .macrolib import build_macrolib_blocks
+from .macrolib import (
+    _limit_scatter_order,
+    build_macrolib_blocks,
+    derive_reference_kinf,
+    read_reference_eigenvalues_hdf5,
+)
 from .multicompo import (
     DEFAULT_ROOT_NAME,
     _select_mixture_histories,
@@ -29,7 +33,11 @@ from .multicompo import (
     read_mgxs_hdf5,
     read_mgxs_hdf5_histories,
 )
-from .pygan_backend import require_pygan
+from .pygan_backend import (
+    pygan_process_guard,
+    pygan_working_directory,
+    require_pygan,
+)
 
 
 PYGAN_EXPORT_OBJECT_NAME = "openmc2donjon_export"
@@ -45,6 +53,7 @@ def convert_mgxs_hdf5_with_pygan(
     burnup: float | None = None,
     h_factor_default: float | None = None,
     mixture_names: Sequence[str] | None = None,
+    max_scatter_order: int | None = None,
 ) -> None:
     """Read an OpenMC MGXS HDF5 dump and write ASCII through PyGan.
 
@@ -52,45 +61,64 @@ def convert_mgxs_hdf5_with_pygan(
     ``"multicompo"`` and ``"macrolib"``.
     """
 
-    if output_format == "macrolib":
-        mixtures, energy_bounds = read_mgxs_hdf5(
-            input_h5,
-            h_factor_default=h_factor_default,
-        )
-        blocks = build_macrolib_blocks(
-            _select_mixtures(mixtures, mixture_names),
-            np.asarray(energy_bounds, dtype=float),
-        )
-    elif output_format == "multicompo":
-        histories, energy_bounds, burnup_values = read_mgxs_hdf5_histories(
-            input_h5,
-            h_factor_default=h_factor_default,
-        )
-        histories = _select_mixture_histories(histories, mixture_names)
-        if comment is None:
-            comment = f"OpenMC MGXS conversion from {Path(input_h5).name}"
-        if any(history.nstates > 1 for history in histories):
-            if burnup is not None:
-                raise ValueError("--burnup cannot override a multi-state HDF5 burnup axis")
-            blocks = build_multicompo_history_blocks(
-                histories,
-                np.asarray(energy_bounds, dtype=float),
-                root_name=root_name,
-                comment=comment,
-                burnup_values=burnup_values,
+    with pygan_process_guard():
+        source = Path(input_h5).expanduser().resolve()
+        output = Path(output_path).expanduser().resolve()
+        if output_format == "macrolib":
+            mixtures, energy_bounds = read_mgxs_hdf5(
+                source,
+                h_factor_default=h_factor_default,
             )
+            reference_keff, reference_kinf = read_reference_eigenvalues_hdf5(source)
+            selected = _select_mixtures(mixtures, mixture_names)
+            selected_is_complete_model = len(selected) == len(mixtures) and {
+                mixture.name for mixture in selected
+            } == {mixture.name for mixture in mixtures}
+            if not selected_is_complete_model:
+                reference_keff = None
+            if reference_kinf is None:
+                reference_kinf = derive_reference_kinf(selected)
+            blocks = build_macrolib_blocks(
+                _limit_scatter_order(
+                    selected,
+                    max_scatter_order,
+                ),
+                np.asarray(energy_bounds, dtype=float),
+                reference_keff=reference_keff,
+                reference_kinf=reference_kinf,
+            )
+        elif output_format == "multicompo":
+            if max_scatter_order is not None:
+                raise ValueError("max_scatter_order currently requires output_format='macrolib'")
+            histories, energy_bounds, burnup_values = read_mgxs_hdf5_histories(
+                source,
+                h_factor_default=h_factor_default,
+            )
+            histories = _select_mixture_histories(histories, mixture_names)
+            if comment is None:
+                comment = f"OpenMC MGXS conversion from {source.name}"
+            if any(history.nstates > 1 for history in histories):
+                if burnup is not None:
+                    raise ValueError("--burnup cannot override a multi-state HDF5 burnup axis")
+                blocks = build_multicompo_history_blocks(
+                    histories,
+                    np.asarray(energy_bounds, dtype=float),
+                    root_name=root_name,
+                    comment=comment,
+                    burnup_values=burnup_values,
+                )
+            else:
+                blocks = build_multicompo_blocks(
+                    [history.calculations[0] for history in histories],
+                    np.asarray(energy_bounds, dtype=float),
+                    root_name=root_name,
+                    comment=comment,
+                    burnup=burnup,
+                )
         else:
-            blocks = build_multicompo_blocks(
-                [history.calculations[0] for history in histories],
-                np.asarray(energy_bounds, dtype=float),
-                root_name=root_name,
-                comment=comment,
-                burnup=burnup,
-            )
-    else:
-        raise ValueError("output_format must be 'multicompo' or 'macrolib'")
+            raise ValueError("output_format must be 'multicompo' or 'macrolib'")
 
-    write_lcm_blocks_with_pygan(blocks, output_path)
+        write_lcm_blocks_with_pygan(blocks, output)
 
 
 def write_lcm_blocks_with_pygan(
@@ -101,26 +129,23 @@ def write_lcm_blocks_with_pygan(
 ) -> None:
     """Write ordered LCM blocks using PyGan's ASCII exporter."""
 
-    lcm, _, _ = require_pygan()
-    _validate_pygan_object_name(object_name)
-    output = Path(output_path).expanduser()
-    obj = _blocks_to_pygan_object(lcm, list(blocks), object_name=object_name)
+    with pygan_process_guard():
+        output = Path(output_path).expanduser().resolve()
+        lcm, _, _ = require_pygan()
+        _validate_pygan_object_name(object_name)
+        obj = _blocks_to_pygan_object(lcm, list(blocks), object_name=object_name)
 
-    # PyGan exports an in-memory object named ``NAME`` as a file named
-    # ``_NAME`` in the current directory.  Stage that side effect in a temporary
-    # directory, then atomically replace the requested output path.
-    with tempfile.TemporaryDirectory(dir=output.parent) as tmpdir:
-        tmp = Path(tmpdir)
-        old_cwd = Path.cwd()
-        try:
-            os.chdir(tmp)
-            lcm.new("ASCII", pyobj=obj)
-        finally:
-            os.chdir(old_cwd)
-        staged = tmp / f"_{object_name}"
-        if not staged.is_file():
-            raise RuntimeError(f"PyGan did not produce expected ASCII file {staged}")
-        staged.replace(output)
+        # PyGan exports an in-memory object named ``NAME`` as a file named
+        # ``_NAME`` in the current directory. Stage that side effect in a
+        # temporary directory, then atomically replace the requested output.
+        with tempfile.TemporaryDirectory(dir=output.parent) as tmpdir:
+            tmp = Path(tmpdir).resolve()
+            with pygan_working_directory(tmp):
+                lcm.new("ASCII", pyobj=obj)
+            staged = tmp / f"_{object_name}"
+            if not staged.is_file():
+                raise RuntimeError(f"PyGan did not produce expected ASCII file {staged}")
+            staged.replace(output)
 
 
 def _blocks_to_pygan_object(

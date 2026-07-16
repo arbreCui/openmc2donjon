@@ -1,0 +1,25 @@
+{
+  "schema": "openmc2donjon.acceptance.v1",
+  "status": "rejected",
+  "summary": "Permanently withdrawn diagnostic: local five-colorset component records and their 91-position reuse map cannot establish the position-resolved IRENA full-core leakage environment, regardless of whether the diagnostic deck terminates.",
+  "criteria": [
+    {
+      "id": "local-colorset-scope",
+      "label": "Local colorset closure is not a full-core equivalence proof",
+      "status": "failed",
+      "evidence": []
+    },
+    {
+      "id": "position-resolved-domains",
+      "label": "Five reused material records do not preserve 91 independent positions or 21 exact D3 transport-time orbits",
+      "status": "failed",
+      "evidence": []
+    },
+    {
+      "id": "full-core-acceptance",
+      "label": "This withdrawn template is ineligible for IRENA full-core physics acceptance",
+      "status": "failed",
+      "evidence": []
+    }
+  ]
+}

@@ -22,6 +22,7 @@ from openmc2donjon.from_openmc_summary import (
     validate_from_openmc_summary,
 )
 from openmc2donjon.handoff_summary import HANDOFF_SUMMARY_SCHEMA
+from openmc2donjon.openmc_provenance import file_sha256, read_openmc_provenance
 
 
 def assert_from_openmc_summary(
@@ -32,6 +33,39 @@ def assert_from_openmc_summary(
 
 
 class FromOpenMCCliTests(unittest.TestCase):
+    def test_production_rejects_h_factor_default(self) -> None:
+        stream = io.StringIO()
+        with contextlib.redirect_stderr(stream):
+            with self.assertRaises(SystemExit) as cm:
+                from_openmc_main(
+                    [
+                        "--recipe",
+                        "missing_recipe.py",
+                        "--production",
+                        "--h-factor-default",
+                        "200.0",
+                    ]
+                )
+
+        self.assertEqual(cm.exception.code, 2)
+        self.assertIn("cannot be combined with --h-factor-default", stream.getvalue())
+
+    def test_production_requires_loaded_statepoint(self) -> None:
+        stream = io.StringIO()
+        with contextlib.redirect_stderr(stream):
+            with self.assertRaises(SystemExit) as cm:
+                from_openmc_main(
+                    [
+                        "--recipe",
+                        "missing_recipe.py",
+                        "--production",
+                        "--no-load-statepoint",
+                    ]
+                )
+
+        self.assertEqual(cm.exception.code, 2)
+        self.assertIn("--production requires --statepoint", stream.getvalue())
+
     def test_version_option(self) -> None:
         stream = io.StringIO()
         with contextlib.redirect_stdout(stream), self.assertRaises(SystemExit) as cm:
@@ -78,6 +112,7 @@ class FromOpenMCCliTests(unittest.TestCase):
             with h5py.File(hdf5, "r") as h5:
                 self.assertEqual(sorted(h5["mixtures"]), ["FUEL_A", "MOD_A"])
                 self.assertEqual(h5.attrs["domain_mode"], "recipe_smoke")
+                self.assertIn("provenance/openmc/record_json", h5)
 
             blocks = lcm_ascii.read_lcm_ascii(output)
             names = [block.name for block in blocks if block.name]
@@ -109,6 +144,17 @@ class FromOpenMCCliTests(unittest.TestCase):
             self.assertFalse(payload["checked"])
             self.assertIsNone(payload["check_passed"])
             self.assertIsNone(payload["check_summary_json"])
+            provenance = payload["openmc_provenance"]
+            self.assertEqual(provenance["status"], "incomplete")
+            self.assertFalse(provenance["capabilities"]["reference_bound"])
+            embedded = read_openmc_provenance(hdf5)
+            assert embedded is not None
+            self.assertTrue(embedded["integrity"]["ok"])
+            self.assertEqual(
+                embedded["digest_sha256"], provenance["digest_sha256"]
+            )
+            self.assertEqual(payload["hdf5_sha256"], file_sha256(hdf5))
+            self.assertEqual(payload["output_sha256"], file_sha256(output))
 
     def test_dry_run_reports_conversion_plan_without_writing_files(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
@@ -205,8 +251,9 @@ class FromOpenMCCliTests(unittest.TestCase):
         self.assertIn("chi_sum_tolerance: 1e-06", rendered)
         self.assertIn("require_adf_face_consistency: yes", rendered)
         self.assertIn("transport_p1_fail: 0.05", rendered)
-        self.assertIn("uncertainty_production_fail: 1.0", rendered)
-        self.assertIn("require_std_dev_coverage: no", rendered)
+        self.assertIn("uncertainty_production_fail: 0.1", rendered)
+        self.assertIn("uncertainty_fail: 0.1", rendered)
+        self.assertIn("require_std_dev_coverage: yes", rendered)
 
     def test_check_can_fail_on_exported_std_dev_uncertainty(self) -> None:
         recipe_text = '''
@@ -417,6 +464,7 @@ def build_library():
             manifest = run_dir / "manifest.json"
             bundle_validation = run_dir / "bundle_validation_summary.json"
             handoff_summary = run_dir / "handoff_summary.json"
+            provenance_summary = run_dir / "openmc_provenance.json"
             recipe_copy = run_dir / recipe.name
             conversion_payload = json.loads(summary.read_text(encoding="utf-8"))
             check_payload = json.loads(check_summary.read_text(encoding="utf-8"))
@@ -433,6 +481,7 @@ def build_library():
                     manifest,
                     bundle_validation,
                     handoff_summary,
+                    provenance_summary,
                     recipe_copy,
                 )
             ]
@@ -467,12 +516,29 @@ def build_library():
             handoff_payload["bundle_validation_decision"],
             validation_payload["decision"],
         )
-        self.assertEqual(handoff_payload["artifact_count"], 5)
+        self.assertEqual(handoff_payload["artifact_count"], 6)
         labels = {artifact["label"]: artifact for artifact in manifest_payload["artifacts"]}
-        self.assertEqual(set(labels), {"mgxs", "mcompo", "run-summary", "check-summary", "recipe"})
+        self.assertEqual(
+            set(labels),
+            {
+                "mgxs",
+                "mcompo",
+                "run-summary",
+                "check-summary",
+                "recipe",
+                "openmc-provenance",
+            },
+        )
         self.assertEqual(
             set(handoff_payload["artifact_labels"]),
-            {"mgxs", "mcompo", "run-summary", "check-summary", "recipe"},
+            {
+                "mgxs",
+                "mcompo",
+                "run-summary",
+                "check-summary",
+                "recipe",
+                "openmc-provenance",
+            },
         )
         self.assertEqual(labels["run-summary"]["summary_schema"], FROM_OPENMC_SUMMARY_SCHEMA)
         self.assertEqual(
@@ -849,6 +915,7 @@ def build_library():
             "face-flux-check-summary",
             "adf-sidecar-summary",
             "recipe",
+            "openmc-provenance",
         }
         self.assertEqual(set(labels), required_labels)
         self.assertEqual(
@@ -954,6 +1021,7 @@ def build_library():
             "face-flux-check-summary",
             "adf-sidecar-summary",
             "recipe",
+            "openmc-provenance",
         }
         self.assertEqual(set(labels), required_labels)
         self.assertEqual(

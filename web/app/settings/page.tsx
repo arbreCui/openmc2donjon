@@ -29,10 +29,11 @@ export default function SettingsPage() {
   };
 
   return (
-    <main className="min-h-[calc(100vh-3.5rem)] px-6 py-12">
-      <div className="mx-auto max-w-3xl">
+    <main className="app-page">
+      <div className="app-container max-w-3xl">
         <header className="mb-8">
-          <h1 className="text-3xl font-bold tracking-tight">
+          <p className="page-kicker">Local preferences</p>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight">
             <span className="grad-text">Settings</span>
           </h1>
           <p className="mt-2 text-sm text-[var(--fg-2)]">
@@ -44,7 +45,7 @@ export default function SettingsPage() {
         </header>
 
         <form
-          className="glass rounded-xl p-5 space-y-4"
+          className="surface space-y-4 p-5"
           onSubmit={onSave}
         >
           <div>
@@ -97,7 +98,7 @@ export default function SettingsPage() {
               className="btn btn-primary"
               disabled={!hydrated}
             >
-              Save
+              Save settings
             </button>
           </div>
         </form>

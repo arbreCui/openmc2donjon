@@ -1,0 +1,120 @@
+{
+  "schema": "openmc2donjon.project.v1",
+  "name": "IRENA-30 withdrawn five-colorset diagnostic",
+  "description": "WITHDRAWN DIAGNOSTIC ONLY: five local seven-node colorset records may be inspected and copied onto the historical 91-position map, but this overmerges distinct full-core leakage environments and can never establish IRENA full-core physics acceptance. Neither count is a product default.",
+  "template": "irena30-colorset-core",
+  "workflow": "withdrawn-diagnostic-five-colorset-component-library",
+  "lifecycle": "withdrawn-diagnostic",
+  "components": [
+    {
+      "id": "int_ext",
+      "label": "INT",
+      "role": "Inner fuel target qualified with six EXT neighbors",
+      "required": true,
+      "input": "colorsets/int_ext/handoff/mgxs_components.h5",
+      "output": "colorsets/int_ext/handoff/native_sph_24g_p3.macrolib.txt",
+      "receipt": "colorsets/int_ext/handoff/reference_24g_p3.macrolib.txt.convert.json",
+      "physics_summary": "colorsets/int_ext/handoff/physics_summary.json",
+      "format": "macrolib",
+      "contract": "native-sph",
+      "identity": "INT",
+      "metadata": {"target": "INT", "neighbors": "EXT", "node_side_cm": 10.1036},
+      "evidence": [
+        {"id": "reference", "label": "Converter reference", "path": "colorsets/int_ext/handoff/reference_24g_p3.macrolib.txt"},
+        {"id": "verification", "label": "DONJON verification", "path": "colorsets/int_ext/handoff/donjon_verify_24g_p3.macrolib.txt"},
+        {"id": "result", "label": "DONJON result", "path": "colorsets/int_ext/handoff/native_sph_donjon.result"},
+        {"id": "coverage", "label": "Energy coverage", "path": "colorsets/int_ext/handoff/energy_coverage_summary.json"}
+      ]
+    },
+    {
+      "id": "ext_int",
+      "label": "EXT",
+      "role": "Outer fuel target qualified with six INT neighbors",
+      "required": true,
+      "input": "colorsets/ext_int/handoff/mgxs_components.h5",
+      "output": "colorsets/ext_int/handoff/native_sph_24g_p3.macrolib.txt",
+      "receipt": "colorsets/ext_int/handoff/reference_24g_p3.macrolib.txt.convert.json",
+      "physics_summary": "colorsets/ext_int/handoff/physics_summary.json",
+      "format": "macrolib",
+      "contract": "native-sph",
+      "identity": "EXT",
+      "metadata": {"target": "EXT", "neighbors": "INT", "node_side_cm": 10.1036},
+      "evidence": [
+        {"id": "reference", "label": "Converter reference", "path": "colorsets/ext_int/handoff/reference_24g_p3.macrolib.txt"},
+        {"id": "verification", "label": "DONJON verification", "path": "colorsets/ext_int/handoff/donjon_verify_24g_p3.macrolib.txt"},
+        {"id": "result", "label": "DONJON result", "path": "colorsets/ext_int/handoff/native_sph_donjon.result"},
+        {"id": "coverage", "label": "Energy coverage", "path": "colorsets/ext_int/handoff/energy_coverage_summary.json"}
+      ]
+    },
+    {
+      "id": "csd_int",
+      "label": "CSD",
+      "role": "Control target qualified with six INT neighbors",
+      "required": true,
+      "input": "colorsets/csd_int/handoff/mgxs_components.h5",
+      "output": "colorsets/csd_int/handoff/native_sph_24g_p3.macrolib.txt",
+      "receipt": "colorsets/csd_int/handoff/reference_24g_p3.macrolib.txt.convert.json",
+      "physics_summary": "colorsets/csd_int/handoff/physics_summary.json",
+      "format": "macrolib",
+      "contract": "native-sph",
+      "identity": "CSD",
+      "metadata": {"target": "CSD", "neighbors": "INT", "node_side_cm": 10.1036},
+      "evidence": [
+        {"id": "reference", "label": "Converter reference", "path": "colorsets/csd_int/handoff/reference_24g_p3.macrolib.txt"},
+        {"id": "verification", "label": "DONJON verification", "path": "colorsets/csd_int/handoff/donjon_verify_24g_p3.macrolib.txt"},
+        {"id": "result", "label": "DONJON result", "path": "colorsets/csd_int/handoff/native_sph_donjon.result"},
+        {"id": "coverage", "label": "Energy coverage", "path": "colorsets/csd_int/handoff/energy_coverage_summary.json"}
+      ]
+    },
+    {
+      "id": "dsdf_int",
+      "label": "DSDF",
+      "role": "Follower target qualified with six INT neighbors",
+      "required": true,
+      "input": "colorsets/dsdf_int/handoff/mgxs_components.h5",
+      "output": "colorsets/dsdf_int/handoff/native_sph_24g_p3.macrolib.txt",
+      "receipt": "colorsets/dsdf_int/handoff/reference_24g_p3.macrolib.txt.convert.json",
+      "physics_summary": "colorsets/dsdf_int/handoff/physics_summary.json",
+      "format": "macrolib",
+      "contract": "native-sph",
+      "identity": "DSDF",
+      "metadata": {"target": "DSDF", "neighbors": "INT", "node_side_cm": 10.1036},
+      "evidence": [
+        {"id": "reference", "label": "Converter reference", "path": "colorsets/dsdf_int/handoff/reference_24g_p3.macrolib.txt"},
+        {"id": "verification", "label": "DONJON verification", "path": "colorsets/dsdf_int/handoff/donjon_verify_24g_p3.macrolib.txt"},
+        {"id": "result", "label": "DONJON result", "path": "colorsets/dsdf_int/handoff/native_sph_donjon.result"},
+        {"id": "coverage", "label": "Energy coverage", "path": "colorsets/dsdf_int/handoff/energy_coverage_summary.json"}
+      ]
+    },
+    {
+      "id": "pnl_ext",
+      "label": "PNL",
+      "role": "Lateral protection target qualified with six EXT neighbors",
+      "required": true,
+      "input": "colorsets/pnl_ext/handoff/mgxs_components.h5",
+      "output": "colorsets/pnl_ext/handoff/native_sph_24g_p3.macrolib.txt",
+      "receipt": "colorsets/pnl_ext/handoff/reference_24g_p3.macrolib.txt.convert.json",
+      "physics_summary": "colorsets/pnl_ext/handoff/physics_summary.json",
+      "format": "macrolib",
+      "contract": "native-sph",
+      "identity": "PNL",
+      "metadata": {"target": "PNL", "neighbors": "EXT", "node_side_cm": 10.1036},
+      "evidence": [
+        {"id": "reference", "label": "Converter reference", "path": "colorsets/pnl_ext/handoff/reference_24g_p3.macrolib.txt"},
+        {"id": "verification", "label": "DONJON verification", "path": "colorsets/pnl_ext/handoff/donjon_verify_24g_p3.macrolib.txt"},
+        {"id": "result", "label": "DONJON result", "path": "colorsets/pnl_ext/handoff/native_sph_donjon.result"},
+        {"id": "coverage", "label": "Energy coverage", "path": "colorsets/pnl_ext/handoff/energy_coverage_summary.json"}
+      ]
+    }
+  ],
+  "consumer": {
+    "kind": "irena30-withdrawn-colorset-core-diagnostic",
+    "label": "IRENA-30 withdrawn five-CPO deck preview",
+    "href": "/donjon?mode=irena30-colorset-core&format=macrolib&geometry=hex&solver=spn&side=10.1036&height=10",
+    "runs": [
+      {"id": "sn", "label": "SN", "deck": "core/irena30_component_fullcore_sn.x2m", "result": "core/irena30_component_fullcore_sn.result"},
+      {"id": "spn", "label": "SPN", "deck": "core/irena30_component_fullcore_spn.x2m", "result": "core/irena30_component_fullcore_spn.result"}
+    ]
+  },
+  "acceptance": {"decision": "acceptance/decision.json"}
+}

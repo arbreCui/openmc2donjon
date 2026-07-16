@@ -29,6 +29,10 @@ from .export_openmc_mgxs import (
     _safe_hdf5_name,
     export_openmc_mgxs_library,
 )
+from .openmc_provenance import (
+    collect_openmc_provenance,
+    write_openmc_provenance,
+)
 
 
 class StatepointLoadError(RuntimeError):
@@ -43,6 +47,7 @@ class RecipeExportSummary:
     statepoint_path: Path | None
     statepoint_loaded: bool
     output: ExportSummary
+    provenance: Mapping[str, Any]
 
 
 @dataclass(frozen=True)
@@ -197,11 +202,45 @@ def export_openmc_statepoint_recipe(
         summary=summary,
     )
 
+    provenance_files = _call_optional(
+        recipe,
+        ("provenance_files", "get_provenance_files"),
+        library=library,
+        recipe_path=recipe_file,
+        statepoint_path=statepoint_file,
+        output_path=output_file,
+        summary=summary,
+    )
+    provenance_metadata = _call_optional(
+        recipe,
+        ("provenance_metadata", "get_provenance_metadata"),
+        library=library,
+        recipe_path=recipe_file,
+        statepoint_path=statepoint_file,
+        output_path=output_file,
+        summary=summary,
+    )
+    if provenance_metadata is not None and not isinstance(provenance_metadata, Mapping):
+        raise TypeError("recipe provenance_metadata() must return a mapping")
+    provenance = collect_openmc_provenance(
+        recipe_path=recipe_file,
+        statepoint_path=statepoint_file,
+        statepoint_loaded=statepoint_loaded,
+        declared_files=_recipe_provenance_files(
+            recipe,
+            provenance_files,
+            recipe_path=recipe_file,
+        ),
+        declared_metadata=provenance_metadata,
+    )
+    provenance = write_openmc_provenance(output_file, provenance)
+
     return RecipeExportSummary(
         recipe_path=recipe_file,
         statepoint_path=statepoint_file,
         statepoint_loaded=statepoint_loaded,
         output=summary,
+        provenance=provenance,
     )
 
 
@@ -730,6 +769,52 @@ def _optional_string_attr(obj: Any, name: str) -> str | None:
     if value is None:
         return None
     return str(value)
+
+
+def _recipe_provenance_files(
+    recipe: ModuleType,
+    declared: Any,
+    *,
+    recipe_path: Path,
+) -> Mapping[str, Any] | Any:
+    """Merge a recipe hook with conventional model-file constants.
+
+    Explicit ``provenance_files()`` entries win. The constants keep existing
+    recipes useful when they already declare OpenMC XML inputs as
+    ``GEOMETRY_XML`` / ``MATERIALS_XML`` and related names.
+    """
+
+    if declared is None:
+        result: dict[str, Any] = {}
+    elif isinstance(declared, Mapping):
+        result = {str(key): value for key, value in declared.items()}
+    else:
+        return declared
+    constants = {
+        "geometry": ("GEOMETRY_XML", "geometry_xml"),
+        "materials": ("MATERIALS_XML", "materials_xml"),
+        "settings": ("SETTINGS_XML", "settings_xml"),
+        "tallies": ("TALLIES_XML", "tallies_xml"),
+        "summary": ("SUMMARY_H5", "SUMMARY_PATH", "summary_path"),
+        "cross_sections": (
+            "CROSS_SECTIONS_XML",
+            "CROSS_SECTIONS",
+            "cross_sections_path",
+        ),
+    }
+    for role, names in constants.items():
+        if role in result:
+            continue
+        for name in names:
+            value = getattr(recipe, name, None)
+            if value is None:
+                continue
+            path = Path(value).expanduser()
+            if not path.is_absolute():
+                path = recipe_path.parent / path
+            result[role] = path
+            break
+    return result
 
 
 def _mgxs_type_warnings(

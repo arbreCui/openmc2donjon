@@ -35,6 +35,159 @@ export const DEFAULT_DONJON_DECK_OPTIONS: DonjonDeckOptions = {
   zPlus: "VOID",
 };
 
+/** Withdrawn historical IRENA-30 five-CPO/91-position deck settings. */
+export const IRENA30_DONJON_DECK_OPTIONS: Readonly<Partial<DonjonDeckOptions>> = {
+  // Retained only so archived decks can be reproduced and inspected.
+  mixtureCount: 5,
+  geometry: "hex",
+  solver: "snt",
+  snOrder: 8,
+  hexSide: 10.1036,
+  hexHeight: 10.0,
+};
+
+export const IRENA30_LEGACY_DECK_STATUS = "WITHDRAWN DIAGNOSTIC ONLY";
+
+export function isWithdrawnIrenaDonjonMode(
+  mode: string | null | undefined,
+): boolean {
+  return (
+    mode === "irena30-colorset-core" ||
+    mode === "colorset-core" ||
+    mode === "irena30-component-core"
+  );
+}
+
+export type Irena30CoreSolver = "snt" | "spn";
+
+export interface Irena30ColorsetCpoPaths {
+  int: string;
+  ext: string;
+  csd: string;
+  dsdf: string;
+  pnl: string;
+}
+
+export const IRENA30_COLORSET_CPO_COMPONENTS = [
+  { id: "int", label: "INT", mixture: 1, colorset: "INT / EXT", colorsetId: "int_ext" },
+  { id: "ext", label: "EXT", mixture: 2, colorset: "EXT / INT", colorsetId: "ext_int" },
+  { id: "csd", label: "CSD", mixture: 3, colorset: "CSD / INT", colorsetId: "csd_int" },
+  { id: "dsdf", label: "DSDF", mixture: 4, colorset: "DSDF / INT", colorsetId: "dsdf_int" },
+  { id: "pnl", label: "PNL", mixture: 5, colorset: "PNL / EXT", colorsetId: "pnl_ext" },
+] as const satisfies readonly {
+  id: keyof Irena30ColorsetCpoPaths;
+  label: string;
+  mixture: number;
+  colorset: string;
+  colorsetId: string;
+}[];
+
+export function irena30CpoPreviewIssue(
+  componentId: keyof Irena30ColorsetCpoPaths,
+  text: string,
+): string | null {
+  const component = IRENA30_COLORSET_CPO_COMPONENTS.find(
+    (candidate) => candidate.id === componentId,
+  );
+  if (!component) return `unknown IRENA component: ${componentId}`;
+  if (!/SIGNATURE[\s\S]*L_MULTICOMPO/.test(text)) {
+    return `${component.label} is not a readable L_MULTICOMPO ASCII object`;
+  }
+  if (!text.toLowerCase().includes(component.colorsetId)) {
+    return `${component.label} CPO must record ${component.colorsetId}`;
+  }
+  return null;
+}
+
+/**
+ * Render the withdrawn historical IRENA-30 five-CPO deck for inspection.
+ * Each CPO contributes its center domain (FROM 1), and those five domains
+ * are reused over the 91-position ARI map. That reuse is not a full-core
+ * equivalence demonstration; this generator is retained for archaeology.
+ */
+export function irena30ColorsetFullCoreSnippet(
+  paths: Irena30ColorsetCpoPaths,
+  solver: Irena30CoreSolver = "snt",
+): string {
+  const modules =
+    solver === "snt"
+      ? "GEO: DELETE: END: NCR: SNT: ASM: FLU: GREP:"
+      : "GEO: DELETE: END: NCR: TRIVAT: TRIVAA: FLUD: GREP:";
+  const inputs = IRENA30_COLORSET_CPO_COMPONENTS.flatMap((component) => {
+    const path =
+      paths[component.id].trim() || `CPO_${component.label.toLowerCase()}.mcompo.txt`;
+    return [
+      `SEQ_ASCII CPO_${component.id}_txt :: FILE`,
+      `  '${lcmFilePath(path)}' ;`,
+    ];
+  });
+  const assignments = [
+    "CPO_INT := CPO_int_txt ; CPO_EXT := CPO_ext_txt ; CPO_CSD := CPO_csd_txt ;",
+    "CPO_DSDF := CPO_dsdf_txt ; CPO_PNL := CPO_pnl_txt ;",
+  ];
+  const ncrComponents = IRENA30_COLORSET_CPO_COMPONENTS.map(
+    (component) =>
+      `    COMPO CPO_${component.label} 'OUT' MIX ${component.mixture} FROM 1 ENDMIX`,
+  );
+  const solve =
+    solver === "snt"
+      ? [
+          "TRACK := SNT: GEOM :: EDIT 0 DIAM 1 SN 8 SCAT 2 ;",
+          "SYSTEM := ASM: MACRO TRACK :: ARM ;",
+          "FLUX := FLU: SYSTEM MACRO TRACK :: TYPE K EXTE 500 1E-05 ;",
+        ]
+      : [
+          "TRACK := TRIVAT: GEOM :: EDIT 0 MAXR 100000 DUAL 2 2 SPN 5 SCAT 2 ;",
+          "SYSTEM := TRIVAA: MACRO TRACK :: EDIT 0 ;",
+          "FLUX := FLUD: SYSTEM TRACK :: ACCE 3 3 EXTE 5000 1E-05 ADI 6 ;",
+        ];
+
+  return [
+    `* ${IRENA30_LEGACY_DECK_STATUS}: IRENA-30 LEGACY FIVE-CPO/91-POSITION DECK.`,
+    "* Retained for historical deck inspection and reproduction only.",
+    "* FROM 1 selects the center domain from each seven-domain colorset.",
+    "* Reusing five center domains over 91 positions does not establish full-core equivalence.",
+    `MODULE ${modules} ;`,
+    "LINKED_LIST GEOM MACRO TRACK SYSTEM FLUX",
+    "            CPO_INT CPO_EXT CPO_CSD CPO_DSDF CPO_PNL ;",
+    "REAL Keff ;",
+    "",
+    ...inputs,
+    ...assignments,
+    "",
+    "MACRO := NCR: CPO_INT CPO_EXT CPO_CSD CPO_DSDF CPO_PNL :: EDIT 0",
+    "    MACRO LINEAR NMIX 5",
+    ...ncrComponents,
+    ";",
+    "CPO_INT CPO_EXT CPO_CSD CPO_DSDF CPO_PNL := DELETE:",
+    "  CPO_INT CPO_EXT CPO_CSD CPO_DSDF CPO_PNL ;",
+    "",
+    "GEOM := GEO: :: HEXZ 91 1 EDIT 0",
+    "  Z- REFL Z+ REFL HBC COMPLETE VOID",
+    "  SIDE 10.1036 SPLITL 2",
+    "  MESHZ 0.0 10.0",
+    "  MIX",
+    "* ARI: control positions use the CSD component (mix 3).",
+    "  1",
+    "  4 1 4 1 4 1",
+    "  1 1 1 1 1 1 1 1 1 1 1 1",
+    "  3 1 1 3 1 1 3 1 1 3 1 1 3 1 1 3 1 1",
+    "  2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2",
+    "  5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5",
+    ";",
+    "",
+    ...solve,
+    "",
+    "GREP: FLUX :: GETVAL 'K-EFFECTIVE' 1 >>Keff<< ;",
+    `ECHO 'IRENA-30 WITHDRAWN FIVE-CPO ${solver === "snt" ? "SN" : "SPN"} DIAGNOSTIC K-EFFECTIVE' Keff ;`,
+    "END: ;",
+  ].join("\n");
+}
+
+function lcmFilePath(value: string): string {
+  return value.replaceAll("'", "''");
+}
+
 export interface DonjonGuideLinkInput {
   asciiPath?: string | null;
   format?: string | null;
@@ -144,9 +297,9 @@ export function donjonDeckChecklist(
   const object = donjonObjectLabel(format);
   const solver =
     deck.solver === "spn"
-      ? `SPN${deck.spnOrder}`
+      ? "SPN"
       : deck.solver === "snt"
-        ? `SN${deck.snOrder}`
+        ? "SN"
         : "diffusion";
   return [
     {
@@ -300,6 +453,44 @@ export function donjonDeckOptionsFromSearchParams(
     zMinus: deckBoundaryParam(params.get("zm")),
     zPlus: deckBoundaryParam(params.get("zp")),
   });
+}
+
+export const DONJON_WEB_RUN_INPUT_ALIASES = {
+  multicompo: "openmc2donjon_input.mcompo.txt",
+  macrolib: "openmc2donjon_input.macrolib.txt",
+} as const satisfies Record<DonjonGuideFormat, string>;
+
+export interface DonjonWebRunPlanInput {
+  asciiPath: string;
+  format: DonjonGuideFormat;
+  purpose: "ingest" | "solve";
+  deckOptions?: Partial<DonjonDeckOptions>;
+}
+
+export interface DonjonWebRunPlan {
+  deckText: string;
+  inputFiles: { source_path: string; relative_path: string }[];
+}
+
+/**
+ * Build the self-contained request used by the constrained in-app runner.
+ *
+ * Previewed/downloaded decks intentionally retain the user's real path. The
+ * web runner instead stages that file under a fixed short relative alias, so
+ * no absolute, quoted, or overlong source path enters executable CLE text.
+ */
+export function donjonWebRunPlan(input: DonjonWebRunPlanInput): DonjonWebRunPlan {
+  const sourcePath = input.asciiPath.trim();
+  if (!sourcePath) throw new Error("A DONJON ASCII path is required");
+  const relativePath = DONJON_WEB_RUN_INPUT_ALIASES[input.format];
+  const deckText =
+    input.purpose === "ingest"
+      ? donjonIngestOnlySnippet(relativePath, input.format)
+      : donjonIngestSnippet(relativePath, input.format, input.deckOptions);
+  return {
+    deckText,
+    inputFiles: [{ source_path: sourcePath, relative_path: relativePath }],
+  };
 }
 
 export function donjonIngestSnippet(

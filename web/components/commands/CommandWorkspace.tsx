@@ -49,17 +49,18 @@ export default function CommandWorkspace() {
   }, [refresh]);
 
   return (
-    <main className="min-h-[calc(100vh-3.5rem)] px-6 py-12">
-      <div className="mx-auto max-w-6xl">
+    <main className="app-page">
+      <div className="app-container max-w-6xl">
         <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
+            <div className="page-kicker">Advanced tools</div>
             <h1 className="text-3xl font-bold tracking-tight">
-              <span className="grad-text">Command reference</span>
+              Command reference
             </h1>
             <p className="mt-2 text-sm text-[var(--fg-2)]">
               Advanced reference for CLI commands and their web surfaces. For
-              normal work, start with Convert; use this page when you need the
-              lower-level command behind a workflow step.
+              normal work, start with the Converter; use this page when you
+              need the lower-level command behind a workflow step.
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -67,7 +68,7 @@ export default function CommandWorkspace() {
               href="/convert?intent=direct-convert&format=multicompo&check=1&production=1"
               className="btn btn-primary"
             >
-              Open converter
+              Open Converter
             </Link>
             {state.kind === "error" ? (
               <button type="button" onClick={refresh} className="btn btn-secondary">

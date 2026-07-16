@@ -11,6 +11,7 @@ export interface ConvertCliPreviewOptions {
   overwrite: boolean;
   check: boolean;
   production: boolean;
+  requirePhysicalSph?: boolean;
   warnUnknownEnergyMesh: boolean;
   requireKnownEnergyMesh: boolean;
   rootName: string;
@@ -76,7 +77,9 @@ export function buildConvertCliPreview(options: ConvertCliPreviewOptions): strin
   }
   if (options.check) command.push("--check");
   if (options.production) command.push("--production");
-  const preflightRequested = options.check || options.production;
+  if (options.requirePhysicalSph) command.push("--require-physical-sph");
+  const preflightRequested =
+    options.check || options.production || Boolean(options.requirePhysicalSph);
   if (preflightRequested && options.warnUnknownEnergyMesh) {
     command.push("--warn-unknown-energy-mesh");
   }

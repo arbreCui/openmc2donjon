@@ -14,6 +14,7 @@ describe("equivalence command builder", () => {
     expect(parseEquivalenceKind("adf-sidecar")).toBe("adf-sidecar");
     expect(parseEquivalenceKind("augment-adf")).toBe("augment-adf");
     expect(parseEquivalenceKind("openmc-sph-sidecar")).toBe("openmc-sph-sidecar");
+    expect(parseEquivalenceKind("apply-sph")).toBe("apply-sph");
     expect(parseEquivalenceKind("sph-sidecar")).toBe("sph-sidecar");
     expect(parseEquivalenceKind("augment-sph")).toBe("augment-sph");
     expect(parseEquivalenceKind("bad")).toBe("openmc-sph-sidecar");
@@ -62,7 +63,7 @@ describe("equivalence command builder", () => {
         damping: "0.5",
       }),
     ).toBe(
-      "openmc2donjon make-openmc-sph-sidecar /tmp/mgxs.h5 -o /tmp/openmc_sph.h5 --reference-flux /tmp/ce_flux.h5::openmc_volume_flux --mg-flux /tmp/mg_flux.h5::openmc_mg_flux --table-output /tmp/openmc_sph.csv --damping 0.5 --flux-normalization none",
+      "openmc2donjon make-openmc-sph-sidecar /tmp/mgxs.h5 -o /tmp/openmc_sph.h5 --reference-flux /tmp/ce_flux.h5::openmc_volume_flux --mg-flux /tmp/mg_flux.h5::openmc_mg_flux --table-output /tmp/openmc_sph.csv --damping 0.5 --flux-normalization auto --sph-target rate",
     );
 
     expect(
@@ -75,7 +76,18 @@ describe("equivalence command builder", () => {
         zeroFluxPolicy: "identity" as const,
       }),
     ).toBe(
-      "openmc2donjon make-openmc-sph-sidecar /tmp/mgxs.h5 -o /tmp/openmc_sph.h5 --reference-flux /tmp/ce_flux.h5::openmc_volume_flux --mg-flux /tmp/mg_flux.h5::openmc_mg_flux --damping 1.0 --flux-normalization none --zero-flux-policy identity",
+      "openmc2donjon make-openmc-sph-sidecar /tmp/mgxs.h5 -o /tmp/openmc_sph.h5 --reference-flux /tmp/ce_flux.h5::openmc_volume_flux --mg-flux /tmp/mg_flux.h5::openmc_mg_flux --damping 1.0 --flux-normalization auto --sph-target rate --zero-flux-policy identity",
+    );
+
+    expect(
+      buildEquivalenceCli({
+        ...defaultEquivalenceOptions("apply-sph"),
+        inputH5: "/tmp/mgxs.h5",
+        outputPath: "/tmp/mgxs_sph_applied.h5",
+        sphSource: "/tmp/openmc_sph.h5",
+      }),
+    ).toBe(
+      "openmc2donjon apply-sph /tmp/mgxs.h5 --input-format converter --sph-source /tmp/openmc_sph.h5 -o /tmp/mgxs_sph_applied.h5",
     );
 
     expect(
@@ -101,21 +113,20 @@ describe("equivalence command builder", () => {
     );
   });
 
-  it("composes the IRENA PNL rate-preserving SPH prescription", () => {
-    const options = {
+  it("keeps the production SPH command free of fitted numerical overrides", () => {
+    const command = buildEquivalenceCli({
       ...defaultEquivalenceOptions("openmc-sph-sidecar"),
       inputH5: "/tmp/mgxs.h5",
       outputPath: "/tmp/openmc_sph.h5",
       referenceFlux: "/tmp/ce_flux.h5::openmc_volume_flux",
       mgFlux: "/tmp/mg_flux.h5::openmc_mg_flux",
-      sphTarget: "rate" as const,
-      freezeGroups: "1,31",
-      fluxFloorRel: "1e-3",
-    };
+    });
 
-    expect(buildEquivalenceCli(options)).toBe(
-      "openmc2donjon make-openmc-sph-sidecar /tmp/mgxs.h5 -o /tmp/openmc_sph.h5 --reference-flux /tmp/ce_flux.h5::openmc_volume_flux --mg-flux /tmp/mg_flux.h5::openmc_mg_flux --damping 1.0 --flux-normalization none --sph-target rate --flux-floor-rel 1e-3 --freeze-groups 1,31",
-    );
+    expect(command).toContain("--sph-target rate");
+    expect(command).not.toContain("--freeze-groups");
+    expect(command).not.toContain("--flux-floor-rel");
+    expect(command).not.toContain("--clip-min");
+    expect(command).not.toContain("--clip-max");
   });
 
   it("labels record attachment as Augment, never Inject", () => {
@@ -158,11 +169,9 @@ describe("OpenMC-side SPH artifact naming (openmc_sph.*)", () => {
   it("agrees with the canned OpenMC SPH workflow step CLIs", () => {
     const make = OPENMC_SPH_WORKFLOW_STEPS.find((step) => step.id === "sph-sidecar");
     const apply = OPENMC_SPH_WORKFLOW_STEPS.find((step) => step.id === "apply-sph");
-    const augment = OPENMC_SPH_WORKFLOW_STEPS.find((step) => step.id === "augment");
 
     expect(make?.cli).toContain(`-o ${sidecarName}`);
     expect(apply?.cli).toContain(`--sph-source ${sidecarName}`);
-    expect(augment?.cli).toContain(`--sph-source ${sidecarName}`);
   });
 
   it("does not collide with the different make-sph-sidecar output", () => {

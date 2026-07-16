@@ -33,14 +33,7 @@ export function buildGates(data: ConvertResponse, input: ConvertPreflightInput) 
     },
     {
       title: "Uncertainty",
-      status:
-        uncertainty?.checked === false
-          ? "skipped"
-          : input.warnings.some((warning) =>
-              warning.toLowerCase().includes("std_dev"),
-            )
-            ? "warn"
-            : "pass",
+      status: uncertaintyGateStatus(input),
       summary: "MGXS std_dev coverage and maximum relative uncertainty.",
       detail:
         uncertainty?.max_rel == null
@@ -61,6 +54,22 @@ export function buildGates(data: ConvertResponse, input: ConvertPreflightInput) 
     summary: string;
     detail: string;
   }[];
+}
+
+export function uncertaintyGateStatus(input: ConvertPreflightInput): GateStatus {
+  if (input.issues.some(isUncertaintyMessage)) return "fail";
+  if (input.uncertainty?.checked === false) return "skipped";
+  if (input.warnings.some(isUncertaintyMessage)) return "warn";
+  const datasets = input.uncertainty?.datasets;
+  const expected = input.uncertainty?.expected_datasets;
+  if (datasets != null && expected != null && datasets < expected) return "warn";
+  if (input.uncertainty == null || input.uncertainty.checked == null) return "skipped";
+  return "pass";
+}
+
+function isUncertaintyMessage(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes("std_dev") || normalized.includes("uncertaint");
 }
 
 function outputGate(data: ConvertResponse): {
@@ -180,7 +189,9 @@ export function compactEquivalence(input: ConvertPreflightInput): string {
     const faces = input.adf_faces?.length ?? 0;
     parts.push(faces > 0 ? `ADF ${input.adf_mixtures}/${faces}f` : `ADF ${input.adf_mixtures}`);
   }
-  if (input.sph_calculations) {
+  if (input.sph_applied) {
+    parts.push("SPH applied");
+  } else if (input.sph_calculations) {
     parts.push(`SPH ${input.sph_calculations}`);
   }
   return parts.length === 0 ? "none" : parts.join(" + ");

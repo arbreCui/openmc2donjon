@@ -3,8 +3,9 @@
  *
  * The form exposes one segmented control ("Checks: Production / Standard /
  * None") instead of independent check/production toggles; these helpers map
- * that level onto the two CLI flags. The production contract is the default —
- * URL params still override it, so demo and SPH deep links keep working.
+ * that level onto the two CLI flags. Production is the default because the
+ * Converter is the formal OpenMC-to-DRAGON/DONJON handoff boundary. Standard
+ * remains available as an explicitly non-production engineering preflight.
  */
 
 export type ConvertChecksLevel = "production" | "standard" | "none";
@@ -15,7 +16,7 @@ export const CONVERT_CHECKS_LEVELS: readonly ConvertChecksLevel[] = [
   "none",
 ];
 
-/** Form defaults: production checks on unless a URL param overrides them. */
+/** Form defaults: formal production validation unless a URL param overrides it. */
 export const CONVERT_CHECKS_DEFAULTS = {
   check: true,
   production: true,
@@ -50,10 +51,10 @@ export function convertChecksLevelDescription(
   level: ConvertChecksLevel,
 ): string {
   if (level === "production") {
-    return "Production checks (--production): strict acceptance preset on top of Preflight (--check).";
+    return "Formal handoff gate (--check --production): strict contract, provenance, and physics checks before writing.";
   }
   if (level === "standard") {
-    return "Preflight (--check): HDF5 contract and quick physics consistency before writing.";
+    return "Engineering preflight only (--check): useful during development, but it is not production acceptance.";
   }
-  return "No preflight before writing; a dry run plus production checks is the safer way to hand off.";
+  return "No contract preflight before writing. Use only for diagnostics; this output is not production accepted.";
 }

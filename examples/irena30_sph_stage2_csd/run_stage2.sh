@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ "${ALLOW_LEGACY_SPH2:-0}" != "1" ]]; then
+  echo "This archived exploratory script uses identity/floor/freeze/clip SPH and is not a production workflow." >&2
+  echo "Use the product Colorsets -> SPH -> Converter route. Set ALLOW_LEGACY_SPH2=1 only to reproduce historical evidence." >&2
+  exit 2
+fi
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 EXAMPLE_DIR="$REPO_ROOT/examples/irena30_sph_stage2_csd"
 PYTHON_BIN="${PYTHON_BIN:-/Users/wen/miniforge3/envs/openmc-dev/bin/python}"

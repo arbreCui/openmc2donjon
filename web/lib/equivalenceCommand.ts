@@ -2,6 +2,7 @@ export type EquivalenceKind =
   | "adf-sidecar"
   | "augment-adf"
   | "openmc-sph-sidecar"
+  | "apply-sph"
   | "sph-sidecar"
   | "augment-sph";
 
@@ -40,6 +41,7 @@ export interface EquivalenceCommandOptions {
   freezeGroups: string;
   sphSource: string;
   sphApplied: BooleanChoice;
+  sphApplyInputFormat: "converter" | "openmc-mgxs";
 }
 
 export interface EquivalenceKindInfo {
@@ -55,11 +57,20 @@ export const EQUIVALENCE_KINDS: readonly EquivalenceKindInfo[] = [
   {
     kind: "openmc-sph-sidecar",
     commandId: "make-openmc-sph-sidecar",
-    label: "OpenMC SPH",
-    title: "Build OpenMC-side SPH sidecar",
+    label: "OpenMC MG cross-check",
+    title: "Build an optional OpenMC MG-side SPH update",
     summary:
-      "Compare OpenMC CE reference flux and OpenMC MG macro flux from the same geometry, then write an auditable SPH table plus HDF5 sidecar.",
+      "Optional alternate method: compute an auditable rate-preserving update from matched fine-reference CE and OpenMC MG domain fluxes, then rerun the MG model until converged.",
     outputPlaceholder: "openmc_sph.h5",
+  },
+  {
+    kind: "apply-sph",
+    commandId: "apply-sph",
+    label: "Apply MG-side SPH",
+    title: "Apply a converged OpenMC MG-side SPH result",
+    summary:
+      "Divide the converter-layout macroscopic cross sections by converged, physically validated SPH factors and write the SPH-applied HDF5 that Converter will validate and export.",
+    outputPlaceholder: "mgxs_sph_applied.h5",
   },
   {
     kind: "sph-sidecar",
@@ -104,6 +115,7 @@ export function parseEquivalenceKind(value: string | null): EquivalenceKind {
     value === "adf-sidecar" ||
     value === "augment-adf" ||
     value === "openmc-sph-sidecar" ||
+    value === "apply-sph" ||
     value === "sph-sidecar" ||
     value === "augment-sph"
   ) {
@@ -141,13 +153,14 @@ export function defaultEquivalenceOptions(kind: EquivalenceKind): EquivalenceCom
     tableOutput: "",
     previousSph: "",
     damping: "1.0",
-    fluxNormalization: "none",
-    sphTarget: "flux",
+    fluxNormalization: "auto",
+    sphTarget: "rate",
     zeroFluxPolicy: "reject",
     fluxFloorRel: "",
     freezeGroups: "",
     sphSource: "",
     sphApplied: "",
+    sphApplyInputFormat: "converter",
   };
 }
 
@@ -155,6 +168,7 @@ export function buildEquivalenceCli(options: EquivalenceCommandOptions): string 
   if (options.kind === "adf-sidecar") return buildAdfSidecarCli(options);
   if (options.kind === "augment-adf") return buildAugmentAdfCli(options);
   if (options.kind === "openmc-sph-sidecar") return buildOpenmcSphSidecarCli(options);
+  if (options.kind === "apply-sph") return buildApplySphCli(options);
   if (options.kind === "sph-sidecar") return buildSphSidecarCli(options);
   return buildAugmentSphCli(options);
 }
@@ -260,6 +274,22 @@ function buildAugmentSphCli(options: EquivalenceCommandOptions): string {
     pathOrPlaceholder(options.outputPath, "mgxs_with_sph.h5"),
   ];
   pushOptional(command, "--sph-applied", options.sphApplied);
+  pushCommon(command, options);
+  return command.map(shellQuote).join(" ");
+}
+
+function buildApplySphCli(options: EquivalenceCommandOptions): string {
+  const command = [
+    "openmc2donjon",
+    "apply-sph",
+    pathOrPlaceholder(options.inputH5, "<mgxs_library.h5>"),
+    "--input-format",
+    options.sphApplyInputFormat,
+    "--sph-source",
+    pathOrPlaceholder(options.sphSource, "<openmc_sph.h5>"),
+    "-o",
+    pathOrPlaceholder(options.outputPath, "mgxs_sph_applied.h5"),
+  ];
   pushCommon(command, options);
   return command.map(shellQuote).join(" ");
 }

@@ -95,7 +95,32 @@ describe("convert next steps", () => {
           },
         }),
       ),
-    ).toContain("&nmix=9");
+    ).not.toContain("nmix=");
+    const irenaHref = convertDonjonGuideHref(
+      response({
+        dry_run: false,
+        converted: true,
+        output_exists: true,
+        preflight: {
+          schema: "openmc2donjon.mgxs-input-preflight.v1",
+          decision: "passed",
+          output_issue: null,
+          inputs: [
+            {
+              path: "/runs/irena/mgxs_sph_applied.h5",
+              ok: true,
+              energy_groups: 33,
+              legendre_order: 1,
+              mixtures: 91,
+              issues: [],
+              warnings: [],
+            },
+          ],
+        },
+      }),
+    );
+    expect(irenaHref).not.toContain("nmix=91");
+    expect(irenaHref).not.toContain("geometry=hex");
     expect(
       convertBundleHref(
         response({
@@ -146,9 +171,30 @@ describe("convert next steps", () => {
     expect(steps[1].href).toContain("mgxs=");
     expect(steps[1].href).toContain("mcompo=");
     expect(steps[1].status).toBe("ready");
-    expect(steps[2].title).toContain("L_MULTICOMPO");
+    expect(steps[2].title).toContain("component library");
+    expect(steps[2].body).toContain("project manifest");
     expect(steps[2].href).toContain("/donjon?");
     expect(steps[3].title).toContain("SPH/ADF");
+  });
+
+  it("prefers a project-declared downstream destination after conversion", () => {
+    const steps = convertNextSteps(
+      response({ dry_run: false, converted: true, output_exists: true }),
+      null,
+      {
+        downstream: {
+          href: "/donjon?mode=declared&project=%2Fruns%2Fa&component=assembly-a",
+          label: "Open declared core",
+          title: "Continue to declared core",
+          body: "Return this component through the project consumer gate.",
+        },
+      },
+    );
+    expect(steps.find((step) => step.id === "donjon")).toMatchObject({
+      label: "Project",
+      title: "Continue to declared core",
+      href: "/donjon?mode=declared&project=%2Fruns%2Fa&component=assembly-a",
+    });
   });
 
   it("adds a PyGan writer comparison step only for converted PyGan output", () => {
@@ -169,7 +215,7 @@ describe("convert next steps", () => {
       "inspect",
     ]);
     expect(steps[1].href).toBe(
-      "/pygan?input_h5=%2Fruns%2Fcase%2Fmgxs_library.h5&format=multicompo&summary_json=%2Fruns%2Fcase%2Fwriter_compare.json&keep_dir=%2Fruns%2Fcase%2Fwriter_compare",
+      "/pygan?input_h5=%2Fruns%2Fcase%2Fmgxs_library.h5&format=multicompo&summary_json=%2Fruns%2Fcase%2Fwriter_compare.json&keep_dir=%2Fruns%2Fcase%2Fwriter_compare&output=%2Fruns%2Fcase%2Fout.mcompo.txt",
     );
     // /pygan never reads a "tab" query param; the link must not carry one.
     expect(steps[1].href).not.toContain("tab=");
@@ -185,6 +231,29 @@ describe("convert next steps", () => {
         }),
       ),
     ).toContain("summary_json=writer_compare.json&keep_dir=writer_compare");
+    const inherited = new URL(
+      convertWriterCompareHref(
+        response({
+          dry_run: false,
+          writer_backend: "pygan",
+          root_name: "LIB",
+          comment: "same state",
+          burnup: 12.5,
+          h_factor_default: 1.25,
+          mixtures: ["fuel", "reflector"],
+          project_root: "/runs/project",
+          component_id: "fuel-a",
+          summary_path: "/runs/case/out.convert.json",
+        }),
+      ),
+      "http://localhost",
+    );
+    expect(inherited.searchParams.get("root_name")).toBe("LIB");
+    expect(inherited.searchParams.get("comment")).toBe("same state");
+    expect(inherited.searchParams.getAll("mixture")).toEqual(["fuel", "reflector"]);
+    expect(inherited.searchParams.get("project")).toBe("/runs/project");
+    expect(inherited.searchParams.get("component")).toBe("fuel-a");
+    expect(inherited.searchParams.get("receipt")).toBe("/runs/case/out.convert.json");
     expect(
       convertNextSteps(
         response({
@@ -207,8 +276,8 @@ describe("convert next steps", () => {
   it("marks copy-CLI destinations for the execute-to-copy boundary chip", () => {
     expect(isCopyCliDestination("/builder?command=bundle")).toBe(true);
     expect(isCopyCliDestination("/equivalence?kind=adf-sidecar")).toBe(true);
-    expect(isCopyCliDestination("/donjon?ascii=%2Fout.txt")).toBe(true);
-    expect(isCopyCliDestination("/donjon")).toBe(true);
+    expect(isCopyCliDestination("/donjon?ascii=%2Fout.txt")).toBe(false);
+    expect(isCopyCliDestination("/donjon")).toBe(false);
     expect(isCopyCliDestination("/pygan?input_h5=x")).toBe(false);
     expect(isCopyCliDestination("/inspect?path=x")).toBe(false);
     expect(isCopyCliDestination("#ascii-output-preview")).toBe(false);

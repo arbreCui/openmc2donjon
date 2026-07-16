@@ -5,6 +5,7 @@ import {
   isFailedOpenmcSphSidecarCheck,
   openmcBundleBuilderHref,
   openmcConvertHref,
+  openmcDirectConvertHref,
   openmcInspectHref,
   openmcSphPrerequisiteCommands,
   openmcSphSidecarCheckFailed,
@@ -17,6 +18,7 @@ function plan(overrides: Partial<OpenmcWorkflowPlan> = {}): OpenmcWorkflowPlan {
     ok: true,
     mock_mode: true,
     workflow: "two-step",
+    plan_scope: "complete",
     workflow_label: "Two-step export then convert",
     equivalence: "direct",
     steps: [],
@@ -146,6 +148,44 @@ describe("OpenMC workflow walkthrough", () => {
     );
   });
 
+  it("keeps project component context on both direct and planned Converter links", () => {
+    const context = {
+      projectRoot: "/runs/core candidate",
+      componentId: "assembly-a",
+      contract: "native-sph",
+    } as const;
+    const direct = new URL(
+      openmcDirectConvertHref(
+        "/runs/core candidate/components/assembly-a/mgxs.h5",
+        "/runs/core candidate/outputs/assembly-a.macrolib.txt",
+        "macrolib",
+        true,
+        context,
+      ),
+      "http://localhost",
+    );
+    expect(direct.searchParams.get("input")).toBe(
+      "/runs/core candidate/components/assembly-a/mgxs.h5",
+    );
+    expect(direct.searchParams.get("output")).toBe(
+      "/runs/core candidate/outputs/assembly-a.macrolib.txt",
+    );
+    expect(direct.searchParams.get("project")).toBe("/runs/core candidate");
+    expect(direct.searchParams.get("component")).toBe("assembly-a");
+    expect(direct.searchParams.get("contract")).toBe("native-sph");
+
+    const planned = new URL(
+      openmcConvertHref(plan(), "macrolib", true, context)!,
+      "http://localhost",
+    );
+    expect(planned.searchParams.get("input")).toBe(
+      "/runs/case/mgxs_library.h5",
+    );
+    expect(planned.searchParams.get("project")).toBe("/runs/core candidate");
+    expect(planned.searchParams.get("component")).toBe("assembly-a");
+    expect(planned.searchParams.get("contract")).toBe("native-sph");
+  });
+
   it("uses the augmented HDF5 as the conversion input for two-step equivalence", () => {
     const payload = plan({
       equivalence: "sph",
@@ -228,6 +268,8 @@ describe("OpenMC workflow walkthrough", () => {
       expect(command.title.length).toBeGreaterThan(0);
     }
     expect(commands[2].cli).toContain("make-openmc-sph-sidecar");
-    expect(OPENMC_SPH_SIDECAR_FORM_HREF).toBe("/equivalence?kind=openmc-sph-sidecar");
+    expect(OPENMC_SPH_SIDECAR_FORM_HREF).toBe(
+      "/equivalence?kind=openmc-sph-sidecar&contract=physical-sph",
+    );
   });
 });

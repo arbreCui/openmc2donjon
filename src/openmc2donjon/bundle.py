@@ -142,6 +142,10 @@ def validate_bundle(
                 )
             )
 
+    messages.extend(
+        _validate_openmc_provenance_bindings(manifest_file, artifacts)
+    )
+
     ok = not messages and all(report.ok for report in artifact_reports)
     decision = VALIDATION_PASS_DECISION if ok else VALIDATION_FAIL_DECISION
     report = BundleValidationReport(
@@ -388,6 +392,155 @@ def _validate_artifact(
         summary_decision=summary_decision,
         acceptance_decision=acceptance_decision,
     )
+
+
+def _validate_openmc_provenance_bindings(
+    manifest_path: Path,
+    artifacts: list[Any],
+) -> list[str]:
+    """Cross-check standalone, HDF5, summary, and bundled source identities."""
+
+    entries = [item for item in artifacts if isinstance(item, dict)]
+    provenance_entry = next(
+        (item for item in entries if item.get("label") == "openmc-provenance"),
+        None,
+    )
+    if provenance_entry is None:
+        return []
+    provenance_path = _artifact_validation_path(manifest_path, provenance_entry)
+    try:
+        provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        return [f"OpenMC provenance JSON is unreadable: {exc}"]
+    if not isinstance(provenance, dict):
+        return ["OpenMC provenance JSON root must be an object"]
+    expected_digest = provenance.get("digest_sha256")
+    messages: list[str] = []
+    try:
+        from .openmc_provenance import validate_openmc_provenance_record
+
+        record_issues = validate_openmc_provenance_record(provenance)
+    except (TypeError, ValueError) as exc:
+        record_issues = [f"cannot validate provenance record: {exc}"]
+    messages.extend(
+        f"OpenMC provenance record is invalid: {issue}"
+        for issue in record_issues
+    )
+
+    by_source: dict[Path, dict[str, Any]] = {}
+    for entry in entries:
+        source = entry.get("source")
+        if isinstance(source, str) and source:
+            by_source[_safe_resolve(Path(source))] = entry
+
+    bound_sources: list[dict[str, Any]] = []
+    raw_sources = provenance.get("artifacts")
+    if isinstance(raw_sources, list):
+        bound_sources.extend(
+            item for item in raw_sources if isinstance(item, dict)
+        )
+    nuclear_data = provenance.get("nuclear_data")
+    if isinstance(nuclear_data, dict):
+        cross_sections = nuclear_data.get("cross_sections")
+        if isinstance(cross_sections, dict):
+            bound_sources.append(cross_sections)
+        libraries = nuclear_data.get("libraries")
+        if isinstance(libraries, list):
+            bound_sources.extend(
+                item for item in libraries if isinstance(item, dict)
+            )
+
+    for source in bound_sources:
+        raw_path = source.get("path")
+        if not isinstance(raw_path, str) or not raw_path:
+            continue
+        bundled = by_source.get(_safe_resolve(Path(raw_path)))
+        if bundled is None:
+            continue
+        role = source.get("role") or raw_path
+        if bundled.get("sha256") != source.get("sha256"):
+            messages.append(
+                f"OpenMC provenance SHA mismatch for bundled source {role}"
+            )
+        if bundled.get("size_bytes") != source.get("size_bytes"):
+            messages.append(
+                f"OpenMC provenance size mismatch for bundled source {role}"
+            )
+
+    mgxs_entry = next(
+        (item for item in entries if item.get("label") == "mgxs"),
+        None,
+    )
+    if mgxs_entry is not None:
+        try:
+            from .openmc_provenance import read_openmc_provenance
+
+            embedded = read_openmc_provenance(
+                _artifact_validation_path(manifest_path, mgxs_entry)
+            )
+        except (OSError, ValueError, TypeError) as exc:
+            messages.append(f"MGXS embedded provenance is unreadable: {exc}")
+        else:
+            if embedded is None or embedded.get("digest_sha256") != expected_digest:
+                messages.append(
+                    "MGXS embedded provenance digest does not match bundled provenance"
+                )
+            elif not bool(embedded.get("integrity", {}).get("ok", False)):
+                messages.append("MGXS embedded provenance integrity check failed")
+
+    summary_entry = next(
+        (item for item in entries if item.get("label") == "run-summary"),
+        None,
+    )
+    if summary_entry is not None:
+        try:
+            summary = json.loads(
+                _artifact_validation_path(manifest_path, summary_entry).read_text(
+                    encoding="utf-8"
+                )
+            )
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            messages.append(f"run summary provenance is unreadable: {exc}")
+        else:
+            summary_provenance = (
+                summary.get("openmc_provenance")
+                if isinstance(summary, dict)
+                else None
+            )
+            if (
+                not isinstance(summary_provenance, dict)
+                or summary_provenance.get("digest_sha256") != expected_digest
+            ):
+                messages.append(
+                    "run summary provenance digest does not match bundled provenance"
+                )
+            if isinstance(summary, dict):
+                mgxs_sha = mgxs_entry.get("sha256") if mgxs_entry is not None else None
+                if summary.get("hdf5_sha256") != mgxs_sha:
+                    messages.append(
+                        "run summary hdf5_sha256 does not match bundled MGXS artifact"
+                    )
+                output_label = (
+                    "macrolib" if summary.get("format") == "macrolib" else "mcompo"
+                )
+                output_entry = next(
+                    (item for item in entries if item.get("label") == output_label),
+                    None,
+                )
+                if output_entry is not None and summary.get(
+                    "output_sha256"
+                ) != output_entry.get("sha256"):
+                    messages.append(
+                        "run summary output_sha256 does not match bundled output artifact"
+                    )
+    return messages
+
+
+def _safe_resolve(path: Path) -> Path:
+    try:
+        return path.resolve()
+    except OSError:
+        return path.absolute()
 
 
 def _artifact_validation_path(manifest_path: Path, artifact: dict[str, Any]) -> Path:

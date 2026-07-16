@@ -402,6 +402,9 @@ def _preflight_decision(payload: dict[str, Any]) -> str | None:
 
 
 def _production_requested(payload: dict[str, Any]) -> bool | None:
+    explicit = _bool_or_none(payload.get("production_requested"))
+    if explicit is not None:
+        return explicit
     command = payload.get("cli_command")
     if isinstance(command, list):
         return any(item == "--production" for item in command if isinstance(item, str))

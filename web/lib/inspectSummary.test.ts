@@ -108,6 +108,12 @@ describe("inspect exits", () => {
     );
   });
 
+  it("uses the direct MULTICOMPO route when SPH is already applied", () => {
+    expect(inspectConvertHref("/runs/case/handoff.h5", 0, true)).toBe(
+      "/convert?input=%2Fruns%2Fcase%2Fhandoff.h5&intent=openmc-sph&format=multicompo",
+    );
+  });
+
   it("links to the diff builder with the inspected file as candidate", () => {
     expect(inspectDiffHref("/runs/case/handoff.h5")).toBe(
       "/builder?command=diff&candidate_h5=%2Fruns%2Fcase%2Fhandoff.h5",

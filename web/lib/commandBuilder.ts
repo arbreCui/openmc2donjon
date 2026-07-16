@@ -285,7 +285,9 @@ export const COMMAND_BUILDER_SPECS: readonly CommandBuilderSpec[] = [
       optionPath("summary_json", "Summary JSON", "Optional iteration summary JSON.", "--summary-json", "sph_update_summary.json", JSON, false, "output"),
       toggle("force", "Force overwrite", "Allow replacing the CSV output.", "--force"),
     ],
-    notes: ["Use this after the CE and MG OpenMC calculations share the same geometry and output regions."],
+    notes: [
+      "Use this after the fine-reference CE model and homogenized MG counterpart share the same outer boundary and project-declared domain mapping.",
+    ],
   },
   {
     id: "apply-sph",
@@ -304,6 +306,29 @@ export const COMMAND_BUILDER_SPECS: readonly CommandBuilderSpec[] = [
     notes: [
       "This is the OpenMC-side iteration step: rerun OpenMC MG with the corrected XS, then recompute the SPH factors.",
       "The output removes active SPH datasets and stores applied_sph provenance so the same factors are not applied twice.",
+    ],
+  },
+  {
+    id: "validate-native-sph",
+    title: "Validate native DRAGON SPH closure",
+    summary:
+      "Build the evidence command for an OpenMC fine reference, Converter MACROLIB, native DRAGON SPH result, and DONJON verification solve.",
+    base: ["openmc2donjon", "validate-native-sph"],
+    fields: [
+      path("reference_h5", "Reference component HDF5", "Converter-ready component reference with OpenMC flux and keff uncertainty.", "<reference_components.h5>", 0, H5),
+      optionPath("reference_macrolib", "Reference MACROLIB", "Uncorrected Converter MACROLIB used by DRAGON SPH.", "--reference-macrolib", "<reference.macrolib.txt>", [".txt", ".mco"], true),
+      optionPath("sph_macrolib", "Native-SPH MACROLIB", "Corrected MACROLIB written after native DRAGON SPH convergence.", "--sph-macrolib", "<native_sph.macrolib.txt>", [".txt", ".mco"], true),
+      optionPath("verify_macrolib", "Verification MACROLIB", "MACROLIB containing the final DONJON calculated K-EFFECTIVE.", "--verify-macrolib", "<verify.macrolib.txt>", [".txt", ".mco"], true),
+      optionPath("result_listing", "DONJON result listing", "Result text containing native SPH iterations and normal end.", "--result-listing", "<donjon.result>", [".result", ".txt"], true),
+      optionPath("execution_deck", "Exact execution deck", "Exact CLE-2000 .x2m deck reproduced by the DONJON listing; required to prove that ADF and empirical eigenvalue multipliers are absent.", "--execution-deck", "<native_sph.x2m>", [".x2m"], true),
+      optionPath("energy_coverage", "Energy coverage JSON", "Optional full-energy reaction-rate coverage gate from the OpenMC fine run.", "--energy-coverage", "energy_coverage.json", JSON),
+      optionPath("converter_receipt", "Production Converter receipt", "Hash-linked production Converter receipt for the exact reference HDF5 → MACROLIB handoff; required for acceptance.", "--converter-receipt", "converter_receipt.json", JSON, true),
+      text("max_keff_sigma", "Maximum |Δk| in OpenMC σ", "Statistical eigenvalue gate; empty keeps the CLI default of 2σ.", "--max-keff-sigma"),
+      optionPath("summary_json", "Physics summary JSON", "Required machine-readable native-SPH acceptance summary.", "--summary-json", "physics_summary.json", JSON, true, "output"),
+    ],
+    notes: [
+      "This command validates evidence; it never fits SPH factors or an eigenvalue multiplier.",
+      "A passing component/coarse-model closure does not automatically accept a separate full-core loading calculation.",
     ],
   },
   {
@@ -392,6 +417,14 @@ export function commandBuilderStage(id: string): CommandBuilderStage {
       summary:
         "Diagnostic command: use it before accepting a handoff or when a local environment looks suspicious.",
       reference: "HDF5 / runtime QA",
+    };
+  }
+  if (id === "validate-native-sph") {
+    return {
+      label: "Native DRAGON SPH",
+      summary:
+        "Physical validation command: audit the Converter reference, native SPH convergence, conserved rates, and DONJON eigenvalue against OpenMC uncertainty.",
+      reference: "OpenMC fine model plus the project-declared DONJON coarse model",
     };
   }
   if (

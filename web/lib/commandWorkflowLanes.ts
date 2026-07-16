@@ -26,9 +26,9 @@ export interface WorkflowOccurrence {
 export const COMMAND_WORKFLOW_LANES: readonly WorkflowLane[] = [
   {
     id: "direct",
-    title: "Direct converter handoff",
+    title: "Converter handoff",
     summary:
-      "Use this when OpenMC already produced the MGXS HDF5 and you want the cleanest route to DONJON ASCII.",
+      "Use this when OpenMC already produced the corrected MGXS HDF5 and you are ready for the core Converter step that writes DONJON ASCII.",
     steps: [
       {
         id: "handoff",
@@ -46,8 +46,8 @@ export const COMMAND_WORKFLOW_LANES: readonly WorkflowLane[] = [
       },
       {
         id: "convert",
-        title: "Write ASCII",
-        body: "Convert MGXS into L_MULTICOMPO or L_MACROLIB without adding equivalence factors.",
+        title: "Run Converter",
+        body: "Validate the Converter-ready MGXS handoff, including SPH only when the project requires it, then serialize it as L_MULTICOMPO or L_MACROLIB.",
         href: "/convert?intent=direct-convert&format=multicompo&check=1&production=1",
         commandIds: ["direct-convert"],
       },
@@ -64,7 +64,7 @@ export const COMMAND_WORKFLOW_LANES: readonly WorkflowLane[] = [
     id: "openmc-sph",
     title: "OpenMC-side SPH equivalence",
     summary:
-      "Use this when OpenMC CE reference tallies and OpenMC MG macro fluxes on the same geometry/output regions should produce explicit NSPH factors before conversion. The accepted demo is one-shot SPH; extra MG reruns are optional review steps.",
+      "Use this SPH route when a fine-reference OpenMC CE model and its homogenized MG counterpart share the same boundary and project-declared domain mapping. Iterate the physical rate-preserving factors to convergence, validate and apply them to the handoff cross sections, then enter Converter for the requested DONJON object.",
     steps: OPENMC_SPH_WORKFLOW_STEPS.map((step) => ({
       id: step.id,
       title: step.title,

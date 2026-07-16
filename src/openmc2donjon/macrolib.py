@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterable, Sequence
 
@@ -21,6 +22,7 @@ class Macrolib:
     state_vector: tuple[int, ...]
     energy: np.ndarray
     volume: np.ndarray
+    flux_intg: np.ndarray
     ntot0: np.ndarray
     diff: np.ndarray
     sigs: dict[int, np.ndarray]
@@ -30,6 +32,8 @@ class Macrolib:
     h_factor: np.ndarray | None
     sph: np.ndarray | None
     adf: dict[str, np.ndarray]
+    reference_keff: float | None
+    reference_kinf: float | None
 
     @property
     def ngroups(self) -> int:
@@ -85,6 +89,7 @@ def convert_mgxs_hdf5_to_macrolib(
     *,
     h_factor_default: float | None = None,
     mixture_names: Sequence[str] | None = None,
+    max_scatter_order: int | None = None,
 ) -> None:
     """Read an OpenMC MGXS HDF5 dump and write a root ``L_MACROLIB`` object."""
 
@@ -94,23 +99,104 @@ def convert_mgxs_hdf5_to_macrolib(
         input_h5,
         h_factor_default=h_factor_default,
     )
+    reference_keff, reference_kinf = read_reference_eigenvalues_hdf5(input_h5)
+    selected = _select_mixtures(mixtures, mixture_names)
+    selected_is_complete_model = len(selected) == len(mixtures) and {
+        mixture.name for mixture in selected
+    } == {mixture.name for mixture in mixtures}
+    if not selected_is_complete_model:
+        # A whole-model eigenvalue is not valid metadata for a selected
+        # component subset.  The subset can still carry its derived kinf.
+        reference_keff = None
+    if reference_kinf is None:
+        reference_kinf = derive_reference_kinf(selected)
     write_macrolib(
-        _select_mixtures(mixtures, mixture_names),
+        _limit_scatter_order(selected, max_scatter_order),
         energy_bounds,
         output_path,
+        reference_keff=reference_keff,
+        reference_kinf=reference_kinf,
     )
+
+
+def _limit_scatter_order(
+    mixtures: Sequence["MixtureXS"], max_scatter_order: int | None
+) -> list["MixtureXS"]:
+    """Project a handoff onto the moments admitted by the target solver."""
+
+    if max_scatter_order is None:
+        return list(mixtures)
+    order = int(max_scatter_order)
+    if order < 0:
+        raise ValueError("max_scatter_order must be non-negative")
+    required_moments = order + 1
+    projected: list["MixtureXS"] = []
+    for mixture in mixtures:
+        if mixture.nmoments < required_moments:
+            raise ValueError(
+                f"mixture {mixture.name}: requested P{order} scattering but "
+                f"only P{mixture.nmoments - 1} is available"
+            )
+        projected.append(
+            replace(
+                mixture,
+                scatter_matrix=np.asarray(mixture.scatter_matrix, dtype=float)[
+                    :required_moments
+                ].copy(),
+            )
+        )
+    return projected
+
+
+def derive_reference_kinf(mixtures: Sequence["MixtureXS"]) -> float | None:
+    """Derive the infinite-medium balance eigenvalue from reference rates.
+
+    The P0 SCAT channel is used exactly as DONJON will use it.  Therefore an
+    ordinary scatter matrix gives the familiar ``nu-fission / absorption``
+    balance, while a consistent nu-scatter matrix also retains multiplication
+    from reactions such as (n,2n).  No fitted or global correction appears.
+    """
+
+    production = 0.0
+    net_loss = 0.0
+    for mixture in mixtures:
+        if mixture.flux_weight is None:
+            return None
+        flux_intg = np.asarray(mixture.flux_weight, dtype=float) * float(
+            mixture.volume
+        )
+        total = np.asarray(mixture.total, dtype=float)
+        nu_fission = np.asarray(mixture.nu_fission, dtype=float)
+        p0 = np.asarray(mixture.scatter_matrix, dtype=float)[0]
+        production += float(np.dot(nu_fission, flux_intg))
+        net_loss += float(
+            np.dot(total, flux_intg)
+            - np.sum(p0 * flux_intg[:, np.newaxis])
+        )
+    if production == 0.0:
+        return None
+    if not np.isfinite(production) or not np.isfinite(net_loss) or net_loss <= 0.0:
+        raise ValueError(
+            "cannot derive reference_kinf: reference production/loss balance is invalid"
+        )
+    return production / net_loss
 
 
 def write_macrolib(
     mixtures: Iterable["MixtureXS"],
     energy_bounds: np.ndarray | list[float],
     output_path: str | Path,
+    *,
+    reference_keff: float | None = None,
+    reference_kinf: float | None = None,
 ) -> None:
     """Write a root ``L_MACROLIB`` ASCII object."""
 
     blocks = build_macrolib_blocks(
         list(mixtures),
         np.asarray(energy_bounds, dtype=float),
+        reference_keff=reference_keff,
+        reference_kinf=reference_kinf,
     )
     lcm.write_lcm_ascii(blocks, output_path)
 
@@ -118,6 +204,9 @@ def write_macrolib(
 def build_macrolib_blocks(
     mixtures: list["MixtureXS"],
     energy_bounds: np.ndarray,
+    *,
+    reference_keff: float | None = None,
+    reference_kinf: float | None = None,
 ) -> list[lcm.LcmBlock]:
     """Build root ``L_MACROLIB`` records from converter-facing MGXS mixtures."""
 
@@ -171,14 +260,47 @@ def build_macrolib_blocks(
         )
 
     blocks.extend(_macrolib_adf_blocks(mixtures))
-    blocks.extend(
-        [
-            lcm.block(1, "K-INFINITY", 2, [1.0]),
-            lcm.block(1, "K-EFFECTIVE", 2, [1.0]),
-            lcm.control(-1),
-        ]
-    )
+    if reference_kinf is not None:
+        blocks.append(
+            lcm.block(1, "K-INFINITY", 2, [_positive_finite(reference_kinf, "reference_kinf")])
+        )
+    if reference_keff is not None:
+        blocks.append(
+            lcm.block(1, "K-EFFECTIVE", 2, [_positive_finite(reference_keff, "reference_keff")])
+        )
+    blocks.append(lcm.control(-1))
     return blocks
+
+
+def read_reference_eigenvalues_hdf5(
+    input_h5: str | Path,
+) -> tuple[float | None, float | None]:
+    """Read optional physical reference eigenvalues from an MGXS handoff.
+
+    Missing metadata stays missing.  In particular, the converter must never
+    manufacture ``K-EFFECTIVE=1``: native DRAGON SPH uses this value in its
+    reference fission source, so an invented default changes the problem.
+    """
+
+    import h5py
+
+    with h5py.File(input_h5, "r") as h5:
+        keff = _optional_positive_attr(h5.attrs, "reference_keff")
+        kinf = _optional_positive_attr(h5.attrs, "reference_kinf")
+    return keff, kinf
+
+
+def _optional_positive_attr(attrs, name: str) -> float | None:
+    if name not in attrs:
+        return None
+    return _positive_finite(attrs[name], name)
+
+
+def _positive_finite(value: object, name: str) -> float:
+    scalar = float(np.asarray(value, dtype=float).reshape(()))
+    if not np.isfinite(scalar) or scalar <= 0.0:
+        raise ValueError(f"{name} must be a positive finite scalar")
+    return scalar
 
 
 def _macrolib_group_blocks(
@@ -429,8 +551,16 @@ def parse_macrolib_blocks(blocks: list[lcm.LcmBlock]) -> Macrolib:
     ngroups = int(state[0])
     nmixtures = int(state[1])
 
-    energy = _real_vector(
-        _find_named(object_blocks, "ENERGY", level=base_level), ngroups + 1
+    energy_block = _find_named(
+        object_blocks,
+        "ENERGY",
+        level=base_level,
+        required=False,
+    )
+    energy = (
+        np.empty(0, dtype=float)
+        if energy_block is None
+        else _real_vector(energy_block, ngroups + 1)
     )
     volume_block = _find_named(object_blocks, "VOLUME", level=base_level, required=False)
     volume = (
@@ -440,28 +570,48 @@ def parse_macrolib_blocks(blocks: list[lcm.LcmBlock]) -> Macrolib:
     )
 
     groups = _group_payloads(object_blocks, ngroups, base_level)
+    parsed_flux_intg = _optional_group_matrix(
+        groups,
+        "FLUX-INTG",
+        nmixtures,
+        ngroups,
+    )
+    flux_intg = (
+        np.repeat(volume[:, np.newaxis], ngroups, axis=1)
+        if parsed_flux_intg is None
+        else parsed_flux_intg
+    )
     ntot0 = _group_matrix(groups, "NTOT0", nmixtures, ngroups)
-    diff = _group_matrix(groups, "DIFF", nmixtures, ngroups)
+    diff = _group_matrix(groups, "DIFF", nmixtures, ngroups, default=0.0)
     nusigf = _group_matrix(groups, "NUSIGF", nmixtures, ngroups, default=0.0)
     chi = _group_matrix(groups, "CHI", nmixtures, ngroups, default=0.0)
     h_factor = _optional_group_matrix(groups, "H-FACTOR", nmixtures, ngroups)
     sph = _optional_group_matrix(groups, "NSPH", nmixtures, ngroups)
     adf = _adf_payload(object_blocks, nmixtures, ngroups, base_level)
+    reference_keff = _optional_scalar_record(object_blocks, "K-EFFECTIVE", base_level)
+    reference_kinf = _optional_scalar_record(object_blocks, "K-INFINITY", base_level)
 
     moments = _scatter_moments(groups)
-    sigs = {
-        moment: _group_matrix(groups, f"SIGS{moment:02d}", nmixtures, ngroups)
-        for moment in moments
-    }
     scatter = {
         moment: _scatter_matrix(groups, moment, nmixtures, ngroups)
         for moment in moments
     }
+    sigs = {}
+    for moment in moments:
+        name = f"SIGS{moment:02d}"
+        if all(name in payload for payload in groups):
+            sigs[moment] = _group_matrix(groups, name, nmixtures, ngroups)
+        else:
+            # DONJON OUT: solver editions may omit the redundant SIGS record
+            # while retaining the complete SCAT triplets.  Recover the source-
+            # group scattering sum exactly from those triplets.
+            sigs[moment] = np.sum(scatter[moment], axis=2)
 
     return Macrolib(
         state_vector=state,
         energy=energy,
         volume=volume,
+        flux_intg=flux_intg,
         ntot0=ntot0,
         diff=diff,
         sigs=sigs,
@@ -471,7 +621,18 @@ def parse_macrolib_blocks(blocks: list[lcm.LcmBlock]) -> Macrolib:
         h_factor=h_factor,
         sph=sph,
         adf=adf,
+        reference_keff=reference_keff,
+        reference_kinf=reference_kinf,
     )
+
+
+def _optional_scalar_record(
+    blocks: list[lcm.LcmBlock], name: str, level: int
+) -> float | None:
+    block = _find_named(blocks, name, level=level, required=False)
+    if block is None:
+        return None
+    return float(_real_vector(block, 1)[0])
 
 
 def _find_macrolib_object(blocks: list[lcm.LcmBlock]) -> tuple[int, int, bool]:

@@ -528,7 +528,7 @@ function EntryRow({
       <button
         type="button"
         onClick={onClick}
-        className="w-full px-3 py-1.5 flex items-baseline gap-3 text-left rounded hover:bg-white/[0.04]"
+        className="control-segment w-full px-3 py-1.5 flex items-center gap-3 text-left rounded hover:bg-white/[0.04]"
       >
         <span className="inline-flex items-center justify-center min-w-[28px] h-5 px-1 rounded border border-[var(--edge)] bg-white/[0.03] text-[10px] font-semibold uppercase tracking-wider text-[var(--fg-2)] tab-num">
           {isDir ? "DIR" : chipLabel}
@@ -582,7 +582,7 @@ function RecentList({
               type="button"
               onClick={() => onPick(entry.path)}
               title={entry.path}
-              className="w-full px-2 py-1 flex items-baseline gap-3 text-left rounded hover:bg-white/[0.04]"
+              className="control-segment w-full px-2 py-1 flex items-center gap-3 text-left rounded hover:bg-white/[0.04]"
             >
               <span className="inline-flex items-center justify-center min-w-[28px] h-5 px-1 rounded border border-[var(--edge)] bg-white/[0.03] text-[10px] font-semibold uppercase tracking-wider text-[var(--fg-2)] tab-num">
                 {chipLabel}
@@ -648,7 +648,7 @@ function PathBreadcrumb({
                 type="button"
                 onClick={() => onPick(crumb.path)}
                 disabled={pending}
-                className="px-1 rounded text-[var(--accent-2)] hover:bg-white/[0.05] break-all disabled:text-[var(--fg-3)] disabled:hover:bg-transparent disabled:cursor-not-allowed"
+                className="inline-flex min-h-8 items-center rounded px-1 text-[var(--accent-2)] hover:bg-white/[0.05] break-all disabled:text-[var(--fg-3)] disabled:hover:bg-transparent disabled:cursor-not-allowed"
                 title={crumb.path}
               >
                 {crumb.label}

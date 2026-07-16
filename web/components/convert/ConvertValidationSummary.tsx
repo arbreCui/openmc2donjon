@@ -6,6 +6,7 @@ import {
   humanDecision,
   validationLabel,
 } from "./ConvertReportShared";
+import { openmcProvenanceView } from "@/lib/openmcProvenance";
 
 interface ValidationSummaryItem {
   label: string;
@@ -39,7 +40,7 @@ export default function ConvertValidationSummary({
           {production ? "production preset" : "standard checks"}
         </span>
       </div>
-      <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-6">
+      <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-7">
         {items.map((item) => (
           <ValidationTile key={item.label} item={item} />
         ))}
@@ -93,6 +94,9 @@ function buildValidationSummaryItems(
 ): ValidationSummaryItem[] {
   const moments = input.legendre_order == null ? "?" : String(input.legendre_order + 1);
   const uncertainty = compactUncertainty(input);
+  const provenance = input.openmc_provenance
+    ? openmcProvenanceView(input.openmc_provenance)
+    : null;
   return [
     {
       label: "Result",
@@ -125,10 +129,17 @@ function buildValidationSummaryItems(
       tone: "neutral",
     },
     {
+      label: "Source evidence",
+      value: provenance?.label ?? "not OpenMC",
+      detail:
+        provenance?.summary ?? "No OpenMC source-provenance contract applies.",
+      tone: provenance?.tone ?? "neutral",
+    },
+    {
       label: "Equivalence",
       value: compactEquivalence(input),
       detail: uncertainty,
-      tone: input.adf_mixtures || input.sph_calculations ? "accent" : "neutral",
+      tone: input.adf_mixtures || input.sph_calculations || input.sph_applied ? "accent" : "neutral",
     },
   ];
 }

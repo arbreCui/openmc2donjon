@@ -6,7 +6,7 @@ describe("home demo shortcuts", () => {
     expect(HOME_DEMO_SHORTCUTS.map((entry) => entry.id)).toEqual([
       "convert-c5g7",
     ]);
-    expect(HOME_DEMO_SHORTCUTS[0].cta).toBe("Open converter demo");
+    expect(HOME_DEMO_SHORTCUTS[0].cta).toBe("Open Converter demo");
   });
 
   it("deep-links to the prefilled converter demo", () => {

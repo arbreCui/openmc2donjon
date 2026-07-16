@@ -171,11 +171,22 @@ def read_mgxs_hdf5_histories(
             raise ValueError("energy_bounds length must be energy_groups + 1")
 
         burnup_values = _burnup_values_from_hdf5(h5)
+        mixture_names = read_mixture_names(h5)
+        reference_flux_weights = _reference_flux_weights(
+            h5,
+            mixture_names=mixture_names,
+            ngroups=ngroups,
+        )
         histories: list[MixtureHistory] = []
         mix_group = h5["mixtures"]
-        for name in read_mixture_names(h5):
+        for mixture_index, name in enumerate(mixture_names):
             g = mix_group[name]
             if "states" in g:
+                if reference_flux_weights is not None:
+                    raise ValueError(
+                        "/openmc_volume_flux cannot be attached to multi-state "
+                        "MGXS data; provide one reference flux field per state"
+                    )
                 states_group = g["states"]
                 states = [
                     _mixture_from_hdf5_group(
@@ -185,6 +196,7 @@ def read_mgxs_hdf5_histories(
                         expected_moments=expected_moments,
                         h_factor_default=h_factor_default,
                         parent_attrs=g.attrs,
+                        flux_weight=None,
                     )
                     for state_name in _sorted_state_names(states_group)
                 ]
@@ -197,6 +209,11 @@ def read_mgxs_hdf5_histories(
                         expected_moments=expected_moments,
                         h_factor_default=h_factor_default,
                         parent_attrs=None,
+                        flux_weight=(
+                            None
+                            if reference_flux_weights is None
+                            else reference_flux_weights[mixture_index]
+                        ),
                     )
                 ]
             histories.append(MixtureHistory(name=str(name), calculations=states))
@@ -646,6 +663,7 @@ def _mixture_from_hdf5_group(
     expected_moments: int | None,
     h_factor_default: float | None,
     parent_attrs,
+    flux_weight: np.ndarray | None,
 ) -> MixtureXS:
     scatter = _scatter_matrix_from_hdf5(
         group,
@@ -682,6 +700,7 @@ def _mixture_from_hdf5_group(
         scatter_matrix=scatter,
         fissionable=fissionable,
         volume=float(_attr_with_parent(group.attrs, parent_attrs, "volume", 1.0)),
+        flux_weight=flux_weight,
         inverse_velocity=inverse_velocity,
         transport_total=transport_total,
         h_factor=_h_factor_from_hdf5(
@@ -693,6 +712,57 @@ def _mixture_from_hdf5_group(
         adf=_adf_from_hdf5(group, ngroups, mix_name),
         sph=_sph_from_hdf5(group, ngroups, mix_name),
     )
+
+
+def _reference_flux_weights(
+    h5,
+    *,
+    mixture_names: tuple[str, ...],
+    ngroups: int,
+) -> np.ndarray | None:
+    """Return average fluxes that reproduce OpenMC ``FLUX-INTG`` values.
+
+    ``/openmc_volume_flux`` is an OpenMC cell/energy flux tally, hence a
+    volume-integrated flux.  ``MixtureXS.flux_weight`` is an average flux and
+    the MACROLIB writer multiplies it by the mixture volume.  Dividing here
+    therefore makes the written ``GROUP/*/FLUX-INTG`` exactly equal to the
+    OpenMC reference tally used by DRAGON ``FPSPH:``.
+    """
+
+    if "openmc_volume_flux" not in h5:
+        return None
+    obj = h5["openmc_volume_flux"]
+    values = np.asarray(obj[:], dtype=float)
+    expected_shape = (len(mixture_names), ngroups)
+    if values.shape != expected_shape:
+        raise ValueError(
+            "/openmc_volume_flux shape must match (mixture, group): "
+            f"{values.shape} != {expected_shape}"
+        )
+    if not np.all(np.isfinite(values)) or np.any(values <= 0.0):
+        raise ValueError("/openmc_volume_flux must contain positive finite values")
+
+    declared = obj.attrs.get("mixture_names")
+    if declared is not None:
+        from .hdf5_names import decode_hdf5_names
+
+        flux_names = decode_hdf5_names(declared)
+        if flux_names != mixture_names:
+            raise ValueError(
+                "/openmc_volume_flux attrs mixture_names must match "
+                f"/mixture_names: {flux_names!r} != {mixture_names!r}"
+            )
+
+    volumes = np.asarray(
+        [
+            float(h5["mixtures"][name].attrs.get("volume", 1.0))
+            for name in mixture_names
+        ],
+        dtype=float,
+    )
+    if not np.all(np.isfinite(volumes)) or np.any(volumes <= 0.0):
+        raise ValueError("mixture volumes must be positive and finite")
+    return values / volumes[:, np.newaxis]
 
 
 def _attr_with_parent(attrs, parent_attrs, name: str, default):

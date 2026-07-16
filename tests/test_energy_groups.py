@@ -21,6 +21,9 @@ class EnergyGroupsTests(unittest.TestCase):
         self.assertGreaterEqual(len(catalog), 38)
         self.assertIn("casmo_70", by_id)
         self.assertEqual(by_id["casmo_70"].n_groups, 70)
+        self.assertIn("anl_24c_20mev", by_id)
+        self.assertEqual(by_id["anl_24c_20mev"].n_groups, 24)
+        self.assertEqual(by_id["anl_24c_20mev"].boundaries_descending[0], 2.0e7)
 
     def test_identifies_known_mesh_from_ascending_or_descending_bounds(self) -> None:
         mesh = load_energy_mesh("casmo_70")

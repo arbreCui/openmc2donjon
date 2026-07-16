@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import hashlib
 import json
 from pathlib import Path
 import shlex
@@ -18,13 +19,18 @@ from ._logging import (
     configure_cli_logging_from_args,
     is_cli_logging_flag,
 )
-from .commands import adf, diagnostics, fill, sph, web
+from .commands import adf, component, diagnostics, fill, sph, web
 from .commands.base import CommandSpec
 from .energy_groups import MESH_RELATIVE_TOLERANCE
 from .macrolib import convert_mgxs_hdf5_to_macrolib
 from .mgxs_input_contract import run_preflight
 from .multicompo import DEFAULT_ROOT_NAME, convert_mgxs_hdf5
 from .pygan_writer import convert_mgxs_hdf5_with_pygan
+from .physical_sph_contract import physical_sph_issues
+from .production_policy import (
+    effective_production_thresholds,
+    production_preflight_policy_payload,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -127,6 +133,15 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--max-scatter-order",
+        type=int,
+        default=None,
+        help=(
+            "for --format macrolib, write moments P0..Pn admitted by the target "
+            "SN/SPN solver; the default preserves every exported moment"
+        ),
+    )
+    parser.add_argument(
         "--check",
         action="store_true",
         help="run HDF5 input-contract preflight before conversion",
@@ -146,9 +161,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--production",
         action="store_true",
         help=(
-            "run preflight with production defaults: volume, transport_total, "
+            "run the canonical non-relaxable production preflight: volume, "
+            "transport_total, "
             "fissionable H-FACTOR, declared mixture order, domain provenance, "
-            "physics consistency gates, and production uncertainty gate"
+            "physics consistency gates, uncertainty limits, and complete "
+            "std-dev coverage"
         ),
     )
     parser.add_argument(
@@ -183,6 +200,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--require-sph",
         action="store_true",
         help="with --check, require SPH data for every calculation",
+    )
+    parser.add_argument(
+        "--require-physical-sph",
+        action="store_true",
+        help=(
+            "require an already applied, rate-preserving OpenMC CE/MG SPH "
+            "fixed-point handoff on any declared domain mapping; rejects "
+            "empirical/global provenance"
+        ),
     )
     parser.add_argument(
         "--expected-adf-faces",
@@ -394,6 +420,7 @@ def build_command_parser() -> argparse.ArgumentParser:
 def _command_specs() -> tuple[CommandSpec, ...]:
     return (
         *adf.command_specs(),
+        *component.command_specs(),
         *fill.command_specs(),
         *sph.command_specs(),
         *diagnostics.command_specs(),
@@ -440,8 +467,22 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _convert_handler(args: argparse.Namespace) -> int:
-    if args.production:
+    if args.production or args.require_physical_sph:
         args.check = True
+    if args.production and args.no_uncertainty_check:
+        sys.stderr.write(
+            "openmc2donjon: error: --production cannot be combined with "
+            "--no-uncertainty-check; the canonical production policy requires "
+            "uncertainty checks and complete std-dev coverage\n"
+        )
+        return 1
+    if args.production and args.h_factor_default is not None:
+        sys.stderr.write(
+            "openmc2donjon: error: --production cannot be combined with "
+            "--h-factor-default; export physical group-wise H-FACTOR / "
+            "kappa-fission data in the input HDF5\n"
+        )
+        return 1
     input_path = Path(args.input_h5).expanduser()
     if args.output:
         output_path = Path(args.output).expanduser()
@@ -465,6 +506,16 @@ def _convert_handler(args: argparse.Namespace) -> int:
     if summary_error is not None:
         sys.stderr.write(f"openmc2donjon: error: {summary_error}\n")
         return 1
+
+    if args.require_physical_sph:
+        try:
+            sph_issues = physical_sph_issues(input_path)
+        except OSError as exc:
+            sph_issues = [f"cannot inspect physical SPH provenance: {exc}"]
+        if sph_issues:
+            for issue in sph_issues:
+                sys.stderr.write(f"openmc2donjon: physical SPH error: {issue}\n")
+            return 1
 
     preflight: dict[str, Any] | None = None
     preflight_ok = True
@@ -520,6 +571,7 @@ def _convert_handler(args: argparse.Namespace) -> int:
                 burnup=args.burnup,
                 h_factor_default=args.h_factor_default,
                 mixture_names=args.mixture,
+                max_scatter_order=args.max_scatter_order,
             )
         elif args.format == "macrolib":
             convert_mgxs_hdf5_to_macrolib(
@@ -527,8 +579,15 @@ def _convert_handler(args: argparse.Namespace) -> int:
                 output_path,
                 h_factor_default=args.h_factor_default,
                 mixture_names=args.mixture,
+                max_scatter_order=args.max_scatter_order,
             )
         else:
+            if args.max_scatter_order is not None:
+                sys.stderr.write(
+                    "openmc2donjon: error: --max-scatter-order currently "
+                    "requires --format macrolib\n"
+                )
+                return 1
             convert_mgxs_hdf5(
                 input_path,
                 output_path,
@@ -656,6 +715,8 @@ def _direct_convert_summary_payload(
     summary_written: bool,
 ) -> dict[str, Any]:
     dry_run = bool(args.dry_run)
+    production_requested = bool(args.production)
+    preflight_executed = bool(args.check) or production_requested
     command = ["openmc2donjon", *list(getattr(args, "_raw_argv", []))]
     return {
         "schema": "openmc2donjon.convert.v1",
@@ -664,8 +725,17 @@ def _direct_convert_summary_payload(
         "converted": converted,
         "format": args.format,
         "writer_backend": args.writer_backend,
+        "physical_sph_required": bool(args.require_physical_sph),
+        "production_requested": production_requested,
+        "preflight_policy": production_preflight_policy_payload(
+            production_requested=production_requested,
+            preflight_executed=preflight_executed,
+            thresholds=_direct_production_thresholds(args),
+        ),
         "input_path": str(input_path),
+        "input_sha256": _file_sha256(input_path),
         "output_path": str(output_path),
+        "output_sha256": _file_sha256(output_path) if converted else None,
         "summary_path": None if args.summary_json is None else str(args.summary_json),
         "summary_written": summary_written,
         "output_exists": output_path.exists(),
@@ -675,6 +745,20 @@ def _direct_convert_summary_payload(
         "cli_command": command,
         "cli_command_text": " ".join(shlex.quote(part) for part in command),
     }
+
+
+def _direct_production_thresholds(args: argparse.Namespace) -> dict[str, float] | None:
+    if not args.production:
+        return None
+    return effective_production_thresholds(
+        scatter_row_balance_fail=args.scatter_row_balance_fail,
+        transport_p1_fail=args.transport_p1_fail,
+        chi_sum_tolerance=args.chi_sum_tolerance,
+        uncertainty_warn=args.uncertainty_warn,
+        uncertainty_fail=args.uncertainty_fail,
+        uncertainty_production_fail=args.uncertainty_production_fail,
+        uncertainty_mean_abs_floor=args.uncertainty_mean_abs_floor,
+    )
 
 
 def _write_direct_convert_summary_for_state(
@@ -706,6 +790,14 @@ def _write_direct_convert_summary_for_state(
 
 def _write_direct_convert_summary(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 if __name__ == "__main__":

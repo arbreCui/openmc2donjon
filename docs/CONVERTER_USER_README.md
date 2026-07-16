@@ -26,7 +26,7 @@ The web UI pages map to that path:
 | 2 | `/convert` | Run dry-run with production checks. No file is written. |
 | 3 | `/convert` | If dry-run passes, run Convert. This writes the ASCII handoff. |
 | 4 | `/convert` | Preview the ASCII LCM text before sending it downstream. |
-| 5 | `/builder` | Bundle the HDF5, ASCII output, and `convert_summary.json`. |
+| 5 | `/convert` | Use **Bundle handoff** to package the HDF5, ASCII output, and Converter receipt. |
 | 6 | `/donjon` | Generate a starter DONJON ingest/solve deck from the bundle metadata. |
 
 You do **not** need to visit every page.
@@ -35,31 +35,43 @@ You do **not** need to visit every page.
 
 | Page | Use it when | Required for direct conversion? |
 | --- | --- | --- |
-| Home | You want shortcuts to demos and major workflows. | No |
-| Convert | You want HDF5 -> `.mcompo.txt` or `.macrolib.txt`. | Yes |
+| Home | You want the product boundary and the shortest route into each workflow. | No |
+| Converter | You want HDF5 -> `.mcompo.txt` or `.macrolib.txt` plus its receipt. | Yes |
 | Inspect | You want to look inside the HDF5: groups, mixtures, mesh ID, XS curves, scatter matrix. | No, but recommended before a new case |
-| Builder | You want a shareable delivery bundle with manifest and hashes. | Recommended |
+| Projects | You want to coordinate repeated or multi-component Converter runs. | No |
+| Builder | You want to assemble and copy an advanced CLI command; the page does not execute it. | No |
 | DONJON | You want a starter DONJON deck and `NCR`/`MACROLIB` loading hints. | Recommended |
-| Equivalence | You already have ADF/SPH data or want CLI commands to build sidecars. | No |
+| SPH | After Converter, your declared coarse model needs physical equivalence. | No |
+| PyGan | You want optional writer diagnostics and ASCII-vs-PyGan semantic validation. | No |
 | Commands | You want command reference and deep links. | No |
 
 ## Direct Conversion In The Web UI
 
-1. Start the backend:
+1. Install the Web dependencies from a fresh checkout:
+
+   ```sh
+   python -m pip install -e ".[web]"
+   cd web
+   npm ci
+   cd ..
+   ```
+
+2. Start the backend from the repository root:
 
    ```sh
    openmc2donjon serve
    ```
 
-2. Start the frontend from the `web/` directory:
+3. Start the frontend in another terminal:
 
    ```sh
+   cd web
    npm run dev
    ```
 
-3. Open <http://localhost:3000/convert>.
+4. Open <http://localhost:3000/convert>.
 
-4. Fill:
+5. Fill:
 
    - input HDF5: `mgxs_library.h5`
    - output ASCII: usually `out.mcompo.txt` for a mapped library, or
@@ -68,11 +80,11 @@ You do **not** need to visit every page.
      macrolib handoffs
    - enable production checks for real handoffs
 
-5. Click dry-run first.
+6. Click dry-run first.
 
-6. If the dry-run passes, click Convert.
+7. If the dry-run passes, click Convert.
 
-7. After conversion, use the result actions:
+8. After conversion, use the result actions:
 
    - Preview ASCII: sanity-check the LCM text blocks.
    - Bundle handoff: create a manifest-backed delivery directory.
@@ -85,7 +97,7 @@ The important output files are:
 | --- | --- |
 | `out.mcompo.txt` | DONJON/DRAGON ASCII `L_MULTICOMPO`. |
 | `out.macrolib.txt` | DONJON/DRAGON ASCII `L_MACROLIB`. |
-| `convert_summary.json` | Machine-readable conversion summary: format, output path, dry-run/convert status, preflight decision, production flag. |
+| `<output>.convert.json` | Web-generated, hash-linked Converter receipt. A CLI user chooses this path with `--summary-json`. |
 | `bundle/manifest.json` | Delivery bundle manifest with artifact paths, sizes, hashes, and summary metadata. |
 
 ## Direct Conversion On The CLI
@@ -107,7 +119,7 @@ openmc2donjon mgxs_library.h5 \
   -o out.mcompo.txt \
   --check \
   --production \
-  --summary-json convert_summary.json
+  --summary-json out.mcompo.txt.convert.json
 ```
 
 Use MACROLIB instead:
@@ -118,7 +130,7 @@ openmc2donjon mgxs_library.h5 \
   -o out.macrolib.txt \
   --check \
   --production \
-  --summary-json convert_summary.json
+  --summary-json out.macrolib.txt.convert.json
 ```
 
 ## What The Converter Does And Does Not Do
@@ -130,7 +142,8 @@ The converter does:
 - write DRAGON/DONJON ASCII `L_MULTICOMPO` or `L_MACROLIB`;
 - carry optional ADF/DF and SPH/NSPH blocks if they already exist in the HDF5;
 - run production preflight checks when requested;
-- write `convert_summary.json` for downstream bundle/DONJON pages.
+- write the hash-linked receipt requested with `--summary-json`; the Web UI
+  supplies `<output>.convert.json` automatically.
 
 The converter does not:
 
@@ -150,58 +163,48 @@ extracts a working `L_MACROLIB` from it with `NCR:`.
 cross sections, scattering, optional ADF, and optional `GROUP/*/NSPH` factors.
 Use it when the next DONJON step expects a macrolib directly.
 
-Current SPH consumption status:
+Current physical SPH handoff status:
 
-- OpenMC-side SPH factors are written to the augmented HDF5 as explicit
-  `NSPH` data.
-- `L_MACROLIB` writes those factors as `GROUP/*/NSPH`; DONJON `DSPH:`/`MAC:`
-  consumes this route directly.
-- `L_MULTICOMPO` can carry the `NSPH` metadata, but DONJON `NCR:` does not
-  currently promote those OpenMC-side factors into non-unity `GROUP/*/NSPH`
-  values in the extracted macrolib.  For a DONJON SPH demonstration, choose
-  `--format macrolib`.
+- Converter first writes the uncorrected reference `L_MACROLIB` and its
+  hash-linked receipt from the model-declared HDF5;
+- native DRAGON `SPH:` solves the project-declared coarse geometry with SN or
+  SPN and writes the corrected `NSPH` MACROLIB;
+- `validate-native-sph` binds the OpenMC reference, Converter receipt, native
+  solver listing, corrected object, and DONJON verification evidence;
+- choose `L_MULTICOMPO` or `L_MACROLIB` according to the downstream model, not
+  because SPH imposes one universal object type.
 
-## ADF/SPH: When To Care
+## Physical SPH: When To Care
 
 Start with direct conversion first.
 
-Use `/equivalence` only when you already know you need equivalence factors:
+Use `/equivalence` only when the homogenized model requires physical SPH. The
+primary route is fine OpenMC reference -> Converter reference MACROLIB ->
+native DRAGON SPH on the matching coarse geometry -> DONJON verification.
+Whether a single assembly needs SPH is a model decision, not a geometry rule;
+the fine and coarse domains, boundaries, group structure, and observable must
+describe the same declared problem.
 
-- ADF/DF: discontinuity factors, usually for diffusion/SPN nodal interfaces.
-- SPH/NSPH: flux-equivalence factors, often preferred when the downstream
-  DONJON method cannot consume ADF directly.
+OpenMC CE/MG `make-openmc-sph-sidecar` + `apply-sph` remains an optional
+alternate or cross-check. When a project explicitly chooses it, the OpenMC MG
+macro calculation uses the same geometry and output regions as the CE
+reference, may use Hn histogram angular representation internally, and must
+iterate the rate-preserving update to convergence before Converter. That route
+does not make OpenMC MG the universal production operator, and it cannot replace
+a project-required native DRAGON/DONJON coarse solve.
 
-The `/equivalence` page is currently a command builder. It helps construct
-sidecar/augmentation CLI commands, but it does not execute the physics workflow
-inside the browser.
-
-For production SPH in this project, OpenMC MG is the equivalence operator:
-generate factors upstream from an OpenMC CE reference versus an OpenMC MG macro
-calculation on the selected group structure with the same geometry and output
-regions. The MG macro calculation can use OpenMC Hn histogram angular
-representation to better retain anisotropic scattering effects while the
-converter-facing handoff remains ordinary Pn/Legendre for DONJON. A single
-assembly usually does not need SPH; colorsets and full-core macro models need
-one factor per output region and energy group. Use `make-openmc-sph-sidecar` to
-turn the CE/MG flux comparison into both an auditable CSV table and an SPH
-sidecar, then use `augment-sph` to inject that sidecar before returning to
-`/convert`.
-
-Practically, the CE run may tally both representations:
+For that optional OpenMC MG route, the CE run may tally both representations:
 
 ```text
 P3 Legendre MGXS   -> DONJON handoff
 Hn histogram MGXS  -> OpenMC MG macro solve -> SPH factor generation
 ```
 
-There is no Hn-to-Legendre conversion step in the normal workflow. The Hn data
-improves the OpenMC MG flux used to compute SPH; DONJON receives directly
-tallied Pn/Legendre MGXS plus explicit `NSPH` factors. DONJON consumes the
-precomputed equivalence data; it is not the feedback operator in this route.
-
-For downstream DONJON consumption of OpenMC-side SPH today, convert the
-augmented HDF5 with `--format macrolib` so that the SPH factors appear as
-`GROUP/*/NSPH`.
+There is no Hn-to-Legendre conversion step in the optional route. The Hn data
+improves only the OpenMC MG flux used to compute its alternate SPH factors;
+DONJON receives directly tallied Pn/Legendre MGXS with the converged correction
+already folded into the handoff cross sections. This alternate path does not
+change the primary native-DRAGON product route.
 
 ## Hexagonal Cases
 
@@ -213,25 +216,19 @@ one OpenMC domain -> one HDF5 mixture -> one DONJON mixture
 ```
 
 For hexagonal examples in this repository, we use OpenMC cell-domain / lattice
-domain style handoffs. The accepted validation status is:
+domain style handoffs. The validation status is:
 
 - C5G7 assembly-wise is the accepted OpenMC -> DONJON k-effective validation.
-- Hex is implemented as a converter/modeling capability smoke.
-- There is not yet an accepted public hex benchmark in this repository.
+- The IRENA-30 ZREFL 91-position OpenMC-MG -> Converter -> DONJON SN8 line is
+  an accepted downstream mapping and transport-mechanics baseline.
+- That multigroup baseline is not an accepted continuous-energy fine -> native
+  DRAGON SPH -> full-core physics result; the strict candidate remains on HOLD.
 
 ## OpenMC Branch Used For Hex Work
 
-Current local OpenMC hex examples do **not** depend on
-`https://github.com/ebknudsen/openmc`.
-
-The local OpenMC checkout used for the repository examples is the official
-OpenMC repository:
-
-```text
-remote: https://github.com/openmc-dev/openmc.git
-checkout: /Users/wen/openmc-workspace/src-v0.15.0
-rev: 55b52b7ef
-```
+The current hex examples use the standard APIs from the official
+[OpenMC repository](https://github.com/openmc-dev/openmc) and do **not** depend
+on a private or project-specific OpenMC fork.
 
 The hex minicase uses standard OpenMC hex-lattice/cell-domain modeling. If a
 future workflow needs a true hex mesh tally API, the external branch may become

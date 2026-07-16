@@ -8,17 +8,20 @@ import {
   convertDeliveryChecklist,
 } from "@/lib/convertDeliveryChecklist";
 import { isCopyCliDestination } from "@/lib/convertNextSteps";
+import type { ConvertDownstreamDestination } from "@/lib/convertNextSteps";
 
 export default function DeliveryChecklist({
   data,
   input,
   onConvert,
+  downstream,
 }: {
   data: ConvertResponse;
   input: ConvertPreflightInput | null;
   onConvert?: () => void;
+  downstream?: ConvertDownstreamDestination | null;
 }) {
-  const items = convertDeliveryChecklist(data, input);
+  const items = convertDeliveryChecklist(data, input, { downstream });
   const completed = items.filter((item) => item.status === "done").length;
   const ready = items.filter((item) => item.status === "ready").length;
   return (
@@ -84,7 +87,7 @@ function ChecklistAction({
       <button
         type="button"
         onClick={onConvert}
-        className="mt-2 text-[12px] text-[var(--accent-2)] hover:underline"
+        className="btn-link mt-1"
       >
         Convert now
       </button>

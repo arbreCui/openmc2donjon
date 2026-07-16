@@ -34,7 +34,7 @@ export const COMMAND_GOALS: readonly CommandGoalDefinition[] = [
     title: "Create the MGXS HDF5 handoff",
     body:
       "Start here when the high-fidelity OpenMC run still needs to produce the spatially resolved MGXS input.",
-    href: "/openmc?workflow=two-step&production=1",
+    href: "/openmc?workflow=two-step",
     cta: "Open OpenMC prep",
     actionHint:
       "Prepare the handoff first if the MGXS HDF5 handoff does not exist yet.",
@@ -46,11 +46,11 @@ export const COMMAND_GOALS: readonly CommandGoalDefinition[] = [
   {
     id: "direct-convert",
     eyebrow: "I already have MGXS HDF5",
-    title: "Convert HDF5 to DONJON ASCII",
+    title: "Run the openmc2donjon Converter",
     body:
-      "Follow the direct converter route: dry-run the production checks, write L_MULTICOMPO or L_MACROLIB, preview the ASCII blocks, then package the bundle.",
+      "Use the product's core Converter: validate the corrected HDF5, write L_MULTICOMPO or L_MACROLIB, preview the ASCII blocks, then package the bundle.",
     href: "/convert?intent=direct-convert&format=multicompo&check=1&production=1",
-    cta: "Open converter",
+    cta: "Open Converter",
     actionHint:
       "The web page guides the same sequence: fill paths, dry run, convert, preview, package the bundle.",
     commandIds: ["direct-convert", "check", "inspect", "bundle"],
@@ -95,11 +95,11 @@ export const COMMAND_GOALS: readonly CommandGoalDefinition[] = [
     eyebrow: "I need SPH factors",
     title: "Carry OpenMC-side SPH to DONJON",
     body:
-      "Use SPH factors generated from OpenMC CE reference tallies versus OpenMC MG macro fluxes on the same geometry/output regions, then attach the accepted factors for DONJON consumption. MG reruns are optional and damping-sensitive.",
-    href: "/equivalence?kind=openmc-sph-sidecar",
+      "Use SPH factors generated from matched fine-reference OpenMC CE and homogenized-MG models on the same boundary and project-declared domain mapping, iterate them to convergence, then pre-apply the physically validated factors before Converter writes the requested object.",
+    href: "/equivalence?kind=openmc-sph-sidecar&contract=physical-sph",
     cta: "Open OpenMC SPH builder",
     actionHint:
-      "Compute the one-shot SPH sidecar from CE/MG fluxes, review the physics summary, and only run apply-sph when an explicit damping study justifies another MG iteration.",
+      "Build and review the SPH sidecar, run apply-sph on the converter-layout HDF5, then let Converter validate and write the DONJON object.",
     commandIds: [
       "export-volume-flux",
       "make-openmc-sph-sidecar",

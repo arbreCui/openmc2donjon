@@ -11,8 +11,8 @@ Use PyGan when you want to:
 
 - check whether `lcm`, `lifo`, and `cle2000` are importable from Python;
 - write the same openmc2donjon LCM tree through PyGan's native ASCII exporter;
-- read a native DRAGON/DONJON COMPO or MULTICOMPO file through the official LCM
-  bindings;
+- read a DRAGON/DONJON LCM ASCII COMPO or MULTICOMPO export through the
+  official LCM bindings;
 - compare PyGan's view of a reference COMPO tree with openmc2donjon's ASCII LCM
   reader in future validation tools;
 - run CLE-2000 procedures from Python in local developer workflows.
@@ -83,7 +83,7 @@ For a meeting or local validation demo, use this order:
    it ignores whitespace and associative-table ordering, but checks integer,
    string, and real payloads within tolerance.
 
-4. Inspect a native DRAGON/DONJON COMPO or MULTICOMPO through PyGan:
+4. Inspect a DRAGON/DONJON LCM ASCII COMPO or MULTICOMPO through PyGan:
 
    ```sh
    openmc2donjon pygan-inspect-compo FUEL30.COMPO \
@@ -91,15 +91,15 @@ For a meeting or local validation demo, use this order:
    ```
 
 This path demonstrates the intended PyGan role clearly: optional environment
-diagnostics, optional writer backend, writer equivalence validation, and native
-DRAGON/DONJON LCM inspection.
+diagnostics, optional writer backend, writer equivalence validation, and
+DRAGON/DONJON LCM ASCII inspection.
 
 In the localhost Web UI, the same story is exposed in two places:
 
 - `/convert` reports PyGan availability for the running backend Python
   environment and enables the PyGan writer only when it is importable.
 - After a successful PyGan conversion, `/convert` shows a `Validate PyGan`
-  action that opens the `compare-writers` command builder with paths prefilled.
+  action that opens the runnable `/pygan` comparison page with paths prefilled.
 
 ## Install PyGan
 
@@ -110,10 +110,8 @@ cd "$DRAGON_ROOT/PyGan"
 FORTRANPATH="$(command -v gfortran)" make pip=1 openmp=1 donjon
 ```
 
-On the development machine used for this project, PyGan is installed in the
-`openmc-dev` Python environment. If your shell has multiple Python
-installations, run the checks with the same Python environment that will run
-`openmc2donjon`.
+If your shell has multiple Python installations, build PyGan and run the checks
+with the same Python environment that will run `openmc2donjon`.
 
 ## Check Availability
 
@@ -136,7 +134,8 @@ not importable. The default converter still works without PyGan.
 
 ## Inspect A DRAGON/DONJON COMPO
 
-Use `pygan-inspect-compo` to inspect a native DRAGON/DONJON LCM ASCII file:
+Use `pygan-inspect-compo` to inspect a DRAGON/DONJON LCM ASCII file. Binary or
+direct-access LCM files must first be exported to the supported ASCII form:
 
 ```sh
 openmc2donjon pygan-inspect-compo FUEL30.COMPO \
@@ -211,8 +210,8 @@ runner is available, it also generates a small CLE-2000 deck that:
 4. compares the extracted macrolib against the PyGan direct `L_MACROLIB` for
    the core MGXS payloads.
 
-Artifacts are written under `/private/tmp/openmc2donjon_pygan_backend_smoke` by
-default.
+Artifacts are written under
+`${TMPDIR:-/tmp}/openmc2donjon_pygan_backend_smoke` by default.
 
 If PyGan is not importable, the smoke reports a clear skip and exits
 successfully, so it can remain in the default release check without requiring

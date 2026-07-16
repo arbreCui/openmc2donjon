@@ -13,6 +13,62 @@ from openmc2donjon.sph_iteration import create_sph_update_table
 
 
 class SphIterationTests(unittest.TestCase):
+    def test_rate_sph_can_pool_a_declared_mixture_symmetry_class(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            reference_flux = root / "reference_flux.csv"
+            mg_flux = root / "mg_flux.csv"
+            sidecar = root / "sph.h5"
+            summary = root / "summary.json"
+            write_mgxs(mgxs)
+            reference_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,2.0\nfuel,2,1.0\n"
+                "moderator,1,4.0\nmoderator,2,3.0\n",
+                encoding="utf-8",
+            )
+            mg_flux.write_text(
+                "mixture,group,flux\n"
+                "fuel,1,3.0\nfuel,2,1.0\n"
+                "moderator,1,3.0\nmoderator,2,7.0\n",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                cli_main(
+                    [
+                        "make-openmc-sph-sidecar",
+                        str(mgxs),
+                        "-o",
+                        str(sidecar),
+                        "--reference-flux",
+                        str(reference_flux),
+                        "--mg-flux",
+                        str(mg_flux),
+                        "--sph-target",
+                        "rate",
+                        "--damping",
+                        "0.5",
+                        "--tie-mixtures",
+                        "fuel,moderator",
+                        "--summary-json",
+                        str(summary),
+                    ]
+                ),
+                0,
+            )
+
+            with h5py.File(sidecar, "r") as h5:
+                np.testing.assert_allclose(
+                    h5["sph"][:],
+                    np.asarray([[1.0, np.sqrt(2.0)], [1.0, np.sqrt(2.0)]]),
+                )
+                self.assertEqual(int(h5.attrs["sph_tied_bin_count"]), 4)
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+            self.assertEqual(payload["tie_mixture_groups"], [["fuel", "moderator"]])
+            self.assertEqual(payload["tied_bin_count"], 4)
+
     def test_cli_builds_openmc_sph_sidecar_in_one_step(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -1620,6 +1676,15 @@ class SphIterationTests(unittest.TestCase):
             expected = np.array([[0.5, 1.0 / 3.0], [0.25, 0.2]])
             with h5py.File(sidecar, "r") as h5:
                 np.testing.assert_allclose(h5["sph"][:], expected, rtol=1.0e-11)
+                self.assertEqual(
+                    h5.attrs["sph_derivation"],
+                    "rate-preserving-ce-mg-fixed-point",
+                )
+                self.assertEqual(h5.attrs["sph_target"], "rate")
+                self.assertAlmostEqual(
+                    float(h5.attrs["sph_max_update_residual"]),
+                    0.8,
+                )
             payload = json.loads(summary.read_text(encoding="utf-8"))
             self.assertEqual(payload["sph_target"], "rate")
             self.assertEqual(

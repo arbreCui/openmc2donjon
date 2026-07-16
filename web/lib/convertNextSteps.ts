@@ -1,5 +1,8 @@
 import type { ConvertPreflightInput, ConvertResponse } from "./api";
-import { donjonDeckFilename, donjonGuideHref } from "./donjonGuide";
+import {
+  donjonDeckFilename,
+  donjonGuideHref,
+} from "./donjonGuide";
 
 export interface ConvertNextStep {
   id: string;
@@ -8,6 +11,13 @@ export interface ConvertNextStep {
   body: string;
   href?: string;
   status: "ready" | "blocked" | "reference";
+}
+
+export interface ConvertDownstreamDestination {
+  href: string;
+  label: string;
+  title: string;
+  body: string;
 }
 
 export function convertObjectLabel(format: ConvertResponse["format"]): string {
@@ -24,9 +34,10 @@ export function convertObjectDescription(format: ConvertResponse["format"]): str
 /**
  * Destinations that only build and copy a CLI command instead of executing
  * in-app. Buttons and links pointing there carry a small "CLI" marker so the
- * execute-to-copy boundary is announced at the point of click.
+ * execute-to-copy boundary is announced at the point of click. DONJON is not
+ * included because its page can now start the constrained local solver job.
  */
-const COPY_CLI_DESTINATIONS = ["/builder", "/equivalence", "/donjon"] as const;
+const COPY_CLI_DESTINATIONS = ["/builder", "/equivalence"] as const;
 
 export function isCopyCliDestination(href: string): boolean {
   return COPY_CLI_DESTINATIONS.some(
@@ -72,7 +83,6 @@ export function convertDonjonGuideHref(
   data: ConvertResponse,
   options?: { manifestConfirmed?: boolean },
 ): string {
-  const mixtureCount = data.preflight?.inputs[0]?.mixtures ?? undefined;
   return donjonGuideHref({
     asciiPath: data.output_path,
     format: data.format,
@@ -80,9 +90,6 @@ export function convertDonjonGuideHref(
       ? convertBundleManifestPath(data)
       : null,
     deckFilename: donjonDeckFilename(data.output_path, data.format, "solve"),
-    deckOptions: {
-      mixtureCount: mixtureCount ?? undefined,
-    },
   });
 }
 
@@ -92,7 +99,18 @@ export function convertWriterCompareHref(data: ConvertResponse): string {
     format: data.format,
     summary_json: siblingPath(data.output_path, "writer_compare.json"),
     keep_dir: siblingPath(data.output_path, "writer_compare"),
+    output: data.output_path,
   });
+  if (data.summary_path) params.set("receipt", data.summary_path);
+  if (data.root_name) params.set("root_name", data.root_name);
+  if (data.comment) params.set("comment", data.comment);
+  if (data.burnup != null) params.set("burnup", String(data.burnup));
+  if (data.h_factor_default != null) {
+    params.set("h_factor_default", String(data.h_factor_default));
+  }
+  for (const mixture of data.mixtures ?? []) params.append("mixture", mixture);
+  if (data.project_root) params.set("project", data.project_root);
+  if (data.component_id) params.set("component", data.component_id);
   return `/pygan?${params.toString()}`;
 }
 
@@ -129,6 +147,7 @@ function withoutTrailingSlash(path: string): string {
 export function convertNextSteps(
   data: ConvertResponse,
   input: ConvertPreflightInput | null,
+  options?: { downstream?: ConvertDownstreamDestination | null },
 ): ConvertNextStep[] {
   const inspectHref = `/inspect?path=${encodeURIComponent(data.input_path)}`;
   const objectLabel = convertObjectLabel(data.format);
@@ -221,10 +240,18 @@ export function convertNextSteps(
     },
     {
       id: "donjon",
-      label: objectLabel,
-      title: `Use ${objectLabel} in DONJON`,
-      body: `${objectDescription} Output path: ${data.output_path}`,
-      href: convertDonjonGuideHref(data),
+      label: options?.downstream ? "Project" : objectLabel,
+      title:
+        options?.downstream?.title ??
+        (data.format === "multicompo"
+          ? "Connect this component library to its consumer"
+          : `Inspect ${objectLabel} in DONJON`),
+      body:
+        options?.downstream?.body ??
+        (data.format === "multicompo"
+          ? `This is one converted component library. The project manifest—not Converter—decides how many such components exist, which domain a consumer imports, and how they are mapped. Output path: ${data.output_path}`
+          : `${objectDescription} Output path: ${data.output_path}`),
+      href: options?.downstream?.href ?? convertDonjonGuideHref(data),
       status: "ready",
     },
     {

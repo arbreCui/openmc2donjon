@@ -7,12 +7,15 @@ layer for validation, inspection, and future alternate writers.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 import importlib
 import os
 from pathlib import Path
 import shutil
 import tempfile
+from threading import RLock
 from types import ModuleType
 from typing import Any
 
@@ -26,6 +29,57 @@ PYGAN_ROLE = (
     "optional DRAGON/DONJON validation and integration backend; "
     "the default converter writer remains pure Python ASCII"
 )
+
+
+# PyGan's legacy LCM import/export API uses the process working directory as
+# an implicit file argument.  ``os.chdir`` is process-global, so concurrent
+# localhost Web requests must serialize every PyGan filesystem operation, not
+# merely the two calls to ``os.chdir``.  An RLock is required because a full
+# conversion enters the guard and then calls the lower-level guarded writer.
+_PYGAN_PROCESS_LOCK = RLock()
+
+
+@contextmanager
+def pygan_process_guard() -> Iterator[None]:
+    """Serialize a complete PyGan filesystem operation within this process.
+
+    Callers should enter this guard *before* resolving relative paths.  This
+    prevents another PyGan request from temporarily changing the process cwd
+    while those paths are interpreted.
+    """
+
+    with _PYGAN_PROCESS_LOCK:
+        yield
+
+
+@contextmanager
+def pygan_working_directory(path: str | Path) -> Iterator[Path]:
+    """Temporarily enter ``path`` under the shared PyGan process lock.
+
+    The original directory is restored in ``finally`` even when a PyGan
+    extension raises.  On POSIX, an open directory descriptor makes recovery
+    robust if the original directory is renamed while PyGan is running.
+    """
+
+    with pygan_process_guard():
+        target = Path(path).expanduser().resolve()
+        original = Path.cwd()
+        restore_fd: int | None = None
+        if hasattr(os, "fchdir"):
+            flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+            restore_fd = os.open(original, flags)
+        try:
+            os.chdir(target)
+            yield target
+        finally:
+            try:
+                if restore_fd is None:
+                    os.chdir(original)
+                else:
+                    os.fchdir(restore_fd)
+            finally:
+                if restore_fd is not None:
+                    os.close(restore_fd)
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,21 +153,25 @@ class PyGanCompoInspection:
 def probe_pygan() -> PyGanStatus:
     """Return import status for the optional PyGan modules."""
 
-    modules = tuple(_probe_module(name) for name in PYGAN_MODULES)
-    return PyGanStatus(
-        available=all(module.available for module in modules),
-        modules=modules,
-    )
+    with pygan_process_guard():
+        modules = tuple(_probe_module(name) for name in PYGAN_MODULES)
+        return PyGanStatus(
+            available=all(module.available for module in modules),
+            modules=modules,
+        )
 
 
 def require_pygan() -> tuple[ModuleType, ModuleType, ModuleType]:
     """Import PyGan modules or raise a user-facing error."""
 
-    status = probe_pygan()
-    if not status.available:
-        missing = ", ".join(status.missing_modules)
-        raise RuntimeError(f"PyGan backend is not available; missing: {missing}. {status.install_hint}")
-    return tuple(importlib.import_module(name) for name in PYGAN_MODULES)  # type: ignore[return-value]
+    with pygan_process_guard():
+        status = probe_pygan()
+        if not status.available:
+            missing = ", ".join(status.missing_modules)
+            raise RuntimeError(
+                f"PyGan backend is not available; missing: {missing}. {status.install_hint}"
+            )
+        return tuple(importlib.import_module(name) for name in PYGAN_MODULES)  # type: ignore[return-value]
 
 
 def inspect_pygan_compo(path: str | Path, *, root_name: str | None = None) -> PyGanCompoInspection:
@@ -125,27 +183,29 @@ def inspect_pygan_compo(path: str | Path, *, root_name: str | None = None) -> Py
     requested file, then reading the object from that temporary directory.
     """
 
-    lcm, _, _ = require_pygan()
-    source = Path(path).expanduser().resolve()
-    if not source.is_file():
-        raise FileNotFoundError(source)
-    if len(source.name) > 71:
-        raise ValueError(f"{source.name!r} is too long for PyGan LCM_INP import")
+    with pygan_process_guard():
+        source = Path(path).expanduser().resolve()
+        lcm, _, _ = require_pygan()
+        if not source.is_file():
+            raise FileNotFoundError(source)
+        if len(source.name) > 71:
+            raise ValueError(f"{source.name!r} is too long for PyGan LCM_INP import")
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmp = Path(tmpdir)
-        import_name = source.name
-        _stage_pygan_input(source, tmp / f"_{import_name}")
-        old_cwd = Path.cwd()
-        try:
-            os.chdir(tmp)
-            try:
-                obj = lcm.new("LCM_INP", import_name)
-            except Exception as exc:  # noqa: BLE001 - PyGan exposes extension-specific exceptions.
-                raise RuntimeError(f"PyGan failed to open {source}: {exc}") from exc
-            return _inspect_lcm_object(obj, source=source, object_name=import_name, root_name=root_name)
-        finally:
-            os.chdir(old_cwd)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir).resolve()
+            import_name = source.name
+            _stage_pygan_input(source, tmp / f"_{import_name}")
+            with pygan_working_directory(tmp):
+                try:
+                    obj = lcm.new("LCM_INP", import_name)
+                except Exception as exc:  # noqa: BLE001 - PyGan exposes extension-specific exceptions.
+                    raise RuntimeError(f"PyGan failed to open {source}: {exc}") from exc
+                return _inspect_lcm_object(
+                    obj,
+                    source=source,
+                    object_name=import_name,
+                    root_name=root_name,
+                )
 
 
 def _probe_module(name: str) -> PyGanModuleStatus:

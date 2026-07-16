@@ -19,6 +19,9 @@ class OpenMCRecipeTemplateTests(unittest.TestCase):
         self.assertIn("def extra_tallies(library):", text)
         self.assertIn("volume=domain_volume_cm3(domain)", text)
         self.assertIn('"scatter matrix"', text)
+        self.assertIn("def provenance_files():", text)
+        self.assertIn("def provenance_metadata():", text)
+        self.assertIn("SETTINGS_XML", text)
 
     def test_readme_states_domain_to_mixture_mapping(self) -> None:
         text = (_template_dir() / "README.md").read_text(encoding="utf-8")
@@ -30,6 +33,8 @@ class OpenMCRecipeTemplateTests(unittest.TestCase):
         self.assertIn("--strict-dry-run", text)
         self.assertIn("--write-tallies tallies.xml", text)
         self.assertIn("DOMAIN_VOLUME_BY_ID_CM3", text)
+        self.assertIn("openmc_provenance.json", text)
+        self.assertIn("does not rerun OpenMC", text)
 
 
 def _template_dir() -> Path:

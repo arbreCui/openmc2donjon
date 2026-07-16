@@ -26,6 +26,7 @@ import {
   convertValidateBundleHref,
   convertWriterCompareHref,
   isCopyCliDestination,
+  type ConvertDownstreamDestination,
 } from "@/lib/convertNextSteps";
 import { convertOutputMode } from "@/lib/convertOutputMode";
 import { convertPostWriteFocus } from "@/lib/convertPostWriteFocus";
@@ -43,9 +44,11 @@ import RunSummaryCard from "./RunSummaryCard";
 export default function OutputActions({
   data,
   onConvert,
+  downstream,
 }: {
   data: ConvertResponse;
   onConvert?: () => void;
+  downstream?: ConvertDownstreamDestination | null;
 }) {
   const paths = useMemo(() => convertArtifactPaths(data), [data]);
   const [statuses, setStatuses] = useState<ConvertArtifactStatusMap>(
@@ -67,7 +70,7 @@ export default function OutputActions({
 
   const input = data.preflight?.inputs[0] ?? null;
   const actions = handoffActions(data, onConvert, statuses);
-  const deliveryItems = convertDeliveryChecklist(data, input);
+  const deliveryItems = convertDeliveryChecklist(data, input, { downstream });
   const mode = convertOutputMode(data);
 
   if (mode === "dry-run-ready") {
@@ -91,6 +94,7 @@ export default function OutputActions({
         statuses={statuses}
         presence={convertOutputPresence(data, statuses.output)}
         actions={actions}
+        downstream={downstream}
         onRefresh={() => setRefreshToken((value) => value + 1)}
       />
     );
@@ -156,7 +160,7 @@ function BlockedOutputActions({
         <button
           type="button"
           onClick={onRefresh}
-          className="text-[var(--accent-2)] hover:underline"
+          className="btn-link"
         >
           Refresh file status
         </button>
@@ -237,6 +241,7 @@ function ConvertedOutputActions({
   statuses,
   presence,
   actions,
+  downstream,
   onRefresh,
 }: {
   data: ConvertResponse;
@@ -244,6 +249,7 @@ function ConvertedOutputActions({
   statuses: ConvertArtifactStatusMap;
   presence: ConvertOutputPresence;
   actions: readonly HandoffAction[];
+  downstream?: ConvertDownstreamDestination | null;
   onRefresh: () => void;
 }) {
   const bundleDir = convertBundleOutputDir(data);
@@ -254,20 +260,23 @@ function ConvertedOutputActions({
   // confirmed the manifest exists (bundling is optional; no amber warning
   // for a step the user never took).
   const [manifestReady, setManifestReady] = useState(false);
-  const donjonHref = convertDonjonGuideHref(data, {
+  const standaloneDonjonHref = convertDonjonGuideHref(data, {
     manifestConfirmed: manifestReady,
   });
+  const donjonHref = downstream?.href ?? standaloneDonjonHref;
   return (
     <section className="glass rounded-xl p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
           <h3 className="text-base font-semibold tracking-tight">
-            Deliver to DONJON
+            Converter handoff complete
           </h3>
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
             {conflict
               ? "The ASCII output was written this session, but the file-status probe disagrees — check the path, then refresh file status."
-              : "The DONJON-facing ASCII output exists. The DONJON guide works from the ASCII path directly; bundle for the manifest-backed record."}
+              : downstream
+                ? "The checked output and Converter receipt exist. This component remains attached to its project, so its declared consumer is the primary optional continuation."
+                : "The checked output and Converter receipt exist. If you only needed one assembly/component library, you can stop here—no Project, full-core model, or DONJON run is required. Bundle is the recommended portable record."}
           </p>
         </div>
         {conflict ? (
@@ -285,7 +294,7 @@ function ConvertedOutputActions({
         <button
           type="button"
           onClick={onRefresh}
-          className="text-[var(--accent-2)] hover:underline"
+          className="btn-link"
         >
           Refresh file status
         </button>
@@ -295,18 +304,22 @@ function ConvertedOutputActions({
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="text-[10px] uppercase tracking-[0.14em] opacity-70">
-              DONJON ASCII
+              checked Converter artifact
             </div>
             <h4 className="mt-1 text-sm font-semibold tracking-tight">
-              {focus?.title ?? "Use the ASCII output in DONJON"}
+              {downstream
+                ? focus?.title ?? "Continue to the declared consumer"
+                : "Standalone component / library handoff is ready"}
             </h4>
-            {focus ? (
+            {focus || !downstream ? (
               <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--fg-2)]">
-                {focus.body}
+                {downstream && focus
+                  ? focus.body
+                  : "The serialized object and hash-linked receipt are the completed Converter product. Downstream use is a separate user choice."}
               </p>
             ) : null}
           </div>
-          {focus ? (
+          {focus && downstream ? (
             <span className="rounded border border-current/20 bg-black/15 px-2 py-1 text-[11px] uppercase tracking-wider">
               {focus.badge}
             </span>
@@ -317,19 +330,30 @@ function ConvertedOutputActions({
           <DeliveryPath label="ASCII output" value={data.output_path} />
           <DeliveryPath label="Bundle directory" value={bundleDir} />
           {data.summary_written && data.summary_path ? (
-            <DeliveryPath label="Conversion summary" value={data.summary_path} />
+            <DeliveryPath label="Converter receipt" value={data.summary_path} />
           ) : null}
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2">
-          <Link href={donjonHref} className="btn btn-primary">
-            Open DONJON guide
-            <CliChip />
+          <Link
+            href={downstream ? donjonHref : convertBundleHref(data)}
+            className="btn btn-primary"
+          >
+            {downstream ? downstream.label : "Bundle handoff"}
+            {!downstream ? <CliChip /> : null}
           </Link>
-          <Link href={convertBundleHref(data)} className="btn btn-secondary">
-            Bundle
-            <CliChip />
+          <Link
+            href={downstream ? convertBundleHref(data) : donjonHref}
+            className="btn btn-secondary"
+          >
+            {downstream ? "Bundle handoff" : "Use in DONJON (optional)"}
+            {downstream ? <CliChip /> : null}
           </Link>
+          {!downstream ? (
+            <Link href="/projects" className="btn btn-secondary">
+              Coordinate in Project (optional)
+            </Link>
+          ) : null}
           {data.writer_backend === "pygan" ? (
             <Link href={convertWriterCompareHref(data)} className="btn btn-secondary">
               Validate PyGan
@@ -343,8 +367,8 @@ function ConvertedOutputActions({
           </Link>
           <CopyCliButton
             value={data.output_path}
-            label="Copy DONJON path"
-            ariaLabel="Copy DONJON path"
+            label="Copy output path"
+            ariaLabel="Copy Converter output path"
           />
         </div>
       </section>
@@ -358,6 +382,7 @@ function ConvertedOutputActions({
           data={data}
           statuses={statuses}
           donjonHref={donjonHref}
+          donjonLabel={downstream?.label}
         />
         <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
           {actions.map((action) => (
@@ -415,7 +440,7 @@ function DryRunOutputActions({
         <button
           type="button"
           onClick={onRefresh}
-          className="text-[var(--accent-2)] hover:underline"
+          className="btn-link"
         >
           Refresh file status
         </button>
@@ -486,10 +511,12 @@ function DeliveryCommandPanel({
   data,
   statuses,
   donjonHref,
+  donjonLabel,
 }: {
   data: ConvertResponse;
   statuses: ConvertArtifactStatusMap;
   donjonHref?: string;
+  donjonLabel?: string;
 }) {
   const presence = convertOutputPresence(data, statuses.output);
   const outputReady = presence === "confirmed" || presence === "unverified";
@@ -539,7 +566,7 @@ function DeliveryCommandPanel({
             <DeliveryPath label="Bundle directory" value={bundleDir} />
             <DeliveryPath label="Manifest after bundle" value={manifestPath} />
             {data.summary_written && data.summary_path ? (
-              <DeliveryPath label="Conversion summary" value={data.summary_path} />
+              <DeliveryPath label="Converter receipt" value={data.summary_path} />
             ) : null}
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -563,8 +590,7 @@ function DeliveryCommandPanel({
               href={donjonHref ?? convertDonjonGuideHref(data)}
               className="btn btn-secondary"
             >
-              Open DONJON guide
-              <CliChip />
+              {donjonLabel ?? "Open DONJON guide"}
             </Link>
           </div>
         </>
@@ -575,8 +601,8 @@ function DeliveryCommandPanel({
 
 /**
  * Marks a button whose destination only builds and copies a CLI command
- * (bundle/equivalence builders, the DONJON guide) instead of executing
- * in-app — the execute-to-copy boundary, announced at the point of click.
+ * (bundle/equivalence builders) instead of executing in-app — the
+ * execute-to-copy boundary, announced at the point of click.
  */
 function CliChip() {
   return (
@@ -659,7 +685,7 @@ function DeliveryItemAction({
       <button
         type="button"
         onClick={onConvert}
-        className="mt-2 text-[11px] font-medium text-[var(--accent-2)] hover:underline"
+        className="btn-link mt-1 text-[11px]"
       >
         Convert now
       </button>
@@ -908,4 +934,3 @@ function deliveryItemClass(
   }
   return "border-[var(--edge)] bg-white/[0.02] text-[var(--fg-2)]";
 }
-

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import io
 import json
 from pathlib import Path
@@ -13,6 +14,10 @@ import numpy as np
 
 from openmc2donjon.cli import build_command_parser, build_parser, main as cli_main
 from openmc2donjon.energy_groups import energy_bounds_sha256
+from openmc2donjon.production_policy import (
+    PRODUCTION_CANONICAL_MAXIMUMS,
+    PRODUCTION_PREFLIGHT_POLICY_ID,
+)
 
 
 class CliTests(unittest.TestCase):
@@ -123,6 +128,21 @@ class CliTests(unittest.TestCase):
                 )
                 h5["mixtures/fuel/total"][:] = np.array([0.29, 0.38])
                 h5["mixtures/fuel/transport_total"][:] = np.array([0.29, 0.38])
+                fuel = h5["mixtures/fuel"]
+                for name in (
+                    "total",
+                    "absorption",
+                    "fission",
+                    "nu_fission",
+                    "chi",
+                    "transport_total",
+                    "kappa_fission",
+                    "scatter_matrix",
+                ):
+                    fuel.create_dataset(
+                        f"{name}_std_dev",
+                        data=np.zeros_like(fuel[name][:]),
+                    )
 
             with contextlib.redirect_stdout(io.StringIO()):
                 present_rc = cli_main(
@@ -150,13 +170,147 @@ class CliTests(unittest.TestCase):
         )
         self.assertEqual(
             payload["inputs"][0]["uncertainty"]["production_fail_threshold"],
-            1.0,
+            1.0e-1,
         )
         self.assertTrue(payload["inputs"][0]["declared_mixture_order"])
         self.assertEqual(payload["inputs"][0]["source_domain_indices"], 1)
         self.assertEqual(payload["inputs"][0]["domain_mode"], "unit_test")
         self.assertEqual(payload["inputs"][0]["source_domain_metadata"], 1)
         self.assertTrue(payload["inputs"][0]["openmc_volume_flux"]["present"])
+
+    def test_direct_production_rejects_disabled_uncertainty_checks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "mgxs.h5"
+            output = Path(tmpdir) / "out.mcompo.txt"
+            write_valid_mgxs(path)
+
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                rc = cli_main(
+                    [
+                        str(path),
+                        "-o",
+                        str(output),
+                        "--production",
+                        "--no-uncertainty-check",
+                    ]
+                )
+
+        self.assertEqual(rc, 1)
+        self.assertFalse(output.exists())
+        self.assertIn("cannot be combined", stderr.getvalue())
+        self.assertIn("std-dev coverage", stderr.getvalue())
+
+    def test_direct_production_rejects_h_factor_default(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "mgxs.h5"
+            output = Path(tmpdir) / "out.mcompo.txt"
+            write_valid_mgxs(path)
+
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                rc = cli_main(
+                    [
+                        str(path),
+                        "-o",
+                        str(output),
+                        "--production",
+                        "--h-factor-default",
+                        "200.0",
+                    ]
+                )
+
+        self.assertEqual(rc, 1)
+        self.assertFalse(output.exists())
+        self.assertIn("cannot be combined with --h-factor-default", stderr.getvalue())
+
+    def test_direct_production_clamps_every_relaxing_threshold(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "mgxs.h5"
+            output = Path(tmpdir) / "out.mcompo.txt"
+            receipt = Path(tmpdir) / "convert.json"
+            write_production_ready_mgxs(path)
+
+            rc = cli_main(
+                [
+                    str(path),
+                    "-o",
+                    str(output),
+                    "--production",
+                    "--scatter-row-balance-fail",
+                    "99",
+                    "--transport-p1-fail",
+                    "99",
+                    "--chi-sum-tolerance",
+                    "99",
+                    "--uncertainty-warn",
+                    "99",
+                    "--uncertainty-fail",
+                    "99",
+                    "--uncertainty-production-fail",
+                    "99",
+                    "--uncertainty-mean-abs-floor",
+                    "99",
+                    "--summary-json",
+                    str(receipt),
+                ]
+            )
+            payload = json.loads(receipt.read_text(encoding="utf-8"))
+
+        self.assertEqual(rc, 0)
+        policy = payload["preflight_policy"]
+        self.assertEqual(policy["policy_id"], PRODUCTION_PREFLIGHT_POLICY_ID)
+        self.assertTrue(policy["uncertainty_check_enabled"])
+        self.assertTrue(policy["require_std_dev_coverage"])
+        self.assertEqual(
+            policy["canonical_maximums"],
+            PRODUCTION_CANONICAL_MAXIMUMS,
+        )
+        effective = policy["effective_thresholds"]
+        for name, maximum in PRODUCTION_CANONICAL_MAXIMUMS.items():
+            self.assertEqual(effective[name], maximum)
+        preflight = payload["preflight"]["inputs"][0]
+        self.assertEqual(
+            preflight["scatter_row_balance"]["fail_threshold"],
+            PRODUCTION_CANONICAL_MAXIMUMS["scatter_row_balance_fail"],
+        )
+        self.assertEqual(
+            preflight["physics_checks"]["chi_sum_tolerance"],
+            PRODUCTION_CANONICAL_MAXIMUMS["chi_sum_tolerance"],
+        )
+        self.assertEqual(
+            preflight["physics_checks"]["transport_p1_fail_threshold"],
+            PRODUCTION_CANONICAL_MAXIMUMS["transport_p1_fail"],
+        )
+        self.assertTrue(preflight["uncertainty"]["require_coverage"])
+
+    def test_engineering_check_remains_configurable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "mgxs.h5"
+            output = Path(tmpdir) / "out.mcompo.txt"
+            receipt = Path(tmpdir) / "convert.json"
+            write_valid_mgxs(path)
+
+            rc = cli_main(
+                [
+                    str(path),
+                    "-o",
+                    str(output),
+                    "--check",
+                    "--scatter-row-balance-fail",
+                    "99",
+                    "--no-uncertainty-check",
+                    "--summary-json",
+                    str(receipt),
+                ]
+            )
+            payload = json.loads(receipt.read_text(encoding="utf-8"))
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(payload["preflight_policy"]["level"], "engineering")
+        preflight = payload["preflight"]["inputs"][0]
+        self.assertEqual(preflight["scatter_row_balance"]["fail_threshold"], 99.0)
+        self.assertFalse(preflight["uncertainty"]["checked"])
 
     def test_check_command_can_gate_energy_group_identity(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -609,6 +763,9 @@ class CliTests(unittest.TestCase):
         self.assertTrue(convert_summary["dry_run"])
         self.assertFalse(convert_summary["converted"])
         self.assertFalse(convert_summary["output_exists"])
+        self.assertFalse(convert_summary["production_requested"])
+        self.assertEqual(convert_summary["preflight_policy"]["level"], "engineering")
+        self.assertTrue(convert_summary["preflight_policy"]["preflight_executed"])
         self.assertEqual(convert_summary["preflight"]["decision"], "mgxs_input_contract_passed")
         self.assertIn("mgxs_input_contract_passed", stream.getvalue())
 
@@ -653,6 +810,8 @@ class CliTests(unittest.TestCase):
             )
             output_text = output_path.read_text(encoding="utf-8")
             convert_summary = json.loads(convert_summary_path.read_text(encoding="utf-8"))
+            input_sha256 = hashlib.sha256(input_path.read_bytes()).hexdigest()
+            output_sha256 = hashlib.sha256(output_path.read_bytes()).hexdigest()
 
         self.assertEqual(rc, 0)
         self.assertNotEqual(output_text, "existing output")
@@ -661,6 +820,14 @@ class CliTests(unittest.TestCase):
         self.assertTrue(convert_summary["converted"])
         self.assertTrue(convert_summary["output_exists"])
         self.assertEqual(convert_summary["output_path"], str(output_path))
+        self.assertEqual(
+            convert_summary["input_sha256"],
+            input_sha256,
+        )
+        self.assertEqual(
+            convert_summary["output_sha256"],
+            output_sha256,
+        )
 
     def test_convert_check_rejects_invalid_hdf5_without_writing_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -759,3 +926,29 @@ def write_valid_mgxs(path: Path) -> None:
         flux.attrs["group_order"] = "mgxs_donjon"
         flux.attrs["mixture_names"] = np.asarray(["fuel"], dtype="S")
         flux.attrs["source_group_order"] = "unit_test"
+
+
+def write_production_ready_mgxs(path: Path) -> None:
+    write_valid_mgxs(path)
+    with h5py.File(path, "a") as h5:
+        fuel = h5["mixtures/fuel"]
+        fuel.create_dataset(
+            "kappa_fission",
+            data=np.array([3.2e-12, 3.1e-12]),
+        )
+        fuel["total"][:] = np.array([0.29, 0.38])
+        fuel["transport_total"][:] = np.array([0.29, 0.38])
+        for name in (
+            "total",
+            "absorption",
+            "fission",
+            "nu_fission",
+            "chi",
+            "transport_total",
+            "kappa_fission",
+            "scatter_matrix",
+        ):
+            fuel.create_dataset(
+                f"{name}_std_dev",
+                data=np.zeros_like(fuel[name][:]),
+            )

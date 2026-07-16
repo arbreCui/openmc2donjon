@@ -103,3 +103,29 @@ describe("api.pyganDoctor", () => {
     });
   });
 });
+
+describe("api.executionJobs", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("lists persisted runs only under the declared artifact directory", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          schema: "openmc2donjon.web-donjon-job-list.v1",
+          artifact_directory: "/project/diagnostics/native-sph-runs",
+          jobs: [],
+        }),
+        { status: 200 },
+      ),
+    );
+
+    await api.executionJobs("/project/diagnostics/native-sph-runs");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/execution/jobs?artifact_directory=%2Fproject%2Fdiagnostics%2Fnative-sph-runs",
+      { cache: "no-store" },
+    );
+  });
+});

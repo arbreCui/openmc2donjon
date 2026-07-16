@@ -103,6 +103,36 @@ describe("commandBuilder", () => {
     );
   });
 
+  it("builds the native DRAGON SPH physics validation command", () => {
+    const spec = commandBuilderSpec("validate-native-sph");
+    expect(spec).not.toBeNull();
+    const values = defaultBuilderValues(spec!);
+    values.reference_h5 = "/runs/case/reference.h5";
+    values.reference_macrolib = "/runs/case/reference.macrolib.txt";
+    values.sph_macrolib = "/runs/case/native_sph.macrolib.txt";
+    values.verify_macrolib = "/runs/case/verify.macrolib.txt";
+    values.result_listing = "/runs/case/donjon.result";
+    values.execution_deck = "/runs/case/native_sph.x2m";
+    values.energy_coverage = "/runs/case/energy_coverage.json";
+    values.converter_receipt = "/runs/case/converter_receipt.json";
+    values.summary_json = "/runs/case/physics_summary.json";
+
+    expect(buildCommandCli(spec!, values)).toBe(
+      "openmc2donjon validate-native-sph /runs/case/reference.h5 " +
+        "--reference-macrolib /runs/case/reference.macrolib.txt " +
+        "--sph-macrolib /runs/case/native_sph.macrolib.txt " +
+        "--verify-macrolib /runs/case/verify.macrolib.txt " +
+        "--result-listing /runs/case/donjon.result " +
+        "--execution-deck /runs/case/native_sph.x2m " +
+        "--energy-coverage /runs/case/energy_coverage.json " +
+        "--converter-receipt /runs/case/converter_receipt.json " +
+        "--summary-json /runs/case/physics_summary.json",
+    );
+    expect(commandBuilderStage("validate-native-sph").label).toBe(
+      "Native DRAGON SPH",
+    );
+  });
+
   it("builds serve command with mock mode and repeated CORS origins", () => {
     const spec = commandBuilderSpec("serve");
     expect(spec).not.toBeNull();

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   browserInitialPath,
   buildCompareCli,
+  optionalNumberError,
+  pyganWorkflowHrefs,
   PYGAN_ATOL_DEFAULT,
   PYGAN_RTOL_DEFAULT,
   toleranceError,
@@ -14,6 +16,8 @@ const BASE = {
   rootName: "CPO",
   comment: "",
   mixtures: "",
+  burnup: "",
+  hFactorDefault: "",
   rtol: "1e-6",
   atol: "1e-8",
   summaryJson: "",
@@ -71,6 +75,46 @@ describe("buildCompareCli tolerances", () => {
     // The form blocks Run compare for the same inputs.
     expect(toleranceError("1e-6x")).not.toBeNull();
     expect(toleranceError("abc")).not.toBeNull();
+  });
+});
+
+describe("Converter and Project context", () => {
+  it("keeps the exact state-changing writer options in the comparison CLI", () => {
+    const cli = buildCompareCli({
+      ...BASE,
+      rootName: "LIB",
+      comment: "state A",
+      mixtures: "fuel, reflector",
+      burnup: "12.5",
+      hFactorDefault: "1.25",
+    });
+    expect(cli).toContain("--root-name LIB");
+    expect(cli).toContain("--comment 'state A'");
+    expect(cli).toContain("--burnup 12.5");
+    expect(cli).toContain("--h-factor-default 1.25");
+    expect(cli).toContain("--mixture fuel --mixture reflector");
+    expect(optionalNumberError("not-a-number", "Burnup")).not.toBeNull();
+  });
+
+  it("returns a comparison result to Project, Converter, Bundle, and DONJON", () => {
+    const hrefs = pyganWorkflowHrefs({
+      projectRoot: "/runs/a",
+      componentId: "fuel",
+      inputH5: "/runs/a/components/fuel.h5",
+      outputPath: "/runs/a/outputs/fuel.mcompo.txt",
+      receiptPath: "/runs/a/outputs/fuel.mcompo.txt.convert.json",
+      format: "multicompo",
+      rootName: "LIB",
+      comment: "fuel state",
+      mixtures: "M1,M2",
+      burnup: "0",
+      hFactorDefault: "",
+    });
+    expect(hrefs.project).toContain("component=fuel");
+    expect(hrefs.converter).toContain("writer_backend=pygan");
+    expect(hrefs.converter).toContain("root_name=LIB");
+    expect(hrefs.bundle).toContain("run_summary=");
+    expect(hrefs.donjon).toContain("ascii=%2Fruns%2Fa%2Foutputs%2Ffuel.mcompo.txt");
   });
 });
 

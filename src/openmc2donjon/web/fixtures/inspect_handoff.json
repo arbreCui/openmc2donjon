@@ -29,6 +29,67 @@
   "root_attrs_total": 5,
   "top_level_keys_total": 2,
   "peek_truncated": false,
+  "openmc_provenance": {
+    "schema": null,
+    "status": "legacy",
+    "issues": ["Simulation fixture is not scientific provenance"],
+    "missing": ["embedded_provenance"],
+    "digest_sha256": null,
+    "integrity": { "ok": false, "issues": ["Simulation fixture is not scientific provenance"] },
+    "capabilities": {
+      "reference_bound": false,
+      "export_replayable": false,
+      "transport_reproducible": false
+    },
+    "fingerprints": {
+      "model_sha256": null,
+      "transport_sha256": null
+    },
+    "producer": {
+      "name": "openmc2donjon",
+      "version": null,
+      "python_version": "mock",
+      "platform": "mock"
+    },
+    "openmc": {
+      "version": null,
+      "git_sha1": null,
+      "statepoint_format_version": null
+    },
+    "statepoint": {
+      "filetype": null,
+      "is_openmc_statepoint": false,
+      "date_and_time": null
+    },
+    "source_mode": "mock",
+    "statepoint_loaded": null,
+    "evidence": { "simulation_sources": {}, "openmc_version_sources": {} },
+    "input_closure": { "attested_complete": false, "method": null },
+    "handoff": { "algorithm": "openmc2donjon-hdf5-payload-sha256-v1", "payload_sha256": null },
+    "artifacts": [],
+    "simulation": {
+      "run_mode": null,
+      "particles": null,
+      "batches": null,
+      "inactive": null,
+      "generations_per_batch": null,
+      "seed": null,
+      "stride": null,
+      "threads": null,
+      "mpi_ranks": null
+    },
+    "temperature": null,
+    "nuclear_data": {
+      "cross_sections": null,
+      "cross_sections_source": null,
+      "selection": "unavailable",
+      "library_count": 0,
+      "total_size_bytes": 0,
+      "libraries_manifest_sha256": null,
+      "libraries": []
+    },
+    "user_metadata": {}
+  },
   "burnup_axis": null,
   "burnup_axis_values": null,
   "mixture_count": 9,
@@ -43,6 +104,10 @@
   "adf_mixtures": 9,
   "adf_faces": ["XMIN", "XMAX", "YMIN", "YMAX"],
   "sph_calculations": 9,
+  "sph_applied": false,
+  "sph_applied_source": null,
+  "sph_apply_operator": null,
+  "sph_kind": null,
   "std_dev_datasets": 72,
   "std_dev_expected_datasets": 72,
   "scatter_axes": ["moment,from,to"],

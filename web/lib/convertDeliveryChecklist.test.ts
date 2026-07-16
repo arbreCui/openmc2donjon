@@ -114,5 +114,39 @@ describe("convertDeliveryChecklist", () => {
 
     expect(items.find((item) => item.id === "hdf5")?.status).toBe("ready");
     expect(items.find((item) => item.id === "gates")?.status).toBe("skipped");
+    expect(items.find((item) => item.id === "gates")?.body).toContain(
+      "Downstream SPH or project physics acceptance is a separate gate",
+    );
+  });
+
+  it("does not present a written Converter object as downstream physics acceptance", () => {
+    const items = convertDeliveryChecklist(
+      response({ dry_run: false, converted: true, output_exists: true }),
+      input(),
+    );
+
+    expect(items.find((item) => item.id === "donjon")?.body).toContain(
+      "does not claim downstream SPH or model-physics acceptance",
+    );
+  });
+
+  it("keeps the project component destination in the delivery checklist", () => {
+    const items = convertDeliveryChecklist(
+      response({ dry_run: false, converted: true, output_exists: true }),
+      input(),
+      {
+        downstream: {
+          href: "/projects?project=%2Fruns%2Fa&component=assembly-a",
+          label: "Return to Project",
+          title: "Return this handoff to Project",
+          body: "Reopen the manifest before choosing a consumer.",
+        },
+      },
+    );
+    expect(items.find((item) => item.id === "donjon")).toMatchObject({
+      label: "Project",
+      title: "Return this handoff to Project",
+      href: "/projects?project=%2Fruns%2Fa&component=assembly-a",
+    });
   });
 });

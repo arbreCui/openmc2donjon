@@ -2,8 +2,13 @@ import { describe, expect, it } from "vitest";
 import bundledFixture from "../../src/openmc2donjon/web/fixtures/openmc_sph_physics_summary.json";
 import type { OpenmcSphPhysicsSummary } from "./api";
 import {
+  evidenceAuditPresentation,
+  forbiddenCorrectionAbsenceState,
+  verifiedForbiddenCorrectionAbsenceState,
   formatScatterTreatment,
   formatPhysicsNumber,
+  nativeDragonSphAcceptancePassed,
+  nativeSphValidatorHref,
   openmcSphConvertHref,
   productionEvidenceRows,
   reactionRatePreservationRows,
@@ -14,7 +19,8 @@ import {
 
 const SUMMARY: OpenmcSphPhysicsSummary = {
   schema: "openmc2donjon.openmc-ce-mg-sph-physics-summary.v1",
-  route: "OpenMC CE reference + OpenMC MG same geometry -> OpenMC-side SPH",
+  route:
+    "Fine OpenMC CE full core + assembly-scale homogenized OpenMC MG full core -> OpenMC-side SPH",
   handoff_dir: "/mock",
   mixture_count: 2,
   energy_groups: 33,
@@ -160,10 +166,152 @@ const SUMMARY: OpenmcSphPhysicsSummary = {
 };
 
 describe("openmcSphSummary", () => {
-  it("marks summaries with HDF5 SPH and ASCII NSPH as pass", () => {
-    expect(summaryStatus(SUMMARY)).toMatchObject({
+  it("recognizes a live native DRAGON SPH physics pass", () => {
+    const native = nativeSummary();
+    expect(nativeDragonSphAcceptancePassed(native)).toBe(true);
+    expect(summaryStatus(native)).toMatchObject({
       tone: "pass",
-      label: "handoff carries NSPH",
+      label: "native SPH physics pass",
+    });
+    expect(openmcSphConvertHref(native)).toBeNull();
+    const validator = new URL(nativeSphValidatorHref(native)!, "http://localhost");
+    expect(validator.pathname).toBe("/builder");
+    expect(validator.searchParams.get("command")).toBe("validate-native-sph");
+    expect(validator.searchParams.get("reference_h5")).toBe(
+      "/mock/mgxs_with_sph.h5",
+    );
+    expect(validator.searchParams.get("result_listing")).toBe(
+      "/tmp/donjon.result",
+    );
+    expect(validator.searchParams.get("execution_deck")).toBe(
+      "/tmp/native_sph.x2m",
+    );
+    expect(validator.searchParams.get("converter_receipt")).toBe(
+      "/tmp/converter_receipt.json",
+    );
+    expect(productionEvidenceRows(native)[3]).toMatchObject({
+      label: "DONJON vs OpenMC",
+      value: "-71.6 pcm",
+    });
+  });
+
+  it("does not accept a normal end when the final transport solve failed", () => {
+    const native = nativeSummary();
+    native.native_sph!.final_flux_solve_converged = false;
+    expect(summaryStatus(native)).toMatchObject({
+      tone: "warn",
+      label: "native SPH review required",
+    });
+  });
+
+  it("requires both one-speed convergence proof records", () => {
+    const missingValidatorProof = nativeSummary();
+    delete missingValidatorProof.acceptance_checks!
+      .one_speed_convergence_provable;
+    expect(summaryStatus(missingValidatorProof).tone).toBe("warn");
+
+    const missingSolverProof = nativeSummary();
+    delete missingSolverProof.native_sph!.one_speed_convergence_provable;
+    expect(summaryStatus(missingSolverProof).tone).toBe("warn");
+
+    const contradictedSolverProof = nativeSummary();
+    contradictedSolverProof.native_sph!.one_speed_convergence_provable = false;
+    expect(summaryStatus(contradictedSolverProof).tone).toBe("warn");
+  });
+
+  it("blocks an old audit PASS when strict raw solver evidence is missing", () => {
+    const oldSummary = nativeSummary();
+    delete oldSummary.native_sph!.one_speed_convergence_provable;
+
+    expect(oldSummary.evidence_audit?.physics_acceptance).toBe("passed");
+    expect(nativeDragonSphAcceptancePassed(oldSummary)).toBe(false);
+    expect(summaryStatus(oldSummary)).toMatchObject({
+      tone: "warn",
+      label: "native SPH review required",
+    });
+    expect(evidenceAuditPresentation(oldSummary)).toEqual({
+      label: "physics acceptance blocked",
+      detail:
+        "The stored audit says passed, but the current strict contract is missing or contradicts a required acceptance check or raw solver record. Revalidate this summary before use.",
+      passed: false,
+    });
+  });
+
+  it("requires audit, validator checks, and raw records to agree", () => {
+    const contradictedCheck = nativeSummary();
+    contradictedCheck.acceptance_checks!.final_flux_solve_converged = false;
+    expect(nativeDragonSphAcceptancePassed(contradictedCheck)).toBe(false);
+
+    const contradictedRawRecord = nativeSummary();
+    contradictedRawRecord.native_sph!.flux_nonconvergence_count = 1;
+    expect(nativeDragonSphAcceptancePassed(contradictedRawRecord)).toBe(false);
+
+    const missingArtifactAudit = nativeSummary();
+    missingArtifactAudit.evidence_audit!.all_referenced_handoff_artifacts_present =
+      false;
+    expect(nativeDragonSphAcceptancePassed(missingArtifactAudit)).toBe(false);
+
+    const invalidIntegrity = nativeSummary();
+    invalidIntegrity.evidence_audit!.evidence_integrity!.verified = false;
+    invalidIntegrity.evidence_audit!.evidence_integrity!.issues = [
+      "execution deck SHA-256 mismatch",
+    ];
+    expect(nativeDragonSphAcceptancePassed(invalidIntegrity)).toBe(false);
+    expect(summaryStatus(invalidIntegrity)).toMatchObject({
+      label: "native evidence integrity blocked",
+      tone: "warn",
+    });
+  });
+
+  it("treats unknown forbidden-correction evidence as blocked, never PASS", () => {
+    expect(forbiddenCorrectionAbsenceState(false)).toBe("pass");
+    expect(forbiddenCorrectionAbsenceState(true)).toBe("fail");
+    expect(forbiddenCorrectionAbsenceState(null)).toBe("unknown");
+    expect(forbiddenCorrectionAbsenceState(undefined)).toBe("unknown");
+    expect(
+      verifiedForbiddenCorrectionAbsenceState(false, "verified_absent"),
+    ).toBe("pass");
+    expect(verifiedForbiddenCorrectionAbsenceState(false, "not_provable")).toBe(
+      "unknown",
+    );
+    expect(verifiedForbiddenCorrectionAbsenceState(false, undefined)).toBe(
+      "unknown",
+    );
+    expect(verifiedForbiddenCorrectionAbsenceState(false, "observed")).toBe(
+      "fail",
+    );
+    expect(verifiedForbiddenCorrectionAbsenceState(true, "verified_absent")).toBe(
+      "fail",
+    );
+
+    const unknown = nativeSummary();
+    unknown.acceptance_checks!.adf_used = null;
+    expect(nativeDragonSphAcceptancePassed(unknown)).toBe(false);
+
+    unknown.evidence_audit!.evidence_integrity!.forbidden_corrections = {
+      status: "not_provable",
+      issues: ["execution deck missing"],
+    };
+    expect(sphUpdatePolicyRows(unknown)).toContainEqual(
+      expect.objectContaining({
+        label: "Forbidden numerical fallback",
+        value: "not established",
+      }),
+    );
+
+    const verified = nativeSummary();
+    expect(sphUpdatePolicyRows(verified)).toContainEqual(
+      expect.objectContaining({
+        label: "Forbidden numerical fallback",
+        value: "verified absent",
+      }),
+    );
+  });
+
+  it("keeps an OpenMC-side NSPH handoff distinct from physics acceptance", () => {
+    expect(summaryStatus(SUMMARY)).toMatchObject({
+      tone: "warn",
+      label: "SPH handoff present — validation required",
     });
   });
 
@@ -392,3 +540,119 @@ describe("openmcSphSummary", () => {
     ).toBeNull();
   });
 });
+
+function nativeSummary(): OpenmcSphPhysicsSummary {
+  return {
+    ...SUMMARY,
+    schema: "openmc2donjon.openmc-dragon-native-sph-physics-summary.v1",
+    requested_path: "/tmp/physics_summary.json",
+    route: "OpenMC CE fine -> Converter -> DRAGON native SPH -> DONJON SPN",
+    handoff: {
+      ...SUMMARY.handoff,
+      augmented_hdf5_has_sph: false,
+      reference_macrolib_path: "/tmp/reference.macrolib.txt",
+      verification_macrolib_path: "/tmp/verify.macrolib.txt",
+      result_listing_path: "/tmp/donjon.result",
+      execution_deck_path: "/tmp/native_sph.x2m",
+      energy_coverage_path: "/tmp/energy_coverage.json",
+      converter_receipt_path: "/tmp/converter_receipt.json",
+    },
+    native_sph: {
+      solver: "DRAGON SPH: with TRIVAT SPN",
+      iterations: 70,
+      epsilon: 1.0e-6,
+      final_max_factor_update: 5.7e-6,
+      final_rms_factor_update: 9.45e-7,
+      converged: true,
+      one_speed_convergence_provable: true,
+      final_flux_solve_converged: true,
+      flux_nonconvergence_count: 0,
+      factors_unmodified: true,
+      negative_factor_correction_count: 0,
+      oscillation_stop_count: 0,
+      normal_end: true,
+    },
+    eigenvalue_validation: {
+      openmc_keff: 1.112311,
+      openmc_keff_std_dev: 0.000589,
+      reference_physical_balance_kind: "finite-domain-keff",
+      reference_physical_balance_keff: 1.112276,
+      reference_physical_balance_delta_pcm: -3.5,
+      reference_physical_balance_z: -0.059,
+      reference_collision_balance_kinf: 1.18,
+      reference_finite_balance_available: true,
+      reference_finite_balance_keff: 1.112276,
+      reference_leakage: 0.04,
+      reference_rate_balance_keff: 1.112276,
+      reference_rate_balance_delta_pcm: -3.5,
+      reference_rate_balance_z: -0.059,
+      donjon_keff: 1.111595,
+      donjon_delta_pcm: -71.5819,
+      donjon_z: -1.216,
+      max_abs_z: 2.0,
+    },
+    component_balance: {
+      reference_net_loss: 0.99976,
+      donjon_net_loss: 1.00037,
+      net_loss_relative_residual: 0.000612,
+      flux_rms_relative_residual: 0.00656,
+      flux_max_relative_residual: 0.0235,
+      power_normalization_factor: 1.11195,
+      per_component: [],
+    },
+    acceptance_checks: {
+      donjon_normal_end: true,
+      native_sph_converged: true,
+      native_sph_factors_unmodified: true,
+      native_sph_not_stopped_by_oscillation: true,
+      one_speed_convergence_provable: true,
+      final_flux_solve_converged: true,
+      energy_coverage_passed: true,
+      leakage_balance_available_when_required: true,
+      reference_physical_balance_within_openmc_uncertainty: true,
+      reference_rate_balance_within_openmc_uncertainty: true,
+      donjon_keff_within_openmc_uncertainty: true,
+      empirical_eigenvalue_multiplier_used: false,
+      adf_used: false,
+    },
+    geometry: {
+      kind: "hexagonal",
+      boundary_conditions: "radial vacuum; axial reflective",
+    },
+    evidence_audit: {
+      origin: "live_file",
+      summary_path: "/tmp/physics_summary.json",
+      summary_file_present: true,
+      referenced_handoff_artifacts: [],
+      all_referenced_handoff_artifacts_present: true,
+      all_referenced_handoff_artifacts_hash_verified: true,
+      evidence_integrity: {
+        verified: true,
+        issues: [],
+        handoff_sha256_manifest_complete: true,
+        all_handoff_sha256_match: true,
+        converter_receipt: { valid: true, issues: [] },
+        openmc_provenance: { valid: true, issues: [] },
+        forbidden_corrections: {
+          status: "verified_absent",
+          execution_deck_path: "/tmp/native_sph.x2m",
+          deck_reproduced_in_result_listing: true,
+          adf: { used: false, evidence_status: "verified_absent", issues: [] },
+          empirical_eigenvalue_multiplier: {
+            used: false,
+            evidence_status: "verified_absent",
+            issues: [],
+          },
+          issues: [],
+        },
+      },
+      physics_acceptance: "passed",
+      reactor_acceptance: "not_evaluated",
+    },
+    quality: {
+      ...SUMMARY.quality!,
+      decision: "native_sph_physics_passed",
+      production_ready: true,
+    },
+  };
+}

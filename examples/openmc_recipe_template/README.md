@@ -15,7 +15,10 @@ Edit these values in `export_recipe.py`:
 
 | Setting | Meaning |
 | --- | --- |
-| `MATERIALS_XML` / `GEOMETRY_XML` | OpenMC model files. |
+| `MATERIALS_XML` / `GEOMETRY_XML` / `SETTINGS_XML` / `TALLIES_XML` | OpenMC model and transport input files whose content hashes identify the fine calculation. |
+| `EXTRA_MODEL_SOURCES` | Imported Python, CAD/mesh, or other files needed to reconstruct the model. |
+| `RUN_THREADS` / `RUN_MPI_RANKS` | Optional launcher topology copied from the actual OpenMC run receipt; never inferred from the export shell. |
+| `input_closure_complete` | Keep `True` only after `provenance_files()` lists every imported Python, CAD/DAGMC, mesh, external-source, weight-window, and other model-defining file. Otherwise set it `False`; replay will remain honestly incomplete. |
 | `ENERGY_BOUNDS_EV` | Ascending energy boundaries in eV. |
 | `DOMAIN_TYPE` | OpenMC MGXS domain type, usually `cell` or `material`. |
 | `DOMAIN_ID_WHITELIST` | Optional subset of OpenMC domain ids to export. |
@@ -88,8 +91,13 @@ openmc2donjon-from-openmc \
 ```
 
 The managed run directory contains `mgxs_library.h5`, `out.mcompo.txt`,
-`run_summary.json`, optional `check_summary.json`, a recipe copy, and
-`manifest.json`.
+`run_summary.json`, `openmc_provenance.json`, optional `check_summary.json`,
+the recipe and small declared model sources, and `manifest.json`. The
+statepoint and nuclear-data libraries are content-hash bound but are not copied
+by default because they may be very large. Native DRAGON SPH consumes the
+frozen MGXS reference; it does not rerun OpenMC. The embedded handoff digest
+also binds the final energy grid, mixtures, XS, fluxes, and correction datasets,
+so modifying the HDF5 after export is detected.
 
 For direct root `L_MACROLIB` output:
 

@@ -55,6 +55,7 @@ describe("convert command helpers", () => {
       overwrite: true,
       check: true,
       production: true,
+      requirePhysicalSph: true,
       warnUnknownEnergyMesh: true,
       requireKnownEnergyMesh: true,
       rootName: "CORE",
@@ -73,6 +74,7 @@ describe("convert command helpers", () => {
     expect(cli).toContain("--h-factor-default 200");
     expect(cli).toContain("--mixture M1_UO2 --mixture M2_MOD");
     expect(cli).toContain("--check --production");
+    expect(cli).toContain("--require-physical-sph");
     expect(cli).toContain("--require-known-energy-mesh");
   });
 

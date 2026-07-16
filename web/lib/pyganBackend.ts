@@ -1,5 +1,8 @@
 import type { PyGanBackendStatus } from "./api";
 
+export const PYGAN_CONVERTER_HREF =
+  "/convert?writer_backend=pygan&check=1&production=1#convert-component";
+
 export interface PyGanCompareAvailability {
   canRun: boolean;
   hint: string;

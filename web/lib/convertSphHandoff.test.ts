@@ -49,6 +49,24 @@ describe("convertSphHandoffStatus", () => {
     expect(convertSphHandoffStatus(response(), input({ sph_calculations: 0 }))).toBeNull();
     expect(convertSphHandoffStatus(response(), null)).toBeNull();
   });
+
+  it("accepts an SPH-applied MULTICOMPO handoff with no active NSPH records", () => {
+    const status = convertSphHandoffStatus(
+      response({ format: "multicompo" }),
+      input({
+        sph_calculations: 0,
+        sph_applied: true,
+        sph_kind: "openmc-ce-mg-global",
+      }),
+    );
+    expect(status).toMatchObject({
+      title: "SPH-applied handoff detected",
+      badge: "pre-applied XS route",
+      tone: "ready",
+    });
+    expect(status?.output).toContain("L_MULTICOMPO");
+    expect(status?.output).toContain("no downstream NSPH operation");
+  });
 });
 
 function response(overrides: Partial<ConvertResponse> = {}): ConvertResponse {
@@ -91,4 +109,3 @@ function input(overrides: Partial<ConvertPreflightInput> = {}): ConvertPreflight
     ...overrides,
   };
 }
-

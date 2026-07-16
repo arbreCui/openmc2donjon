@@ -167,6 +167,46 @@ class MultiCompoSmokeTests(unittest.TestCase):
         self.assertEqual([mixture.name for mixture in mixtures], ["B", "A"])
         np.testing.assert_allclose([mixture.total[0] for mixture in mixtures], [0.5, 0.7])
 
+    def test_read_mgxs_hdf5_maps_reference_volume_flux_to_macrolib_weight(self) -> None:
+        import h5py
+
+        def add_mixture(parent, name: str, volume: float) -> None:
+            group = parent.create_group(name)
+            group.attrs["fissionable"] = False
+            group.attrs["scatter_axes"] = "moment,from,to"
+            group.attrs["volume"] = volume
+            group.create_dataset("total", data=[0.5, 0.7])
+            group.create_dataset("absorption", data=[0.01, 0.02])
+            group.create_dataset("fission", data=[0.0, 0.0])
+            group.create_dataset("nu_fission", data=[0.0, 0.0])
+            group.create_dataset("chi", data=[0.0, 0.0])
+            group.create_dataset(
+                "scatter_matrix",
+                data=[[[0.1, 0.0], [0.0, 0.2]]],
+            )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "reference_flux.h5"
+            with h5py.File(path, "w") as h5:
+                h5.attrs["energy_groups"] = 2
+                h5.attrs["legendre_order"] = 0
+                h5.create_dataset("energy_bounds", data=[1.0e-5, 1.0, 1.0e7])
+                names = np.asarray(["fuel", "mod"], dtype="S")
+                h5.create_dataset("mixture_names", data=names)
+                flux = h5.create_dataset(
+                    "openmc_volume_flux",
+                    data=[[20.0, 40.0], [60.0, 90.0]],
+                )
+                flux.attrs["mixture_names"] = names
+                mixtures_group = h5.create_group("mixtures")
+                add_mixture(mixtures_group, "fuel", 2.0)
+                add_mixture(mixtures_group, "mod", 3.0)
+
+            mixtures, _energy_bounds = read_mgxs_hdf5(path)
+
+        np.testing.assert_allclose(mixtures[0].flux_weight, [10.0, 20.0])
+        np.testing.assert_allclose(mixtures[1].flux_weight, [20.0, 30.0])
+
     def test_writes_burnup_axis_with_multiple_calculations(self) -> None:
         calc0 = MixtureXS(
             name="fuel",

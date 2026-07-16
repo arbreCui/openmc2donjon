@@ -16,19 +16,25 @@ export default function OpenmcSphWorkflowPanel({
             OpenMC-side SPH route
           </div>
           <h3 className="mt-1 text-sm font-semibold tracking-tight">
-            CE reference and MG macro solve stay in OpenMC
+            Matched fine-reference and homogenized-MG models stay in OpenMC
           </h3>
           <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--fg-2)]">
-            This route does not iterate DONJON for SPH. Run OpenMC twice with the
-            same geometry, compute SPH from the two OpenMC flux fields, attach the
-            factors to the MGXS HDF5, then use the normal converter.
+            This route does not iterate the downstream DONJON consumer for SPH. Run
+            the fine reference and homogenized MG models with the same boundary and
+            project-declared domain order, compute the next SPH update
+            from the paired OpenMC flux fields, re-run OpenMC MG, and repeat until
+            the update residual converges. Only then apply the factors to the
+            Converter handoff.
           </p>
           <p className="mt-2 max-w-3xl text-[12px] leading-5 text-amber-200/85">
-            Current accepted evidence includes the one-shot two-region production
-            probe: two output regions produce two SPH factors per energy group.
-            The five-region 2D case remains the larger diagnostic. Additional
-            OpenMC MG reruns are available for review, but they are
-            damping-sensitive and should not be treated as the default route.
+            The production rule is physical and contains no fitted k-effective
+            multiplier: NSPHⁿ⁺¹ = NSPHⁿ [φMGⁿ/(NSPHⁿ φCE)]ᵅ. Because the applied
+            cross sections are Σ′ = Σ/NSPH, the converged fixed point preserves
+            the reference reaction rate, Σ′φMG = ΣφCE. Eigenvalue closure is a
+            validation result, never an input used to tune NSPH. No group freeze,
+            flux floor, or factor clipping is permitted in production; inactive
+            groups must be declared from the physical group structure and unresolved
+            active bins require better statistics.
           </p>
         </div>
         <Link href="/commands/export-volume-flux" className="btn btn-secondary">
@@ -36,7 +42,7 @@ export default function OpenmcSphWorkflowPanel({
         </Link>
       </div>
 
-      <div className="mt-4 grid gap-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="mt-4 grid gap-2 lg:grid-cols-3 xl:grid-cols-5">
         {steps.map((step, index) => (
           <article
             key={step.id}

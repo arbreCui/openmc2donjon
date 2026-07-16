@@ -105,6 +105,22 @@
       "n_groups": 27
     },
     {
+      "id": "anl_23c",
+      "name": "ANL-23C",
+      "short": "ANL-23C",
+      "description": "ANL-27 with its five lowest-energy groups conservatively condensed into one retained-domain group.",
+      "purpose": "fast",
+      "n_groups": 23
+    },
+    {
+      "id": "anl_24c_20mev",
+      "name": "ANL-24C-20MeV",
+      "short": "ANL-24C-20MeV",
+      "description": "ANL-23C fast mesh extended by one 10–20 MeV group for full-spectrum fast-reactor handoff.",
+      "purpose": "fast",
+      "n_groups": 24
+    },
+    {
       "id": "lanl_30",
       "name": "LANL-30",
       "short": "LANL-30",

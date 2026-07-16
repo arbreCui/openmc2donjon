@@ -217,6 +217,13 @@ class CommandCatalogEndpointTests(unittest.TestCase):
             commands["make-low-order-driver"]["web_path"],
             "/builder?command=make-low-order-driver",
         )
+        native = commands["validate-native-sph"]
+        self.assertEqual(native["group"], "sph")
+        self.assertEqual(
+            native["web_path"], "/builder?command=validate-native-sph"
+        )
+        self.assertIn("physics_summary.json", native["produces"])
+        self.assertIn("full-core", native["next_step"])
 
     def test_catalog_has_a_web_path_for_every_command_except_cli_only(self) -> None:
         from openmc2donjon.web.server import create_app

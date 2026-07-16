@@ -19,6 +19,19 @@ from openmc2donjon import DomainExportSpec
 CASE_DIR = Path(__file__).resolve().parent
 MATERIALS_XML = CASE_DIR / "materials.xml"
 GEOMETRY_XML = CASE_DIR / "geometry.xml"
+SETTINGS_XML = CASE_DIR / "settings.xml"
+TALLIES_XML = CASE_DIR / "tallies.xml"
+
+# Add local Python modules, CAD/mesh sources, or other model-defining files
+# imported by this recipe. Their content hashes become part of the portable
+# model fingerprint and the managed research bundle.
+EXTRA_MODEL_SOURCES: dict[str, Path] = {}
+
+# OpenMC does not necessarily store launcher topology in a statepoint. Set
+# these only from the actual run receipt; do not infer them from the current
+# shell when exporting an old statepoint.
+RUN_THREADS: int | None = None
+RUN_MPI_RANKS: int | None = None
 
 # Energy boundaries must be ascending in eV. Replace this with the group
 # structure used for the OpenMC MGXS run.
@@ -136,6 +149,31 @@ def load_statepoint(library, statepoint_path):
         keff = getattr(statepoint, "keff", None)
         if keff is not None:
             print(f"OpenMC keff = {keff}")
+
+
+def provenance_files():
+    """Declare every small source file needed to reconstruct the fine model."""
+
+    return {
+        "materials": MATERIALS_XML,
+        "geometry": GEOMETRY_XML,
+        "settings": SETTINGS_XML,
+        "tallies": TALLIES_XML,
+        **EXTRA_MODEL_SOURCES,
+    }
+
+
+def provenance_metadata():
+    """Record launcher details that are not reliably stored by OpenMC."""
+
+    return {
+        # Set this true only after provenance_files() includes every imported
+        # Python module, CAD/DAGMC/mesh file, external source, weight window,
+        # and other file that can change the OpenMC model or tallies.
+        "input_closure_complete": True,
+        "threads": RUN_THREADS,
+        "mpi_ranks": RUN_MPI_RANKS,
+    }
 
 
 def extra_tallies(library):

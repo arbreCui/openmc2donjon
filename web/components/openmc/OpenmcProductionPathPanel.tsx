@@ -5,7 +5,7 @@ import { CopyCliButton } from "@/components/commands/CopyCliButton";
 import type {
   ConvertFormat,
   OpenmcEquivalenceMode,
-  OpenmcWorkflowKind,
+  OpenmcExportExecutionResponse,
   OpenmcWorkflowPlan,
 } from "@/lib/api";
 import type { OpenmcSphDemoPreset } from "@/lib/openmcSphDemo";
@@ -15,13 +15,14 @@ import {
   openmcSphEvidenceHref,
 } from "@/lib/openmcSphDemo";
 import {
-  openmcBundleBuilderHref,
-  openmcConvertHref,
-  openmcInspectHref,
+  openmcDirectConvertHref,
+  OPENMC_SPH_SIDECAR_FORM_HREF,
   openmcWalkthroughStatuses,
   type OpenmcWalkthroughRun,
   type OpenmcWalkthroughStatus,
 } from "@/lib/openmcWorkflowWalkthrough";
+import type { ProjectComponentRouteContext } from "@/lib/projectWorkspace";
+import { openmcExportProvenanceVerified } from "@/lib/openmcExportGate";
 
 export type OpenmcPlannerState =
   | { kind: "idle" }
@@ -36,9 +37,15 @@ export interface OpenmcSphDemoActions {
   onReview: () => void;
 }
 
+export type OpenmcExportState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "ok"; data: OpenmcExportExecutionResponse }
+  | { kind: "error"; message: string };
+
 export default function OpenmcProductionPathPanel({
   state,
-  workflow,
+  exportState,
   equivalence,
   format,
   production,
@@ -46,10 +53,11 @@ export default function OpenmcProductionPathPanel({
   statepointPath,
   loadStatepoint,
   runDir,
+  projectContext,
   demo = null,
 }: {
   state: OpenmcPlannerState;
-  workflow: OpenmcWorkflowKind;
+  exportState: OpenmcExportState;
   equivalence: OpenmcEquivalenceMode;
   format: ConvertFormat;
   production: boolean;
@@ -57,28 +65,112 @@ export default function OpenmcProductionPathPanel({
   statepointPath: string;
   loadStatepoint: boolean;
   runDir: string;
+  projectContext?: ProjectComponentRouteContext;
   demo?: OpenmcSphDemoActions | null;
 }) {
   const planned = state.kind === "ok" && state.data.ok;
   const plan = state.kind === "ok" ? state.data : null;
-  const statuses = openmcWalkthroughStatuses({
+  const plannedStatuses = openmcWalkthroughStatuses({
     hasRecipe: recipePath.trim().length > 0,
     hasStatepoint: statepointPath.trim().length > 0,
     loadStatepoint,
     hasRunDir: runDir.trim().length > 0,
     run: openmcWalkthroughRunFromState(state),
   });
-  const inspectHref = planned && plan ? openmcInspectHref(plan) : null;
-  const convertHref =
-    planned && plan ? openmcConvertHref(plan, format, production) : null;
-  const bundleHref =
-    planned && plan ? openmcBundleBuilderHref(plan, format) : null;
   const object = format === "macrolib" ? "L_MACROLIB" : "L_MULTICOMPO";
   const objectShort = format === "macrolib" ? "MACROLIB" : "MULTICOMPO";
   const isOpenmcSph = equivalence === "sph";
+  const isSphExport = isOpenmcSph && plan?.plan_scope === "export";
+  const exported =
+    exportState.kind === "ok" &&
+    exportState.data.ok &&
+    !exportState.data.mock_mode;
+  const provenanceVerified =
+    exported && openmcExportProvenanceVerified(exportState.data, production);
+  const actualHdf5Path = exported ? exportState.data.output_path : null;
+  const inspectHref = actualHdf5Path
+    ? `/inspect?path=${encodeURIComponent(actualHdf5Path)}`
+    : null;
+  const plannedAsciiPath =
+    plan?.artifacts.find((artifact) => artifact.kind === "ascii")?.path ?? "";
+  const convertHref =
+    planned && plan && provenanceVerified && !isSphExport && actualHdf5Path
+      ? openmcDirectConvertHref(
+          actualHdf5Path,
+          plannedAsciiPath,
+          format,
+          production,
+          projectContext,
+        )
+      : null;
+  // A plan and even an HDF5 export do not prove that Converter has written an
+  // ASCII object or receipt, so this panel must never enable Bundle directly.
+  const bundleHref: string | null = null;
+  const exportStatus: OpenmcWalkthroughStatus =
+    exportState.kind === "loading"
+      ? "planning"
+      : exportState.kind === "error"
+        ? "blocked"
+        : exported
+          ? "written"
+          : exportState.kind === "ok"
+            ? "planned"
+            : planned
+              ? "ready"
+              : plannedStatuses.run;
+  const verificationStatus: OpenmcWalkthroughStatus = provenanceVerified
+    ? "verified"
+    : exported || exportState.kind === "error"
+      ? "blocked"
+      : "needed";
+  const statuses = {
+    ...plannedStatuses,
+    run: exportStatus,
+    review: verificationStatus,
+    bundle: "needed" as OpenmcWalkthroughStatus,
+  };
   const sphDemo = isOpenmcSph && demo ? demo : null;
   const demoBundleHref = sphDemo ? openmcSphBundleHref(sphDemo.preset) : null;
-  const items = isOpenmcSph
+  const items = isSphExport
+    ? [
+        {
+          id: "export",
+          label: "01",
+          eyebrow: "OpenMC export",
+          title: "Write the MGXS HDF5",
+          body:
+            "Run the generated export command with the fine-reference CE statepoint and the project recipe that declares the equivalence domains.",
+          status: statuses.run,
+          href: undefined,
+          hrefLabel: undefined,
+          onClick: undefined,
+        },
+        {
+          id: "inspect",
+          label: "02",
+          eyebrow: "Confirm domains",
+          title: "Inspect the exported HDF5",
+          body:
+            "Confirm the declared domains and ordering, energy groups, scattering order, uncertainty data, and expected mesh before solving SPH.",
+          status: statuses.review,
+          href: inspectHref ?? undefined,
+          hrefLabel: inspectHref ? "Inspect exported HDF5" : undefined,
+          onClick: undefined,
+        },
+        {
+          id: "sph",
+          label: "03",
+          eyebrow: "Next page",
+          title: "Build and apply SPH",
+          body:
+            "Use paired CE-reference and homogenized-MG fluxes in the same declared domain order. Converter comes after apply-sph, not directly after export.",
+          status: statuses.review,
+          href: OPENMC_SPH_SIDECAR_FORM_HREF,
+          hrefLabel: "Continue to SPH",
+          onClick: undefined,
+        },
+      ]
+    : isOpenmcSph
     ? [
         {
           id: "run-openmc",
@@ -86,8 +178,8 @@ export default function OpenmcProductionPathPanel({
           eyebrow: "Run physics",
           title: "Run OpenMC CE/MG SPH",
           body:
-            "Run OpenMC CE as the reference and OpenMC MG on the same geometry/output regions. Export CE/MG fluxes, build SPH(region, group), and attach NSPH to the MGXS handoff.",
-          status: statuses.plan,
+            "Run the fine-reference and homogenized-MG OpenMC models on the same boundary and declared domains. Export matched CE/MG fluxes, converge SPH(domain, group), and pre-apply NSPH to the handoff.",
+          status: statuses.run,
           href: undefined,
           hrefLabel: undefined,
           onClick: undefined,
@@ -111,17 +203,17 @@ export default function OpenmcProductionPathPanel({
           title: `Convert to DONJON ${objectShort}`,
           body:
             format === "macrolib"
-              ? `Use the SPH-augmented HDF5 as converter input and write ${object}. For this SPH route, MACROLIB is the DONJON consumption route because NSPH is carried as GROUP/*/NSPH.`
-              : `Use the SPH-augmented HDF5 as converter input and write ${object}. Caveat: DONJON NCR: does not consume NSPH records from L_MULTICOMPO — use MACROLIB (GROUP/*/NSPH via DSPH: + MAC:) or pre-apply the factors with apply-sph so the correction reaches DONJON.`,
+              ? `Use the pre-applied HDF5 as Converter input and write ${object}.`
+              : `Use the pre-applied HDF5 as Converter input and write ${object}. The project manifest defines which domain or state the downstream consumer imports.`,
           status: statuses.review,
           href:
             convertHref ??
             (sphDemo ? openmcSphConvertHref(sphDemo.preset) : inspectHref) ??
             undefined,
           hrefLabel: convertHref
-            ? "Open converter"
+            ? "Open Converter"
             : sphDemo
-              ? "Open converter (demo prefill)"
+              ? "Open Converter (demo prefill)"
               : "Inspect HDF5",
           onClick: undefined,
         },
@@ -135,7 +227,7 @@ export default function OpenmcProductionPathPanel({
           body: loadStatepoint
             ? "Select the export recipe and statepoint that define the OpenMC MGXS handoff."
             : "Use the recipe without loading a statepoint when you only need the generated command scaffold.",
-          status: statuses.source,
+          status: statuses.run,
           href: undefined,
           hrefLabel: undefined,
           onClick: undefined,
@@ -144,14 +236,11 @@ export default function OpenmcProductionPathPanel({
           id: "convert",
           label: "02",
           eyebrow: "Converter",
-          title: workflow === "one-step" ? `Write ${object}` : `Convert HDF5 to ${object}`,
-          body:
-            workflow === "one-step"
-              ? `The primary command exports MGXS, applies ${equivalenceLabel(equivalence)}, writes ${object}, and records the run.`
-              : `Run export first, inspect or augment the HDF5, then convert that handoff into ${object}.`,
+          title: `Convert HDF5 to ${object}`,
+          body: `Run the OpenMC export first, inspect or augment the HDF5 when needed, then use Converter to write ${object}.`,
           status: statuses.review,
           href: convertHref ?? inspectHref ?? undefined,
-          hrefLabel: convertHref ? "Open converter" : "Inspect HDF5",
+          hrefLabel: convertHref ? "Open Converter" : "Inspect HDF5",
           onClick: undefined,
         },
         {
@@ -176,14 +265,18 @@ export default function OpenmcProductionPathPanel({
             Main workflow
           </div>
           <h2 className="mt-1 text-base font-semibold tracking-tight">
-            {isOpenmcSph
-              ? `Three steps before the converter writes ${objectShort}`
-              : "Three steps before the converter writes DONJON ASCII"}
+            {isSphExport
+              ? "Export the MGXS source before SPH"
+              : isOpenmcSph
+              ? `Prepare the input before Converter writes ${objectShort}`
+              : "Prepare the input before Converter writes DONJON ASCII"}
           </h2>
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
-            {isOpenmcSph
-              ? "This route prepares the converter input: OpenMC MG is the SPH equivalence operator, DONJON receives precomputed NSPH factors, and DONJON is not used as an SPH feedback loop. The current production demo is one-shot SPH; extra MG reruns are a damping-sensitive review step."
-              : "This route prepares the MGXS HDF5 from OpenMC inputs. Once planned or exported, open Convert to run production checks and write the ASCII library."}
+            {isSphExport
+              ? "This step ends at the MGXS HDF5. Inspect it, then build and apply SPH on the next page; Converter remains the single gateway that validates and writes DONJON ASCII."
+              : isOpenmcSph
+              ? "This route prepares one Converter input from matched fine-reference and homogenized-MG domains. Converter writes one checked object; the project manifest decides how many other objects and which consumer are required."
+              : "This route prepares the MGXS HDF5 from OpenMC inputs. Converter is enabled only after a real write and a fail-closed provenance check; a successful plan alone is not an artifact."}
           </p>
           {demo ? (
             <p className="mt-1 max-w-3xl text-[12px] leading-5 text-emerald-200/90">
@@ -195,8 +288,7 @@ export default function OpenmcProductionPathPanel({
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-3">
           <span className="rounded border border-[var(--edge)] px-2 py-1 font-mono text-[11px] uppercase tracking-wider text-[var(--fg-2)]">
-            {workflow === "one-step" ? "one-step" : "two-step"} ·{" "}
-            {equivalenceLabel(equivalence)}
+            OpenMC HDF5 → Converter · {equivalenceLabel(equivalence)}
           </span>
           {demo ? (
             <>
@@ -254,6 +346,14 @@ export default function OpenmcProductionPathPanel({
         ))}
       </div>
 
+      {exported && !provenanceVerified ? (
+        <div className="mt-4 rounded-lg border border-rose-300/25 bg-rose-300/[0.055] px-3 py-2 text-[12px] leading-5 text-rose-100">
+          The HDF5 was written, but its embedded OpenMC provenance is not
+          sufficient for this {production ? "production" : "engineering"}
+          handoff. Inspect is available for diagnosis; Converter remains blocked.
+        </div>
+      ) : null}
+
       {(planned && plan) || demoBundleHref ? (
         <div className="mt-4 flex flex-wrap items-center gap-3">
           {planned && plan ? (
@@ -263,9 +363,9 @@ export default function OpenmcProductionPathPanel({
               copiedLabel="Copied"
             />
           ) : null}
-          {workflow === "two-step" && convertHref ? (
+          {convertHref ? (
             <Link href={convertHref} className="btn btn-secondary">
-              Open converter
+              Open Converter
             </Link>
           ) : null}
           {inspectHref ? (
@@ -298,7 +398,12 @@ function openmcWalkthroughRunFromState(
 }
 
 function openmcWalkthroughStatusClass(status: OpenmcWalkthroughStatus): string {
-  if (status === "ready" || status === "planning") {
+  if (
+    status === "ready" ||
+    status === "planning" ||
+    status === "written" ||
+    status === "verified"
+  ) {
     return "border-cyan-300/25 bg-cyan-300/[0.06] text-cyan-100";
   }
   if (status === "planned") {

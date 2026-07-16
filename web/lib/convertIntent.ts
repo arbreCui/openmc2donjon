@@ -38,11 +38,11 @@ const COPIES: Record<ConvertIntent, ConvertIntentCopy> = {
   "openmc-sph": {
     intent: "openmc-sph",
     eyebrow: "OpenMC-side SPH",
-    title: "Convert an SPH-augmented handoff",
+    title: "Convert an SPH-applied handoff",
     body:
-      "Use this after OpenMC CE/MG equivalence has produced SPH factors and they have been attached to the HDF5 handoff. This page does not recompute SPH; it verifies the SPH-augmented HDF5 and writes the DONJON-facing ASCII. For DONJON SPH consumption, choose MACROLIB so NSPH is written as GROUP/*/NSPH.",
-    commandHref: "/commands/augment-sph",
-    commandLabel: "augment-sph",
+      "Use this only after OpenMC CE/MG equivalence has converged and independently validated its physical SPH factors, and apply-sph has folded them into the HDF5 cross sections. Converter verifies that handoff and writes the DONJON-facing ASCII; it does not recompute SPH.",
+    commandHref: "/commands/apply-sph",
+    commandLabel: "apply-sph",
     tone: "sph",
   },
   generic: {

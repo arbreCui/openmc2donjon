@@ -63,5 +63,30 @@ def load_statepoint(library, statepoint_path):
     return _model.load_statepoint(library, statepoint_path)
 
 
+def scatter_mgxs_type():
+    """Use the neutron-production transfer matrix required by DONJON.
+
+    A DRAGON/DONJON MACROLIB has no separate OpenMC multiplicity-matrix
+    channel in its deterministic scattering source.  Its SCAT records must
+    therefore contain the multiplicity-weighted transfer cross sections.
+    The consistent estimator also makes the P0 transfer balance with the
+    independently tallied total and absorption cross sections.
+    """
+
+    return "consistent nu-scatter matrix"
+
+
 def root_attrs():
     return _model.root_attrs()
+
+
+def postprocess_hdf5(output_path, statepoint_path, summary):
+    """Attach the exact CE region/group flux used by native DRAGON SPH."""
+
+    if statepoint_path is None:
+        return
+    _model.append_volume_flux_hdf5(
+        output_path=output_path,
+        statepoint_path=statepoint_path,
+        mixture_names=[domain.name for domain in summary.domains],
+    )

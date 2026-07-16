@@ -46,7 +46,7 @@ describe("convert showcase", () => {
     expect(gates?.title).toBe("Preflight (--check)");
   });
 
-  it("reports ADF and SPH carry-through after preflight", () => {
+  it("reports SPH carry-through after preflight", () => {
     const equivalence = convertShowcaseFacts({
       format: "multicompo",
       check: true,
@@ -54,11 +54,11 @@ describe("convert showcase", () => {
       requireKnownMesh: false,
       input: input({ adf_mixtures: 9, adf_faces: ["north", "south"], sph_calculations: 9 }),
     }).find((fact) => fact.id === "equivalence");
-    expect(equivalence?.badge).toBe("9 ADF mix · 9 SPH");
-    expect(equivalence?.body).toContain("2 face type");
+    expect(equivalence?.badge).toBe("9 calculation record(s)");
+    expect(equivalence?.body).toContain("NSPH");
   });
 
-  it("warns when preflight reports direct XS only", () => {
+  it("accepts direct XS when no SPH contract was selected", () => {
     const equivalence = convertShowcaseFacts({
       format: "macrolib",
       check: false,
@@ -66,12 +66,29 @@ describe("convert showcase", () => {
       requireKnownMesh: false,
       input: input({ adf_mixtures: 0, adf_faces: [], sph_calculations: 0 }),
     }).find((fact) => fact.id === "equivalence");
-    expect(equivalence?.badge).toBe("direct XS only");
-    expect(equivalence?.tone).toBe("warn");
+    expect(equivalence?.badge).toBe("direct cross sections");
+    expect(equivalence?.tone).toBe("neutral");
   });
 
-  it("only expands the explanatory section before a run result exists", () => {
-    expect(convertShowcaseDefaultOpen("idle")).toBe(true);
+  it("recognizes apply-sph provenance without active NSPH records", () => {
+    const equivalence = convertShowcaseFacts({
+      format: "multicompo",
+      check: true,
+      production: false,
+      requireKnownMesh: false,
+      input: input({
+        sph_calculations: 0,
+        sph_applied: true,
+        sph_kind: "openmc-ce-mg-global",
+      }),
+    }).find((fact) => fact.id === "equivalence");
+    expect(equivalence?.title).toBe("SPH already applied");
+    expect(equivalence?.badge).toBe("openmc-ce-mg-global");
+    expect(equivalence?.tone).toBe("pass");
+  });
+
+  it("keeps the explanatory section collapsed for the guided workflow", () => {
+    expect(convertShowcaseDefaultOpen("idle")).toBe(false);
     expect(convertShowcaseDefaultOpen("loading")).toBe(false);
     expect(convertShowcaseDefaultOpen("ok")).toBe(false);
     expect(convertShowcaseDefaultOpen("error")).toBe(false);

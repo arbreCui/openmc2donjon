@@ -1,0 +1,31 @@
+{
+  "schema": "openmc2donjon.acceptance.v1",
+  "status": "pending",
+  "summary": "HOLD: no accepted IRENA CE-fine to native-SPH to full-core result exists yet. Acceptance requires one hash-linked 91-position or exact 21-D3-orbit transport-pooled run to pass every declared gate.",
+  "criteria": [
+    {
+      "id": "native-sph-convergence",
+      "label": "Native DRAGON SPH, every one-speed solve, and the final transport solve converge without numerical exemptions",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "finite-domain-balance",
+      "label": "IRENA full-core k-effective and physical leakage agree with the OpenMC reference under the declared uncertainty gate",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "position-power",
+      "label": "All 91 physical positions pass the declared normalized power RMS and maximum-error gates",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "evidence-provenance",
+      "label": "Converter, OpenMC, native-SPH, DONJON, and validation artifacts are present with matching SHA-256 evidence",
+      "status": "pending",
+      "evidence": []
+    }
+  ]
+}

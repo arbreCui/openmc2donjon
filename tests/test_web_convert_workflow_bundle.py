@@ -14,10 +14,85 @@ from tests.web_test_utils import (
     TestClient,
     write_fake_hdf5 as _write_fake_hdf5,
 )
+from openmc2donjon.production_policy import (
+    PRODUCTION_CANONICAL_MAXIMUMS,
+    PRODUCTION_PREFLIGHT_POLICY_ID,
+)
 
 
 @unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
 class ConvertEndpointTests(unittest.TestCase):
+    def test_production_rejects_h_factor_default(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.post(
+            "/api/convert",
+            json={
+                "input_path": "/mock/home/openmc-runs/c5g7/handoff.h5",
+                "production": True,
+                "h_factor_default": 200.0,
+            },
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("cannot use h_factor_default", response.json()["detail"])
+        self.assertIn("group-wise", response.json()["detail"])
+
+    def test_production_rejects_disabled_uncertainty_checks(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.post(
+            "/api/convert",
+            json={
+                "input_path": "/mock/home/openmc-runs/c5g7/handoff.h5",
+                "production": True,
+                "no_uncertainty_check": True,
+            },
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("cannot disable uncertainty", response.json()["detail"])
+        self.assertIn("std-dev coverage", response.json()["detail"])
+
+    def test_production_receipt_records_non_relaxable_effective_policy(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.post(
+            "/api/convert",
+            json={
+                "input_path": "/mock/home/openmc-runs/c5g7/handoff.h5",
+                "production": True,
+                "scatter_row_balance_fail": 99.0,
+                "transport_p1_fail": 99.0,
+                "chi_sum_tolerance": 99.0,
+                "uncertainty_warn": 99.0,
+                "uncertainty_fail": 99.0,
+                "uncertainty_production_fail": 99.0,
+                "uncertainty_mean_abs_floor": 99.0,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        policy = payload["preflight_policy"]
+        self.assertEqual(policy["policy_id"], PRODUCTION_PREFLIGHT_POLICY_ID)
+        self.assertEqual(
+            policy["canonical_maximums"],
+            PRODUCTION_CANONICAL_MAXIMUMS,
+        )
+        for name, maximum in PRODUCTION_CANONICAL_MAXIMUMS.items():
+            self.assertEqual(policy["effective_thresholds"][name], maximum)
+        preflight = payload["preflight"]["inputs"][0]
+        self.assertEqual(
+            preflight["scatter_row_balance"]["fail_threshold"],
+            PRODUCTION_CANONICAL_MAXIMUMS["scatter_row_balance_fail"],
+        )
+        self.assertTrue(preflight["uncertainty"]["checked"])
+        self.assertTrue(preflight["uncertainty"]["require_coverage"])
+
     def test_mock_mode_returns_conversion_preview(self) -> None:
         from openmc2donjon.web.convert import CONVERT_SCHEMA
         from openmc2donjon.web.server import create_app
@@ -35,6 +110,11 @@ class ConvertEndpointTests(unittest.TestCase):
                 "warn_unknown_energy_mesh": True,
                 "require_known_energy_mesh": False,
                 "comment": "C5G7 dry run",
+                "root_name": "LIB",
+                "burnup": 12.5,
+                "mixtures": ["fuel", "reflector"],
+                "project_root": "/mock/home/projects/core-a",
+                "component_id": "fuel-a",
             },
         )
 
@@ -46,6 +126,14 @@ class ConvertEndpointTests(unittest.TestCase):
         self.assertFalse(payload["converted"])
         self.assertEqual(payload["format"], "multicompo")
         self.assertEqual(payload["writer_backend"], "ascii")
+        self.assertEqual(payload["root_name"], "LIB")
+        self.assertEqual(payload["comment"], "C5G7 dry run")
+        self.assertEqual(payload["burnup"], 12.5)
+        self.assertEqual(payload["mixtures"], ["fuel", "reflector"])
+        self.assertEqual(payload["project_root"], "/mock/home/projects/core-a")
+        self.assertEqual(payload["component_id"], "fuel-a")
+        self.assertFalse(payload["production_requested"])
+        self.assertEqual(payload["preflight_policy"]["level"], "engineering")
         self.assertIn("--format multicompo", payload["cli_command_text"])
         self.assertIn("--dry-run", payload["cli_command"])
         self.assertNotIn("--overwrite", payload["cli_command"])
@@ -63,7 +151,7 @@ class ConvertEndpointTests(unittest.TestCase):
         self.assertIsNone(payload["output_size"])
         self.assertEqual(
             payload["summary_path"],
-            "/mock/home/openmc-runs/c5g7/convert_summary.json",
+            "/mock/home/openmc-runs/c5g7/handoff.mcompo.txt.convert.json",
         )
         self.assertEqual(payload["preflight"]["inputs"][0]["energy_mesh_id"], "casmo_7")
 
@@ -111,7 +199,7 @@ class ConvertEndpointTests(unittest.TestCase):
         ).json()
         sizes = {entry["name"]: entry["size"] for entry in listing["entries"]}
         self.assertEqual(sizes.get("handoff.mcompo.txt"), payload["output_size"])
-        self.assertIn("convert_summary.json", sizes)
+        self.assertIn("handoff.mcompo.txt.convert.json", sizes)
 
         summary_status = client.get(
             "/api/file-status", params={"path": payload["summary_path"]}
@@ -145,6 +233,9 @@ class ConvertEndpointTests(unittest.TestCase):
         payload = response.json()
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["format"], "macrolib")
+        self.assertTrue(payload["production_requested"])
+        self.assertEqual(payload["preflight_policy"]["level"], "production")
+        self.assertTrue(payload["preflight_policy"]["preflight_executed"])
         self.assertIn("--production", payload["cli_command"])
         preflight_input = payload["preflight"]["inputs"][0]
         self.assertEqual(preflight_input["energy_groups"], 33)
@@ -187,10 +278,37 @@ class ConvertEndpointTests(unittest.TestCase):
             self.assertTrue(payload["dry_run"])
             self.assertFalse(payload["converted"])
             self.assertFalse(payload["summary_written"])
-            self.assertFalse((Path(tmp) / "convert_summary.json").exists())
+            self.assertFalse((Path(tmp) / "handoff.mcompo.txt.convert.json").exists())
             self.assertIn("--dry-run", payload["cli_command"])
             self.assertEqual(payload["output_path"], str(output_path.resolve()))
             self.assertEqual(payload["preflight"]["inputs"][0]["mixtures"], 2)
+
+    def test_live_converter_rejects_non_physical_sph_handoff(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            input_path = Path(tmp) / "handoff.h5"
+            output_path = Path(tmp) / "handoff.mcompo.txt"
+            _write_fake_hdf5(input_path)
+
+            client = TestClient(create_app(mock_mode=False))
+            response = client.post(
+                "/api/convert",
+                json={
+                    "input_path": str(input_path),
+                    "output_path": str(output_path),
+                    "format": "multicompo",
+                    "dry_run": True,
+                    "check": True,
+                    "production": True,
+                    "require_physical_sph": True,
+                },
+            )
+
+            self.assertEqual(response.status_code, 422)
+            self.assertIn("physical SPH gate failed", response.json()["detail"])
+            self.assertIn("sph_applied=true", response.json()["detail"])
+            self.assertNotIn("exactly 7 domains", response.json()["detail"])
 
     def test_live_mode_converts_and_refuses_accidental_overwrite(self) -> None:
         from openmc2donjon.web.server import create_app
@@ -225,12 +343,17 @@ class ConvertEndpointTests(unittest.TestCase):
             self.assertEqual(payload["output_size"], output_path.stat().st_size)
             summary_path = Path(payload["summary_path"])
             self.assertTrue(payload["summary_written"])
-            self.assertEqual(summary_path, (Path(tmp) / "convert_summary.json").resolve())
+            self.assertEqual(
+                summary_path,
+                (Path(tmp) / "handoff.mcompo.txt.convert.json").resolve(),
+            )
             self.assertTrue(summary_path.exists())
             summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
             self.assertEqual(summary_payload["schema"], "openmc2donjon.convert.v1")
             self.assertEqual(summary_payload["writer_backend"], "ascii")
             self.assertEqual(summary_payload["output_path"], str(output_path.resolve()))
+            self.assertEqual(len(summary_payload["input_sha256"]), 64)
+            self.assertEqual(len(summary_payload["output_sha256"]), 64)
             self.assertIn("--summary-json", summary_payload["cli_command"])
 
             conflict = client.post(
@@ -277,7 +400,7 @@ class ConvertEndpointTests(unittest.TestCase):
 
 @unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
 class OpenmcWorkflowEndpointTests(unittest.TestCase):
-    def test_mock_mode_plans_one_step_openmc_handoff(self) -> None:
+    def test_mock_mode_plans_one_step_nonproduction_openmc_handoff_with_diagnostic_h_factor(self) -> None:
         from openmc2donjon.web.openmc_workflow import OPENMC_WORKFLOW_SCHEMA
         from openmc2donjon.web.server import create_app
 
@@ -294,7 +417,7 @@ class OpenmcWorkflowEndpointTests(unittest.TestCase):
                 "run_dir": "/mock/home/openmc-runs/c5g7",
                 "keep_hdf5_path": "/mock/home/openmc-runs/c5g7/mgxs_library.h5",
                 "check": True,
-                "production": True,
+                "production": False,
                 "strict_dry_run": True,
                 "h_factor_default": 200.0,
                 "require_known_energy_mesh": True,
@@ -312,7 +435,7 @@ class OpenmcWorkflowEndpointTests(unittest.TestCase):
         self.assertEqual(len(payload["commands"]), 1)
         command = payload["commands"][0]["text"]
         self.assertIn("openmc2donjon-from-openmc", command)
-        self.assertIn("--production", command)
+        self.assertNotIn("--production", command)
         self.assertIn("--strict-dry-run", command)
         self.assertIn("--require-known-energy-mesh", command)
         self.assertIn("--h-factor-default 200.0", command)
@@ -352,6 +475,42 @@ class OpenmcWorkflowEndpointTests(unittest.TestCase):
         self.assertIn("--format macrolib", convert_text)
         self.assertIn("--check", convert_text)
         self.assertIn("--production", convert_text)
+
+    def test_export_scope_stops_before_sph_and_converter(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.post(
+            "/api/openmc-workflow/plan",
+            json={
+                "workflow": "two-step",
+                "plan_scope": "export",
+                "recipe_path": "/mock/home/openmc-runs/export_recipe.py",
+                "statepoint_path": "/mock/home/openmc-runs/statepoint.h5",
+                "load_statepoint": True,
+                "format": "multicompo",
+                "output_path": "/mock/home/openmc-runs/out.mcompo.txt",
+                "run_dir": "/mock/home/openmc-runs/irena",
+                "keep_hdf5_path": "/mock/home/openmc-runs/irena/mgxs_library.h5",
+                "check": True,
+                "production": False,
+                "equivalence": "sph",
+                "sph_source": "",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["plan_scope"], "export")
+        self.assertEqual(payload["workflow_label"], "OpenMC MGXS export")
+        self.assertEqual(
+            [command["label"] for command in payload["commands"]],
+            ["Export MGXS HDF5"],
+        )
+        self.assertEqual([artifact["kind"] for artifact in payload["artifacts"]], ["hdf5"])
+        self.assertNotIn("SPH sidecar", {check["name"] for check in payload["checks"]})
+        self.assertNotIn("ASCII output directory", {check["name"] for check in payload["checks"]})
 
     def test_mock_mode_two_step_adf_inserts_augment_command(self) -> None:
         from openmc2donjon.web.server import create_app
@@ -497,6 +656,41 @@ class OpenmcWorkflowEndpointTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 422)
         self.assertIn("h_factor_default", response.json()["detail"])
+
+    def test_rejects_production_h_factor_default(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.post(
+            "/api/openmc-workflow/plan",
+            json={
+                "workflow": "two-step",
+                "recipe_path": "/mock/home/openmc-runs/export_recipe.py",
+                "statepoint_path": "/mock/home/openmc-runs/statepoint.h5",
+                "production": True,
+                "h_factor_default": 200.0,
+            },
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("cannot use h_factor_default", response.json()["detail"])
+
+    def test_rejects_production_recipe_only_plan(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        client = TestClient(create_app(mock_mode=True))
+        response = client.post(
+            "/api/openmc-workflow/plan",
+            json={
+                "workflow": "two-step",
+                "recipe_path": "/mock/home/openmc-runs/export_recipe.py",
+                "load_statepoint": False,
+                "production": True,
+            },
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("requires load_statepoint=true", response.json()["detail"])
 
 @unittest.skipUnless(_WEB_AVAILABLE, "openmc2donjon[web,dev] not installed")
 class BundleInspectEndpointTests(unittest.TestCase):

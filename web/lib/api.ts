@@ -72,9 +72,92 @@ export interface TopLevelEntry {
   dtype: string | null;
 }
 
+export interface OpenmcProvenanceArtifact {
+  role: string;
+  path: string;
+  required: boolean;
+  present: boolean;
+  size_bytes: number | null;
+  sha256: string | null;
+}
+
+export interface OpenmcProvenance {
+  schema: string | null;
+  status: "complete" | "incomplete" | "legacy";
+  issues: string[];
+  missing: string[];
+  digest_sha256: string | null;
+  integrity?: { ok: boolean; issues: string[] };
+  capabilities: {
+    reference_bound: boolean;
+    export_replayable: boolean;
+    transport_reproducible: boolean;
+  };
+  fingerprints: {
+    model_sha256: string | null;
+    transport_sha256: string | null;
+  };
+  producer: {
+    name: string | null;
+    version: string | null;
+    python_version: string | null;
+    platform: string | null;
+  };
+  openmc: {
+    version: string | null;
+    git_sha1: string | null;
+    statepoint_format_version: string | null;
+  };
+  statepoint: {
+    filetype: string | null;
+    is_openmc_statepoint: boolean;
+    date_and_time: string | null;
+  };
+  source_mode: string;
+  statepoint_loaded: boolean | null;
+  evidence: {
+    simulation_sources: Record<string, Record<string, unknown>>;
+    openmc_version_sources: Record<string, unknown>;
+  };
+  input_closure: {
+    attested_complete: boolean;
+    method: string | null;
+  };
+  handoff: {
+    algorithm: string;
+    payload_sha256: string | null;
+  };
+  artifacts: OpenmcProvenanceArtifact[];
+  simulation: {
+    run_mode: string | null;
+    particles: number | null;
+    batches: number | null;
+    inactive: number | null;
+    generations_per_batch: number | null;
+    seed: number | null;
+    stride: number | null;
+    threads: number | null;
+    mpi_ranks: number | null;
+  };
+  temperature: Record<string, string | number | object> | null;
+  nuclear_data: {
+    cross_sections: OpenmcProvenanceArtifact | null;
+    cross_sections_source: string | null;
+    selection: string;
+    library_count: number;
+    total_size_bytes: number;
+    libraries_manifest_sha256: string | null;
+    libraries: OpenmcProvenanceArtifact[];
+  };
+  user_metadata: Record<string, unknown>;
+}
+
 export interface HandoffInspection {
   schema: string;
   path: string;
+  /** True when the backend returned the bundled demonstration fixture
+   * instead of reading ``path``.  Optional for older recorded payloads. */
+  mock_mode?: boolean;
   ok: boolean;
   energy_groups: number | null;
   legendre_order: number | null;
@@ -102,6 +185,7 @@ export interface HandoffInspection {
    * shortened against its total; the UI surfaces a "showing X of Y"
    * hint when this is set. */
   peek_truncated: boolean;
+  openmc_provenance: OpenmcProvenance | null;
   root_attr_keys: string[];
   burnup_axis: string | null;
   burnup_axis_values: number | null;
@@ -117,6 +201,10 @@ export interface HandoffInspection {
   adf_mixtures: number;
   adf_faces: string[];
   sph_calculations: number;
+  sph_applied: boolean;
+  sph_applied_source: string | null;
+  sph_apply_operator: string | null;
+  sph_kind: string | null;
   std_dev_datasets?: number;
   std_dev_expected_datasets?: number;
   scatter_axes: string[];
@@ -274,6 +362,225 @@ export interface FileStatus {
   detail: string | null;
 }
 
+export type ProjectArtifactState =
+  | "missing"
+  | "not-required"
+  | "present"
+  | "accepted"
+  | "rejected";
+
+export interface ProjectArtifactStatus {
+  state: ProjectArtifactState;
+  issues: string[];
+}
+
+export interface ProjectEvidencePath {
+  id: string;
+  label: string;
+  path: string;
+}
+
+export interface ProjectComponentPaths {
+  directory: string;
+  input: string;
+  output: string;
+  /** Production Converter receipt for the converted object. */
+  receipt: string;
+  /** Native-SPH physics summary; never aliases the Converter receipt. */
+  physics_summary: string;
+  evidence: ProjectEvidencePath[];
+  // Compatibility fields exposed for the IRENA guided pages.
+  sph_applied: string;
+  cpo: string;
+  cpo_receipt: string;
+}
+
+export interface ProjectNativeSphDeclaration {
+  /** Absolute project-confined path resolved from the manifest declaration. */
+  deck_path: string;
+  /** Absolute project-confined directory used to resolve deck FILE clauses. */
+  working_directory: string;
+  /** Optional compatibility map; named validation evidence remains in paths.evidence. */
+  evidence_paths?: Record<string, string>;
+}
+
+export interface ProjectConversionPolicy {
+  writer_backend: ConvertWriterBackend;
+  root_name: string;
+  comment: string | null;
+  burnup: number | null;
+  h_factor_default: number | null;
+  mixtures: string[];
+}
+
+export interface ProjectComponentStatus {
+  id: string;
+  label: string;
+  role: string;
+  target: string;
+  neighbors: string;
+  required: boolean;
+  contract:
+    | "converter-hdf5"
+    | "physical-sph"
+    | "native-sph"
+    | "irena30-colorset-sph"
+    | "physical-colorset-sph";
+  format: ConvertFormat;
+  identity: string | null;
+  metadata: Record<string, JsonScalar>;
+  /** Exact Converter writer/state policy declared for this component. */
+  conversion: ProjectConversionPolicy;
+  native_sph: ProjectNativeSphDeclaration | null;
+  paths: ProjectComponentPaths;
+  evidence: ProjectArtifactStatus;
+  output: ProjectArtifactStatus;
+  // Compatibility aliases.
+  source_pair: ProjectArtifactStatus;
+  handoff: ProjectArtifactStatus;
+  cpo: ProjectArtifactStatus;
+}
+
+export type ProjectColorsetPaths = ProjectComponentPaths;
+export type ProjectColorsetStatus = ProjectComponentStatus;
+
+export interface ProjectConsumerRun {
+  id: string;
+  label: string;
+  state: "missing" | "completed";
+  deck_path: string | null;
+  result_path: string | null;
+  k_effective: number | null;
+}
+
+export interface ProjectConsumerStatus {
+  kind: string;
+  label: string;
+  href: string | null;
+  runs: ProjectConsumerRun[];
+}
+
+export interface ProjectAcceptanceEvidence {
+  label: string;
+  path: string;
+  state: "present" | "missing" | "hash-unverified" | "hash-mismatch";
+  sha256?: string | null;
+}
+
+export interface ProjectAcceptanceCriterion {
+  id: string;
+  label: string;
+  status: "pending" | "passed" | "failed";
+  evidence: ProjectAcceptanceEvidence[];
+}
+
+export interface ProjectMachineValidationEvidence {
+  id: string;
+  path: string | null;
+  state:
+    | "present"
+    | "missing"
+    | "invalid-path"
+    | "hash-unverified"
+    | "hash-mismatch";
+  sha256: string | null;
+}
+
+export interface ProjectMachineValidationStatus {
+  declared: boolean;
+  contract: string | null;
+  component: string | null;
+  state: "not-declared" | "missing" | "passed" | "rejected" | "invalid";
+  summary_path: string | null;
+  summary_sha256: string | null;
+  checks_passed: number;
+  checks_total: number;
+  evidence: ProjectMachineValidationEvidence[];
+  issues: string[];
+}
+
+export interface ProjectAcceptanceStatus {
+  declared: boolean;
+  /** Who establishes this result: the project ledger alone or a bound validator. */
+  basis: "not-required" | "project-declared" | "machine-verified";
+  state:
+    | "not-required"
+    | "missing"
+    | "pending"
+    | "accepted"
+    | "rejected"
+    | "invalid";
+  decision_path: string | null;
+  decision_sha256: string | null;
+  summary: string;
+  criteria: ProjectAcceptanceCriterion[];
+  issues: string[];
+  machine_validation: ProjectMachineValidationStatus;
+}
+
+export interface ProjectStatus {
+  schema: string;
+  manifest_schema: string | null;
+  manifest_path: string;
+  configured: boolean;
+  configuration_issues: string[];
+  name: string;
+  description: string;
+  template: string | null;
+  workflow: string | null;
+  /** Whether validated handoffs are sufficient or a project acceptance ledger must close. */
+  acceptance_mode: "handoff-only" | "physics-gated" | null;
+  acceptance_required: boolean;
+  root: string;
+  root_exists: boolean;
+  required_components: number;
+  accepted_inputs: number;
+  accepted_outputs: number;
+  ready_components: number;
+  /** Every required input and exact Converter/native-SPH output is live and validated. */
+  handoffs_ready: boolean;
+  /** Compatibility verdict for an accepted project gate; inspect acceptance_basis. */
+  physics_accepted: boolean;
+  acceptance_basis: "not-required" | "project-declared" | "machine-verified";
+  /** The accepted ledger is additionally proven by its declared machine validator. */
+  machine_verified_acceptance: boolean;
+  /** The model owner accepted the external criteria without a machine validator. */
+  project_declared_acceptance: boolean;
+  /** Handoffs are ready and, when declared, the physics acceptance gate is accepted. */
+  ready_for_consumer: boolean;
+  components: ProjectComponentStatus[];
+  consumer: ProjectConsumerStatus;
+  acceptance: ProjectAcceptanceStatus;
+  // Compatibility aliases.
+  required_colorsets: number;
+  accepted_handoffs: number;
+  accepted_cpos: number;
+  ready_for_core: boolean;
+  colorsets: ProjectComponentStatus[];
+  core: {
+    directory: string;
+    sn: ProjectCoreSolveStatus;
+    spn: ProjectCoreSolveStatus;
+    closure_state: "pending-reference-comparison";
+  };
+}
+
+export type ProjectManifest = Record<string, JsonValue>;
+
+export interface ProjectManifestResponse {
+  schema: "openmc2donjon.project-manifest.v1";
+  root: string;
+  manifest_path: string;
+  manifest: ProjectManifest;
+}
+
+export interface ProjectCoreSolveStatus {
+  state: "missing" | "completed";
+  deck_path: string;
+  result_path: string;
+  k_effective: number | null;
+}
+
 export type JsonScalar = string | number | boolean | null;
 export type JsonValue =
   | JsonScalar
@@ -330,6 +637,113 @@ export interface OpenmcSphPhysicsSummaryHandoff {
   macrolib_ascii_nsp_block_count?: number;
   macrolib_ascii_path?: string | null;
   augmented_hdf5_path: string | null;
+  reference_macrolib_path?: string | null;
+  verification_macrolib_path?: string | null;
+  result_listing_path?: string | null;
+  execution_deck_path?: string | null;
+  energy_coverage_path?: string | null;
+  converter_receipt_path?: string | null;
+  evidence_sha256?: Record<string, string>;
+}
+
+export interface NativeDragonSphConvergence {
+  solver: string;
+  solver_family?: "sn" | "spn" | string;
+  scattering_moments_used?: number | null;
+  iterations: number;
+  epsilon: number;
+  final_max_factor_update?: number | null;
+  final_rms_factor_update: number;
+  converged: boolean;
+  one_speed_convergence_provable?: boolean;
+  final_flux_solve_converged?: boolean;
+  flux_nonconvergence_count?: number;
+  flux_nonconvergence_markers?: Record<string, number>;
+  factors_unmodified?: boolean;
+  negative_factor_correction_count?: number;
+  oscillation_stop_count?: number;
+  normal_end: boolean;
+}
+
+export interface NativeDragonSphEigenvalueValidation {
+  openmc_keff: number;
+  openmc_keff_std_dev: number;
+  reference_physical_balance_kind?: string;
+  reference_physical_balance_keff?: number;
+  reference_physical_balance_delta_pcm?: number;
+  reference_physical_balance_z?: number;
+  reference_collision_balance_kinf?: number;
+  reference_collision_balance_tally_kinf?: number | null;
+  reference_collision_balance_macrolib_vs_tally_delta_pcm?: number | null;
+  reference_collision_balance_macrolib_vs_tally_z?: number | null;
+  reference_collision_balance_std_dev?: number | null;
+  reference_finite_balance_available?: boolean;
+  reference_finite_balance_keff?: number | null;
+  reference_finite_balance_std_dev?: number | null;
+  reference_leakage?: number | null;
+  reference_leakage_std_dev?: number | null;
+  /** Compatibility fields: new summaries report the selected physical balance. */
+  reference_rate_balance_keff: number;
+  reference_rate_balance_delta_pcm: number;
+  reference_rate_balance_z: number;
+  donjon_keff: number;
+  donjon_delta_pcm: number;
+  donjon_z: number;
+  max_abs_z: number;
+}
+
+export interface NativeDragonSphComponentBalanceRow {
+  mixture_index: number;
+  net_loss_reference: number;
+  net_loss_donjon: number;
+  net_loss_relative_residual: number;
+  flux_rms_relative_residual: number;
+  flux_max_relative_residual: number;
+}
+
+export interface NativeDragonSphComponentBalance {
+  reference_net_loss: number;
+  donjon_net_loss: number;
+  net_loss_relative_residual: number;
+  flux_rms_relative_residual: number;
+  flux_max_relative_residual: number;
+  power_normalization_factor: number;
+  per_component: NativeDragonSphComponentBalanceRow[];
+}
+
+export interface NativeDragonSphEnergyCoverage {
+  decision: string;
+  energy_mesh_id?: string | null;
+  mg_energy_min_ev?: number | null;
+  mg_energy_max_ev?: number | null;
+  max_outside_fraction?: number | null;
+}
+
+export interface NativeDragonSphAcceptanceChecks {
+  donjon_normal_end: boolean;
+  native_sph_converged: boolean;
+  native_sph_factors_unmodified?: boolean;
+  native_sph_not_stopped_by_oscillation?: boolean;
+  one_speed_convergence_provable?: boolean;
+  final_flux_solve_converged?: boolean;
+  energy_coverage_passed: boolean;
+  leakage_balance_available_when_required?: boolean;
+  reference_physical_balance_within_openmc_uncertainty?: boolean;
+  reference_rate_balance_within_openmc_uncertainty: boolean;
+  reference_macrolib_matches_direct_collision_balance_tally?: boolean;
+  flux_uncertainty_within_production_limit?: boolean;
+  donjon_keff_within_openmc_uncertainty: boolean;
+  empirical_eigenvalue_multiplier_used: boolean | null;
+  adf_used: boolean | null;
+}
+
+export interface NativeDragonSphGeometry {
+  kind: string;
+  boundary_conditions: string;
+  coarse_node_side_cm?: number | null;
+  homogenization_volume_includes_node_catchall?: boolean;
+  center_kind?: string | null;
+  neighbor_kinds?: string[] | null;
 }
 
 export interface OpenmcSphReactionRateResidual {
@@ -407,6 +821,62 @@ export interface OpenmcSphDonjonSolveDiagnostic {
   } | null;
 }
 
+export interface OpenmcSphEvidenceArtifact {
+  label: "augmented_hdf5" | "ascii" | string;
+  path: string | null;
+  status: "present" | "missing" | "not_declared" | "outside_scope" | "fixture" | string;
+  manifest_key?: string | null;
+  expected_sha256?: string | null;
+  actual_sha256?: string | null;
+  hash_matches?: boolean | null;
+}
+
+export interface NativeSphCorrectionEvidenceItem {
+  used: boolean | null;
+  evidence_status: "verified_absent" | "observed" | "not_provable" | string;
+  issues: string[];
+}
+
+export interface NativeSphCorrectionPolicyEvidence {
+  status: "verified_absent" | "forbidden_correction_observed" | "not_provable" | string;
+  execution_deck_path?: string | null;
+  execution_deck_sha256?: string | null;
+  deck_reproduced_in_result_listing?: boolean;
+  adf?: NativeSphCorrectionEvidenceItem;
+  empirical_eigenvalue_multiplier?: NativeSphCorrectionEvidenceItem & {
+    unclassified_evaluate_statements?: string[];
+  };
+  issues?: string[];
+}
+
+export interface OpenmcSphEvidenceIntegrity {
+  verified: boolean | null;
+  issues: string[];
+  handoff_sha256_manifest_complete: boolean | null;
+  all_handoff_sha256_match: boolean | null;
+  converter_receipt?: { valid: boolean; issues: string[] } | null;
+  openmc_provenance?: {
+    valid: boolean;
+    status?: string | null;
+    digest_sha256?: string | null;
+    payload_sha256?: string | null;
+    issues: string[];
+  } | null;
+  forbidden_corrections?: NativeSphCorrectionPolicyEvidence | null;
+}
+
+export interface OpenmcSphEvidenceAudit {
+  origin: "live_file" | "mock_fixture" | "recorded_fixture" | string;
+  summary_path: string | null;
+  summary_file_present: boolean;
+  referenced_handoff_artifacts: OpenmcSphEvidenceArtifact[];
+  all_referenced_handoff_artifacts_present: boolean | null;
+  all_referenced_handoff_artifacts_hash_verified?: boolean | null;
+  evidence_integrity?: OpenmcSphEvidenceIntegrity | null;
+  physics_acceptance: "not_evaluated" | string;
+  reactor_acceptance: "not_evaluated" | string;
+}
+
 export interface OpenmcSphPhysicsSummary {
   schema: string;
   route: string;
@@ -434,6 +904,13 @@ export interface OpenmcSphPhysicsSummary {
   handoff: OpenmcSphPhysicsSummaryHandoff;
   donjon_consumption?: OpenmcSphDonjonConsumption | null;
   donjon_solve_diagnostic?: OpenmcSphDonjonSolveDiagnostic | null;
+  native_sph?: NativeDragonSphConvergence | null;
+  geometry?: NativeDragonSphGeometry | null;
+  eigenvalue_validation?: NativeDragonSphEigenvalueValidation | null;
+  component_balance?: NativeDragonSphComponentBalance | null;
+  energy_coverage?: NativeDragonSphEnergyCoverage | null;
+  acceptance_checks?: NativeDragonSphAcceptanceChecks | null;
+  evidence_audit?: OpenmcSphEvidenceAudit;
   per_mixture: OpenmcSphPhysicsSummaryMixture[];
 }
 
@@ -449,6 +926,7 @@ export interface ConvertRequest {
   overwrite: boolean;
   check: boolean;
   production: boolean;
+  require_physical_sph?: boolean;
   warn_unknown_energy_mesh: boolean;
   require_known_energy_mesh: boolean;
   root_name?: string;
@@ -456,6 +934,8 @@ export interface ConvertRequest {
   burnup?: number | null;
   h_factor_default?: number | null;
   mixtures?: string[] | null;
+  project_root?: string | null;
+  component_id?: string | null;
 }
 
 export interface ConvertPreflightInput {
@@ -469,9 +949,14 @@ export interface ConvertPreflightInput {
   calculations?: number | null;
   state_points?: number | null;
   fissionable_mixtures?: number | null;
+  openmc_provenance?: OpenmcProvenance | null;
   adf_mixtures?: number | null;
   adf_faces?: string[];
   sph_calculations?: number | null;
+  sph_applied?: boolean | null;
+  sph_applied_source?: string | null;
+  sph_apply_operator?: string | null;
+  sph_kind?: string | null;
   scatter_row_balance?: {
     checked?: boolean;
     max_abs?: number | null;
@@ -509,8 +994,25 @@ export interface ConvertResponse {
   converted: boolean;
   format: ConvertFormat;
   writer_backend: ConvertWriterBackend;
+  root_name?: string;
+  comment?: string | null;
+  burnup?: number | null;
+  h_factor_default?: number | null;
+  mixtures?: string[] | null;
+  project_root?: string | null;
+  component_id?: string | null;
+  physical_sph_required?: boolean;
+  production_requested?: boolean;
+  preflight_policy?: {
+    level: "none" | "engineering" | "production";
+    production_requested: boolean;
+    preflight_executed: boolean;
+  };
   input_path: string;
+  openmc_provenance?: OpenmcProvenance | null;
+  input_sha256?: string | null;
   output_path: string;
+  output_sha256?: string | null;
   summary_path: string | null;
   summary_written: boolean;
   output_exists: boolean;
@@ -532,6 +1034,7 @@ export interface TextPreview {
   max_lines: number;
   truncated: boolean;
   truncated_by: string[];
+  sha256: string | null;
   text: string;
 }
 
@@ -622,6 +1125,7 @@ export type OpenmcEquivalenceMode = "direct" | "adf" | "sph" | "flux-ratio-adf";
 
 export interface OpenmcWorkflowRequest {
   workflow: OpenmcWorkflowKind;
+  plan_scope: "export" | "complete";
   recipe_path: string;
   statepoint_path: string;
   load_statepoint: boolean;
@@ -671,6 +1175,7 @@ export interface OpenmcWorkflowPlan {
   ok: boolean;
   mock_mode: boolean;
   workflow: OpenmcWorkflowKind;
+  plan_scope: "export" | "complete";
   workflow_label: string;
   equivalence: OpenmcEquivalenceMode;
   steps: OpenmcWorkflowStep[];
@@ -679,6 +1184,138 @@ export interface OpenmcWorkflowPlan {
   commands: OpenmcWorkflowCommand[];
   primary_command_text: string;
   next_actions: string[];
+}
+
+export interface OpenmcExportExecutionRequest {
+  recipe_path: string;
+  statepoint_path: string;
+  load_statepoint: boolean;
+  output_path: string;
+  overwrite: boolean;
+}
+
+export interface OpenmcExportExecutionResponse {
+  schema: string;
+  ok: boolean;
+  mock_mode: boolean;
+  output_path: string;
+  energy_groups: number;
+  legendre_order: number;
+  mixtures: number;
+  std_dev_datasets: number;
+  std_dev_expected: number;
+  openmc_provenance: OpenmcProvenance;
+}
+
+export interface SphSidecarExecutionRequest {
+  strategy: "ratio";
+  input_h5: string;
+  output_path: string;
+  reference_flux?: string;
+  mg_flux?: string;
+  previous_sph?: string;
+  table_output?: string;
+  damping?: number;
+  flux_normalization?: "none" | "total" | "power" | "auto";
+  sph_target?: "flux" | "rate";
+  zero_flux_policy?: "reject" | "identity";
+  flux_floor_rel?: number | null;
+  freeze_groups?: number[];
+  clip_min?: number | null;
+  clip_max?: number | null;
+  summary_json?: string;
+  force: boolean;
+}
+
+export interface ApplySphExecutionRequest {
+  input_h5: string;
+  sph_source: string;
+  output_path: string;
+  input_format: "converter" | "openmc-mgxs";
+  summary_json?: string;
+  force: boolean;
+}
+
+export interface SphExecutionResponse {
+  schema: string;
+  ok: boolean;
+  operation: "sph-sidecar" | "apply-sph";
+  output_path: string;
+  table_path?: string | null;
+  summary_path?: string | null;
+  mixtures: number;
+  energy_groups: number;
+  sph_min: number;
+  sph_max: number;
+  strategy?: "ratio";
+  raw_update_minimum?: number;
+  raw_update_maximum?: number;
+  max_update_residual?: number;
+  converged?: boolean;
+  scaled_datasets?: number;
+}
+
+export interface DonjonExecutionRequest {
+  deck_text: string;
+  deck_filename: string;
+  input_files?: { source_path: string; relative_path: string }[];
+  donjon_root?: string;
+  artifact_directory?: string;
+  working_directory?: string;
+  source_deck_path?: string;
+  source_deck_sha256?: string;
+  project_root?: string;
+  component_id?: string;
+  timeout_seconds?: number;
+  expect_k_effective?: boolean;
+}
+
+export interface ExecutionJob {
+  schema: string;
+  job_id: string;
+  run_id: string;
+  operation: "donjon";
+  status: "queued" | "running" | "completed" | "failed";
+  created_at: number;
+  started_at: number | null;
+  finished_at: number | null;
+  message: string;
+  result_path: string | null;
+  deck_path: string | null;
+  deck_sha256?: string | null;
+  source_deck_path?: string | null;
+  source_deck_sha256?: string | null;
+  project_root?: string | null;
+  component_id?: string | null;
+  declaration_sha256?: string | null;
+  project_manifest_path?: string | null;
+  project_manifest_sha256?: string | null;
+  project_manifest_snapshot_path?: string | null;
+  request_binding_sha256?: string | null;
+  owner_path?: string | null;
+  owner_token?: string | null;
+  owner_pid?: number | null;
+  artifacts_finalized?: boolean;
+  k_effective: number | null;
+  return_code: number | null;
+  log_tail: string;
+  working_directory: string | null;
+  archive_root: string | null;
+  run_directory: string | null;
+  request_path: string | null;
+  status_path: string | null;
+  artifacts_path: string | null;
+  completion_path?: string | null;
+  completion_sha256?: string | null;
+  log_path: string | null;
+  staged_manifest_path: string | null;
+  runtime_output_directory: string | null;
+}
+
+export interface ExecutionJobList {
+  schema: "openmc2donjon.web-donjon-job-list.v1";
+  artifact_directory: string;
+  jobs: ExecutionJob[];
 }
 
 export type CommandStatus = "ready" | "partial" | "planned";
@@ -734,6 +1371,23 @@ export const api = {
     getJson<BundleInspection>("/api/bundle/inspect", { manifest }),
   openmcWorkflowPlan: (request: OpenmcWorkflowRequest) =>
     postJson<OpenmcWorkflowPlan>("/api/openmc-workflow/plan", request),
+  executeOpenmcExport: (request: OpenmcExportExecutionRequest) =>
+    postJson<OpenmcExportExecutionResponse>("/api/execute/openmc-export", request),
+  executeSphSidecar: (request: SphSidecarExecutionRequest) =>
+    postJson<SphExecutionResponse>("/api/execute/sph-sidecar", request),
+  executeApplySph: (request: ApplySphExecutionRequest) =>
+    postJson<SphExecutionResponse>("/api/execute/apply-sph", request),
+  executeDonjon: (request: DonjonExecutionRequest) =>
+    postJson<ExecutionJob>("/api/execute/donjon", request),
+  executionJob: (jobId: string, artifactDirectory?: string) =>
+    getJson<ExecutionJob>(
+      `/api/execution/jobs/${encodeURIComponent(jobId)}`,
+      { artifact_directory: artifactDirectory },
+    ),
+  executionJobs: (artifactDirectory: string) =>
+    getJson<ExecutionJobList>("/api/execution/jobs", {
+      artifact_directory: artifactDirectory,
+    }),
   inspect: (path: string) =>
     getJson<HandoffInspection>("/api/inspect", { path }),
   inspectMixture: (path: string, mixture: string, moment: number = 0) =>
@@ -745,6 +1399,27 @@ export const api = {
   listFiles: (path: string) => getJson<FileListing>("/api/files", { path }),
   fileStatus: (path: string) =>
     getJson<FileStatus>("/api/file-status", { path }),
+  projectStatus: (root: string) =>
+    getJson<ProjectStatus>("/api/project/status", { root }),
+  projectManifest: (root: string) =>
+    getJson<ProjectManifestResponse>("/api/project/manifest", { root }),
+  saveProjectManifest: (root: string, manifest: ProjectManifest) =>
+    postJson<ProjectManifestResponse>("/api/project/manifest", {
+      root,
+      manifest,
+    }),
+  createProject: (
+    root: string,
+    name?: string,
+    acceptanceMode: "handoff-only" | "physics-gated" = "handoff-only",
+    writerBackend: ConvertWriterBackend = "ascii",
+  ) =>
+    postJson<ProjectStatus>("/api/project/create", {
+      root,
+      name,
+      acceptance_mode: acceptanceMode,
+      writer_backend: writerBackend,
+    }),
   openmcSphSummary: (path: string) =>
     getJson<OpenmcSphPhysicsSummary>("/api/openmc-sph-summary", { path }),
 };

@@ -9,16 +9,16 @@ export interface DemoShortcut {
   cta: string;
 }
 
-// The home Demo panel keeps only the primary converter shortcut; the
+// The home Demo panel keeps only the primary Converter shortcut; the
 // landing pages (/inspect, /openmc) self-serve their own demos.
 export const HOME_DEMO_SHORTCUTS: readonly DemoShortcut[] = [
   {
     id: "convert-c5g7",
-    eyebrow: "C5G7 direct conversion",
-    title: "Run the converter demo",
+    eyebrow: "C5G7 Converter path",
+    title: "Run the Converter demo",
     body:
-      "Open the converter prefilled with the bundled C5G7 MGXS HDF5, production checks, and MULTICOMPO output.",
+      "Open the Converter prefilled with the bundled C5G7 MGXS HDF5, production checks, and MULTICOMPO output.",
     href: convertDemoHref(C5G7_PRODUCTION_DEMO),
-    cta: "Open converter demo",
+    cta: "Open Converter demo",
   },
 ] as const;

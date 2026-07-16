@@ -12,8 +12,13 @@ import {
   donjonIngestSnippet,
   donjonObjectLabel,
   donjonRunCommand,
+  donjonWebRunPlan,
   findDonjonBundleArtifact,
   inferDonjonFormat,
+  IRENA30_LEGACY_DECK_STATUS,
+  irena30ColorsetFullCoreSnippet,
+  isWithdrawnIrenaDonjonMode,
+  irena30CpoPreviewIssue,
   normalizeDonjonDeckOptions,
 } from "./donjonGuide";
 
@@ -171,6 +176,131 @@ describe("DONJON guide helpers", () => {
     expect(snippet).not.toContain("NCR:");
   });
 
+  it("stages MULTICOMPO under a short relative alias for in-app runs", () => {
+    const sourcePath = `  /very/long/${"nested-directory/".repeat(8)}O'Brien.mcompo.txt  `;
+    const plan = donjonWebRunPlan({
+      asciiPath: sourcePath,
+      format: "multicompo",
+      purpose: "ingest",
+    });
+
+    expect(plan.inputFiles).toEqual([
+      {
+        source_path: sourcePath.trim(),
+        relative_path: "openmc2donjon_input.mcompo.txt",
+      },
+    ]);
+    expect(plan.deckText).toContain(
+      "FILE 'openmc2donjon_input.mcompo.txt'",
+    );
+    expect(plan.deckText).not.toContain(sourcePath.trim());
+    expect(plan.deckText).not.toMatch(/\bFILE\s+'\//);
+    expect(plan.deckText).not.toContain("O'Brien");
+
+    // Preview/download generation remains user-facing and keeps the real path.
+    expect(donjonIngestOnlySnippet(sourcePath, "multicompo")).toContain(
+      sourcePath.trim(),
+    );
+  });
+
+  it("stages MACROLIB solve input without leaking its source path into CLE", () => {
+    const sourcePath = `/private/${"long-segment-".repeat(10)}'quoted'.macrolib.txt`;
+    const plan = donjonWebRunPlan({
+      asciiPath: sourcePath,
+      format: "macrolib",
+      purpose: "solve",
+      deckOptions: { geometry: "car3d", solver: "spn", spnOrder: 5 },
+    });
+
+    expect(plan.inputFiles).toEqual([
+      {
+        source_path: sourcePath,
+        relative_path: "openmc2donjon_input.macrolib.txt",
+      },
+    ]);
+    expect(plan.deckText).toContain(
+      "FILE 'openmc2donjon_input.macrolib.txt'",
+    );
+    expect(plan.deckText).toContain("SPN 5");
+    expect(plan.deckText).not.toContain(sourcePath);
+    expect(plan.deckText).not.toMatch(/\bFILE\s+'\//);
+    expect(plan.deckText).not.toContain("quoted");
+  });
+
+  it("rejects an empty source path for an in-app run", () => {
+    expect(() =>
+      donjonWebRunPlan({
+        asciiPath: "   ",
+        format: "multicompo",
+        purpose: "ingest",
+      }),
+    ).toThrow("DONJON ASCII path is required");
+  });
+
+  it("renders the withdrawn historical IRENA five-CPO deck with an explicit marker", () => {
+    const snippet = irena30ColorsetFullCoreSnippet(
+      {
+        int: "/cpo/int.mcompo.txt",
+        ext: "/cpo/ext.mcompo.txt",
+        csd: "/cpo/csd.mcompo.txt",
+        dsdf: "/cpo/dsdf.mcompo.txt",
+        pnl: "/cpo/pnl.mcompo.txt",
+      },
+      "snt",
+    );
+
+    expect(snippet).toContain(`* ${IRENA30_LEGACY_DECK_STATUS}:`);
+    expect(snippet).toContain("Retained for historical deck inspection");
+    expect(snippet).toContain("does not establish full-core equivalence");
+    expect(snippet).toContain("WITHDRAWN FIVE-CPO SN DIAGNOSTIC K-EFFECTIVE");
+    expect(snippet.toLowerCase()).not.toMatch(/\b(production|physical|accepted)\b/);
+    expect(snippet).toContain("MACRO LINEAR NMIX 5");
+    expect(snippet).toContain("COMPO CPO_CSD 'OUT' MIX 3 FROM 1 ENDMIX");
+    expect(snippet).toContain("GEOM := GEO: :: HEXZ 91 1 EDIT 0");
+    expect(snippet).toContain("TRACK := SNT: GEOM");
+    expect(snippet).toContain("SN 8 SCAT 2");
+    const lines = snippet.split("\n");
+    const geometryStart = lines.findIndex((line) => line.startsWith("GEOM :="));
+    const mapStart = lines.findIndex(
+      (line, index) => index > geometryStart && line.trim() === "MIX",
+    );
+    const mapEnd = lines.findIndex(
+      (line, index) => index > mapStart && line.trim() === ";",
+    );
+    const map = lines.slice(mapStart + 2, mapEnd);
+    expect(map.join(" ").trim().split(/\s+/)).toHaveLength(91);
+  });
+
+  it("routes every historical IRENA core bookmark to the withdrawn panel", () => {
+    expect(isWithdrawnIrenaDonjonMode("irena30-colorset-core")).toBe(true);
+    expect(isWithdrawnIrenaDonjonMode("colorset-core")).toBe(true);
+    expect(isWithdrawnIrenaDonjonMode("irena30-component-core")).toBe(true);
+    expect(isWithdrawnIrenaDonjonMode("irena30-fullcore")).toBe(false);
+    expect(isWithdrawnIrenaDonjonMode(null)).toBe(false);
+  });
+
+  it("marks the SPN variant as the same withdrawn historical diagnostic", () => {
+    const snippet = irena30ColorsetFullCoreSnippet(
+      { int: "i", ext: "e", csd: "c", dsdf: "d", pnl: "p" },
+      "spn",
+    );
+    expect(snippet).toContain(`* ${IRENA30_LEGACY_DECK_STATUS}:`);
+    expect(snippet).toContain("WITHDRAWN FIVE-CPO SPN DIAGNOSTIC K-EFFECTIVE");
+    expect(snippet).toContain("TRIVAT: TRIVAA: FLUD:");
+    expect(snippet).toContain("SPN 5 SCAT 2");
+    expect(snippet).toContain("HEXZ 91 1");
+    expect(snippet).toContain("NMIX 5");
+  });
+
+  it("verifies both the L_MULTICOMPO signature and colorset identity", () => {
+    const valid = "SIGNATURE\n4 4 4\nL_MULTICOMPO\nCOMMENT\nIRENA-30 csd_int historical CPO";
+    expect(irena30CpoPreviewIssue("csd", valid)).toBeNull();
+    expect(irena30CpoPreviewIssue("int", valid)).toContain("must record int_ext");
+    expect(irena30CpoPreviewIssue("csd", "plain text")).toContain(
+      "not a readable L_MULTICOMPO",
+    );
+  });
+
   it("suggests safe DONJON deck filenames from ASCII output paths", () => {
     expect(
       donjonDeckFilename("/runs/case/out.mcompo.txt", "multicompo", "ingest"),
@@ -215,7 +345,8 @@ describe("DONJON guide helpers", () => {
     expect(items[0]).toMatchObject({ tone: "ready" });
     expect(items[1].body).toContain("NMIX 9");
     expect(items[2].body).toContain("assign all 9 mixture regions");
-    expect(items[3].title).toContain("SPN5");
+    expect(items[3].title).toContain("SPN");
+    expect(items[3].title).not.toContain("SPN5");
     expect(items[3].body).toContain("Z+ REFL");
     // The SEQ_ASCII 72-character limit applies to every geometry, not
     // just hex decks.
@@ -262,7 +393,8 @@ describe("DONJON guide helpers", () => {
     expect(items[1].body).toContain("mixture_names");
     expect(items[2].title).toContain("HEXZ");
     expect(items[2].body).toContain("MIX 1..91");
-    expect(items[3].title).toContain("SN8");
+    expect(items[3].title).toContain("SN");
+    expect(items[3].title).not.toContain("SN8");
     // The boundary card is a short pointer; the full boundary rule
     // lives only in the dedicated hex-boundary-void card.
     expect(items[3].body).toContain("outer-boundary card");

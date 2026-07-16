@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ "${ALLOW_LEGACY_SPH1:-0}" != "1" ]]; then
+  echo "This archived single-assembly identity/floor/clip study is not a production colorset workflow." >&2
+  echo "Set ALLOW_LEGACY_SPH1=1 only to reproduce historical loop evidence." >&2
+  exit 2
+fi
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 EXAMPLE_DIR="$REPO_ROOT/examples/irena30_sph_stage1"
 PYTHON_BIN="${PYTHON_BIN:-/Users/wen/miniforge3/envs/openmc-dev/bin/python}"

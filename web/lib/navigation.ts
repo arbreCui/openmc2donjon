@@ -1,30 +1,55 @@
 export interface NavItem {
   href: string;
   label: string;
+  step?: string;
   description?: string;
   match: readonly string[];
 }
 
 export const PRIMARY_NAV_ITEMS: readonly NavItem[] = [
   {
-    href: "/convert?intent=direct-convert&format=multicompo",
-    label: "Convert",
+    href: "/convert",
+    label: "Converter",
+    description: "Validate one MGXS handoff and write a traceable DONJON object.",
     match: ["/convert"],
   },
   {
-    href: "/openmc?workflow=two-step&production=1",
-    label: "OpenMC prep",
+    href: "/inspect",
+    label: "Inspect",
+    description: "Open an OpenMC HDF5 directly; visualize MGXS data or inspect any HDF5 structure read-only.",
+    match: ["/inspect"],
+  },
+  {
+    href: "/projects",
+    label: "Projects",
+    description: "Optionally coordinate repeated or multi-component Converter jobs.",
+    match: ["/projects"],
+  },
+  {
+    href: "/docs",
+    label: "Documentation",
+    description: "Read the product boundary, input contract, and verified workflow guides.",
+    match: ["/docs"],
+  },
+] as const;
+
+export const WORKFLOW_NAV_ITEMS: readonly NavItem[] = [
+  {
+    href: "/openmc",
+    label: "OpenMC MGXS",
+    description: "Prepare or export an OpenMC MGXS HDF5 for your model.",
     match: ["/openmc"],
   },
   {
-    href: "/inspect",
-    label: "Inspect HDF5",
-    match: ["/inspect"],
+    href: "/equivalence",
+    label: "SPH",
+    description: "Close the fine-to-coarse model with native DRAGON SPH; OpenMC MG is optional.",
+    match: ["/equivalence"],
   },
   {
     href: "/donjon",
     label: "DONJON",
-    description: "Generate the DONJON deck that consumes your ASCII.",
+    description: "Connect Converter outputs to a user-defined DRAGON/DONJON model.",
     match: ["/donjon"],
   },
 ] as const;
@@ -43,15 +68,9 @@ export const SECONDARY_NAV_ITEMS: readonly NavItem[] = [
     match: ["/builder"],
   },
   {
-    href: "/equivalence",
-    label: "SPH/ADF sidecars",
-    description: "Build SPH sidecar commands; ADF/DF rides along as converter data.",
-    match: ["/equivalence"],
-  },
-  {
     href: "/pygan",
-    label: "PyGan validation",
-    description: "PyGan writer diagnostics and ASCII-vs-PyGan comparison.",
+    label: "PyGan writer",
+    description: "Optional PyGan/LCM writer diagnostics and ASCII-vs-PyGan comparison.",
     match: ["/pygan"],
   },
   {

@@ -1,14 +1,16 @@
 import Link from "next/link";
 import { CopyCliButton } from "@/components/commands/CopyCliButton";
+import EvidenceLadder from "@/components/EvidenceLadder";
 import type { ConvertPreflightInput, ConvertResponse } from "@/lib/api";
 import { convertDecision } from "@/lib/convertDecision";
+import { converterEvidenceLadder } from "@/lib/evidenceLadder";
 import { primaryOutcomeClass } from "./ConvertReportShared";
 
 /**
  * Card 1 of the post-run report: a pure, immutable render of what the run
  * reported — verdict, "Why this state", Preview ASCII, and the Copy CLI
- * reproducibility record. Delivery actions (DONJON guide, Bundle) live in
- * the OutputActions "Deliver to DONJON" card so the two cards stay disjoint.
+ * reproducibility record. Optional delivery actions live in the OutputActions
+ * completed-handoff card so the two cards stay disjoint.
  */
 export default function ConvertOutcomeSummary({
   data,
@@ -26,6 +28,11 @@ export default function ConvertOutcomeSummary({
     : data.converted
       ? "ASCII written"
       : "Conversion stopped";
+  const verdict = data.preflight_ok
+    ? "HANDOFF CONTRACT PASS"
+    : data.ok
+      ? "CONVERTER ACTION COMPLETE"
+      : "HANDOFF CONTRACT FAIL";
   return (
     <section className="glass rounded-xl p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-4">
@@ -35,7 +42,7 @@ export default function ConvertOutcomeSummary({
               data.ok ? "text-emerald-300" : "text-rose-300"
             }`}
           >
-            {data.ok ? "PASS" : "FAIL"}
+            {verdict}
           </div>
           <h2 className="mt-1 text-lg font-semibold tracking-tight">
             {headline}
@@ -52,6 +59,8 @@ export default function ConvertOutcomeSummary({
           </span>
         </div>
       </div>
+
+      <EvidenceLadder stages={converterEvidenceLadder(data, input)} />
 
       <PrimaryOutcomeActions
         data={data}
@@ -106,11 +115,6 @@ function PrimaryOutcomeActions({
           <button type="button" onClick={onConvert} className="btn btn-primary">
             Convert now
           </button>
-        ) : null}
-        {converted ? (
-          <a href="#ascii-output-preview" className="btn btn-primary">
-            Preview ASCII
-          </a>
         ) : null}
         <CopyCliButton
           value={data.cli_command_text}

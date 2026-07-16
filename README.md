@@ -3,57 +3,57 @@
 [![CI](https://github.com/arbreCui/openmc2donjon/actions/workflows/ci.yml/badge.svg)](https://github.com/arbreCui/openmc2donjon/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Build handoffs from OpenMC multi-group cross sections and
-OpenMC-side equivalence factors to DRAGON/DONJON deterministic workflows.
+`openmc2donjon` is a general OpenMC-MGXS-to-DRAGON/DONJON Converter and
+handoff workflow.
+Converter is its mandatory core: every formal handoff validates one declared
+MGXS HDF5, writes `L_MULTICOMPO` or `L_MACROLIB`, and records a hash-linked
+receipt. The HDF5 may represent one assembly, one component with any number of
+homogenization domains, an arbitrary colorset, or a full-core coarse model.
 
-The primary SPH route uses OpenMC MG as the equivalence operator. OpenMC CE
-is the high-fidelity reference calculation; the CE statepoint provides the
-group-wise reference tallies, while OpenMC MG runs on the selected energy mesh
-with the same geometry and homogenization regions. The resulting SPH factors
-are then carried by this package into DRAGON/DONJON:
+The product architecture is:
 
-```text
-OpenMC CE reference
-  + OpenMC MG using the selected energy mesh and the same geometry
-    (typically with Hn angular histogram scattering)
-  -> OpenMC-side SPH factors and/or ADF/DF sidecars
-  -> corrected MGXS HDF5 handoff
-  -> openmc2donjon converter
-  -> DONJON L_MULTICOMPO or L_MACROLIB consumption
-```
+- **Converter:** required formal handoff boundary.
+- **OpenMC MGXS:** optional input preparation when the HDF5 does not exist.
+- **Physical SPH:** optional CE/MG equivalence when the model requires it.
+- **Project:** optional coordination for repeated or multi-component jobs.
+- **Inspect:** independent, read-only HDF5 structure and MGXS diagnostics.
+- **DONJON:** downstream use and independent validation.
+- **PyGan:** optional writer and semantic cross-validation backend inside
+  Converter.
 
-For OpenMC-side SPH consumed by DONJON `DSPH:`/`MAC:`, use the
-`L_MACROLIB` route: the converter writes the precomputed SPH factors as
-`GROUP/*/NSPH`, which DONJON reads directly. In this workflow DONJON is the
-consumer of the corrected handoff, not the SPH feedback operator.
-`L_MULTICOMPO` remains the mapped-library route for domain-wise handoffs
-extracted through `NCR:`.
-
-In the OpenMC CE/MG SPH route, the CE run can tally two scattering
-representations at once:
+The stable path is:
 
 ```text
-OpenMC CE run
-  P3 Legendre MGXS   -> converter-facing HDF5 -> DONJON scatter blocks
-  H16 histogram MGXS -> OpenMC MG macro solve on the selected mesh -> MG-H16 flux
-
-OpenMC CE flux vs OpenMC MG-H16 flux -> SPH(region, group)
+one declared MGXS HDF5
+  -> Converter production validation
+  -> L_MULTICOMPO or L_MACROLIB + receipt
+  -> user- or project-defined DRAGON/DONJON consumer
 ```
 
-Thus Hn is used to improve the OpenMC MG macro calculation that generates the
-formal OpenMC-side SPH factors. It is not converted to DONJON scatter; DONJON
-receives the directly tallied Pn/Legendre MGXS plus explicit SPH factors.
+When physical SPH is selected, the primary route sends the fine OpenMC
+reference through Converter first, then solves native DRAGON `SPH:` on the
+project-declared coarse geometry and verifies the corrected object in DONJON.
+Native-SPH acceptance permits no ADF substitution, global multiplier,
+empirical calibration, or k-effective fitting. The model may declare one
+domain, many component domains, 91 independent positions, or exact symmetry
+orbits pooled during fine transport.
 
-## Equivalence Methods
+```text
+OpenMC fine reference
+  -> Converter reference MACROLIB + receipt
+  -> native DRAGON SPH on the declared coarse geometry
+  -> corrected MACROLIB + DONJON verification
+```
 
-The core converter does not invent physics corrections while writing ASCII. It
-carries explicit factors produced upstream, with OpenMC CE/MG equivalence as
-the production SPH route.
+The OpenMC CE/MG `make-openmc-sph-sidecar` + `apply-sph` workflow remains an
+optional alternate or cross-check when a project explicitly selects it. It is
+not the mandatory production operator and cannot replace the declared
+DRAGON/DONJON coarse solve for IRENA full-core acceptance.
 
-| Method | What it does | Entry point |
-| --- | --- | --- |
-| Direct | No equivalence factors; accept the homogenization bias. | Convert without equivalence flags. |
-| OpenMC-side SPH / ADF | Generate SPH factors from OpenMC CE reference tallies vs an OpenMC MG macro calculation on the selected energy mesh with the same geometry/output regions, usually using OpenMC Hn histogram angular representation for the MG macro solve; or build ADF/DF sidecars from OpenMC face-flux evidence. | `make-openmc-sph-sidecar` + optional `apply-sph` MG reruns + final `augment-sph`, `make-adf-sidecar` + `augment-adf`, or `openmc2donjon-from-openmc --sph-source` / `--build-flux-ratio-adf`. |
+Generic Converter inputs may carry explicitly supplied ADF/DF records for
+separately declared workflows. Preserving those records is not permission to
+use ADF in a native-SPH acceptance route, and Converter never invents or fits
+an ADF or empirical correction.
 
 ## Export And Convert Modes
 
@@ -65,16 +65,15 @@ Both invocation styles ship:
 - one-step: `openmc2donjon-from-openmc` exports, checks, converts, and bundles
   a managed run directory in a single command.
 
-Either invocation style composes with direct conversion or explicit OpenMC-side
-equivalence factors.
+Either invocation style produces the same Converter-facing HDF5. A direct
+handoff can stop after Converter; a physical-equivalence project follows the
+declared native-DRAGON route above. OpenMC-side factors remain an optional
+alternate, not the primary product path.
 
 ## Output Formats
 
 - `L_MULTICOMPO` as `.mcompo.txt` for mapped domain-wise libraries.
 - `L_MACROLIB` as `.macrolib.txt` for direct one-state macrolib handoffs.
-
-If the handoff carries OpenMC-side SPH factors and the next DONJON step should
-consume them, prefer `.macrolib.txt`.
 
 Accepted validation: C5G7 assembly-wise OpenMC -> DONJON handoff with
 documented k-effective comparisons; see [Validation Status](#validation-status).
@@ -105,7 +104,9 @@ openmc2donjon pygan-doctor
 openmc2donjon mgxs_library.h5 \
   --writer-backend pygan \
   --format multicompo \
-  -o out.mcompo.txt
+  -o out.mcompo.txt \
+  --production \
+  --summary-json out.mcompo.txt.convert.json
 ```
 
 3. Compare the default writer and PyGan writer semantically:
@@ -130,7 +131,8 @@ DONJON itself reads the PyGan-exported ASCII files, runs `NCR:` on the PyGan
 `L_MULTICOMPO`, and checks the extracted macrolib against the PyGan direct
 `L_MACROLIB`.
 
-5. Inspect the root structure of a native DRAGON/DONJON COMPO through PyGan:
+5. Inspect the root structure of a DRAGON/DONJON LCM ASCII COMPO through
+   PyGan:
 
 ```sh
 openmc2donjon pygan-inspect-compo FUEL30.COMPO --summary-json fuel30.pygan.json
@@ -156,11 +158,15 @@ examples, and the current scope of the optional backend.
 New users should start with the short path-oriented guide:
 
 - [User README: HDF5 -> Convert -> Bundle -> DONJON](docs/CONVERTER_USER_README.md)
+- [Physics evidence audit and next accepted closure](docs/PHYSICS_EVIDENCE_AUDIT.md)
 
-Install from a source checkout:
+Clone and install from a fresh checkout:
 
 ```sh
+git clone https://github.com/arbreCui/openmc2donjon.git
+cd openmc2donjon
 python -m pip install -e .
+openmc2donjon --help
 ```
 
 Check an MGXS handoff before conversion:
@@ -172,13 +178,16 @@ openmc2donjon check mgxs_library.h5 --production
 Convert to MULTICOMPO:
 
 ```sh
-openmc2donjon mgxs_library.h5 -o out.mcompo.txt --check
+openmc2donjon mgxs_library.h5 -o out.mcompo.txt --production \
+  --summary-json out.mcompo.txt.convert.json
 ```
 
 Convert to MACROLIB:
 
 ```sh
-openmc2donjon mgxs_library.h5 --format macrolib -o out.macrolib.txt --check
+openmc2donjon mgxs_library.h5 --format macrolib \
+  -o out.macrolib.txt --production \
+  --summary-json out.macrolib.txt.convert.json
 ```
 
 Run a tiny recipe/export smoke without OpenMC data:
@@ -238,6 +247,13 @@ The converter preserves the OpenMC spatial partition:
 - one HDF5 mixture becomes one DONJON mixture;
 - the DONJON geometry places that mixture back at the matching spatial position.
 
+Recipe/statepoint exports also embed a content-hash-bound OpenMC provenance
+record. It binds both a declared-complete fine-model input manifest and the
+actual numerical HDF5 payload; the one-step v5 summary additionally binds the
+final HDF5 and ASCII bytes. This makes the fine reference auditable without
+making native DRAGON SPH rerun OpenMC or depend on the original local model
+paths.
+
 This is intentionally not material-collapsed. Two domains with the same
 material may still receive different homogenized cross sections because their
 spectra, leakage, and neighbor effects differ.
@@ -254,6 +270,7 @@ layers, the handoff contains 3860 spatial mixtures.
 - explicit `transport_total`;
 - group-wise H-FACTOR/kappa-fission for fissionable calculations;
 - stable declared mixture order and source-domain provenance;
+- for OpenMC-source handoffs, an intact recipe/statepoint reference binding;
 - energy-bound consistency and known mesh audit metadata;
 - scatter row-balance, chi normalization, ADF face consistency, and
   transport/P1 consistency gates;
@@ -266,31 +283,25 @@ Details:
 - [Production thresholds](docs/PRODUCTION_THRESHOLDS.md)
 - [HDF5 input contract](docs/HDF5_INPUT_CONTRACT.md)
 
-## OpenMC-Side SPH And ADF/DF
+## Physical SPH
 
-The package can carry equivalence data into DONJON handoffs:
+Physical SPH is optional. Use it only when the homogenized model needs an
+explicit equivalence closure. The primary physical route is OpenMC fine
+reference -> Converter reference MACROLIB -> native DRAGON SPH -> DONJON
+verification. A standalone assembly is a valid SPH model when its declared
+fine and coarse problems match; geometry alone neither accepts nor rejects it.
 
-- ADF/HADF discontinuity factors, including flux-ratio ADF sidecars.
-- SPH/NSPH factors generated from OpenMC-side CE/MG equivalence.
+The general contract accepts any positive number of declared domains. It
+requires a matched fine reference and coarse model, rate preservation,
+convergence, zero numerical exemptions, and hash-linked artifacts. Converter
+checks the formal boundary and provenance; it never invents or fits a factor.
 
-The converter records these factors and provenance in the HDF5/MACROLIB/MULTICOMPO
-handoff; it does not invent physics corrections on its own. Case-specific ADF
-or SPH factors should come from the chosen OpenMC CE reference and OpenMC MG
-macro workflow. A single isolated assembly generally does not need SPH; a
-colorset or full-core macro model needs one SPH factor per homogenized output
-region and energy group.
-
-For the current DONJON consumption smoke, OpenMC-side SPH is accepted through
-`L_MACROLIB` because DONJON `DSPH:` reads `GROUP/*/NSPH`. `L_MULTICOMPO`
-continues to carry mapped macroscopic data, but `NCR:` does not currently
-promote these OpenMC-side SPH factors into non-unity macrolib `NSPH` values.
+The commands below implement the optional OpenMC CE/MG alternate route. They
+do not replace native DRAGON SPH when the project declares that coarse solver.
 
 Entry points:
 
 ```sh
-openmc2donjon make-adf-sidecar mgxs_library.h5 -o adf_sidecar.h5 --mode unity
-openmc2donjon augment-adf mgxs_library.h5 --adf-source adf_sidecar.h5 -o mgxs_with_adf.h5
-
 openmc2donjon make-openmc-sph-sidecar mgxs_library.h5 \
   -o sph_sidecar.h5 \
   --reference-flux openmc_ce_flux.h5::openmc_volume_flux \
@@ -304,9 +315,12 @@ openmc2donjon apply-sph mg_case/mgxs_unapplied.h5 \
   --sph-source sph_sidecar.h5 \
   -o mg_case/mgxs.h5
 
-# Final DONJON handoff path:
-openmc2donjon augment-sph mgxs_library.h5 --sph-source sph_sidecar.h5 -o mgxs_with_sph.h5
-openmc2donjon mgxs_with_sph.h5 --format macrolib -o out.macrolib.txt --check --require-sph
+# Final Converter handoff path (MULTICOMPO or MACROLIB is chosen downstream):
+openmc2donjon apply-sph mgxs_library.h5 \
+  --sph-source sph_sidecar.h5 \
+  -o mgxs_sph_applied.h5
+openmc2donjon mgxs_sph_applied.h5 --format multicompo \
+  -o out.mcompo.txt --production --require-physical-sph
 ```
 
 Docs and examples:
@@ -316,12 +330,25 @@ Docs and examples:
 
 ## Validation Status
 
-Current accepted validation line:
+Current validation line:
 
 - C5G7 assembly-wise OpenMC-to-DONJON handoff with DONJON k-effective checks.
+- The accepted IRENA-30 ZREFL 91-hex OpenMC-MG -> Converter -> DONJON
+  SN8/SCAT2 baseline agrees with its paired OpenMC-MG reference in k-effective
+  and fission-source shape. It validates downstream hex mapping and solver
+  mechanics; it is not CE-fine/native-SPH/full-core physics acceptance.
 - Converter round trips for `L_MULTICOMPO` and `L_MACROLIB`.
 - Mechanics smokes for recipe export, full-core domain mapping, hex geometry
-  capability, ADF carry-through, and SPH handoff mechanics.
+  capability, and SPH handoff mechanics.
+
+There is currently no accepted IRENA continuous-energy fine -> SPH ->
+full-core result. Earlier local PNL/EXT and INT/EXT summaries are withdrawn as
+physics passes: their listings contain unconverged final transport solves, and
+their local boundary/volume contract does not establish the full-core leakage
+environment. The current candidate uses all 91 fine assemblies with either 91
+independent domains or 21 exact global D3 orbit domains, then requires joint
+k-effective, leakage, power-shape, statistical, and numerical-convergence
+gates. No ADF or empirical/global eigenvalue factor is permitted.
 
 Run portable checks:
 
@@ -391,9 +418,9 @@ and builds the `web/` Next.js project.
 
 A localhost-only Next.js + FastAPI web UI lives in [`web/`](web/), wired to
 the same Python package as the CLI. It includes a command workspace
-(`Commands`), the OpenMC production planner (`OpenMC`), the direct converter
-workflow (`Convert`), HDF5 inspection (`Inspect`), OpenMC-side ADF/SPH sidecar
-builders (`Equivalence`), PyGan integration (`PyGan`), DONJON handoff guidance
+(`Commands`), OpenMC MGXS preparation (`OpenMC`), the core Converter workflow
+(`Converter`), HDF5 inspection (`Inspect`), physical SPH tools (`SPH`), optional
+project coordination (`Projects`), PyGan integration (`PyGan`), DONJON guidance
 (`DONJON`), and generic CLI command builders (`Builder`).
 
 ```sh
@@ -415,17 +442,19 @@ constrain filesystem access with `--workspace-root /path/to/openmc-runs`;
 otherwise the server refuses to start unless `--unsafe-remote` is explicitly
 requested.
 
-The Web UI is intentionally localhost-first. Direct conversion can be dry-run
-or executed through `/convert`; equivalence and generic builders assemble
-copyable CLI commands for OpenMC-side sidecar, bundle, and diagnostic support
-commands.
+The Web UI is intentionally localhost-first. Converter production validation,
+exact-deck native DRAGON SPH execution and evidence validation, optional
+OpenMC-side SPH sidecar/application, project creation/status, read-only HDF5
+inspection, PyGan writer comparison, and DONJON diagnostics can run locally;
+advanced builders retain copyable CLI commands for lower-level support
+operations.
 
 ## Roadmap
 
 Near-term work:
 
-- tighten the OpenMC CE/MG colorset minicase around corrected HDF5 ->
-  MACROLIB NSPH -> DONJON `DSPH:`/`MAC:` handoff records;
+- produce one hash-linked IRENA 91-position/21-D3-orbit result through
+  Converter -> native DRAGON SPH -> DONJON and every full-core acceptance gate;
 - keep standard energy-mesh identification and uncertainty coverage visible in
   every production audit surface;
 - broader mypy coverage for small pure helper modules.

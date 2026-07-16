@@ -1,5 +1,10 @@
 # IRENA SPH Stage 1 — Fissile Assembly, CE Fine vs MG Coarse
 
+> **Archived loop-mechanics study — not a production recipe.** It uses one
+> assembly plus identity/floor/clip handling and cannot satisfy the current
+> seven-domain physical colorset contract. The runner requires
+> `ALLOW_LEGACY_SPH1=1` for deliberate historical reproduction.
+
 First stage of the three-model OpenMC-side SPH route for IRENA-30:
 
 ```text

@@ -11,7 +11,18 @@ machine-readable index; cross-reference the release notes for context.
 
 ## [Unreleased]
 
-Nothing yet.
+- Extended `fill-zero-flux` with opt-in total-XS uncertainty and P0
+  scatter-row overshoot criteria for solver-destabilizing micro-flux bins;
+  repeated fills now retain the union of substituted-group provenance, and
+  the standalone summary schema is now v2.
+- Added the IRENA-30 full-core Stage 3 fine CE versus assembly-homogenized
+  MG+DONJON full-core workflow, resumable SPH iterations, exact final-sidecar MG evaluation,
+  120-degree local-factor regularization, and normalized power-shape closure.
+  The empirical eigenvalue-fitted global scalar has been withdrawn from the
+  frontend, web execution API, and runnable example. Stage 3 now permits only
+  the rate-preserving CE/MG SPH fixed-point iteration with uncertainty and
+  convergence gates. The existing physical full-core result is documented as
+  **not accepted** pending convergence and independent closure.
 
 ## [0.1.4] - 2026-07-10
 

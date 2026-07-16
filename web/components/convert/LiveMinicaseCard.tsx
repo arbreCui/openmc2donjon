@@ -235,7 +235,7 @@ export default function LiveMinicaseCard({ onApply }: { onApply: () => void }) {
         <button
           type="button"
           onClick={() => setRefreshToken((value) => value + 1)}
-          className="text-[var(--accent-2)] hover:underline"
+          className="btn-link"
         >
           Refresh status
         </button>

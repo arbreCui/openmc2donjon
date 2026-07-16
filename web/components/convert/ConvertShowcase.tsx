@@ -16,6 +16,7 @@ interface Props {
   outputPath: string;
   input: ConvertPreflightInput | null;
   defaultOpen: boolean;
+  sphHref?: string;
 }
 
 export default function ConvertShowcase({
@@ -26,6 +27,7 @@ export default function ConvertShowcase({
   outputPath,
   input,
   defaultOpen,
+  sphHref,
 }: Props) {
   const [open, setOpen] = useState(defaultOpen);
   const objectLabel = convertShowcaseObjectLabel(format);
@@ -63,18 +65,20 @@ export default function ConvertShowcase({
               {objectLabel} ASCII output for DONJON
             </h2>
             <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
-              Dry run reads the same inputs without writing. Convert creates the
-              selected ASCII object and preserves OpenMC mixture ordering.
+              Dry run reads the same inputs without writing. Converter creates
+              the selected ASCII object and preserves OpenMC mixture ordering.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href="/equivalence?kind=adf-sidecar"
-              className="btn btn-secondary"
-              onClick={(event) => event.stopPropagation()}
-            >
-              Need ADF/SPH?
-            </Link>
+            {sphHref ? (
+              <Link
+                href={sphHref}
+                className="btn btn-secondary"
+                onClick={(event) => event.stopPropagation()}
+              >
+                Review required SPH handoff
+              </Link>
+            ) : null}
             <span className="text-[13px] text-[var(--fg-3)]">
               {open ? "Click to collapse" : "Click to expand"}
             </span>

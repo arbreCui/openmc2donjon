@@ -93,10 +93,16 @@ export function stdDevCoverageLabel(
 export function inspectConvertHref(
   path: string,
   sphCalculations: number,
+  sphApplied = false,
 ): string {
   const params = new URLSearchParams();
   params.set("input", path);
-  if (sphCalculations > 0) params.set("format", "macrolib");
+  if (sphApplied) {
+    params.set("intent", "openmc-sph");
+    params.set("format", "multicompo");
+  } else if (sphCalculations > 0) {
+    params.set("format", "macrolib");
+  }
   return `/convert?${params.toString()}`;
 }
 

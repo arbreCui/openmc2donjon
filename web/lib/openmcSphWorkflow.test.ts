@@ -13,7 +13,6 @@ describe("openmcSphWorkflow", () => {
       "mg-flux",
       "sph-sidecar",
       "apply-sph",
-      "augment",
       "convert",
     ]);
   });
@@ -63,11 +62,19 @@ describe("openmcSphWorkflow", () => {
     expect(active.map((step) => step.id)).toEqual(["sph-sidecar"]);
   });
 
-  it("labels the MG rerun as optional and damping-sensitive", () => {
+  it("makes apply-sph the converter-facing correction step", () => {
     const apply = OPENMC_SPH_WORKFLOW_STEPS.find((step) => step.id === "apply-sph");
 
-    expect(apply?.badge).toBe("OPT");
-    expect(apply?.body).toContain("damping-sensitive");
-    expect(apply?.body).toContain("not the default production claim");
+    expect(apply?.badge).toBe("XS");
+    expect(apply?.href).toBe("/equivalence?kind=apply-sph");
+    expect(apply?.body).toContain("divided by the physical NSPH factors");
+  });
+
+  it("documents a rate-preserving iterative update without k fitting", () => {
+    const sph = OPENMC_SPH_WORKFLOW_STEPS.find((step) => step.id === "sph-sidecar");
+
+    expect(sph?.body).toContain("repeat with the previous sidecar");
+    expect(sph?.body).toContain("No k-effective fitting");
+    expect(sph?.cli).toContain("--sph-target rate");
   });
 });

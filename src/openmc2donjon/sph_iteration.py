@@ -109,6 +109,8 @@ class SphUpdateTableReport:
     floored_bin_count: int
     freeze_groups: tuple[int, ...] | None
     frozen_group_bin_count: int
+    tie_mixture_groups: tuple[tuple[str, ...], ...]
+    tied_bin_count: int
     sph_target: str
     worst_residual_bins: tuple[SphUpdateBinDiagnostic, ...]
     clipped_bins: tuple[SphUpdateBinDiagnostic, ...]
@@ -130,6 +132,7 @@ def create_sph_update_table(
     zero_flux_policy: str = "reject",
     flux_floor_rel: float | None = None,
     freeze_groups: tuple[int, ...] | None = None,
+    tie_mixture_groups: tuple[tuple[str, ...], ...] | None = None,
     require_reference_flux_std_dev: bool = False,
     max_reference_flux_std_dev_rel: float | None = None,
     require_low_order_flux_std_dev: bool = False,
@@ -187,6 +190,10 @@ def create_sph_update_table(
 
     mixture_names, energy_groups = _read_mgxs_metadata(input_h5)
     freeze_groups = _normalize_freeze_groups(freeze_groups, energy_groups=energy_groups)
+    tie_mixture_groups = _normalize_tie_mixture_groups(
+        tie_mixture_groups,
+        mixture_names=mixture_names,
+    )
     reference = _load_matrix_source(
         reference_flux,
         mixture_names=mixture_names,
@@ -287,6 +294,20 @@ def create_sph_update_table(
             out=np.ones_like(reference.values),
             where=~frozen_mask,
         )
+    if tie_mixture_groups:
+        if frozen_mask is not None:
+            raise ValueError(
+                "--tie-mixtures cannot be combined with identity, floor, or frozen-group bins"
+            )
+        raw_update = _tie_raw_updates(
+            raw_update,
+            tie_mixture_groups=tie_mixture_groups,
+            mixture_names=mixture_names,
+            reference_flux=reference.values,
+            normalized_low_order_flux=normalized_low_order,
+            previous_sph=previous.values,
+            sph_target=sph_target,
+        )
     # Disjoint attribution: identity zeros first, then the explicit group
     # list, then the floor, so the three counters sum to the frozen total.
     identity_bin_count = 0 if identity_mask is None else int(np.count_nonzero(identity_mask))
@@ -369,6 +390,8 @@ def create_sph_update_table(
         floored_bin_count=floored_bin_count,
         freeze_groups=freeze_groups,
         frozen_group_bin_count=frozen_group_bin_count,
+        tie_mixture_groups=tie_mixture_groups,
+        tied_bin_count=sum(len(group) * energy_groups for group in tie_mixture_groups),
         sph_target=sph_target,
         worst_residual_bins=worst_residual_bins,
         clipped_bins=clipped_bins,
@@ -428,6 +451,12 @@ def print_report(report: SphUpdateTableReport) -> None:
         print(
             f"  freeze_groups: {rendered} "
             f"frozen_group_bins={report.frozen_group_bin_count}"
+        )
+    if report.tie_mixture_groups:
+        rendered = "; ".join(",".join(group) for group in report.tie_mixture_groups)
+        print(
+            f"  tied_mixture_groups: {rendered} "
+            f"tied_bins={report.tied_bin_count}"
         )
     if report.flux_normalization != "none":
         print(
@@ -502,6 +531,8 @@ def write_summary(path: Path, report: SphUpdateTableReport) -> None:
         "floored_bin_count": report.floored_bin_count,
         "freeze_groups": None if report.freeze_groups is None else list(report.freeze_groups),
         "frozen_group_bin_count": report.frozen_group_bin_count,
+        "tie_mixture_groups": [list(group) for group in report.tie_mixture_groups],
+        "tied_bin_count": report.tied_bin_count,
         "diagnostic_bin_limit": DIAGNOSTIC_BIN_LIMIT,
         "worst_residual_bins": [
             _bin_diagnostic_payload(item) for item in report.worst_residual_bins
@@ -1274,6 +1305,69 @@ def _normalize_freeze_groups(
     if len(set(groups)) != len(groups):
         raise ValueError("--freeze-groups must not contain duplicate groups")
     return groups
+
+
+def _normalize_tie_mixture_groups(
+    groups: tuple[tuple[str, ...], ...] | None,
+    *,
+    mixture_names: tuple[str, ...],
+) -> tuple[tuple[str, ...], ...]:
+    if groups is None:
+        return ()
+    known = set(mixture_names)
+    seen: set[str] = set()
+    normalized: list[tuple[str, ...]] = []
+    for raw_group in groups:
+        group = tuple(str(name).strip() for name in raw_group if str(name).strip())
+        if len(group) < 2:
+            raise ValueError("--tie-mixtures groups must contain at least two mixtures")
+        if len(set(group)) != len(group):
+            raise ValueError("--tie-mixtures groups must not contain duplicate mixtures")
+        unknown = [name for name in group if name not in known]
+        if unknown:
+            raise ValueError(
+                "--tie-mixtures contains unknown mixture(s): " + ", ".join(unknown)
+            )
+        overlap = [name for name in group if name in seen]
+        if overlap:
+            raise ValueError(
+                "--tie-mixtures groups must be disjoint; repeated: " + ", ".join(overlap)
+            )
+        seen.update(group)
+        normalized.append(group)
+    return tuple(normalized)
+
+
+def _tie_raw_updates(
+    raw_update: np.ndarray,
+    *,
+    tie_mixture_groups: tuple[tuple[str, ...], ...],
+    mixture_names: tuple[str, ...],
+    reference_flux: np.ndarray,
+    normalized_low_order_flux: np.ndarray,
+    previous_sph: np.ndarray,
+    sph_target: str,
+) -> np.ndarray:
+    """Pool symmetric-region rates and impose one update per equivalence class."""
+
+    tied = np.asarray(raw_update, dtype=float).copy()
+    index_by_name = {name: index for index, name in enumerate(mixture_names)}
+    for group in tie_mixture_groups:
+        indices = np.asarray([index_by_name[name] for name in group], dtype=int)
+        anchor = previous_sph[indices[0], :]
+        if not np.allclose(previous_sph[indices, :], anchor, rtol=1.0e-10, atol=1.0e-12):
+            raise ValueError(
+                "previous SPH factors must already be identical within tied mixture group "
+                + ",".join(group)
+            )
+        pooled_reference = np.sum(reference_flux[indices, :], axis=0)
+        pooled_low_order = np.sum(normalized_low_order_flux[indices, :], axis=0)
+        if sph_target == "rate":
+            pooled_update = pooled_low_order / (anchor * pooled_reference)
+        else:
+            pooled_update = pooled_reference / pooled_low_order
+        tied[indices, :] = pooled_update
+    return tied
 
 
 def _freeze_groups_mask(

@@ -1,0 +1,24 @@
+{
+  "schema": "openmc2donjon.project.v1",
+  "name": "Minimal component project",
+  "description": "A generic Converter project with one user-defined component and an external downstream consumer.",
+  "workflow": "component-library",
+  "acceptance_mode": "handoff-only",
+  "components": [
+    {
+      "id": "component",
+      "label": "Component library",
+      "role": "User-defined homogenized component",
+      "required": true,
+      "input": "components/component/mgxs_library.h5",
+      "output": "outputs/component.mcompo.txt",
+      "format": "multicompo",
+      "contract": "converter-hdf5"
+    }
+  ],
+  "consumer": {
+    "kind": "external",
+    "label": "User-supplied DRAGON/DONJON model",
+    "href": "/donjon"
+  }
+}

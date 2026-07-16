@@ -1,5 +1,9 @@
 import type { ConvertPreflightInput, ConvertResponse } from "./api";
-import { convertBundleHref, convertDonjonGuideHref } from "./convertNextSteps";
+import {
+  convertBundleHref,
+  convertDonjonGuideHref,
+  type ConvertDownstreamDestination,
+} from "./convertNextSteps";
 
 export type ConvertDeliveryStatus =
   | "done"
@@ -21,6 +25,7 @@ export interface ConvertDeliveryItem {
 export function convertDeliveryChecklist(
   data: ConvertResponse,
   input: ConvertPreflightInput | null,
+  options?: { downstream?: ConvertDownstreamDestination | null },
 ): ConvertDeliveryItem[] {
   return [
     hdf5Item(data, input),
@@ -28,7 +33,7 @@ export function convertDeliveryChecklist(
     asciiItem(data),
     previewItem(data),
     bundleItem(data),
-    donjonItem(data),
+    donjonItem(data, options?.downstream),
   ];
 }
 
@@ -69,7 +74,7 @@ function gatesItem(
       label: "Checks",
       title: "Production checks not run",
       body:
-        "Enable Preflight (--check) and Production checks (--production) to record the contract and physics acceptance decision.",
+        "Enable Preflight (--check) and Production checks (--production) to record the Converter input-contract decision. Downstream SPH or project physics acceptance is a separate gate.",
       status: data.ok ? "skipped" : "pending",
     };
   }
@@ -162,16 +167,20 @@ function bundleItem(data: ConvertResponse): ConvertDeliveryItem {
   };
 }
 
-function donjonItem(data: ConvertResponse): ConvertDeliveryItem {
+function donjonItem(
+  data: ConvertResponse,
+  downstream?: ConvertDownstreamDestination | null,
+): ConvertDeliveryItem {
   if (data.converted && data.output_exists) {
     return {
       id: "donjon",
-      label: "DONJON",
-      title: "Generate the DONJON deck",
+      label: downstream ? "Project" : "DONJON",
+      title: downstream?.title ?? "DONJON deck setup is available",
       body:
-        "Open the DONJON guide to build the deck skeleton and ingest smoke that consume this ASCII output.",
+        downstream?.body ??
+        "Open the DONJON guide to build a deck skeleton or ingest smoke for this ASCII output. This action does not claim downstream SPH or model-physics acceptance.",
       status: "ready",
-      href: convertDonjonGuideHref(data),
+      href: downstream?.href ?? convertDonjonGuideHref(data),
     };
   }
   return {

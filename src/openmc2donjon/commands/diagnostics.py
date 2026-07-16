@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import sys
 
 from .base import (
     USER_FACING_EXCEPTIONS,
@@ -303,9 +304,11 @@ def build_check_parser() -> argparse.ArgumentParser:
         "--production",
         action="store_true",
         help=(
-            "enable production preflight defaults: volume, transport_total, "
+            "enable the canonical non-relaxable production preflight: volume, "
+            "transport_total, "
             "fissionable H-FACTOR, declared mixture order, domain provenance, "
-            "physics consistency gates, and production uncertainty gate"
+            "physics consistency gates, uncertainty limits, and complete "
+            "std-dev coverage"
         ),
     )
     parser.add_argument(
@@ -725,6 +728,13 @@ def build_validate_bundle_parser() -> argparse.ArgumentParser:
 
 
 def check_handler(args: argparse.Namespace) -> int:
+    if args.production and args.no_uncertainty_check:
+        sys.stderr.write(
+            "openmc2donjon check: error: --production cannot be combined with "
+            "--no-uncertainty-check; the canonical production policy requires "
+            "uncertainty checks and complete std-dev coverage\n"
+        )
+        return 1
     ok = run_preflight(
         args.input_h5,
         output_format=args.format,

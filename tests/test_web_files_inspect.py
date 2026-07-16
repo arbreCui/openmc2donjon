@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import unittest
@@ -25,6 +26,7 @@ class InspectEndpointTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
+        self.assertTrue(payload["mock_mode"])
         self.assertEqual(payload["schema"], INSPECT_SCHEMA)
         # Mock mode echoes the requested path so the result header names
         # the file the user asked for.
@@ -57,6 +59,10 @@ class InspectEndpointTests(unittest.TestCase):
         self.assertEqual(payload["root_attrs_total"], 5)
         self.assertEqual(payload["top_level_keys_total"], 2)
         self.assertFalse(payload["peek_truncated"])
+        self.assertEqual(payload["openmc_provenance"]["status"], "legacy")
+        self.assertFalse(
+            payload["openmc_provenance"]["capabilities"]["reference_bound"]
+        )
 
     def test_mock_mode_returns_bundled_mixture_fixture(self) -> None:
         from openmc2donjon.web.server import MIXTURE_SCHEMA, create_app
@@ -253,6 +259,7 @@ class InspectEndpointTests(unittest.TestCase):
             response = client.get("/api/inspect", params={"path": str(path)})
             self.assertEqual(response.status_code, 200)
             payload = response.json()
+            self.assertFalse(payload["mock_mode"])
             self.assertEqual(payload["schema"], INSPECT_SCHEMA)
             self.assertEqual(payload["energy_groups"], 7)
             self.assertEqual(payload["mixture_count"], 2)
@@ -267,6 +274,32 @@ class InspectEndpointTests(unittest.TestCase):
             self.assertEqual(len(payload["energy_bounds"]), 8)
             self.assertAlmostEqual(payload["energy_bounds"][0], 9.999999999999999e-06)
             self.assertAlmostEqual(payload["energy_bounds"][-1], 10000000.0)
+
+    def test_live_mode_reports_pre_applied_sph_provenance(self) -> None:
+        import h5py
+
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "sph_applied.h5"
+            _write_fake_hdf5(path)
+            with h5py.File(path, "a") as h5:
+                h5.attrs["sph_applied"] = True
+                h5.attrs["sph_applied_source"] = "/runs/openmc_sph.h5"
+                h5.attrs["sph_apply_operator"] = "divide-xs-by-nsph"
+                h5.attrs["sph_kind"] = "openmc-ce-mg-rate"
+
+            payload = (
+                TestClient(create_app(mock_mode=False))
+                .get("/api/inspect", params={"path": str(path)})
+                .json()
+            )
+
+            self.assertTrue(payload["sph_applied"])
+            self.assertEqual(payload["sph_applied_source"], "/runs/openmc_sph.h5")
+            self.assertEqual(payload["sph_apply_operator"], "divide-xs-by-nsph")
+            self.assertEqual(payload["sph_kind"], "openmc-ce-mg-rate")
+            self.assertEqual(payload["sph_calculations"], 0)
 
     def test_live_mode_mixture_endpoint_returns_arrays(self) -> None:
         from openmc2donjon.web.server import MIXTURE_SCHEMA, create_app
@@ -287,6 +320,7 @@ class InspectEndpointTests(unittest.TestCase):
             self.assertEqual(payload["energy_groups"], 7)
             self.assertEqual(len(payload["cross_sections"]["total"]), 7)
             self.assertEqual(payload["scatter"]["shape"], [1, 7, 7])
+            self.assertEqual(payload["scatter"]["axes"], "moment,from,to")
             self.assertEqual(len(payload["scatter"]["values"]), 7)
 
     def test_live_mode_mixture_not_found_returns_404(self) -> None:
@@ -340,6 +374,8 @@ class InspectEndpointTests(unittest.TestCase):
 
             self.assertFalse(payload["ok"])
             self.assertEqual(payload["mixture_count"], 0)
+            self.assertEqual(payload["openmc_provenance"]["status"], "legacy")
+            self.assertFalse(payload["openmc_provenance"]["integrity"]["ok"])
 
             attrs = {a["name"]: a["value"] for a in payload["root_attrs"]}
             self.assertEqual(attrs["source"], "OpenMC surface current export")
@@ -444,6 +480,14 @@ class OpenMCSphPhysicsSummaryEndpointTests(unittest.TestCase):
             payload["handoff"]["augmented_hdf5_path"],
             "/mock/home/openmc-runs/openmc-sph-minicase/mgxs_with_openmc_sph.h5",
         )
+        self.assertEqual(payload["evidence_audit"]["origin"], "mock_fixture")
+        self.assertIsNone(
+            payload["evidence_audit"]["all_referenced_handoff_artifacts_present"]
+        )
+        self.assertEqual(
+            payload["evidence_audit"]["physics_acceptance"],
+            "not_evaluated",
+        )
 
     def test_mock_summary_fixture_paths_exist_in_mock_tree(self) -> None:
         """Every /mock path in the fixture resolves in the mock browser.
@@ -486,10 +530,15 @@ class OpenMCSphPhysicsSummaryEndpointTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "physics_summary.json"
-            path.write_text(
-                json.dumps(_minimal_openmc_sph_physics_summary()),
-                encoding="utf-8",
-            )
+            payload_on_disk = _minimal_openmc_sph_physics_summary()
+            handoff = payload_on_disk["handoff"]
+            augmented = Path(tmp) / "mgxs_with_openmc_sph.h5"
+            ascii_path = Path(tmp) / "out.macrolib.txt"
+            augmented.write_bytes(b"hdf5")
+            ascii_path.write_text("ASCII", encoding="utf-8")
+            handoff["augmented_hdf5_path"] = str(augmented)
+            handoff["ascii_path"] = str(ascii_path)
+            path.write_text(json.dumps(payload_on_disk), encoding="utf-8")
             client = TestClient(create_app(mock_mode=False))
             response = client.get("/api/openmc-sph-summary", params={"path": str(path)})
 
@@ -498,6 +547,367 @@ class OpenMCSphPhysicsSummaryEndpointTests(unittest.TestCase):
         self.assertEqual(payload["schema"], OPENMC_SPH_PHYSICS_SUMMARY_SCHEMA)
         self.assertEqual(payload["requested_path"], str(path.resolve()))
         self.assertEqual(payload["mixture_names"], ["CS_FUEL", "CS_MOD"])
+        self.assertEqual(payload["evidence_audit"]["origin"], "live_file")
+        self.assertTrue(
+            payload["evidence_audit"]["all_referenced_handoff_artifacts_present"]
+        )
+        self.assertTrue(
+            all(
+                item["status"] == "present"
+                for item in payload["evidence_audit"]["referenced_handoff_artifacts"]
+            )
+        )
+
+    def test_live_summary_marks_stale_referenced_artifacts_missing(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "physics_summary.json"
+            payload_on_disk = _minimal_openmc_sph_physics_summary()
+            payload_on_disk["handoff"]["augmented_hdf5_path"] = str(
+                Path(tmp) / "missing_sph.h5"
+            )
+            payload_on_disk["handoff"]["ascii_path"] = str(
+                Path(tmp) / "missing.macrolib.txt"
+            )
+            path.write_text(json.dumps(payload_on_disk), encoding="utf-8")
+            client = TestClient(create_app(mock_mode=False))
+            response = client.get("/api/openmc-sph-summary", params={"path": str(path)})
+
+        self.assertEqual(response.status_code, 200)
+        audit = response.json()["evidence_audit"]
+        self.assertFalse(audit["all_referenced_handoff_artifacts_present"])
+        self.assertEqual(
+            [item["status"] for item in audit["referenced_handoff_artifacts"]],
+            ["missing", "missing"],
+        )
+
+    def test_live_mode_rejects_unbound_native_dragon_sph_declarations(self) -> None:
+        from openmc2donjon.web.openmc_sph_summary import (
+            NATIVE_DRAGON_SPH_PHYSICS_SUMMARY_SCHEMA,
+        )
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            payload_on_disk = _minimal_openmc_sph_physics_summary()
+            payload_on_disk["schema"] = NATIVE_DRAGON_SPH_PHYSICS_SUMMARY_SCHEMA
+            payload_on_disk["quality"] = {
+                "decision": "native_sph_physics_passed",
+                "structural_passed": True,
+                "production_ready": True,
+                "demonstration_quality": True,
+                "max_flux_relative_std_dev": 0.09,
+                "production_flux_relative_std_dev_threshold": 0.1,
+                "demonstration_flux_relative_std_dev_threshold": 0.2,
+                "notes": [],
+            }
+            payload_on_disk["handoff"]["augmented_hdf5_has_sph"] = False
+            artifacts = {
+                "augmented_hdf5_path": root / "reference.h5",
+                "reference_macrolib_path": root / "reference.macrolib.txt",
+                "macrolib_ascii_path": root / "native_sph.macrolib.txt",
+                "verification_macrolib_path": root / "verify.macrolib.txt",
+                "result_listing_path": root / "donjon.result",
+            }
+            for artifact in artifacts.values():
+                artifact.write_bytes(b"evidence")
+            payload_on_disk["handoff"].update(
+                {key: str(value) for key, value in artifacts.items()}
+            )
+            payload_on_disk["native_sph"] = {
+                "converged": True,
+                "one_speed_convergence_provable": True,
+                "final_flux_solve_converged": True,
+                "flux_nonconvergence_count": 0,
+                "factors_unmodified": True,
+                "negative_factor_correction_count": 0,
+                "oscillation_stop_count": 0,
+                "normal_end": True,
+                "iterations": 70,
+                "epsilon": 1.0e-6,
+                "final_rms_factor_update": 9.45e-7,
+            }
+            payload_on_disk["eigenvalue_validation"] = {
+                "openmc_keff": 1.11231,
+                "openmc_keff_std_dev": 0.00059,
+                "reference_physical_balance_kind": "finite-domain-keff",
+                "reference_physical_balance_keff": 1.11228,
+                "reference_physical_balance_delta_pcm": -3.0,
+                "reference_physical_balance_z": -0.05,
+                "reference_collision_balance_kinf": 1.18,
+                "reference_finite_balance_available": True,
+                "reference_finite_balance_keff": 1.11228,
+                "reference_leakage": 0.04,
+                "reference_rate_balance_keff": 1.11228,
+                "reference_rate_balance_delta_pcm": -3.0,
+                "reference_rate_balance_z": -0.05,
+                "donjon_keff": 1.11160,
+                "donjon_delta_pcm": -71.0,
+                "donjon_z": -1.2,
+                "max_abs_z": 2.0,
+            }
+            payload_on_disk["geometry"] = {
+                "kind": "hexagonal",
+                "boundary_conditions": "radial vacuum; axial reflective",
+            }
+            payload_on_disk["component_balance"] = {}
+            payload_on_disk["acceptance_checks"] = {
+                "donjon_normal_end": True,
+                "native_sph_converged": True,
+                "native_sph_factors_unmodified": True,
+                "native_sph_not_stopped_by_oscillation": True,
+                "one_speed_convergence_provable": True,
+                "final_flux_solve_converged": True,
+                "energy_coverage_passed": True,
+                "leakage_balance_available_when_required": True,
+                "reference_physical_balance_within_openmc_uncertainty": True,
+                "reference_rate_balance_within_openmc_uncertainty": True,
+                "donjon_keff_within_openmc_uncertainty": True,
+                "empirical_eigenvalue_multiplier_used": False,
+                "adf_used": False,
+            }
+            path = root / "physics_summary.json"
+            path.write_text(json.dumps(payload_on_disk), encoding="utf-8")
+            client = TestClient(create_app(mock_mode=False))
+            response = client.get("/api/openmc-sph-summary", params={"path": str(path)})
+
+            # Both the validator declaration and the raw solver record must
+            # independently prove one-speed convergence.  SNGMRE reaching
+            # MAXIT can otherwise look like a clean normal end.
+            payload_on_disk["native_sph"]["one_speed_convergence_provable"] = False
+            path.write_text(json.dumps(payload_on_disk), encoding="utf-8")
+            unproved_solver = client.get(
+                "/api/openmc-sph-summary", params={"path": str(path)}
+            )
+            payload_on_disk["native_sph"]["one_speed_convergence_provable"] = True
+            payload_on_disk["acceptance_checks"][
+                "one_speed_convergence_provable"
+            ] = False
+            path.write_text(json.dumps(payload_on_disk), encoding="utf-8")
+            unproved_check = client.get(
+                "/api/openmc-sph-summary", params={"path": str(path)}
+            )
+            payload_on_disk["acceptance_checks"][
+                "one_speed_convergence_provable"
+            ] = True
+
+            # Recorded booleans cannot override contradictory raw solver
+            # evidence.  A normal end with final-transport warnings or a
+            # negative-factor reset must remain rejected.
+            payload_on_disk["native_sph"].update(
+                {
+                    "final_flux_solve_converged": False,
+                    "flux_nonconvergence_count": 208,
+                    "factors_unmodified": False,
+                    "negative_factor_correction_count": 1,
+                }
+            )
+            path.write_text(json.dumps(payload_on_disk), encoding="utf-8")
+            contradictory = client.get(
+                "/api/openmc-sph-summary", params={"path": str(path)}
+            )
+
+        self.assertEqual(response.status_code, 200)
+        audit = response.json()["evidence_audit"]
+        self.assertEqual(audit["physics_acceptance"], "failed")
+        self.assertFalse(audit["all_referenced_handoff_artifacts_present"])
+        self.assertFalse(audit["evidence_integrity"]["verified"])
+        self.assertFalse(
+            audit["evidence_integrity"]["handoff_sha256_manifest_complete"]
+        )
+        self.assertEqual(len(audit["referenced_handoff_artifacts"]), 8)
+        self.assertEqual(
+            unproved_solver.json()["evidence_audit"]["physics_acceptance"],
+            "failed",
+        )
+        self.assertEqual(
+            unproved_check.json()["evidence_audit"]["physics_acceptance"],
+            "failed",
+        )
+        self.assertEqual(
+            contradictory.json()["evidence_audit"]["physics_acceptance"],
+            "failed",
+        )
+
+    def test_live_native_summary_revalidates_hash_receipt_and_openmc_provenance(
+        self,
+    ) -> None:
+        import h5py
+        import numpy as np
+
+        from openmc2donjon.macrolib import write_macrolib
+        from openmc2donjon.native_sph_validation import validate_native_sph
+        from openmc2donjon.web.server import create_app
+        from tests.test_native_sph_validation import (
+            _bind_clean_execution_deck,
+            _mixture,
+            _write_converter_receipt,
+            _write_energy_coverage,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            reference_h5 = root / "reference.h5"
+            reference_ascii = root / "reference.macrolib.txt"
+            sph_ascii = root / "sph.macrolib.txt"
+            verify_ascii = root / "verify.macrolib.txt"
+            result = root / "donjon.result"
+            receipt = root / "converter_summary.json"
+            coverage = root / "energy_coverage.json"
+            summary = root / "physics_summary.json"
+
+            reference = _mixture(
+                total=1.0, scatter=0.1, nusigf=0.9, flux=10.0
+            )
+            corrected = _mixture(
+                total=1.1,
+                scatter=0.11,
+                nusigf=0.99,
+                flux=10.0 / 1.1,
+                sph=1.1,
+            )
+            write_macrolib(
+                [reference],
+                np.array([1.0, 2.0]),
+                reference_ascii,
+                reference_keff=1.0,
+                reference_kinf=1.0,
+            )
+            write_macrolib(
+                [corrected],
+                np.array([1.0, 2.0]),
+                sph_ascii,
+                reference_keff=1.0,
+                reference_kinf=1.0,
+            )
+            write_macrolib(
+                [corrected],
+                np.array([1.0, 2.0]),
+                verify_ascii,
+                reference_keff=1.0,
+            )
+            with h5py.File(reference_h5, "w") as h5:
+                h5.attrs["reference_keff"] = 1.0
+                h5.attrs["reference_keff_std_dev"] = 0.01
+                h5.create_dataset(
+                    "mixture_names", data=np.asarray(["fuel"], dtype="S")
+                )
+                h5.create_group("mixtures").create_group("fuel")
+                h5.create_dataset("openmc_volume_flux", data=[[10.0]])
+                h5.create_dataset(
+                    "openmc_volume_flux_std_dev", data=[[0.1]]
+                )
+            result.write_text(
+                "TRACK := SNT: GEOM :: EDIT 1 DIAM 1 SN 8 SCAT 2 ;\n"
+                "EPSPH  1.0E-06   (CONVERGENCE CRITERION)\n"
+                "SPHEQU: ITER= 12 ERROR= 8.0E-07 ERR 2= 5.0E-07\n"
+                "SPHEQU: ENDING OF SPH CONVERGENCE AFTER 12 ITERATIONS.\n"
+                "normal end of execution for donjon 5 Version 5.1.0\n",
+                encoding="utf-8",
+            )
+            deck = _bind_clean_execution_deck(result)
+            _write_converter_receipt(
+                receipt,
+                input_path=reference_h5,
+                output_path=reference_ascii,
+            )
+            _write_energy_coverage(coverage)
+            validate_native_sph(
+                reference_h5,
+                reference_ascii,
+                sph_ascii,
+                verify_ascii,
+                result,
+                output_json=summary,
+                energy_coverage_json=coverage,
+                converter_receipt_json=receipt,
+                execution_deck=deck,
+            )
+
+            client = TestClient(create_app(mock_mode=False))
+            accepted_response = client.get(
+                "/api/openmc-sph-summary", params={"path": str(summary)}
+            )
+            self.assertEqual(
+                accepted_response.status_code, 200, accepted_response.text
+            )
+            accepted = accepted_response.json()
+            self.assertEqual(
+                accepted["evidence_audit"]["physics_acceptance"], "passed"
+            )
+            self.assertTrue(
+                accepted["evidence_audit"]["evidence_integrity"]["verified"]
+            )
+
+            baseline_h5 = reference_h5.read_bytes()
+            baseline_receipt = receipt.read_bytes()
+            baseline_summary = summary.read_bytes()
+            baseline_sph = sph_ascii.read_bytes()
+
+            sph_ascii.write_bytes(baseline_sph + b"tampered\n")
+            hash_tamper = client.get(
+                "/api/openmc-sph-summary", params={"path": str(summary)}
+            ).json()["evidence_audit"]
+            self.assertFalse(
+                hash_tamper["all_referenced_handoff_artifacts_hash_verified"]
+            )
+            self.assertFalse(hash_tamper["evidence_integrity"]["verified"])
+            self.assertEqual(hash_tamper["physics_acceptance"], "failed")
+            sph_ascii.write_bytes(baseline_sph)
+
+            with h5py.File(reference_h5, "a") as h5:
+                h5["openmc_volume_flux"][0, 0] = 11.0
+            receipt_payload = json.loads(receipt.read_text(encoding="utf-8"))
+            receipt_payload["input_sha256"] = hashlib.sha256(
+                reference_h5.read_bytes()
+            ).hexdigest()
+            receipt.write_text(json.dumps(receipt_payload), encoding="utf-8")
+            summary_payload = json.loads(summary.read_text(encoding="utf-8"))
+            summary_payload["handoff"]["evidence_sha256"][
+                "augmented_hdf5_path"
+            ] = hashlib.sha256(reference_h5.read_bytes()).hexdigest()
+            summary_payload["handoff"]["evidence_sha256"][
+                "converter_receipt_path"
+            ] = hashlib.sha256(receipt.read_bytes()).hexdigest()
+            summary.write_text(json.dumps(summary_payload), encoding="utf-8")
+            provenance_tamper = client.get(
+                "/api/openmc-sph-summary", params={"path": str(summary)}
+            ).json()["evidence_audit"]
+            self.assertTrue(
+                provenance_tamper["all_referenced_handoff_artifacts_hash_verified"]
+            )
+            self.assertFalse(provenance_tamper["evidence_integrity"]["verified"])
+            self.assertFalse(
+                provenance_tamper["evidence_integrity"]["openmc_provenance"][
+                    "valid"
+                ]
+            )
+
+            reference_h5.write_bytes(baseline_h5)
+            receipt.write_bytes(baseline_receipt)
+            summary.write_bytes(baseline_summary)
+            receipt_payload = json.loads(receipt.read_text(encoding="utf-8"))
+            receipt_payload["output_sha256"] = "0" * 64
+            receipt.write_text(json.dumps(receipt_payload), encoding="utf-8")
+            summary_payload = json.loads(summary.read_text(encoding="utf-8"))
+            summary_payload["handoff"]["evidence_sha256"][
+                "converter_receipt_path"
+            ] = hashlib.sha256(receipt.read_bytes()).hexdigest()
+            summary.write_text(json.dumps(summary_payload), encoding="utf-8")
+            receipt_tamper = client.get(
+                "/api/openmc-sph-summary", params={"path": str(summary)}
+            ).json()["evidence_audit"]
+            self.assertTrue(
+                receipt_tamper["all_referenced_handoff_artifacts_hash_verified"]
+            )
+            self.assertFalse(receipt_tamper["evidence_integrity"]["verified"])
+            self.assertFalse(
+                receipt_tamper["evidence_integrity"]["converter_receipt"][
+                    "valid"
+                ]
+            )
+            self.assertEqual(receipt_tamper["physics_acceptance"], "failed")
 
     def test_live_mode_rejects_non_summary_json(self) -> None:
         from openmc2donjon.web.server import create_app
@@ -848,10 +1258,42 @@ class TextPreviewEndpointTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["schema"], TEXT_PREVIEW_SCHEMA)
-        self.assertEqual(payload["text"], "line-1\nline-2")
+        self.assertEqual(payload["text"], "line-1\nline-2\n")
         self.assertTrue(payload["truncated"])
         self.assertEqual(payload["truncated_by"], ["lines"])
         self.assertEqual(payload["displayed_lines"], 2)
+
+    def test_live_mode_preserves_complete_deck_bytes_and_reports_sha256(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "case.x2m"
+            raw = b"PROCEDURE TEST ;\r\nQUIT .\r\n"
+            path.write_bytes(raw)
+
+            client = TestClient(create_app(mock_mode=False))
+            response = client.get(
+                "/api/text-preview",
+                params={"path": str(path), "max_bytes": 64, "max_lines": 20},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["text"].encode("utf-8"), raw)
+        self.assertEqual(payload["sha256"], hashlib.sha256(raw).hexdigest())
+        self.assertFalse(payload["truncated"])
+
+    def test_live_mode_rejects_invalid_utf8_instead_of_replacing_it(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "invalid.x2m"
+            path.write_bytes(b"QUIT .\n\xff")
+            client = TestClient(create_app(mock_mode=False))
+            response = client.get("/api/text-preview", params={"path": str(path)})
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("valid UTF-8", response.json()["detail"])
 
     def test_live_mode_rejects_binary_preview(self) -> None:
         from openmc2donjon.web.server import create_app

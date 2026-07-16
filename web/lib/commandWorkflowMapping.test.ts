@@ -13,7 +13,7 @@ describe("commandWorkflowMapping", () => {
     );
 
     expect(mapping.available).toBe(true);
-    expect(mapping.surface).toBe("Convert page");
+    expect(mapping.surface).toBe("Converter page");
     expect(mapping.presets).toContain("Output object: MULTICOMPO");
     // Flag labels show the flag they toggle.
     expect(mapping.presets).toContain("Preflight (--check): on");
@@ -30,7 +30,7 @@ describe("commandWorkflowMapping", () => {
       }),
     );
 
-    expect(mapping.surface).toBe("Convert page");
+    expect(mapping.surface).toBe("Converter page");
     expect(mapping.presets).toContain("Production checks (--production): on");
   });
 
@@ -44,11 +44,12 @@ describe("commandWorkflowMapping", () => {
     );
 
     // "planner" is a retired self-name; the surface matches the file's
-    // own "Convert page"/"Inspect page" convention.
+    // own "Converter page"/"Inspect page" convention.
     expect(mapping.surface).toBe("OpenMC page");
     expect(mapping.title).not.toContain("planner");
     expect(mapping.summary).not.toContain("planner");
-    expect(mapping.presets).toContain("Workflow: two-step export then convert");
+    expect(mapping.presets).toContain("Workflow: OpenMC HDF5 export, then Converter");
+    expect(mapping.summary).toContain("separate Converter step");
     expect(mapping.presets).toContain("Equivalence: direct");
   });
 

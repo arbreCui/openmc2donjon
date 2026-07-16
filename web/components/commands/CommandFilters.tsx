@@ -135,8 +135,9 @@ function FilterRow({
             key={id}
             type="button"
             onClick={() => onChange(id)}
+            aria-pressed={value === id}
             className={
-              "rounded-md border px-2.5 py-1 text-[12px] transition " +
+              "control-segment rounded-md border px-2.5 py-1 text-[12px] transition " +
               (value === id
                 ? "border-emerald-400/40 bg-emerald-400/15 text-emerald-200"
                 : "border-[var(--edge)] bg-white/[0.02] text-[var(--fg-2)] hover:text-[var(--fg-0)]")

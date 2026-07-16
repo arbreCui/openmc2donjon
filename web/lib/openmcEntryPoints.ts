@@ -22,10 +22,10 @@ export const OPENMC_ENTRY_POINTS: readonly OpenmcEntryPoint[] = [
     eyebrow: "Need HDF5 first",
     title: "Prepare OpenMC MGXS HDF5",
     body:
-      "Start here when your input is an OpenMC recipe/statepoint and you still need the MGXS HDF5. If that HDF5 already exists, skip this page and open Convert.",
+      "Start here when your input is an OpenMC recipe/statepoint and you still need the MGXS HDF5. If that HDF5 already exists, skip this page and open Converter.",
     primaryLabel: "Plan HDF5 export",
     secondaryHref: "/convert?intent=direct-convert&format=multicompo&check=1&production=1",
-    secondaryLabel: "Already have HDF5? Convert",
+    secondaryLabel: "Already have HDF5? Open Converter",
     workflow: "two-step",
     equivalence: "direct",
     production: true,
@@ -33,13 +33,13 @@ export const OPENMC_ENTRY_POINTS: readonly OpenmcEntryPoint[] = [
   },
   {
     id: "openmc-sph",
-    eyebrow: "OpenMC-side equivalence",
-    title: "Prepare CE/MG SPH factors",
+    eyebrow: "SPH equivalence",
+    title: "Prepare matched CE/MG domains and their SPH",
     body:
-      "Start here when a colorset or core model needs equivalence before conversion: compare OpenMC CE reference flux against OpenMC MG macro flux on the same geometry/output regions, attach NSPH, then convert to MACROLIB for DONJON.",
+      "Compare a fine CE reference against its homogenized MG model on the same project-declared domains, iterate rate-preserving NSPH to convergence, pre-apply the validated factors, then send that HDF5 to Converter.",
     primaryLabel: "Plan CE/MG SPH route",
     secondaryHref:
-      "/openmc?workflow=two-step&equivalence=sph&format=macrolib#openmc-sph-summary",
+      "/openmc?workflow=two-step&equivalence=sph&format=multicompo&production=1#openmc-sph-summary",
     secondaryLabel: "Open SPH summary",
     workflow: "two-step",
     equivalence: "sph",

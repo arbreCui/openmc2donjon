@@ -37,7 +37,9 @@ def build_fill_zero_flux_parser() -> argparse.ArgumentParser:
             "Substitute exact material XS from an OpenMC MG macrolib into "
             "the (mixture, group) bins of a converter MGXS HDF5 where the "
             "flux-weighted tallies are zero: bins with total == 0, or "
-            "transport_total <= 0 when that dataset is present. This is a "
+            "transport_total <= 0 when that dataset is present. Optional "
+            "uncertainty and scatter-row overshoot criteria cover nonzero "
+            "micro-flux bins whose rate/flux estimators are unphysical. This is a "
             "mandatory step for fast-spectrum cores whose thermal groups "
             "carry no Monte Carlo flux. Mixtures are matched to macrolib "
             "materials through a mixture label attribute."
@@ -72,6 +74,26 @@ def build_fill_zero_flux_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--max-total-rel-std-dev",
+        type=float,
+        default=None,
+        help=(
+            "also fill bins whose total XS relative std_dev exceeds this "
+            "threshold (micro-flux noise bins with unphysical rate/flux "
+            "spikes; degenerate single-score bins carry rel std sqrt(2))"
+        ),
+    )
+    parser.add_argument(
+        "--max-scatter-row-overshoot-rel",
+        type=float,
+        default=None,
+        help=(
+            "also fill bins whose P0 out-scatter row exceeds total XS by "
+            "more than this relative tolerance (solver-destabilizing "
+            "micro-flux noise)"
+        ),
+    )
+    parser.add_argument(
         "--summary-json",
         type=Path,
         default=None,
@@ -95,6 +117,8 @@ def fill_zero_flux_handler(args: argparse.Namespace) -> int:
             in_place=args.in_place,
             label_attr=args.label_attr,
             force=args.force,
+            max_total_rel_std_dev=args.max_total_rel_std_dev,
+            max_scatter_row_overshoot_rel=args.max_scatter_row_overshoot_rel,
         )
         print_zero_flux_fill_report(report)
         if args.summary_json is not None:

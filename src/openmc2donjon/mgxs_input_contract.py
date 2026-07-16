@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import sys
 from typing import Any
 
 import h5py
@@ -36,12 +37,11 @@ from .mgxs_input_report import (
     write_summary,
 )
 from .mgxs_physics_checks import (
-    DEFAULT_CHI_SUM_TOLERANCE,
-    DEFAULT_SCATTER_ROW_BALANCE_REL,
-    DEFAULT_TRANSPORT_P1_REL,
     MgxsPhysicsCheckReport,
     evaluate_mgxs_physics,
 )
+from .production_policy import effective_production_thresholds
+from .openmc_provenance import read_openmc_provenance_h5
 from .mgxs_input_scatter import (
     configure_scatter_row_balance,
     validate_scatter,
@@ -74,16 +74,14 @@ H_FACTOR_DATASETS = (
     "kappa_fission_xs",
     "kappa_fission_cross_section",
 )
-PRODUCTION_SCATTER_ROW_BALANCE_FAIL = DEFAULT_SCATTER_ROW_BALANCE_REL
-PRODUCTION_UNCERTAINTY_PRODUCTION_FAIL = 1.0
-
-
 def production_preflight_defaults(
     *,
     production: bool,
     require_mixture_order: bool = False,
     require_domain_mode: bool = False,
     require_source_domain_metadata: bool = False,
+    require_openmc_provenance: bool = False,
+    require_openmc_provenance_if_openmc: bool = False,
     require_openmc_volume_flux: bool = False,
     require_transport_dataset: bool,
     require_volume: bool,
@@ -98,7 +96,9 @@ def production_preflight_defaults(
     require_adf_face_consistency: bool = False,
     transport_p1_fail: float | None = None,
     uncertainty_warn: float | None,
+    uncertainty_fail: float | None,
     uncertainty_production_fail: float | None,
+    uncertainty_mean_abs_floor: float,
     require_std_dev_coverage: bool = False,
 ) -> dict[str, Any]:
     """Return effective preflight options after applying the production preset."""
@@ -107,6 +107,10 @@ def production_preflight_defaults(
             "require_mixture_order": require_mixture_order,
             "require_domain_mode": require_domain_mode,
             "require_source_domain_metadata": require_source_domain_metadata,
+            "require_openmc_provenance": require_openmc_provenance,
+            "require_openmc_provenance_if_openmc": (
+                require_openmc_provenance_if_openmc
+            ),
             "require_openmc_volume_flux": require_openmc_volume_flux,
             "require_transport_dataset": require_transport_dataset,
             "require_volume": require_volume,
@@ -120,23 +124,33 @@ def production_preflight_defaults(
             "chi_sum_tolerance": chi_sum_tolerance,
             "require_adf_face_consistency": require_adf_face_consistency,
             "transport_p1_fail": transport_p1_fail,
+            "uncertainty_warn": uncertainty_warn,
+            "uncertainty_fail": uncertainty_fail,
             "uncertainty_production_fail": uncertainty_production_fail,
+            "uncertainty_mean_abs_floor": uncertainty_mean_abs_floor,
             "require_std_dev_coverage": require_std_dev_coverage,
         }
 
-    if scatter_row_balance_fail is None:
-        scatter_row_balance_fail = PRODUCTION_SCATTER_ROW_BALANCE_FAIL
-    if chi_sum_tolerance is None:
-        chi_sum_tolerance = DEFAULT_CHI_SUM_TOLERANCE
-    if transport_p1_fail is None:
-        transport_p1_fail = DEFAULT_TRANSPORT_P1_REL
-    if uncertainty_warn is not None and uncertainty_production_fail is None:
-        uncertainty_production_fail = PRODUCTION_UNCERTAINTY_PRODUCTION_FAIL
+    thresholds = effective_production_thresholds(
+        scatter_row_balance_fail=scatter_row_balance_fail,
+        transport_p1_fail=transport_p1_fail,
+        chi_sum_tolerance=chi_sum_tolerance,
+        uncertainty_warn=uncertainty_warn,
+        uncertainty_fail=uncertainty_fail,
+        uncertainty_production_fail=uncertainty_production_fail,
+        uncertainty_mean_abs_floor=uncertainty_mean_abs_floor,
+    )
 
     return {
         "require_mixture_order": True,
         "require_domain_mode": True,
         "require_source_domain_metadata": True,
+        # Production is source-aware: a generic handoff is not forced to
+        # pretend it came from OpenMC, while every marked/embedded OpenMC input
+        # must carry an intact frozen-reference binding. The explicit CLI flag
+        # remains stricter and requires provenance on every input.
+        "require_openmc_provenance": require_openmc_provenance,
+        "require_openmc_provenance_if_openmc": True,
         "require_openmc_volume_flux": require_openmc_volume_flux,
         "require_transport_dataset": True,
         "require_volume": True,
@@ -145,24 +159,39 @@ def production_preflight_defaults(
         "warn_unknown_energy_mesh": True,
         "energy_mesh_tolerance": energy_mesh_tolerance,
         "scatter_row_balance_warn": scatter_row_balance_warn,
-        "scatter_row_balance_fail": scatter_row_balance_fail,
+        "scatter_row_balance_fail": thresholds["scatter_row_balance_fail"],
         "require_energy_bounds_consistency": True,
-        "chi_sum_tolerance": chi_sum_tolerance,
+        "chi_sum_tolerance": thresholds["chi_sum_tolerance"],
         "require_adf_face_consistency": True,
-        "transport_p1_fail": transport_p1_fail,
-        "uncertainty_production_fail": uncertainty_production_fail,
-        "require_std_dev_coverage": require_std_dev_coverage,
+        "transport_p1_fail": thresholds["transport_p1_fail"],
+        "uncertainty_warn": thresholds["uncertainty_warn"],
+        "uncertainty_fail": thresholds["uncertainty_fail"],
+        "uncertainty_production_fail": thresholds[
+            "uncertainty_production_fail"
+        ],
+        "uncertainty_mean_abs_floor": thresholds[
+            "uncertainty_mean_abs_floor"
+        ],
+        "require_std_dev_coverage": True,
     }
 
 
 def main() -> int:
     args = parse_args()
+    if args.production and args.no_uncertainty_check:
+        sys.stderr.write(
+            "mgxs_input_contract: error: --production cannot be combined with "
+            "--no-uncertainty-check; the canonical production policy requires "
+            "uncertainty checks and complete std-dev coverage\n"
+        )
+        return 1
     expected_faces = split_csv(args.expected_adf_faces)
     settings = production_preflight_defaults(
         production=args.production,
         require_mixture_order=args.require_mixture_order,
         require_domain_mode=args.require_domain_mode,
         require_source_domain_metadata=args.require_source_domain_metadata,
+        require_openmc_provenance=args.require_openmc_provenance,
         require_openmc_volume_flux=args.require_openmc_volume_flux,
         require_transport_dataset=args.require_transport_dataset,
         require_volume=args.require_volume,
@@ -177,9 +206,11 @@ def main() -> int:
         require_adf_face_consistency=args.require_adf_face_consistency,
         transport_p1_fail=args.transport_p1_fail,
         uncertainty_warn=None if args.no_uncertainty_check else args.uncertainty_warn,
+        uncertainty_fail=None if args.no_uncertainty_check else args.uncertainty_fail,
         uncertainty_production_fail=(
             None if args.no_uncertainty_check else args.uncertainty_production_fail
         ),
+        uncertainty_mean_abs_floor=args.uncertainty_mean_abs_floor,
         require_std_dev_coverage=(
             False if args.no_uncertainty_check else args.require_std_dev_coverage
         ),
@@ -192,6 +223,10 @@ def main() -> int:
             require_mixture_order=settings["require_mixture_order"],
             require_domain_mode=settings["require_domain_mode"],
             require_source_domain_metadata=settings["require_source_domain_metadata"],
+            require_openmc_provenance=settings["require_openmc_provenance"],
+            require_openmc_provenance_if_openmc=settings[
+                "require_openmc_provenance_if_openmc"
+            ],
             require_openmc_volume_flux=settings["require_openmc_volume_flux"],
             require_transport_dataset=settings["require_transport_dataset"],
             require_volume=settings["require_volume"],
@@ -221,10 +256,10 @@ def main() -> int:
             require_adf_face_consistency=settings["require_adf_face_consistency"],
             transport_p1_fail=settings["transport_p1_fail"],
             uncertainty=UncertaintyConfig(
-                warn_threshold=None if args.no_uncertainty_check else args.uncertainty_warn,
-                fail_threshold=None if args.no_uncertainty_check else args.uncertainty_fail,
+                warn_threshold=settings["uncertainty_warn"],
+                fail_threshold=settings["uncertainty_fail"],
                 production_fail_threshold=settings["uncertainty_production_fail"],
-                mean_abs_floor=args.uncertainty_mean_abs_floor,
+                mean_abs_floor=settings["uncertainty_mean_abs_floor"],
                 require_coverage=settings["require_std_dev_coverage"],
             ),
         )
@@ -269,7 +304,8 @@ def parse_args() -> argparse.Namespace:
         help=(
             "enable production preflight defaults: require volume, transport_total, "
             "fissionable H-FACTOR, declared mixture order, domain provenance, "
-            "physics consistency gates, and production uncertainty failure threshold"
+            "OpenMC fine-reference binding, physics consistency gates, and "
+            "production uncertainty failure threshold"
         ),
     )
     parser.add_argument(
@@ -289,6 +325,14 @@ def parse_args() -> argparse.Namespace:
         "--require-source-domain-metadata",
         action="store_true",
         help="require source_domain_id and source_domain_type on every mixture",
+    )
+    parser.add_argument(
+        "--require-openmc-provenance",
+        action="store_true",
+        help=(
+            "for OpenMC-source handoffs, require a verified recipe/statepoint "
+            "reference binding; implied by --production"
+        ),
     )
     parser.add_argument(
         "--require-openmc-volume-flux",
@@ -486,6 +530,8 @@ def validate_input(
     require_mixture_order: bool = False,
     require_domain_mode: bool = False,
     require_source_domain_metadata: bool = False,
+    require_openmc_provenance: bool = False,
+    require_openmc_provenance_if_openmc: bool = False,
     require_openmc_volume_flux: bool = False,
     require_transport_dataset: bool = False,
     require_volume: bool = False,
@@ -507,6 +553,8 @@ def validate_input(
     uncertainty: UncertaintyConfig | None = None,
 ) -> InputReport:
     report = InputReport(path=str(path))
+    report.chi_sum_tolerance = chi_sum_tolerance
+    report.transport_p1_fail_threshold = transport_p1_fail
     configure_scatter_row_balance(
         report,
         warn_threshold=scatter_row_balance_warn,
@@ -527,6 +575,10 @@ def validate_input(
                 require_mixture_order=require_mixture_order,
                 require_domain_mode=require_domain_mode,
                 require_source_domain_metadata=require_source_domain_metadata,
+                require_openmc_provenance=require_openmc_provenance,
+                require_openmc_provenance_if_openmc=(
+                    require_openmc_provenance_if_openmc
+                ),
                 require_openmc_volume_flux=require_openmc_volume_flux,
                 require_transport_dataset=require_transport_dataset,
                 require_volume=require_volume,
@@ -563,6 +615,8 @@ def validate_open_h5(
     require_mixture_order: bool,
     require_domain_mode: bool,
     require_source_domain_metadata: bool,
+    require_openmc_provenance: bool,
+    require_openmc_provenance_if_openmc: bool,
     require_openmc_volume_flux: bool,
     require_transport_dataset: bool,
     require_volume: bool,
@@ -587,6 +641,28 @@ def validate_open_h5(
     legendre_order = integer_attr(h5.attrs, "legendre_order")
     report.energy_groups = ngroups
     report.legendre_order = legendre_order
+    report.sph_applied = bool(h5.attrs.get("sph_applied", False))
+    report.sph_applied_source = (
+        attr_text(h5.attrs["sph_applied_source"])
+        if "sph_applied_source" in h5.attrs
+        else None
+    )
+    report.sph_apply_operator = (
+        attr_text(h5.attrs["sph_apply_operator"])
+        if "sph_apply_operator" in h5.attrs
+        else None
+    )
+    report.sph_kind = (
+        attr_text(h5.attrs["sph_kind"])
+        if "sph_kind" in h5.attrs
+        else None
+    )
+    validate_openmc_provenance(
+        h5,
+        report,
+        require_complete=require_openmc_provenance,
+        require_if_openmc=require_openmc_provenance_if_openmc,
+    )
 
     if ngroups is None or ngroups <= 0:
         report.fail("/attrs energy_groups must be a positive integer")
@@ -829,6 +905,66 @@ def validate_domain_mode(
     report.domain_mode = domain_mode or None
     if require_domain_mode and not domain_mode:
         report.fail("/attrs domain_mode must be a non-empty string")
+
+
+def validate_openmc_provenance(
+    h5: h5py.File,
+    report: InputReport,
+    *,
+    require_complete: bool,
+    require_if_openmc: bool,
+) -> None:
+    """Validate the embedded fine-reference identity without reopening OpenMC.
+
+    Production conversion requires an immutable reference binding (recipe and
+    loaded statepoint hashes plus a valid embedded record). Full transport
+    replayability remains visible as a stricter academic capability and is not
+    made a native-SPH runtime dependency.
+    """
+
+    provenance = read_openmc_provenance_h5(h5)
+    if provenance is None:
+        if require_complete:
+            report.fail(
+                "OpenMC provenance was explicitly required, but the input has no "
+                "embedded OpenMC provenance record"
+            )
+        return
+    report.openmc_provenance = provenance
+    report.openmc_provenance_status = str(provenance.get("status") or "legacy")
+    is_legacy = report.openmc_provenance_status == "legacy"
+    capabilities = provenance.get("capabilities")
+    integrity = provenance.get("integrity")
+    integrity_ok = bool(
+        integrity.get("ok", False) if isinstance(integrity, dict) else False
+    )
+    reference_bound = bool(
+        capabilities.get("reference_bound", False)
+        if isinstance(capabilities, dict)
+        else False
+    )
+    transport_reproducible = bool(
+        capabilities.get("transport_reproducible", False)
+        if isinstance(capabilities, dict)
+        else False
+    )
+    if not integrity_ok and not is_legacy:
+        report.fail("embedded OpenMC provenance integrity check failed")
+    if (require_complete or require_if_openmc) and (
+        not reference_bound or not integrity_ok
+    ):
+        report.fail(
+            "OpenMC source provenance is not reference-bound; production needs "
+            "verified recipe and loaded-statepoint content hashes plus an intact "
+            "embedded provenance digest"
+        )
+    if not transport_reproducible:
+        missing = provenance.get("missing")
+        count = len(missing) if isinstance(missing, list) else 0
+        report.warn(
+            "OpenMC transport replay provenance is incomplete"
+            + (f" ({count} missing field(s))" if count else "")
+        )
 
 
 def validate_source_domain_metadata(
@@ -1538,6 +1674,8 @@ def run_preflight(
     require_mixture_order: bool = False,
     require_domain_mode: bool = False,
     require_source_domain_metadata: bool = False,
+    require_openmc_provenance: bool = False,
+    require_openmc_provenance_if_openmc: bool = False,
     require_openmc_volume_flux: bool = False,
     require_transport_dataset: bool = False,
     require_volume: bool = False,
@@ -1574,6 +1712,8 @@ def run_preflight(
         require_mixture_order=require_mixture_order,
         require_domain_mode=require_domain_mode,
         require_source_domain_metadata=require_source_domain_metadata,
+        require_openmc_provenance=require_openmc_provenance,
+        require_openmc_provenance_if_openmc=require_openmc_provenance_if_openmc,
         require_openmc_volume_flux=require_openmc_volume_flux,
         require_transport_dataset=require_transport_dataset,
         require_volume=require_volume,
@@ -1588,7 +1728,9 @@ def run_preflight(
         require_adf_face_consistency=require_adf_face_consistency,
         transport_p1_fail=transport_p1_fail,
         uncertainty_warn=uncertainty_warn,
+        uncertainty_fail=uncertainty_fail,
         uncertainty_production_fail=uncertainty_production_fail,
+        uncertainty_mean_abs_floor=uncertainty_mean_abs_floor,
         require_std_dev_coverage=require_std_dev_coverage,
     )
     reports = [
@@ -1599,6 +1741,10 @@ def run_preflight(
             require_mixture_order=settings["require_mixture_order"],
             require_domain_mode=settings["require_domain_mode"],
             require_source_domain_metadata=settings["require_source_domain_metadata"],
+            require_openmc_provenance=settings["require_openmc_provenance"],
+            require_openmc_provenance_if_openmc=settings[
+                "require_openmc_provenance_if_openmc"
+            ],
             require_openmc_volume_flux=settings["require_openmc_volume_flux"],
             require_transport_dataset=settings["require_transport_dataset"],
             require_volume=settings["require_volume"],
@@ -1620,10 +1766,10 @@ def run_preflight(
             require_adf_face_consistency=settings["require_adf_face_consistency"],
             transport_p1_fail=settings["transport_p1_fail"],
             uncertainty=UncertaintyConfig(
-                warn_threshold=uncertainty_warn,
-                fail_threshold=uncertainty_fail,
+                warn_threshold=settings["uncertainty_warn"],
+                fail_threshold=settings["uncertainty_fail"],
                 production_fail_threshold=settings["uncertainty_production_fail"],
-                mean_abs_floor=uncertainty_mean_abs_floor,
+                mean_abs_floor=settings["uncertainty_mean_abs_floor"],
                 require_coverage=settings["require_std_dev_coverage"],
             ),
         )

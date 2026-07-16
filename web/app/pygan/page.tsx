@@ -5,6 +5,7 @@ import type React from "react";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { CopyCliButton } from "@/components/commands/CopyCliButton";
+import EvidenceLadder from "@/components/EvidenceLadder";
 import FileBrowserModal from "@/components/inspect/FileBrowserModal";
 import {
   ApiError,
@@ -14,12 +15,17 @@ import {
   api,
 } from "@/lib/api";
 import {
+  PYGAN_CONVERTER_HREF,
   pyganCompareAvailability,
   pyganMissingModulesLabel,
 } from "@/lib/pyganBackend";
+import { writerComparisonEvidenceLadder } from "@/lib/evidenceLadder";
 import {
   browserInitialPath,
   buildCompareCli,
+  optionalNumberError,
+  optionalNumberValue,
+  pyganWorkflowHrefs,
   parseMixtures,
   PYGAN_ATOL_DEFAULT,
   PYGAN_RTOL_DEFAULT,
@@ -28,6 +34,7 @@ import {
   type PyGanBrowseTarget as BrowseTarget,
 } from "@/lib/pyganCompare";
 import { useSettings } from "@/lib/settings";
+import { projectRootFromSearchParams } from "@/lib/projectWorkspace";
 
 type DoctorState =
   | { kind: "loading" }
@@ -54,8 +61,8 @@ export default function PyGanPage() {
 
 function PyGanLoading() {
   return (
-    <main className="min-h-[calc(100vh-3.5rem)] px-6 py-12">
-      <div className="mx-auto max-w-5xl">
+    <main className="app-page">
+      <div className="app-container max-w-5xl">
         <section className="glass rounded-xl p-5 text-sm text-[var(--fg-2)]">
           Loading PyGan workspace…
         </section>
@@ -76,7 +83,11 @@ function PyGanPageContent() {
   );
   const [rootName, setRootName] = useState(searchParams.get("root_name") ?? "CPO");
   const [comment, setComment] = useState(searchParams.get("comment") ?? "");
-  const [mixtures, setMixtures] = useState(searchParams.get("mixture") ?? "");
+  const [mixtures, setMixtures] = useState(searchParams.getAll("mixture").join(","));
+  const [burnup, setBurnup] = useState(searchParams.get("burnup") ?? "");
+  const [hFactorDefault, setHFactorDefault] = useState(
+    searchParams.get("h_factor_default") ?? "",
+  );
   const [rtol, setRtol] = useState(searchParams.get("rtol") ?? "1e-6");
   const [atol, setAtol] = useState(searchParams.get("atol") ?? "1e-8");
   const [summaryJson, setSummaryJson] = useState(
@@ -84,6 +95,10 @@ function PyGanPageContent() {
   );
   const [keepDir, setKeepDir] = useState(searchParams.get("keep_dir") ?? "");
   const [browserTarget, setBrowserTarget] = useState<BrowseTarget | null>(null);
+  const projectRoot = projectRootFromSearchParams(searchParams);
+  const componentId = searchParams.get("component") ?? "";
+  const converterOutput = searchParams.get("output") ?? "";
+  const converterReceipt = searchParams.get("receipt") ?? "";
 
   useEffect(() => {
     let cancelled = false;
@@ -114,17 +129,49 @@ function PyGanPageContent() {
         rootName,
         comment,
         mixtures,
+        burnup,
+        hFactorDefault,
         rtol,
         atol,
         summaryJson,
         keepDir,
       }),
-    [inputH5, format, rootName, comment, mixtures, rtol, atol, summaryJson, keepDir],
+    [inputH5, format, rootName, comment, mixtures, burnup, hFactorDefault, rtol, atol, summaryJson, keepDir],
   );
   const doctorData = doctor.kind === "ok" ? doctor.data : null;
   const compareAvailability = pyganCompareAvailability(doctorData);
   const rtolError = toleranceError(rtol);
   const atolError = toleranceError(atol);
+  const burnupError = optionalNumberError(burnup, "Burnup");
+  const hFactorError = optionalNumberError(hFactorDefault, "H-FACTOR default");
+  const workflowHrefs = useMemo(
+    () => pyganWorkflowHrefs({
+      projectRoot,
+      componentId,
+      inputH5,
+      outputPath: converterOutput,
+      receiptPath: converterReceipt,
+      format,
+      rootName,
+      comment,
+      mixtures,
+      burnup,
+      hFactorDefault,
+    }),
+    [
+      burnup,
+      comment,
+      componentId,
+      converterOutput,
+      converterReceipt,
+      format,
+      hFactorDefault,
+      inputH5,
+      mixtures,
+      projectRoot,
+      rootName,
+    ],
+  );
   // In the live available state the availability hint repeats the
   // Doctor panel's "PyGan is importable..." sentence verbatim, so the
   // hint only renders when it adds something (checking / mock / missing
@@ -140,6 +187,8 @@ function PyGanPageContent() {
     setRootName("CPO");
     setComment("PyGan writer comparison web demo");
     setMixtures("");
+    setBurnup("");
+    setHFactorDefault("");
     setRtol("1e-6");
     setAtol("1e-8");
     setSummaryJson(MOCK_SUMMARY);
@@ -156,6 +205,8 @@ function PyGanPageContent() {
         root_name: rootName.trim() || "CPO",
         comment: comment.trim() || null,
         mixtures: parseMixtures(mixtures),
+        burnup: optionalNumberValue(burnup),
+        h_factor_default: optionalNumberValue(hFactorDefault),
         rtol: toleranceValue(rtol, PYGAN_RTOL_DEFAULT),
         atol: toleranceValue(atol, PYGAN_ATOL_DEFAULT),
         summary_json: summaryJson.trim() || null,
@@ -182,21 +233,41 @@ function PyGanPageContent() {
   }
 
   return (
-    <main className="min-h-[calc(100vh-3.5rem)] px-6 py-12">
-      <div className="mx-auto max-w-5xl space-y-5">
+    <main className="app-page">
+      <div className="app-container max-w-5xl space-y-5">
         <header>
           <div className="text-[11px] uppercase tracking-[0.16em] text-[var(--fg-3)]">
-            Optional backend validation
+            Optional Converter backend
           </div>
           <h1 className="mt-2 text-3xl font-bold tracking-tight">
-            <span className="grad-text">PyGan writer validation</span>
+            <span className="grad-text">PyGan writer &amp; validation</span>
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
             The production converter uses the built-in ASCII LCM writer by default.
-            PyGan is an optional DRAGON/DONJON-backed writer and validation layer
-            for teams that already have the PyGan modules in their Python environment.
+            When its modules are installed, PyGan is a selectable DRAGON/DONJON-backed
+            writer inside Converter as well as a semantic validation layer. Teams can
+            therefore write through PyGan, compare it with ASCII, or use ASCII alone.
           </p>
+          <Link href={PYGAN_CONVERTER_HREF} className="btn btn-primary mt-4">
+            Use PyGan in Converter
+            <span aria-hidden="true">→</span>
+          </Link>
         </header>
+
+        {projectRoot || converterOutput || converterReceipt ? (
+          <section className="rounded-xl border border-cyan-300/20 bg-cyan-300/[0.045] p-4">
+            <p className="page-kicker">Inherited Converter context</p>
+            <h2 className="mt-1 text-sm font-bold">
+              Compare the same writer configuration—not a fresh default
+            </h2>
+            <div className="mt-3 grid gap-2 text-[11px] md:grid-cols-2">
+              <PathPill label="project / component" value={projectRoot ? `${projectRoot}${componentId ? ` · ${componentId}` : ""}` : "standalone"} />
+              <PathPill label="Converter output" value={converterOutput || "not supplied"} />
+              <PathPill label="Converter receipt" value={converterReceipt || "not supplied"} />
+              <PathPill label="writer state" value={`root=${rootName || "CPO"} · mixtures=${mixtures || "all"} · burnup=${burnup || "source/default"} · H-factor=${hFactorDefault || "source"}`} />
+            </div>
+          </section>
+        ) : null}
 
         <DoctorPanel state={doctor} onMockDemo={applyMockDemo} />
 
@@ -223,7 +294,7 @@ function PyGanPageContent() {
             <button
               type="button"
               onClick={() => setInputH5(savedPrefix)}
-              className="mt-4 text-[12px] text-[var(--accent-2)] hover:underline"
+              className="btn-link mt-3"
             >
               Use saved prefix: <code className="font-mono">{savedPrefix}</code>
             </button>
@@ -255,6 +326,20 @@ function PyGanPageContent() {
                 value={mixtures}
                 onChange={setMixtures}
                 placeholder="M1,M2"
+              />
+              <TextField
+                label="Burnup"
+                value={burnup}
+                onChange={setBurnup}
+                placeholder="Inherited Converter value or empty"
+                error={burnupError}
+              />
+              <TextField
+                label="H-FACTOR default"
+                value={hFactorDefault}
+                onChange={setHFactorDefault}
+                placeholder="Inherited value or empty"
+                error={hFactorError}
               />
               <TextField
                 label="Relative tolerance"
@@ -306,7 +391,9 @@ function PyGanPageContent() {
                   compare.kind === "loading" ||
                   !compareAvailability.canRun ||
                   rtolError != null ||
-                  atolError != null
+                  atolError != null ||
+                  burnupError != null ||
+                  hFactorError != null
                 }
                 className="btn btn-primary mt-4 w-full disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -321,7 +408,7 @@ function PyGanPageContent() {
           </div>
         </section>
 
-        <ComparePanel state={compare} />
+        <ComparePanel state={compare} workflowHrefs={workflowHrefs} />
 
         <FileBrowserModal
           open={browserTarget != null}
@@ -437,7 +524,13 @@ function DoctorPanel({
   );
 }
 
-function ComparePanel({ state }: { state: CompareState }) {
+function ComparePanel({
+  state,
+  workflowHrefs,
+}: {
+  state: CompareState;
+  workflowHrefs: ReturnType<typeof pyganWorkflowHrefs>;
+}) {
   if (state.kind === "idle") return null;
   if (state.kind === "loading") {
     return (
@@ -462,7 +555,7 @@ function ComparePanel({ state }: { state: CompareState }) {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className={data.ok ? "text-sm font-semibold text-emerald-300" : "text-sm font-semibold text-rose-300"}>
-            {data.ok ? "PASS" : "FAIL"}
+            {data.ok ? "WRITER SEMANTICS PASS" : "WRITER SEMANTICS FAIL"}
           </div>
           <h2 className="mt-1 text-base font-semibold tracking-tight">
             Semantic writer comparison
@@ -475,6 +568,8 @@ function ComparePanel({ state }: { state: CompareState }) {
         </div>
         <CopyCliButton value={data.cli_command_text} label="Copy CLI" />
       </div>
+
+      <EvidenceLadder stages={writerComparisonEvidenceLadder(data)} />
 
       <dl className="mt-4 grid gap-3 text-sm md:grid-cols-3">
         <Meta label="Input" value={data.input_h5} mono />
@@ -515,6 +610,24 @@ function ComparePanel({ state }: { state: CompareState }) {
           No semantic differences were reported.
         </p>
       )}
+      <div className="mt-4 flex flex-wrap gap-2 border-t border-[var(--edge)] pt-4">
+        {workflowHrefs.project ? (
+          <Link href={workflowHrefs.project} className="btn btn-primary">
+            Return to Project
+          </Link>
+        ) : null}
+        <Link href={workflowHrefs.converter} className="btn btn-secondary">
+          Reopen same Converter settings
+        </Link>
+        <Link href={workflowHrefs.bundle} className="btn btn-secondary">
+          Bundle output + receipt
+        </Link>
+        {workflowHrefs.donjon ? (
+          <Link href={workflowHrefs.donjon} className="btn btn-secondary">
+            Open output in DONJON
+          </Link>
+        ) : null}
+      </div>
     </section>
   );
 }

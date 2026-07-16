@@ -7,7 +7,11 @@ import {
   MixtureSummary,
   api,
 } from "@/lib/api";
-import { parseMixtures } from "@/lib/convertCommand";
+import {
+  mixtureScopeSelection,
+  normalizeMixtureScope,
+  toggleMixtureScope,
+} from "@/lib/convertMixtureScope";
 
 type LoadState =
   | { kind: "idle" }
@@ -25,7 +29,22 @@ export default function MixturePicker({
   onChange: (value: string) => void;
 }) {
   const [state, setState] = useState<LoadState>({ kind: "idle" });
-  const selected = useMemo(() => new Set(parseMixtures(value) ?? []), [value]);
+  const mixtures = state.kind === "ok" ? state.data.mixtures : [];
+  const mixtureNames = useMemo(
+    () =>
+      state.kind === "ok"
+        ? state.data.mixtures.map((mixture) => mixture.name)
+        : [],
+    [state],
+  );
+  // The Converter contract deliberately uses an empty filter to mean
+  // "all mixtures". Treat that as a real selection state in the UI so a
+  // user never sees 0/N selected while the command is about to write N/N.
+  const scope = useMemo(
+    () => mixtureScopeSelection(value, mixtureNames),
+    [value, mixtureNames],
+  );
+  const { allByDefault: allSelectedByDefault, selected, selectedCount } = scope;
 
   useEffect(() => {
     setState({ kind: "idle" });
@@ -46,18 +65,12 @@ export default function MixturePicker({
   }
 
   function setSelected(names: Iterable<string>) {
-    onChange(Array.from(names).join("\n"));
+    onChange(normalizeMixtureScope(names, mixtureNames));
   }
 
   function toggle(name: string) {
-    const next = new Set(selected);
-    if (next.has(name)) next.delete(name);
-    else next.add(name);
-    setSelected(next);
+    onChange(toggleMixtureScope(value, name, mixtureNames));
   }
-
-  const mixtures = state.kind === "ok" ? state.data.mixtures : [];
-  const selectedCount = mixtures.filter((mixture) => selected.has(mixture.name)).length;
 
   return (
     <div className="space-y-3">
@@ -74,10 +87,10 @@ export default function MixturePicker({
           <>
             <button
               type="button"
-              onClick={() => setSelected(mixtures.map((mixture) => mixture.name))}
+              onClick={() => onChange("")}
               className="btn btn-secondary"
             >
-              Select all
+              Use all (default)
             </button>
             <button
               type="button"
@@ -88,21 +101,20 @@ export default function MixturePicker({
             >
               Fissionable only
             </button>
-            <button
-              type="button"
-              onClick={() => onChange("")}
-              className="btn btn-secondary"
-            >
-              Clear
-            </button>
             <span className="text-[12px] text-[var(--fg-3)] tab-num">
               {selectedCount} / {mixtures.length} selected
+              {allSelectedByDefault ? " · default scope" : " · explicit subset"}
             </span>
           </>
         ) : null}
       </div>
 
-      <LoadStateView state={state} selected={selected} onToggle={toggle} />
+      <LoadStateView
+        state={state}
+        selected={selected}
+        allSelectedByDefault={allSelectedByDefault}
+        onToggle={toggle}
+      />
     </div>
   );
 }
@@ -110,10 +122,12 @@ export default function MixturePicker({
 function LoadStateView({
   state,
   selected,
+  allSelectedByDefault,
   onToggle,
 }: {
   state: LoadState;
   selected: Set<string>;
+  allSelectedByDefault: boolean;
   onToggle: (name: string) => void;
 }) {
   if (state.kind === "idle") {
@@ -160,7 +174,7 @@ function LoadStateView({
           <MixtureChip
             key={mixture.name}
             mixture={mixture}
-            active={selected.has(mixture.name)}
+            active={allSelectedByDefault || selected.has(mixture.name)}
             onClick={() => onToggle(mixture.name)}
           />
         ))}

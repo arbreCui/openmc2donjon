@@ -9,7 +9,7 @@ import {
 } from "./convertChecks";
 
 describe("convertChecks", () => {
-  it("defaults the converter form to the production contract", () => {
+  it("defaults the converter form to the formal production gate", () => {
     expect(CONVERT_CHECKS_DEFAULTS).toEqual({ check: true, production: true });
     expect(
       convertChecksLevel(
@@ -42,6 +42,11 @@ describe("convertChecks", () => {
       "--production",
     );
     expect(convertChecksLevelDescription("standard")).toContain("--check");
-    expect(convertChecksLevelDescription("none")).toContain("dry run");
+    expect(convertChecksLevelDescription("standard")).toContain(
+      "not production acceptance",
+    );
+    expect(convertChecksLevelDescription("none")).toContain(
+      "not production accepted",
+    );
   });
 });

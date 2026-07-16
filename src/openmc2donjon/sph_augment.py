@@ -15,6 +15,10 @@ import numpy as np
 from . import __version__
 from .constants import MGXS_DONJON_GROUP_ORDER
 from .hdf5_names import read_mixture_names
+from .openmc_provenance import (
+    provenance_before_hdf5_mutation,
+    refresh_openmc_provenance_after_hdf5_mutation,
+)
 
 
 SCHEMA = "openmc2donjon.sph-augment.v1"
@@ -291,6 +295,7 @@ def augment_hdf5_with_sph(
     with h5py.File(input_h5, "r") as h5:
         mixture_names = _input_mixture_names(h5)
         ngroups = _energy_groups(h5)
+    openmc_provenance = provenance_before_hdf5_mutation(input_h5)
 
     loaded = load_sph_source(
         sph_source,
@@ -321,6 +326,10 @@ def augment_hdf5_with_sph(
             sph_source=sph_source,
             sph_source_label=sph_source_label,
         )
+    refresh_openmc_provenance_after_hdf5_mutation(
+        output_h5,
+        openmc_provenance,
+    )
 
     report = SphAugmentReport(
         input_h5=input_h5,

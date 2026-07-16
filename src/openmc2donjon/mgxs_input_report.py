@@ -29,6 +29,8 @@ class InputReport:
     declared_mixture_order: bool = False
     source_domain_indices: int = 0
     source_domain_metadata: int = 0
+    openmc_provenance: dict[str, object] | None = None
+    openmc_provenance_status: str | None = None
     stateful_mixtures: int = 0
     state_points: int = 1
     calculations: int = 0
@@ -53,6 +55,10 @@ class InputReport:
     adf_mixtures: int = 0
     adf_faces: list[str] = field(default_factory=list)
     sph_calculations: int = 0
+    sph_applied: bool = False
+    sph_applied_source: str | None = None
+    sph_apply_operator: str | None = None
+    sph_kind: str | None = None
     scatter_row_balance_checked: bool = False
     scatter_row_balance_warn_threshold: float | None = None
     scatter_row_balance_fail_threshold: float | None = None
@@ -60,6 +66,7 @@ class InputReport:
     scatter_row_balance_max_rel: float | None = None
     scatter_row_balance_worst: str | None = None
     chi_checked: int = 0
+    chi_sum_tolerance: float | None = None
     chi_sum_max_abs_error: float | None = None
     chi_sum_worst: str | None = None
     nu_ratio_checked_bins: int = 0
@@ -70,6 +77,7 @@ class InputReport:
     adf_face_consistency_checked: bool = False
     adf_face_consistency_errors: int = 0
     transport_p1_checked: int = 0
+    transport_p1_fail_threshold: float | None = None
     transport_p1_max_abs: float | None = None
     transport_p1_max_rel: float | None = None
     transport_p1_worst: str | None = None
@@ -153,6 +161,28 @@ def print_report(report: InputReport) -> None:
         f"source_domain_index={report.source_domain_indices}/{report.mixtures} "
         f"source_domain_metadata={report.source_domain_metadata}/{report.mixtures}"
     )
+    if report.openmc_provenance_status is not None:
+        capabilities = (
+            report.openmc_provenance.get("capabilities", {})
+            if report.openmc_provenance is not None
+            else {}
+        )
+        reference_bound = (
+            capabilities.get("reference_bound", False)
+            if isinstance(capabilities, dict)
+            else False
+        )
+        transport_reproducible = (
+            capabilities.get("transport_reproducible", False)
+            if isinstance(capabilities, dict)
+            else False
+        )
+        print(
+            "        openmc_provenance="
+            f"{report.openmc_provenance_status} "
+            f"reference_bound={str(bool(reference_bound)).lower()} "
+            f"transport_reproducible={str(bool(transport_reproducible)).lower()}"
+        )
     if report.burnup_axis_path:
         print(
             "        burnup_axis="
@@ -240,6 +270,7 @@ def _report_payload(report: InputReport) -> dict[str, object]:
         "declared_mixture_order": report.declared_mixture_order,
         "source_domain_indices": report.source_domain_indices,
         "source_domain_metadata": report.source_domain_metadata,
+        "openmc_provenance": report.openmc_provenance,
         "stateful_mixtures": report.stateful_mixtures,
         "state_points": report.state_points,
         "calculations": report.calculations,
@@ -271,6 +302,7 @@ def _report_payload(report: InputReport) -> dict[str, object]:
         },
         "physics_checks": {
             "chi_checked": report.chi_checked,
+            "chi_sum_tolerance": report.chi_sum_tolerance,
             "chi_sum_max_abs_error": report.chi_sum_max_abs_error,
             "chi_sum_worst": report.chi_sum_worst,
             "nu_ratio_checked_bins": report.nu_ratio_checked_bins,
@@ -281,6 +313,7 @@ def _report_payload(report: InputReport) -> dict[str, object]:
             "adf_face_consistency_checked": report.adf_face_consistency_checked,
             "adf_face_consistency_errors": report.adf_face_consistency_errors,
             "transport_p1_checked": report.transport_p1_checked,
+            "transport_p1_fail_threshold": report.transport_p1_fail_threshold,
             "transport_p1_max_abs": report.transport_p1_max_abs,
             "transport_p1_max_rel": report.transport_p1_max_rel,
             "transport_p1_worst": report.transport_p1_worst,
@@ -312,6 +345,10 @@ def _report_payload(report: InputReport) -> dict[str, object]:
         "adf_mixtures": report.adf_mixtures,
         "adf_faces": report.adf_faces,
         "sph_calculations": report.sph_calculations,
+        "sph_applied": report.sph_applied,
+        "sph_applied_source": report.sph_applied_source,
+        "sph_apply_operator": report.sph_apply_operator,
+        "sph_kind": report.sph_kind,
         "issues": report.issues,
         "warnings": report.warnings,
     }

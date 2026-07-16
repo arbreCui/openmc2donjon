@@ -64,6 +64,16 @@ describe("equivalenceOptionsForKindSwitch", () => {
     );
     expect(fromOpenmc.sphSource).toBe("/runs/case/openmc_sph.h5");
 
+    const toApply = equivalenceOptionsForKindSwitch(
+      {
+        ...defaultEquivalenceOptions("openmc-sph-sidecar"),
+        outputPath: "/runs/case/openmc_sph.h5",
+      },
+      "apply-sph",
+    );
+    expect(toApply.sphSource).toBe("/runs/case/openmc_sph.h5");
+    expect(toApply.outputPath).toBe("mgxs_sph_applied.h5");
+
     const fromGeneric = equivalenceOptionsForKindSwitch(
       {
         ...defaultEquivalenceOptions("sph-sidecar"),

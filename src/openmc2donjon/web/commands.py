@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from ..commands import adf, diagnostics, sph, web as web_commands
+from ..commands import adf, component, diagnostics, sph, web as web_commands
 
 
 COMMANDS_SCHEMA = "openmc2donjon.commands.v1"
@@ -69,8 +69,13 @@ GROUPS: tuple[CommandGroup, ...] = (
     ),
     CommandGroup(
         "sph",
-        "OpenMC-side SPH equivalence",
-        "Create and inject SPH factors produced from OpenMC CE/MG equivalence.",
+        "Physical SPH equivalence",
+        "Validate native DRAGON SPH or use optional OpenMC MG-side factor tools.",
+    ),
+    CommandGroup(
+        "project",
+        "Component and project coordination",
+        "Assemble accepted component types and map them onto a declared downstream model.",
     ),
     CommandGroup(
         "package",
@@ -111,12 +116,26 @@ GROUP_GUIDANCE: dict[str, CommandGuidance] = {
     ),
     "sph": CommandGuidance(
         use_when=(
-            "You already have SPH factors from OpenMC CE/MG equivalence "
-            "and need to carry them to DONJON."
+            "Your fine OpenMC reference and declared DRAGON/DONJON coarse model "
+            "require a physical equivalence calculation."
         ),
-        produces="SPH sidecars and SPH-augmented HDF5 handoffs.",
+        produces="Native-SPH validation evidence or optional SPH sidecar artifacts.",
         next_step=(
-            "Augment the HDF5 with the sidecar, then return to direct conversion."
+            "Use the accepted corrected MACROLIB in DONJON; keep component and full-core acceptance separate."
+        ),
+    ),
+    "project": CommandGuidance(
+        use_when=(
+            "Your required components have independent accepted native-SPH evidence "
+            "and are ready to enter a batch, lattice, or full-core model."
+        ),
+        produces=(
+            "A hash-linked component MACROLIB or an explicit position-expanded "
+            "MACROLIB that preserves the accepted component records exactly."
+        ),
+        next_step=(
+            "Run the declared downstream SN/SPN model and apply its independent "
+            "k-effective, leakage, and power-shape acceptance criteria."
         ),
     ),
     "package": CommandGuidance(
@@ -439,6 +458,38 @@ DETAILS: dict[str, CommandDetail] = {
             "the final sidecar before DONJON conversion."
         ),
     ),
+    "validate-native-sph": CommandDetail(
+        group="sph",
+        title="Validate native DRAGON SPH closure",
+        summary=(
+            "Audit the OpenMC fine reference, Converter reference MACROLIB, "
+            "native DRAGON SPH convergence, and DONJON verification result."
+        ),
+        status="partial",
+        status_label="Command builder ready",
+        web_path="/builder?command=validate-native-sph",
+        cli=(
+            "openmc2donjon validate-native-sph reference.h5 "
+            "--reference-macrolib reference.macrolib.txt "
+            "--sph-macrolib native_sph.macrolib.txt "
+            "--verify-macrolib verify.macrolib.txt "
+            "--result-listing donjon.result --execution-deck native_sph.x2m "
+            "--summary-json physics_summary.json"
+        ),
+        tags=("SPH", "DRAGON", "DONJON", "physics validation"),
+        use_when=(
+            "You ran native DRAGON SPH on the project-declared coarse geometry "
+            "and need an auditable physical/statistical acceptance decision."
+        ),
+        produces=(
+            "A physics_summary.json linking the reference, corrected MACROLIB, "
+            "verification solve, convergence, balance, and eigenvalue gates."
+        ),
+        next_step=(
+            "If every gate passes, use the corrected MACROLIB in the matching "
+            "DONJON model; do not relabel a component pass as full-core acceptance."
+        ),
+    ),
     "augment-sph": CommandDetail(
         group="sph",
         title="Augment with SPH factors",
@@ -522,6 +573,41 @@ DETAILS: dict[str, CommandDetail] = {
         web_path="/pygan",
         cli="openmc2donjon compare-writers mgxs_library.h5 --format multicompo",
         tags=("PyGan", "validation", "writer"),
+    ),
+    "assemble-component-library": CommandDetail(
+        group="project",
+        title="Assemble accepted component library",
+        summary=(
+            "Select target records only from production-ready native-SPH "
+            "MACROLIBs and assemble the downstream component types."
+        ),
+        status="partial",
+        status_label="Command builder ready",
+        web_path="/builder?command=assemble-component-library",
+        cli=(
+            "openmc2donjon assemble-component-library "
+            "--component FUEL=fuel_sph.macrolib.txt::FUEL "
+            "--physics-summary FUEL=physics_summary.json "
+            "-o components.macrolib.txt --summary-json components.json"
+        ),
+        tags=("Project", "components", "native SPH", "MACROLIB"),
+    ),
+    "expand-component-library": CommandDetail(
+        group="project",
+        title="Map components to model positions",
+        summary=(
+            "Copy accepted component records onto an explicit consumer position "
+            "map without averaging, fitting, or rerunning SPH."
+        ),
+        status="partial",
+        status_label="Command builder ready",
+        web_path="/builder?command=expand-component-library",
+        cli=(
+            "openmc2donjon expand-component-library components.macrolib.txt "
+            "--library-summary components.json --position R0P00=FUEL "
+            "-o positions.macrolib.txt --summary-json positions.json"
+        ),
+        tags=("Project", "position map", "full core", "MACROLIB"),
     ),
     "serve": CommandDetail(
         group="web",
@@ -657,6 +743,7 @@ def _cli_specs() -> tuple[Any, ...]:
     return (
         *adf.command_specs(),
         *sph.command_specs(),
+        *component.command_specs(),
         *diagnostics.command_specs(),
         *web_commands.command_specs(),
     )

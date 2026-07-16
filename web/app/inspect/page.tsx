@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import {
   ApiError,
   HandoffInspection,
@@ -24,6 +25,9 @@ import ScatterHeatmap, {
   type Scale as ScatterScale,
 } from "@/components/inspect/ScatterHeatmap";
 import Summary from "@/components/inspect/Summary";
+import { FormStep, WorkflowPageHeader } from "@/components/ui/Workflow";
+import ProjectAcceptance from "@/components/ProjectAcceptance";
+import { projectCoreHref, projectRootFromSearchParams } from "@/lib/projectWorkspace";
 
 const FALLBACK_PLACEHOLDER = "/path/to/mgxs_library.h5";
 
@@ -89,8 +93,8 @@ export default function InspectPage() {
 
 function InspectLoading() {
   return (
-    <main className="min-h-[calc(100vh-3.5rem)] px-6 py-12">
-      <div className="mx-auto max-w-5xl">
+    <main className="app-page">
+      <div className="app-container max-w-5xl">
         <section className="glass rounded-xl p-5 text-sm text-[var(--fg-2)]">
           Loading inspector…
         </section>
@@ -101,8 +105,10 @@ function InspectLoading() {
 
 function InspectPageContent() {
   const searchParams = useSearchParams();
+  const projectRoot = projectRootFromSearchParams(searchParams);
+  const acceptanceMode = searchParams.get("mode") === "acceptance";
   const queryPath = searchParams.get("path") ?? "";
-  const [path, setPath] = useState("");
+  const [path, setPath] = useState(queryPath);
   const [state, setState] = useState<State>({ kind: "idle" });
   const [selectedMixture, setSelectedMixture] = useState<string | null>(null);
   const [mixtureState, setMixtureState] = useState<MixtureState>({
@@ -132,6 +138,7 @@ function InspectPageContent() {
   // explicit "Use saved prefix" button below the form copies the saved
   // value into the input when the user actually wants to save typing.
   const placeholder = savedPrefix || FALLBACK_PLACEHOLDER;
+  const hasPath = path.trim().length > 0;
   const canUseSavedPrefix =
     settingsHydrated && savedPrefix !== "" && !path.startsWith(savedPrefix);
 
@@ -234,51 +241,96 @@ function InspectPageContent() {
   }, [state, selectedMixture, scatterMoment, scatterFetchToken]);
 
   return (
-    <main className="min-h-[calc(100vh-3.5rem)] px-6 py-12">
-      <div className="mx-auto max-w-5xl">
-        <header className="mb-8">
-          <h1 className="text-3xl font-bold tracking-tight">
-            <span className="grad-text">Inspect HDF5 handoff</span>
-          </h1>
-          <p className="mt-2 text-sm text-[var(--fg-2)]">
-            Read an MGXS HDF5 file produced by{" "}
-            <code className="font-mono">openmc2donjon-export</code> or{" "}
-            <code className="font-mono">openmc2donjon-from-openmc</code> and
-            show its file-level summary, mixture roster, and per-mixture
-            reaction-rate spectrum.
-          </p>
-        </header>
+    <main className="app-page">
+      <div className="app-container max-w-5xl">
+        <WorkflowPageHeader
+          step={acceptanceMode ? "Acceptance" : "Inspect"}
+          eyebrow={acceptanceMode ? "Project acceptance" : "Read-only HDF5 inspection"}
+          title={acceptanceMode ? "Close the project with evidence" : "Inspect and visualize an OpenMC HDF5"}
+          description={acceptanceMode ? "Review the components, input contracts, Converter receipts, consumer runs, and independent validation criteria declared by this project. Raw HDF5 inspection remains available below for diagnosis." : "Use Inspect by itself: open an HDF5 read-only, see its root attributes and top-level entries, and—when it follows the MGXS handoff schema—visualize mixtures, reaction spectra, and scattering moments. Embedded OpenMC provenance is shown when present. Nothing is converted or written."}
+          input={acceptanceMode ? "Manifest-driven project + project-specific references" : "One local HDF5; MGXS handoff or generic OpenMC HDF5"}
+          output={acceptanceMode ? "Auditable acceptance decision" : "Read-only structure, metadata, provenance, spectra, and scatter views"}
+          actions={
+            <Link
+              href={
+                acceptanceMode
+                  ? projectRoot
+                    ? projectCoreHref(projectRoot)
+                    : "/projects"
+                  : "/convert"
+              }
+              className="btn btn-secondary"
+            >
+              {acceptanceMode
+                ? projectRoot
+                  ? "Review declared consumer"
+                  : "Choose project"
+                : "Converter (optional)"}
+            </Link>
+          }
+        />
 
-        <form
-          className="glass rounded-xl p-4 flex flex-col sm:flex-row sm:items-stretch gap-3"
-          onSubmit={inspect}
+        {acceptanceMode ? <ProjectAcceptance projectRoot={projectRoot} /> : null}
+
+        <details className="rounded-xl border border-[var(--edge)] bg-black/10 p-3" open={!acceptanceMode}>
+          <summary className="cursor-pointer text-[12px] font-semibold text-[var(--fg-2)]">
+            {acceptanceMode ? "Diagnostic: inspect one HDF5 artifact" : "HDF5 inspector"}
+          </summary>
+          <div className="mt-4">
+
+        <FormStep
+          number="A"
+          title="Choose one HDF5 artifact"
+          description="Start at file level. After the summary loads, choose a mixture to reveal spectra and scattering details."
+          className="surface"
         >
-          <input
-            type="text"
-            placeholder={placeholder}
-            value={path}
-            onChange={(e) => setPath(e.target.value)}
-            className="flex-1 min-w-0 px-3 py-2 rounded-md border border-[var(--edge)] bg-[rgba(255,255,255,0.03)] text-[var(--fg-0)] font-mono text-sm focus:outline-none focus:border-[var(--accent)]"
-            spellCheck={false}
-            autoComplete="off"
-            aria-label="HDF5 handoff path"
-          />
-          <button
-            type="button"
-            onClick={() => setBrowserOpen(true)}
-            className="btn btn-secondary"
+          <form
+            className="flex flex-col gap-3 sm:flex-row sm:items-stretch"
+            onSubmit={inspect}
           >
-            Browse…
-          </button>
-          <button
-            ref={inspectButtonRef}
-            type="submit"
-            className="btn btn-primary"
-            disabled={state.kind === "loading"}
-          >
-            {state.kind === "loading" ? "Reading…" : "Inspect"}
-          </button>
-        </form>
+            <input
+              type="text"
+              placeholder={placeholder}
+              value={path}
+              onChange={(e) => setPath(e.target.value)}
+              className="min-w-0 flex-1 rounded-md border border-[var(--edge)] bg-[rgba(255,255,255,0.03)] px-3 py-2 font-mono text-sm text-[var(--fg-0)] focus:border-[var(--accent)] focus:outline-none"
+              spellCheck={false}
+              autoComplete="off"
+              aria-label="HDF5 file path"
+            />
+            <button
+              type="button"
+              onClick={() => setBrowserOpen(true)}
+              className={`btn ${hasPath ? "btn-secondary" : "btn-primary"}`}
+            >
+              {hasPath ? "Choose another HDF5" : "Choose HDF5"}
+            </button>
+            <button
+              ref={inspectButtonRef}
+              type="submit"
+              className="btn btn-primary"
+              disabled={!hasPath || state.kind === "loading"}
+            >
+              {state.kind === "loading" ? "Reading…" : "Inspect HDF5"}
+            </button>
+          </form>
+
+          <p className="mt-2 text-[12px] text-[var(--fg-3)]">
+            {hasPath
+              ? "Ready: inspection is read-only and will not change the HDF5."
+              : "Choose or paste one HDF5 file to enable inspection."}
+          </p>
+
+          {canUseSavedPrefix ? (
+            <button
+              type="button"
+              onClick={() => setPath(savedPrefix)}
+              className="btn-link mt-1"
+            >
+              Use saved prefix: <code className="font-mono">{savedPrefix}</code>
+            </button>
+          ) : null}
+        </FormStep>
 
         <FileBrowserModal
           open={browserOpen}
@@ -305,17 +357,6 @@ function InspectPageContent() {
           }}
         />
 
-        {canUseSavedPrefix ? (
-          <button
-            type="button"
-            onClick={() => setPath(savedPrefix)}
-            className="mt-2 text-[12px] text-[var(--accent-2)] hover:underline"
-          >
-            Use saved prefix:{" "}
-            <code className="font-mono">{savedPrefix}</code>
-          </button>
-        ) : null}
-
         <section className="mt-6">
           <FileResultView state={state} />
         </section>
@@ -327,18 +368,22 @@ function InspectPageContent() {
               selectedName={selectedMixture}
               onSelect={handlePickMixture}
             />
-            <MixturePanel
-              handoff={state.data}
-              mixtureState={mixtureState}
-              selectedMixture={selectedMixture}
-              scatterMoment={scatterMoment}
-              scatterScale={scatterScale}
-              onScatterMomentChange={handleScatterMomentChange}
-              onScatterScaleChange={setScatterScale}
-              onScatterRetry={retryScatterFetch}
-            />
+            {state.data.mixtures.length > 0 ? (
+              <MixturePanel
+                handoff={state.data}
+                mixtureState={mixtureState}
+                selectedMixture={selectedMixture}
+                scatterMoment={scatterMoment}
+                scatterScale={scatterScale}
+                onScatterMomentChange={handleScatterMomentChange}
+                onScatterScaleChange={setScatterScale}
+                onScatterRetry={retryScatterFetch}
+              />
+            ) : null}
           </section>
         ) : null}
+          </div>
+        </details>
       </div>
     </main>
   );
@@ -502,7 +547,7 @@ function MixtureErrorBanner({
       <button
         type="button"
         onClick={onRetry}
-        className="text-[12px] text-[var(--accent-2)] hover:underline"
+        className="btn-link"
       >
         Retry P{state.moment}
       </button>

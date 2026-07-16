@@ -27,7 +27,7 @@ export function equivalenceOptionsForKindSwitch(
       next.adfSource = makeOutput;
     } else if (
       (current.kind === "openmc-sph-sidecar" || current.kind === "sph-sidecar") &&
-      kind === "augment-sph"
+      (kind === "apply-sph" || kind === "augment-sph")
     ) {
       next.sphSource = makeOutput;
     }

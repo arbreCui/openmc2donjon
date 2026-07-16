@@ -55,7 +55,7 @@ export default function MixtureTable({
                 {interactive ? (
                   <button
                     type="button"
-                    className="font-mono"
+                    className="inline-flex min-h-9 items-center rounded px-1 font-mono text-[var(--accent-2)] hover:bg-white/[0.05]"
                     aria-pressed={active}
                     onClick={(e) => {
                       e.stopPropagation();

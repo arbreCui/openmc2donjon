@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 from .base import (
@@ -12,6 +13,7 @@ from .base import (
     parser_from_args,
 )
 from ..openmc_sph_sidecar import create_openmc_sph_sidecar
+from ..native_sph_validation import validate_native_sph
 from ..sph_apply import (
     apply_sph_to_openmc_mgxs_hdf5,
     apply_sph_to_hdf5,
@@ -34,6 +36,12 @@ from ..sph_iteration import (
 
 def command_specs() -> tuple[CommandSpec, ...]:
     return (
+        CommandSpec(
+            "validate-native-sph",
+            build_validate_native_sph_parser,
+            validate_native_sph_handler,
+            "validate Converter -> DRAGON native SPH -> DONJON evidence",
+        ),
         CommandSpec(
             "make-openmc-sph-sidecar",
             build_make_openmc_sph_sidecar_parser,
@@ -65,6 +73,49 @@ def command_specs() -> tuple[CommandSpec, ...]:
             "inject SPH factors into an MGXS HDF5 handoff",
         ),
     )
+
+
+def build_validate_native_sph_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="openmc2donjon validate-native-sph",
+        description=(
+            "Validate a physical OpenMC CE -> Converter -> DRAGON SPH -> "
+            "DONJON SN/SPN handoff using reaction-rate balance, native SPH "
+            "convergence, and OpenMC keff uncertainty."
+        ),
+    )
+    parser.add_argument("reference_h5", type=Path, help="component MGXS HDF5 reference")
+    parser.add_argument("--reference-macrolib", type=Path, required=True)
+    parser.add_argument("--sph-macrolib", type=Path, required=True)
+    parser.add_argument("--verify-macrolib", type=Path, required=True)
+    parser.add_argument("--result-listing", type=Path, required=True)
+    parser.add_argument(
+        "--execution-deck",
+        type=Path,
+        default=None,
+        help=(
+            "exact CLE-2000 deck echoed by the result listing; required to "
+            "prove that ADF and empirical eigenvalue multipliers were absent"
+        ),
+    )
+    parser.add_argument("--energy-coverage", type=Path, default=None)
+    parser.add_argument(
+        "--converter-receipt",
+        type=Path,
+        default=None,
+        help=(
+            "hash-linked openmc2donjon.convert.v1 receipt for the reference "
+            "HDF5 -> reference MACROLIB conversion; required for acceptance"
+        ),
+    )
+    parser.add_argument(
+        "--max-keff-sigma",
+        type=float,
+        default=2.0,
+        help="maximum absolute OpenMC standard deviations for eigenvalue gates",
+    )
+    parser.add_argument("--summary-json", type=Path, required=True)
+    return parser
 
 
 def build_make_openmc_sph_sidecar_parser() -> argparse.ArgumentParser:
@@ -161,6 +212,16 @@ def build_make_openmc_sph_sidecar_parser() -> argparse.ArgumentParser:
             "update table and diagnostics) whose SPH is frozen at the "
             "previous value for all mixtures, e.g. 31 or 30,31 "
             "(default: none)"
+        ),
+    )
+    parser.add_argument(
+        "--tie-mixtures",
+        action="append",
+        default=None,
+        metavar="MIX1,MIX2,...",
+        help=(
+            "declare a physical symmetry/equivalence class whose mixtures share "
+            "one pooled SPH update; repeat for disjoint classes"
         ),
     )
     parser.add_argument(
@@ -600,6 +661,20 @@ def _parse_freeze_groups(raw: str | None) -> tuple[int, ...] | None:
         raise ValueError("--freeze-groups must be comma-separated integers") from exc
 
 
+def _parse_tie_mixture_groups(
+    raw_groups: list[str] | None,
+) -> tuple[tuple[str, ...], ...] | None:
+    if raw_groups is None:
+        return None
+    groups: list[tuple[str, ...]] = []
+    for raw in raw_groups:
+        group = tuple(item.strip() for item in str(raw).split(",") if item.strip())
+        if len(group) < 2:
+            raise ValueError("--tie-mixtures must list at least two mixture names")
+        groups.append(group)
+    return tuple(groups)
+
+
 def make_openmc_sph_sidecar_handler(args: argparse.Namespace) -> int:
     parser = parser_from_args(args)
     try:
@@ -618,6 +693,7 @@ def make_openmc_sph_sidecar_handler(args: argparse.Namespace) -> int:
             zero_flux_policy=args.zero_flux_policy,
             flux_floor_rel=args.flux_floor_rel,
             freeze_groups=_parse_freeze_groups(args.freeze_groups),
+            tie_mixture_groups=_parse_tie_mixture_groups(args.tie_mixtures),
             require_reference_flux_std_dev=args.require_reference_flux_std_dev,
             max_reference_flux_std_dev_rel=args.max_reference_flux_std_dev_rel,
             require_mg_flux_std_dev=args.require_mg_flux_std_dev,
@@ -632,3 +708,30 @@ def make_openmc_sph_sidecar_handler(args: argparse.Namespace) -> int:
     except USER_FACING_EXCEPTIONS as exc:
         exit_with_command_error(parser, "make-openmc-sph-sidecar", exc)
     return 0
+
+
+def print_native_sph_validation(payload: dict[str, object]) -> None:
+    """Render the native-SPH validation result as the CLI JSON result."""
+
+    print(json.dumps(payload, indent=2, sort_keys=True))
+
+
+def validate_native_sph_handler(args: argparse.Namespace) -> int:
+    parser = parser_from_args(args)
+    try:
+        payload = validate_native_sph(
+            args.reference_h5,
+            args.reference_macrolib,
+            args.sph_macrolib,
+            args.verify_macrolib,
+            args.result_listing,
+            output_json=args.summary_json,
+            energy_coverage_json=args.energy_coverage,
+            converter_receipt_json=args.converter_receipt,
+            execution_deck=args.execution_deck,
+            max_keff_sigma=args.max_keff_sigma,
+        )
+        print_native_sph_validation(payload)
+    except USER_FACING_EXCEPTIONS as exc:
+        exit_with_command_error(parser, "validate-native-sph", exc)
+    return 0 if payload["quality"]["production_ready"] else 2

@@ -5,11 +5,14 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from .openmc_provenance import OPENMC_PROVENANCE_SCHEMA, provenance_digest
+
 
 FROM_OPENMC_SUMMARY_SCHEMA_V1 = "openmc2donjon.from-openmc-summary.v1"
 FROM_OPENMC_SUMMARY_SCHEMA_V2 = "openmc2donjon.from-openmc-summary.v2"
 FROM_OPENMC_SUMMARY_SCHEMA_V3 = "openmc2donjon.from-openmc-summary.v3"
-FROM_OPENMC_SUMMARY_SCHEMA = "openmc2donjon.from-openmc-summary.v4"
+FROM_OPENMC_SUMMARY_SCHEMA_V4 = "openmc2donjon.from-openmc-summary.v4"
+FROM_OPENMC_SUMMARY_SCHEMA = "openmc2donjon.from-openmc-summary.v5"
 
 FROM_OPENMC_SUMMARY_V1_KEYS = frozenset(
     {
@@ -57,6 +60,14 @@ FROM_OPENMC_SUMMARY_V4_KEYS = FROM_OPENMC_SUMMARY_V3_KEYS | frozenset(
     }
 )
 
+FROM_OPENMC_SUMMARY_V5_KEYS = FROM_OPENMC_SUMMARY_V4_KEYS | frozenset(
+    {
+        "hdf5_sha256",
+        "openmc_provenance",
+        "output_sha256",
+    }
+)
+
 
 def validate_from_openmc_summary(payload: Mapping[str, Any]) -> list[str]:
     """Return schema validation errors for any supported from-OpenMC summary."""
@@ -68,7 +79,9 @@ def validate_from_openmc_summary(payload: Mapping[str, Any]) -> list[str]:
         return validate_from_openmc_summary_v2(payload)
     if schema == FROM_OPENMC_SUMMARY_SCHEMA_V3:
         return validate_from_openmc_summary_v3(payload)
-    return validate_from_openmc_summary_v4(payload)
+    if schema == FROM_OPENMC_SUMMARY_SCHEMA_V4:
+        return validate_from_openmc_summary_v4(payload)
+    return validate_from_openmc_summary_v5(payload)
 
 
 def validate_from_openmc_summary_v1(payload: Mapping[str, Any]) -> list[str]:
@@ -112,11 +125,25 @@ def validate_from_openmc_summary_v4(payload: Mapping[str, Any]) -> list[str]:
 
     return _validate_from_openmc_summary(
         payload,
-        schema=FROM_OPENMC_SUMMARY_SCHEMA,
+        schema=FROM_OPENMC_SUMMARY_SCHEMA_V4,
         keys=FROM_OPENMC_SUMMARY_V4_KEYS,
         validate_check_fields=True,
         validate_std_dev_fields=True,
         validate_fill_fields=True,
+    )
+
+
+def validate_from_openmc_summary_v5(payload: Mapping[str, Any]) -> list[str]:
+    """Return schema validation errors for a provenance-bound v5 summary."""
+
+    return _validate_from_openmc_summary(
+        payload,
+        schema=FROM_OPENMC_SUMMARY_SCHEMA,
+        keys=FROM_OPENMC_SUMMARY_V5_KEYS,
+        validate_check_fields=True,
+        validate_std_dev_fields=True,
+        validate_fill_fields=True,
+        validate_provenance_fields=True,
     )
 
 
@@ -128,6 +155,7 @@ def _validate_from_openmc_summary(
     validate_check_fields: bool,
     validate_std_dev_fields: bool,
     validate_fill_fields: bool = False,
+    validate_provenance_fields: bool = False,
 ) -> list[str]:
     """Return schema validation errors for a from-OpenMC summary payload."""
 
@@ -173,6 +201,10 @@ def _validate_from_openmc_summary(
         _require_int_at_least(errors, payload, "std_dev_dataset_count", 0)
         _require_int_at_least(errors, payload, "std_dev_expected_dataset_count", 0)
         _validate_std_dev_fields(errors, payload)
+    if validate_provenance_fields:
+        _require_sha256(errors, payload, "hdf5_sha256")
+        _require_sha256(errors, payload, "output_sha256")
+        _validate_openmc_provenance(errors, payload)
     return errors
 
 
@@ -312,6 +344,71 @@ def _validate_std_dev_fields(errors: list[str], payload: Mapping[str, Any]) -> N
     expected = payload.get("std_dev_expected_dataset_count")
     if _is_int(present) and _is_int(expected) and present > expected:
         errors.append("std_dev_dataset_count: expected <= std_dev_expected_dataset_count")
+
+
+def _require_sha256(
+    errors: list[str], payload: Mapping[str, Any], key: str
+) -> None:
+    if key not in payload:
+        return
+    value = payload[key]
+    if not isinstance(value, str) or len(value) != 64:
+        errors.append(f"{key}: expected 64-character SHA256 hex string")
+        return
+    try:
+        int(value, 16)
+    except ValueError:
+        errors.append(f"{key}: expected 64-character SHA256 hex string")
+
+
+def _validate_openmc_provenance(
+    errors: list[str], payload: Mapping[str, Any]
+) -> None:
+    value = payload.get("openmc_provenance")
+    if not isinstance(value, Mapping):
+        errors.append("openmc_provenance: expected object")
+        return
+    if value.get("schema") != OPENMC_PROVENANCE_SCHEMA:
+        errors.append(
+            "openmc_provenance.schema: expected "
+            f"{OPENMC_PROVENANCE_SCHEMA!r}"
+        )
+    if value.get("status") not in {"complete", "incomplete"}:
+        errors.append(
+            "openmc_provenance.status: expected complete or incomplete"
+        )
+    digest = value.get("digest_sha256")
+    if not isinstance(digest, str) or len(digest) != 64:
+        errors.append(
+            "openmc_provenance.digest_sha256: expected 64-character SHA256 hex string"
+        )
+    elif digest != provenance_digest(value):
+        errors.append(
+            "openmc_provenance.digest_sha256: does not match provenance content"
+        )
+    artifacts = value.get("artifacts")
+    if not isinstance(artifacts, list):
+        errors.append("openmc_provenance.artifacts: expected list")
+        return
+    by_role = {
+        item.get("role"): item
+        for item in artifacts
+        if isinstance(item, Mapping) and isinstance(item.get("role"), str)
+    }
+    recipe = by_role.get("recipe")
+    if not isinstance(recipe, Mapping) or recipe.get("path") != payload.get("recipe"):
+        errors.append(
+            "openmc_provenance.artifacts: recipe path must match summary recipe"
+        )
+    if payload.get("loaded_statepoint") is True:
+        statepoint = by_role.get("statepoint")
+        if (
+            not isinstance(statepoint, Mapping)
+            or statepoint.get("path") != payload.get("statepoint")
+        ):
+            errors.append(
+                "openmc_provenance.artifacts: statepoint path must match summary statepoint"
+            )
 
 
 def _validate_mixture_count(errors: list[str], payload: Mapping[str, Any]) -> None:

@@ -1,5 +1,5 @@
 export interface AcceptedValidationEntry {
-  id: "c5g7-cartesian" | "irena30-hex" | "openmc-sph-equivalence";
+  id: "c5g7-cartesian" | "irena30-hex";
   label: string;
   title: string;
   body: string;
@@ -18,17 +18,9 @@ export const ACCEPTED_VALIDATION_ENTRIES: readonly AcceptedValidationEntry[] = [
   {
     id: "irena30-hex",
     label: "IRENA-30",
-    title: "ZREFL 91-hex core",
+    title: "ZREFL 91-hex transport baseline",
     body:
-      "DONJON SN8 lands within Monte Carlo statistics of the paired OpenMC reference (-9 pcm at 21 pcm sigma; +29 pcm with a different seed), with per-assembly fission-source shape 1.27% worst / 0.47% RMS.",
-    result: "SN8 -9 pcm",
-  },
-  {
-    id: "openmc-sph-equivalence",
-    label: "SPH",
-    title: "OpenMC-side CE/MG equivalence",
-    body:
-      "OpenMC-side CE/MG SPH with the rate-preserving target is validated to core level on the IRENA Pb-reflector line (prescription: rate target, freeze groups {1, 31}, 2-3 iterations).",
-    result: "core-level validated",
+      "A separate direct-handoff geometry baseline put DONJON SN within Monte Carlo statistics of its paired OpenMC case (-9 pcm at 21 pcm sigma; +29 pcm with a different seed), with 1.27% worst / 0.47% RMS source-shape error. It validates geometry and solver plumbing, not the new colorset-SPH production result.",
+    result: "geometry baseline",
   },
 ] as const;

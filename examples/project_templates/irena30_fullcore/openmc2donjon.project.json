@@ -1,0 +1,73 @@
+{
+  "schema": "openmc2donjon.project.v1",
+  "name": "IRENA-30 strict full-core candidate",
+  "description": "IRENA-specific candidate for a 91-position fine reference and either 91 independent coarse domains or 21 exact D3 orbits pooled during OpenMC transport. This template starts on HOLD and does not represent an accepted IRENA result.",
+  "template": "irena30-fullcore-physical",
+  "workflow": "converter-native-sph-fullcore",
+  "acceptance_mode": "physics-gated",
+  "components": [
+    {
+      "id": "fullcore",
+      "label": "IRENA full-core domain library",
+      "role": "One full-core handoff; domains are declared by the transport model, not by five material labels",
+      "required": true,
+      "input": "fullcore/handoff/mgxs_orbits.h5",
+      "output": "fullcore/handoff/native_sph_24g_p1.macrolib.txt",
+      "receipt": "fullcore/handoff/reference_24g_p1.macrolib.txt.convert.json",
+      "physics_summary": "fullcore/handoff/physics_summary.json",
+      "format": "macrolib",
+      "contract": "native-sph",
+      "native_sph": {
+        "deck": "fullcore/irena30_orbit_fullcore_native_sph.x2m",
+        "working_directory": "fullcore"
+      },
+      "metadata": {
+        "domain_strategy": "d3-orbits-transport-pooled",
+        "fine_positions": 91,
+        "coarse_domains": 21,
+        "node_side_cm": 10.103629710818451,
+        "post_hoc_xs_averaging": false
+      },
+      "evidence": [
+        {
+          "id": "reference",
+          "label": "Converter reference MACROLIB",
+          "path": "fullcore/handoff/reference_24g_p1.macrolib.txt"
+        },
+        {
+          "id": "verification",
+          "label": "DONJON verification MACROLIB",
+          "path": "fullcore/handoff/donjon_verify_24g_p1.macrolib.txt"
+        },
+        {
+          "id": "result",
+          "label": "Native SPH and final transport listing",
+          "path": "fullcore/handoff/native_sph_donjon.result"
+        },
+        {
+          "id": "coverage",
+          "label": "Energy coverage",
+          "path": "fullcore/handoff/energy_coverage_summary.json"
+        },
+        {
+          "id": "position_power",
+          "label": "91-position power comparison",
+          "path": "fullcore/handoff/fullcore_validation.json"
+        }
+      ]
+    }
+  ],
+  "consumer": {
+    "kind": "irena30-donjon-fullcore",
+    "label": "IRENA-30 strict full-core acceptance",
+    "href": "/donjon?mode=irena30-fullcore"
+  },
+  "acceptance": {
+    "decision": "acceptance/decision.json",
+    "validator": {
+      "contract": "irena30-orbit-fullcore-v1",
+      "summary": "fullcore/handoff/fullcore_validation.json",
+      "component": "fullcore"
+    }
+  }
+}

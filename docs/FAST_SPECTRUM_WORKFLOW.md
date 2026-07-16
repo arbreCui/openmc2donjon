@@ -1,92 +1,96 @@
-# Fast-Spectrum Production Workflow
+# IRENA Fast-Spectrum Example Workflow
 
-Fast-reactor cases need two things on top of the standard conversion flow:
-a zero-flux fill before the input contract will accept the export, and —
-when the coarse model must be equivalence-corrected — the rate-preserving
-SPH loop with its fast-spectrum regularization. This page is the standard
-route; the IRENA examples referenced at the bottom are its runnable,
-validated instances.
+This document defines the strict physics contract selected by the IRENA-30
+full-core example manifest. It is not a universal Converter workflow.
+Historical scripts that use local colorsets, post-transport record reuse,
+zero-flux filling, identity substitutions, flux floors, frozen groups, clipping,
+eigenvalue fitting, or a global multiplier remain useful as research records,
+but they do not produce an accepted IRENA full-core result.
 
-## 1. Why the fill exists
+The current qualification unit is one position-resolved full core. The fine
+transport either keeps 91 independent domains or pools tallies on 21 exact
+global D3 symmetry orbits while particles are being transported:
 
-A fast core has exactly zero Monte Carlo flux in the thermal groups of a
-fast group structure (for ECCO-33: the bottom few groups), so their
-flux-weighted tallies are `0/0 -> 0` at any statistics, and near-thermal
-micro-flux bins can tally a positive `total` with a noise-level
-nonpositive `transport_total`. The input contract rightly rejects both.
-The fill substitutes those bins with the exact material data from the MG
-macrolib the case is built around, recording the touched groups in the
-`zero_flux_filled_groups` mixture attribute.
-
-One-step (export, fill, check, convert in a single command):
-
-```sh
-openmc2donjon-from-openmc \
-  --recipe my_recipe.py --statepoint statepoint.h5 \
-  --fill-macrolib macrolib.h5 \
-  --run-dir runs/case --check
+```text
+fine OpenMC CE 91-position full core
+  -> 91 independent domains or 21 exact D3 transport-time tally pools
+  -> Converter reference MACROLIB
+  -> native DRAGON SPH on the matching 91-position coarse geometry
+  -> corrected MACROLIB
+  -> DONJON k-effective, leakage, and 91-position power verification
 ```
 
-The run summary records the fill (`zero_flux_fill_macrolib`,
-`zero_flux_fill_total_bins`; schema v4). The standalone command is
-`openmc2donjon fill-zero-flux` (same semantics, `--label-attr` selects the
-mixture attribute naming the macrolib material).
+Historical IRENA local studies declare colorsets such as `int_ext`, `ext_int`,
+`csd_int`, `dsdf_int`, and `pnl_ext`. These labels and counts are template
+facts, not Converter defaults. They are not the current full-core production
+mapping because identical material labels can occupy different global leakage
+environments.
 
-## 2. Equivalence: the rate-preserving SPH loop
+## 1. Strict full-core SPH contract
 
-When per-region homogenization has a real defect to correct (absorbers,
-reflectors), run the OpenMC-side CE/MG SPH loop with:
+An accepted IRENA full-core handoff must satisfy all of the following:
 
-- `--sph-target rate` — the classic Hebert/DRAGON rate-preserving update.
-  Its fixed point reproduces the CE reaction rates, so the corrected
-  coarse model's k RECOVERS toward the CE reference instead of drifting
-  (measured on the IRENA colorsets: the CSD absorber climbs from
-  -423 pcm back to -78 pcm; the flux target drifts to -860 pcm on the
-  same case). See `examples/irena30_sph_stage2_csd/README.md` for the
-  full numbers.
-- `--zero-flux-policy identity` and `--flux-floor-rel 1e-3` — matched
-  zero bins and micro-flux bins are frozen: don't fit Monte Carlo noise.
-- `--freeze-groups ...` — explicit switch-off for bins with no rate
-  fixed point (chi-driven top groups; the established IRENA CSD practice
-  of disabling group 31).
+- The fine reference contains all 91 physical OpenMC CE positions with exact
+  integrated flux, reaction rates, energy coverage, uncertainty, and boundary
+  leakage evidence.
+- Converter preserves the declared 91-position or 21-orbit transport-time tally
+  mapping and writes the uncorrected reference MACROLIB before SPH.
+- DRAGON native `SPH:` converges on the matching project-declared full-core
+  geometry using SN or SPN as declared by that model.
+- Zero or unusable bins are rejected. Identity substitution, floors, frozen
+  groups, clipping, and ADF are absent.
+- Converter rate balance and final DONJON eigenvalue both pass the predeclared
+  OpenMC-uncertainty gate.
+- Full-core k-effective, leakage, and power are validation observables only; no
+  empirical scalar or fitted global coefficient participates in factor
+  generation.
 
-Validated prescriptions:
+If statistics are insufficient to evaluate a bin, the remedy is better tally
+design, a physically justified energy structure, or more histories. A numerical
+exception is not a physical SPH result.
 
-| Case class | Prescription |
-| --- | --- |
-| Pb reflector (pnl_ext) | rate, freeze {1, 31}, 2-3 iterations |
-| B4C absorber (csd_int) | rate, freeze {1, 2, 31}, >= 8 iterations |
+The local workspace currently has no accepted IRENA full-core physical closure.
+Earlier PNL/EXT and INT/EXT summaries had converged SPH fixed points but
+unconverged final transport solves, so they are retained only as negative
+evidence.
 
-## 3. Getting the factors into DONJON
+## 2. Converter is the controlled boundary
 
-`NCR:` contains no SPH handling — `NSPH` records inside a `L_MULTICOMPO`
-are inert archive metadata (verified against the DONJON sources and
-numerically; see `docs/HDF5_INPUT_CONTRACT.md`). Two routes work:
+Converter first writes the uncorrected `L_MACROLIB` reference from the declared
+component HDF5. DRAGON then solves native SPH and writes the corrected NSPH
+MACROLIB consumed by DONJON. The Converter receipt identifies the exact
+reference input and object; `validate-native-sph` links that reference to the
+SPH and verification artifacts.
 
-1. Root `L_MACROLIB` output: its `GROUP/*/NSPH` records are read by
-   `DSPH:` and applied by `MAC:`.
-2. `openmc2donjon apply-sph`: fold the factors into the cross sections
-   first, then convert to either format for any consumer. The
-   MULTICOMPO + `NCR:` production route requires this pre-application.
+The older OpenMC MG-side `apply-sph` route remains an optional diagnostic or
+alternate project method. It is not the primary IRENA production route.
 
-### Bringing your own DONJON deck
+## 3. Full-core DONJON model
 
-The converter deliberately does not generate DONJON geometry from the
-handoff — the low-order geometry, tracking, and solver are user-supplied
-by design. The web `/donjon` guide turns the converter output path into
-an editable deck skeleton: Cartesian TRIVAT diffusion/SPN, or the
-hexagonal `HEXZ` + `SNT` / TRIVAC `MCFD 1` patterns whose validated
-references are the accepted benchmark decks written by
-`examples/irena30_zrefl_hex/write_donjon_decks.py`. The one contract to
-keep when editing: the `GEO:` MIX numbering must follow the multicompo
-mixture order (the `mixture_names` dataset of the handoff HDF5).
+The IRENA full-core solve is a coarse transport model over 91 physical core
+positions (52 are fuel), not a 91-mixture fit and not 91 fuel assemblies. The
+fine reference keeps all 91 heterogeneous assemblies. It may retain 91
+independent homogenized domains or pool tallies during OpenMC transport on the
+21 exact global D3 symmetry orbits. The older five-material and 13-local-
+signature maps are diagnostic only because they overmerge distinct global
+environments. The downstream solver may be SN or SPN; a special `SN8` choice
+is not part of the general physical contract.
 
-## 4. Runnable, validated instances
+Full-core k-effective, leakage, and power shape are validation observables only.
+They may reveal that the coarse model is inadequate, but they may never be
+used to tune a global SPH coefficient.
 
-- `examples/irena30_zrefl_hex` — the accepted 91-hex benchmark
-  (fill + convert + DONJON SN8; k within Monte Carlo statistics, power
-  shape 1.27 % worst / 0.47 % RMS).
-- `examples/irena30_sph_stage1` — single fissile assembly CE/MG loop
-  (convergence study; damping 0.5 x 4 iterations).
-- `examples/irena30_sph_stage2_csd` — CSD/PNL colorsets
-  (`IRENA_SPH2_CASE`), rate-mode results and core-level closure.
+## 4. Historical evidence
+
+- `examples/irena30_sph_stage2_csd` records the earlier seven-assembly
+  colorset experiments. Its identity/floor/freeze/clip prescriptions are
+  archived and production-rejected; its reproduction runners are guarded and
+  their summaries are permanently marked withdrawn diagnostics.
+- `examples/irena30_sph_stage3_fullcore` records the rejected full-core SPH
+  research line. Its sparse/fill/floor/frozen-group artifacts are not the
+  current full-core input.
+- `examples/irena30_zrefl_hex` remains useful converter/DONJON benchmark
+  evidence. Its older 91-position representation does not prove an accepted
+  five-component physical SPH model.
+- C5G7 ADF validation remains a separate capability. ADF is not part of the
+  IRENA product route described here.

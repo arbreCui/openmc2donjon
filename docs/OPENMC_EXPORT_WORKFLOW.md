@@ -78,13 +78,20 @@ openmc2donjon-from-openmc \
 ```
 
 With `--run-dir`, the command writes `mgxs_library.h5`, `out.mcompo.txt`,
-`run_summary.json`, optional `check_summary.json`, a recipe copy, and
-`manifest.json`. The summary JSON records recipe, statepoint, HDF5, output,
+`run_summary.json`, `openmc_provenance.json`, optional `check_summary.json`, a
+recipe/model-source copy, and `manifest.json`. The summary JSON records recipe,
+statepoint, HDF5, output,
 group count, Legendre order, and mixture names. The summary schema is documented
 in [From-OpenMC summary JSON](FROM_OPENMC_SUMMARY_SCHEMA.md). Existing managed
-run-directory files are refused unless `--force-run-dir` is set. Additional
-production side artifacts can be copied into the same manifest during the
-one-step run:
+run-directory files are refused unless `--force-run-dir` is set.
+
+Before claiming academic replay, declare every model dependency through the
+recipe `provenance_files()` hook and set `input_closure_complete=true` only
+after that list is complete. The final handoff binds both those source hashes
+and a recomputed digest of the actual MGXS HDF5 numerical payload.
+
+Additional production side artifacts can be copied into the same manifest
+during the one-step run:
 
 ```sh
 openmc2donjon-from-openmc \
@@ -436,6 +443,8 @@ Optional recipe hooks:
 | `root_attrs(library)` | Optional. Return root HDF5 attributes such as `domain_mode`. |
 | `scatter_mgxs_type(library)` | Optional. Explicitly select a non-default scattering MGXS type. |
 | `load_statepoint(library, statepoint_path)` | Optional. Override default OpenMC statepoint loading. |
+| `provenance_files(...)` | Optional but strongly recommended. Map stable roles to every Python/XML/CAD/mesh file needed to rebuild the fine model. Small files are copied into a managed run bundle. |
+| `provenance_metadata(...)` | Optional. Record launcher-only facts such as the actual thread and MPI-rank counts. Values must come from the original run receipt, not the current export shell. |
 | `postprocess_hdf5(output_path, library)` | Optional. Add case-specific payloads such as ADF. |
 
 Optional hooks may declare only the arguments they need. Supported argument names

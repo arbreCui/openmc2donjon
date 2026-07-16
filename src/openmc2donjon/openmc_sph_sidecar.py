@@ -42,6 +42,7 @@ def create_openmc_sph_sidecar(
     zero_flux_policy: str = "reject",
     flux_floor_rel: float | None = None,
     freeze_groups: tuple[int, ...] | None = None,
+    tie_mixture_groups: tuple[tuple[str, ...], ...] | None = None,
     require_reference_flux_std_dev: bool = False,
     max_reference_flux_std_dev_rel: float | None = None,
     require_mg_flux_std_dev: bool = False,
@@ -86,6 +87,7 @@ def create_openmc_sph_sidecar(
         zero_flux_policy=zero_flux_policy,
         flux_floor_rel=flux_floor_rel,
         freeze_groups=freeze_groups,
+        tie_mixture_groups=tie_mixture_groups,
         require_reference_flux_std_dev=require_reference_flux_std_dev,
         max_reference_flux_std_dev_rel=max_reference_flux_std_dev_rel,
         require_low_order_flux_std_dev=require_mg_flux_std_dev,
@@ -104,6 +106,7 @@ def create_openmc_sph_sidecar(
         sph_applied=sph_applied,
         summary_json=None,
     )
+    _write_physics_provenance(output_h5, update)
     report = OpenmcSphSidecarReport(
         input_h5=input_h5,
         output_h5=output_h5,
@@ -117,6 +120,38 @@ def create_openmc_sph_sidecar(
     if summary_json is not None:
         write_summary(summary_json, report)
     return report
+
+
+def _write_physics_provenance(path: Path, update: SphUpdateTableReport) -> None:
+    """Persist the derivation and convergence evidence beside the factors."""
+
+    import h5py
+
+    raw_minimum = float(update.raw_update_minimum)
+    raw_maximum = float(update.raw_update_maximum)
+    max_residual = max(abs(raw_minimum - 1.0), abs(raw_maximum - 1.0))
+    derivation = (
+        "rate-preserving-ce-mg-fixed-point"
+        if update.sph_target == "rate"
+        else "ce-mg-flux-fixed-point"
+    )
+    with h5py.File(path, "r+") as h5:
+        h5.attrs["sph_derivation"] = derivation
+        h5.attrs["sph_target"] = update.sph_target
+        h5.attrs["sph_raw_update_minimum"] = raw_minimum
+        h5.attrs["sph_raw_update_maximum"] = raw_maximum
+        h5.attrs["sph_max_update_residual"] = max_residual
+        h5.attrs["sph_flux_normalization"] = update.flux_normalization
+        h5.attrs["sph_zero_flux_policy"] = update.zero_flux_policy
+        h5.attrs["sph_identity_bin_count"] = update.identity_bin_count
+        h5.attrs["sph_floored_bin_count"] = update.floored_bin_count
+        h5.attrs["sph_frozen_group_bin_count"] = update.frozen_group_bin_count
+        h5.attrs["sph_tie_mixture_groups"] = json.dumps(
+            [list(group) for group in update.tie_mixture_groups],
+            separators=(",", ":"),
+        )
+        h5.attrs["sph_tied_bin_count"] = update.tied_bin_count
+        h5.attrs["sph_clipped_count"] = update.clipped_count
 
 
 def print_report(report: OpenmcSphSidecarReport) -> None:
@@ -176,6 +211,8 @@ def write_summary(path: Path, report: OpenmcSphSidecarReport) -> None:
         if report.update.freeze_groups is None
         else list(report.update.freeze_groups),
         "frozen_group_bin_count": report.update.frozen_group_bin_count,
+        "tie_mixture_groups": [list(group) for group in report.update.tie_mixture_groups],
+        "tied_bin_count": report.update.tied_bin_count,
         "normalization_factor": report.update.normalization_factor,
         "sph_min": report.sidecar.sph_min,
         "sph_max": report.sidecar.sph_max,

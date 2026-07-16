@@ -1,373 +1,333 @@
-"use client";
-
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
-import type { AcceptedValidationEntry } from "@/lib/acceptedValidation";
-import { ACCEPTED_VALIDATION_ENTRIES } from "@/lib/acceptedValidation";
-import { ApiError, HealthResponse, api } from "@/lib/api";
-import type { DemoShortcut } from "@/lib/demoShortcuts";
-import { HOME_DEMO_SHORTCUTS } from "@/lib/demoShortcuts";
-import { HOME_HERO } from "@/lib/homeHero";
-import type { TaskEntrypoint } from "@/lib/taskEntrypoints";
-import { TASK_ENTRYPOINTS } from "@/lib/taskEntrypoints";
-
-type Status =
-  | { kind: "idle" }
-  | { kind: "loading" }
-  | { kind: "ok"; data: HealthResponse }
-  | { kind: "error"; message: string };
+import ConverterQuickStart from "@/components/ConverterQuickStart";
+import { HOME_FLOW, HOME_HERO } from "@/lib/homeHero";
 
 export default function Home() {
-  const [status, setStatus] = useState<Status>({ kind: "idle" });
-
-  const refresh = useCallback(async () => {
-    setStatus({ kind: "loading" });
-    try {
-      const data = await api.health();
-      setStatus({ kind: "ok", data });
-    } catch (err) {
-      const message =
-        err instanceof ApiError
-          ? `${err.message}`
-          : err instanceof Error
-            ? err.message
-            : "Unknown error";
-      setStatus({ kind: "error", message });
-    }
-  }, []);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
   return (
-    <main className="min-h-screen px-6 py-12">
-      <div className="mx-auto max-w-6xl">
-        <header className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
-              {HOME_HERO.kicker}
+    <main className="app-page">
+      <div className="app-container">
+        <section className="grid gap-8 border-b border-[var(--edge)] pb-10 xl:grid-cols-[minmax(0,1fr)_430px] xl:items-center">
+          <div className="py-2">
+            <p className="page-kicker">{HOME_HERO.kicker}</p>
+            <h1 className="page-title">{HOME_HERO.heading}</h1>
+            <p className="page-description text-base">{HOME_HERO.paragraph}</p>
+            <p className="mt-3 max-w-3xl text-[12px] leading-5 text-[var(--fg-3)]">
+              {HOME_HERO.supporting}
             </p>
-            <h1 className="mt-2 text-4xl font-bold tracking-tight">
-              <span className="grad-text">{HOME_HERO.heading}</span>
-            </h1>
-            <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
-              {HOME_HERO.paragraph}
-            </p>
+            <ProductFlow />
           </div>
-          <Link
-            href="/convert?intent=direct-convert&format=multicompo"
-            className="btn btn-primary shrink-0"
-          >
-            Start converter
-          </Link>
-        </header>
+          <ConverterQuickStart />
+        </section>
 
-        <div className="grid gap-5 xl:grid-cols-[1fr_340px]">
-          <div className="space-y-5">
-            <StartHere entries={TASK_ENTRYPOINTS} />
-            <AcceptedValidation entries={ACCEPTED_VALIDATION_ENTRIES} />
-            <AfterYouConvert />
+        <ProductArchitecture />
+        <StartingPoints />
+
+        <section className="mt-10 border-t border-[var(--edge)] pt-6">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px]">
+            <span className="font-bold text-[var(--fg-1)]">Supporting tools</span>
+            <Link href="/commands" className="inline-flex min-h-10 items-center rounded-lg px-2 text-[var(--fg-3)] hover:bg-white/[0.035] hover:text-[var(--accent-2)]">CLI reference</Link>
+            <Link href="/pygan" className="inline-flex min-h-10 items-center rounded-lg px-2 text-[var(--fg-3)] hover:bg-white/[0.035] hover:text-[var(--accent-2)]">PyGan writer &amp; validation</Link>
+            <Link href="/settings" className="inline-flex min-h-10 items-center rounded-lg px-2 text-[var(--fg-3)] hover:bg-white/[0.035] hover:text-[var(--accent-2)]">Settings</Link>
           </div>
-
-          <aside className="space-y-5">
-            <BackendStatusCard status={status} onRefresh={refresh} />
-            <DemoPanel
-              state={demoBackendState(status)}
-              shortcuts={HOME_DEMO_SHORTCUTS}
-            />
-          </aside>
-        </div>
-
-        <p className="mt-8 text-[12px] text-[var(--fg-3)]">
-          Set <code className="font-mono">NEXT_PUBLIC_API_BASE_URL</code> in{" "}
-          <code className="font-mono">web/.env.local</code> if the backend is
-          not on{" "}
-          <code className="font-mono">http://localhost:8000</code>.
-        </p>
+        </section>
       </div>
     </main>
   );
 }
 
-function StartHere({ entries }: { entries: readonly TaskEntrypoint[] }) {
+function ProductArchitecture() {
   return (
-    <section className="glass rounded-xl p-5">
-      <h2 className="text-base font-semibold tracking-tight">Start here</h2>
-      <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
-        Most users start with Convert. Use OpenMC SPH only when the HDF5
-        still needs equivalence factors, and Inspect when you only need to
-        understand a file before converting.
-      </p>
-
-      <div className="mt-4 grid gap-3 lg:grid-cols-3">
-        {entries.map((entry, index) => (
-          <Link
-            key={entry.id}
-            href={entry.href}
-            className="group rounded-lg border border-[var(--edge)] bg-white/[0.025] p-4 transition hover:border-[var(--edge-bright)] hover:bg-white/[0.045]"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <span className="tab-num rounded-md border border-[var(--edge)] bg-black/20 px-2 py-1 text-[11px] font-semibold text-[var(--accent)]">
-                {index + 1}
-              </span>
-              <span className="text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
-                {entry.eyebrow}
-              </span>
-            </div>
-            <h3 className="mt-3 text-sm font-semibold tracking-tight text-[var(--fg-0)]">
-              {entry.title}
-            </h3>
-            <p className="mt-2 min-h-[4rem] text-[12px] leading-5 text-[var(--fg-2)]">
-              {entry.body}
-            </p>
-            <div className="mt-4 text-[12px] font-medium text-[var(--accent-2)] group-hover:underline">
-              {entry.cta}
-            </div>
-          </Link>
-        ))}
+    <section className="mt-10">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="page-kicker">Product architecture</p>
+          <h2 className="mt-1 text-2xl font-bold tracking-[-0.03em]">
+            One Converter boundary, optional workflows around it
+          </h2>
+        </div>
+        <p className="max-w-xl text-[12px] leading-5 text-[var(--fg-3)]">
+          Prepare inputs, run equivalence, coordinate components, or calculate
+          downstream only when the model requires it. Every formal handoff still
+          passes through the same checked Converter.
+        </p>
       </div>
-    </section>
-  );
-}
 
-function AcceptedValidation({
-  entries,
-}: {
-  entries: readonly AcceptedValidationEntry[];
-}) {
-  return (
-    <section className="glass rounded-xl p-5">
-      <h2 className="text-base font-semibold tracking-tight">
-        Accepted validation
-      </h2>
-      <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--fg-2)]">
-        The route is validated against paired OpenMC references on Cartesian
-        and hexagonal cores, not only on unit tests.
-      </p>
-      <ul className="mt-4 grid gap-3 md:grid-cols-3">
-        {entries.map((entry) => (
-          <li
-            key={entry.id}
-            className="rounded-lg border border-[var(--edge)] bg-black/10 p-3"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <span className="font-mono text-[11px] text-[var(--accent)]">
-                {entry.label}
-              </span>
-              <span className="text-[11px] text-[var(--fg-3)]">
-                {entry.result}
-              </span>
+      <div className="mt-5 grid gap-3 md:grid-cols-2 md:items-start xl:grid-cols-[0.92fr_1.16fr_0.92fr]">
+        <div className="md:col-span-2 xl:col-span-1 xl:col-start-2 xl:row-start-1">
+          <ConverterArchitectureCard />
+        </div>
+
+        <div className="md:col-start-1 md:row-start-2 xl:col-start-1 xl:row-start-1">
+          <ArchitectureCard eyebrow="Optional preparation" title="Prepare the reference">
+            <ArchitectureLink href="/openmc" label="OpenMC MGXS" body="Export the groups, domains, moments, and uncertainties required by your model." />
+            <div className="rounded-xl border border-[var(--edge)] bg-black/10 p-3 text-[10px] leading-4 text-[var(--fg-3)]">
+              If a converter-ready HDF5 already exists, start directly with Converter. OpenMC MG mode is not required for native DRAGON SPH.
             </div>
-            <h3 className="mt-2 text-sm font-semibold tracking-tight">
-              {entry.title}
-            </h3>
-            <p className="mt-1 text-[12px] leading-5 text-[var(--fg-2)]">
-              {entry.body}
-            </p>
-          </li>
-        ))}
-      </ul>
+          </ArchitectureCard>
+        </div>
+
+        <div className="md:col-start-2 md:row-start-2 xl:col-start-3 xl:row-start-1">
+          <ArchitectureCard
+            eyebrow="Optional physics & downstream"
+            title="SPH when needed; DONJON downstream"
+          >
+            <div className="rounded-xl border border-[var(--edge)] bg-black/10 p-3">
+              <p className="font-mono text-[10px] text-[var(--accent)]">OUTPUT</p>
+              <p className="mt-1 text-[12px] font-bold">L_MULTICOMPO or L_MACROLIB</p>
+              <p className="mt-1 text-[10px] leading-4 text-[var(--fg-3)]">Checked ASCII/LCM object plus exact Converter receipt.</p>
+            </div>
+            <ArchitectureLink href="/equivalence" label="Native DRAGON SPH" body="Use Converter reference rates on the project-declared coarse geometry; no ADF or fitted global coefficient." />
+            <ArchitectureLink href="/donjon" label="DONJON use and validation" body="Consume the corrected object in a component or full-core model with its own mapping and acceptance criteria." />
+          </ArchitectureCard>
+        </div>
+      </div>
+
+      <Link
+        href="/projects"
+        className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-200/20 bg-sky-300/[0.035] px-4 py-3 transition hover:border-sky-200/35 hover:bg-sky-300/[0.06]"
+      >
+        <span>
+          <strong className="text-sm text-[var(--fg-0)]">Project coordination</strong>
+          <span className="mt-1 block text-[11px] text-[var(--fg-3)] sm:ml-2 sm:mt-0 sm:inline">Optional manifests coordinate repeated component conversions, SPH evidence, and downstream runs.</span>
+        </span>
+        <span className="text-[12px] font-semibold text-[var(--accent-2)]">Open Projects →</span>
+      </Link>
     </section>
   );
 }
 
-function AfterYouConvert() {
-  const links = [
+function StartingPoints() {
+  const paths = [
     {
-      href: "/donjon",
-      title: "DONJON deck guide",
-      body: "Generate the editable deck skeleton and run commands that consume the ASCII output — works from the ASCII path directly.",
+      id: "inspect",
+      label: "I only want to examine an HDF5",
+      title: "Inspect OpenMC HDF5",
+      body: "Open a file read-only. Compatible MGXS handoffs get mixture, spectrum, and scattering visualizations; other HDF5 files still expose their root metadata and structure. Converter is not required.",
+      href: "/inspect",
+      cta: "Open Inspect",
     },
     {
-      href: "/builder?command=bundle",
-      title: "Bundle",
-      body: "Package the run when you want the manifest-backed record — recipients open the bundle on the DONJON page.",
+      id: "openmc",
+      label: "I have a recipe or statepoint",
+      title: "Prepare OpenMC MGXS",
+      body: "Create the HDF5 handoff first, then bring it to Converter.",
+      href: "/openmc",
+      cta: "Open OpenMC MGXS",
+    },
+    {
+      id: "component",
+      label: "I only need one component library",
+      title: "Convert one component",
+      body: "Choose the mixtures that belong to the component, run the formal gate, and stop with the output plus receipt. A full-core project is not required.",
+      href: "/convert?check=1&production=1#convert-component",
+      cta: "Open component conversion",
+    },
+    {
+      id: "sph",
+      label: "My coarse model needs equivalence",
+      title: "Compute and apply SPH",
+      body: "Use the fine OpenMC reference, Converter output, and your declared DRAGON/DONJON coarse model. OpenMC MG remains optional.",
+      href: "/equivalence",
+      cta: "Open SPH",
+    },
+    {
+      id: "project",
+      label: "I have several components or runs",
+      title: "Coordinate a Project",
+      body: "Declare any component set and track each Converter output without imposing one reactor template.",
+      href: "/projects",
+      cta: "Open Projects",
+    },
+    {
+      id: "consumer",
+      label: "My Converter artifact is ready",
+      title: "Use it downstream",
+      body: "Connect the checked object to a user-defined component or full-core DRAGON/DONJON model, or validate the optional PyGan writer without changing the physics contract.",
+      href: "/donjon",
+      cta: "Open DONJON",
     },
   ] as const;
   return (
-    <section className="glass rounded-xl p-5">
-      <h2 className="text-base font-semibold tracking-tight">
-        After you convert
-      </h2>
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
-        {links.map((link) => (
-          <Link
-            key={link.href}
-            href={link.href}
-            className="rounded-lg border border-[var(--edge)] bg-white/[0.025] p-3 transition hover:border-[var(--edge-bright)]"
-          >
-            <div className="text-sm font-semibold">{link.title}</div>
-            <div className="mt-1 text-[12px] leading-5 text-[var(--fg-2)]">
-              {link.body}
-            </div>
-          </Link>
+    <section className="mt-10">
+      <p className="page-kicker">Classic user jobs</p>
+      <h2 className="mt-1 text-2xl font-bold tracking-[-0.03em]">Start from what you actually have</h2>
+      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {paths.map((path) => (
+          <article key={path.id} className="surface flex h-full flex-col p-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-[var(--fg-3)]">{path.label}</p>
+            <h3 className="mt-2 text-base font-bold tracking-tight">{path.title}</h3>
+            <p className="mt-2 flex-1 text-[12px] leading-5 text-[var(--fg-2)]">{path.body}</p>
+            <Link href={path.href} className="btn btn-quiet mt-3 w-full justify-between px-2">{path.cta} <span aria-hidden="true">→</span></Link>
+          </article>
         ))}
       </div>
     </section>
   );
 }
 
-function BackendStatusCard({
-  status,
-  onRefresh,
-}: {
-  status: Status;
-  onRefresh: () => void;
-}) {
+function ProductFlow() {
+  const handoffStages = HOME_FLOW.slice(0, 3);
+  const optionalStage = HOME_FLOW[3];
+
   return (
-    <section className="glass rounded-xl p-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-4">
-        <h2 className="text-base font-semibold tracking-tight">Backend</h2>
-        <button
-          type="button"
-          onClick={onRefresh}
-          className="btn btn-secondary tab-num"
-          aria-label="Refresh backend health"
-        >
-          Refresh
-        </button>
+    <section aria-labelledby="home-product-flow-title" className="mt-6 max-w-[54rem]">
+      <h2 id="home-product-flow-title" className="sr-only">Product flow</h2>
+      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_1.25rem_minmax(0,0.86fr)_1.25rem_minmax(0,1.15fr)] sm:items-center">
+        {handoffStages.map((stage, index) => (
+          <div key={stage.label} className="contents">
+            {index > 0 ? <StageArrow /> : null}
+            <FlowStage
+              label={stage.label}
+              qualifier={stage.qualifier}
+              tone={stage.label === "Converter" ? "required" : index === 2 ? "output" : "neutral"}
+            />
+          </div>
+        ))}
       </div>
-      <div className="mt-4 text-sm tab-num">
-        <StatusView status={status} />
+
+      <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+        <span aria-hidden="true" className="hidden h-px flex-1 bg-gradient-to-r from-transparent via-[var(--edge-bright)] to-[var(--edge-bright)] sm:block" />
+        <span className="text-center text-[10px] font-bold uppercase tracking-[0.11em] text-[var(--fg-3)]">
+          Optional workflows · only when required
+        </span>
+        <StageArrow />
+        <FlowStage
+          label={optionalStage.label}
+          qualifier={optionalStage.qualifier}
+          tone="optional"
+          className="sm:min-w-[17rem]"
+        />
       </div>
     </section>
   );
 }
 
-function DemoPanel({
-  state,
-  shortcuts,
-}: {
-  state: ReturnType<typeof demoBackendState>;
-  shortcuts: readonly DemoShortcut[];
-}) {
-  const primary = shortcuts[0];
-  const enabled = state.kind === "ready" && state.mockMode;
+function ConverterArchitectureCard() {
   return (
-    <section className="glass rounded-xl p-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h2 className="text-base font-semibold tracking-tight">Demo</h2>
-        <DemoBadge state={state} />
+    <article className="rounded-2xl border border-emerald-200/35 bg-emerald-300/[0.075] p-5 shadow-[var(--shadow-md)]">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-200/80">
+          Product core
+        </p>
+        <span className="rounded-full border border-emerald-200/25 bg-emerald-300/10 px-2 py-1 font-mono text-[9px] uppercase tracking-[0.1em] text-emerald-100">
+          required
+        </span>
       </div>
-      <p className="mt-2 text-sm leading-relaxed text-[var(--fg-2)]">
-        Use this when showing the product without hunting for local files.
+      <h3 className="mt-2 text-xl font-bold tracking-tight">Converter</h3>
+      <p className="mt-2 text-[12px] leading-5 text-[var(--fg-2)]">
+        Validate one MGXS handoff, select the object contract and writer, then
+        produce the DRAGON/DONJON object with a hash-linked receipt.
       </p>
-      {enabled ? (
-        <div className="mt-4">
-          <Link href={primary.href} className="btn btn-primary w-full">
-            {primary.cta}
+
+      <div className="mt-4 grid grid-cols-2 gap-2 text-center text-[10px] md:grid-cols-4">
+        <CoreStep label="Validate" />
+        <CoreStep label="Choose writer" />
+        <CoreStep label="Write object" />
+        <CoreStep label="Receipt" />
+      </div>
+
+      <div className="mt-4 rounded-xl border border-emerald-200/15 bg-black/10 p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[11px] font-bold text-[var(--fg-1)]">Converter writers</p>
+          <Link href="/pygan" className="text-[10px] font-semibold text-[var(--accent-2)] hover:underline">
+            PyGan details →
           </Link>
         </div>
-      ) : (
-        <div className="mt-4 rounded-lg border border-[var(--edge)] bg-white/[0.025] p-3 text-[12px] leading-5 text-[var(--fg-2)]">
-          <DemoDisabledMessage state={state} />
+        <div className="mt-3 grid gap-2 md:grid-cols-2">
+          <ConverterWriter
+            badge="built in"
+            title="ASCII"
+            body="Portable L_MULTICOMPO or L_MACROLIB handoff without a PyGan dependency."
+          />
+          <ConverterWriter
+            badge="optional"
+            title="PyGan / LCM"
+            body="Native LCM writing and validation when PyGan is installed in the environment."
+          />
         </div>
-      )}
-    </section>
+        <p className="mt-3 text-[10px] leading-4 text-[var(--fg-3)]">
+          Both writers follow the same checked physics contract; the backend only changes how the object is encoded.
+        </p>
+      </div>
+
+      <Link href="/convert" className="btn btn-primary mt-5 w-full justify-center">
+        Open Converter <span aria-hidden="true">→</span>
+      </Link>
+    </article>
   );
 }
 
-function demoBackendState(status: Status) {
-  if (status.kind === "idle" || status.kind === "loading") {
-    return { kind: "checking" } as const;
-  }
-  if (status.kind === "error") {
-    return { kind: "unavailable" } as const;
-  }
-  return { kind: "ready", mockMode: status.data.mock_mode } as const;
-}
+function FlowStage({
+  label,
+  qualifier,
+  tone,
+  className = "",
+}: {
+  label: string;
+  qualifier: string;
+  tone: "neutral" | "required" | "output" | "optional";
+  className?: string;
+}) {
+  const toneClass = {
+    neutral: "border-[var(--edge)] bg-white/[0.025]",
+    required: "border-emerald-200/40 bg-emerald-300/10 shadow-[0_10px_28px_rgba(47,201,133,0.08)]",
+    output: "border-sky-200/25 bg-sky-300/[0.04]",
+    optional: "border-dashed border-[var(--edge-bright)] bg-white/[0.018]",
+  }[tone];
 
-function DemoDisabledMessage({ state }: { state: ReturnType<typeof demoBackendState> }) {
-  if (state.kind === "checking") {
-    return <>Checking backend mode before enabling demo shortcuts.</>;
-  }
-  if (state.kind === "unavailable") {
-    return (
-      <>
-        Start the backend with{" "}
-        <code className="font-mono">openmc2donjon serve --mock</code> to enable
-        bundled demos.
-      </>
-    );
-  }
-  return (
-    <>
-      Demo shortcuts are hidden in live mode so real runs do not accidentally
-      use <code className="font-mono">/mock</code> paths.
-    </>
-  );
-}
-
-function DemoBadge({ state }: { state: ReturnType<typeof demoBackendState> }) {
-  if (state.kind === "checking") {
-    return (
-      <span className="rounded-full border border-[var(--edge)] px-2.5 py-1 text-[11px] text-[var(--fg-2)]">
-        checking
-      </span>
-    );
-  }
-  if (state.kind === "unavailable") {
-    return (
-      <span className="rounded-full border border-rose-400/20 bg-rose-400/10 px-2.5 py-1 text-[11px] text-rose-200">
-        offline
-      </span>
-    );
-  }
   return (
     <span
-      className={
-        state.mockMode
-          ? "rounded-full border border-amber-300/30 bg-amber-300/10 px-2.5 py-1 text-[11px] text-amber-200"
-          : "rounded-full border border-[var(--edge)] px-2.5 py-1 text-[11px] text-[var(--fg-2)]"
-      }
+      className={`flex min-h-[58px] flex-col justify-center rounded-xl border px-3 py-2 ${toneClass} ${className}`}
     >
-      {state.mockMode ? "mock" : "live"}
+      <span className="block text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--fg-1)]">{label}</span>
+      <span className={`mt-1 block text-[10px] leading-4 tracking-[0.02em] ${tone === "required" ? "text-emerald-100" : "text-[var(--fg-3)]"}`}>
+        {qualifier}
+      </span>
     </span>
   );
 }
 
-function StatusView({ status }: { status: Status }) {
-  if (status.kind === "idle" || status.kind === "loading") {
-    return <span className="text-[var(--fg-2)]">Checking…</span>;
-  }
-  if (status.kind === "error") {
-    return (
-      <div className="space-y-1">
-        <div className="text-rose-300">Cannot reach backend.</div>
-        <div className="text-[var(--fg-2)]">{status.message}</div>
-        <div className="text-[var(--fg-3)] text-[12px]">
-          Start it with{" "}
-          <code className="font-mono">openmc2donjon serve</code> for real
-          files, or <code className="font-mono">openmc2donjon serve --mock</code>{" "}
-          for the bundled demo — run one or the other.
-        </div>
-      </div>
-    );
-  }
-  const { data } = status;
+function StageArrow() {
   return (
-    <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-1.5">
-      <dt className="text-[var(--fg-2)]">status</dt>
-      <dd>
-        <span
-          className={
-            data.status === "ok" ? "text-emerald-300" : "text-amber-300"
-          }
-        >
-          {data.status}
+    <span aria-hidden="true" className="flex h-5 items-center justify-center text-[12px] text-[var(--fg-3)]">
+      <span className="rotate-90 sm:rotate-0">→</span>
+    </span>
+  );
+}
+
+function ArchitectureCard({ eyebrow, title, children }: { eyebrow: string; title: string; children: React.ReactNode }) {
+  return (
+    <article className="rounded-2xl border border-[var(--edge)] bg-[var(--surface)] p-5">
+      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--fg-3)]">{eyebrow}</p>
+      <h3 className="mt-2 text-lg font-bold tracking-tight">{title}</h3>
+      <div className="mt-4 grid gap-2">{children}</div>
+    </article>
+  );
+}
+
+function ArchitectureLink({ href, label, body }: { href: string; label: string; body: string }) {
+  return (
+    <Link href={href} className="rounded-xl border border-[var(--edge)] bg-black/10 p-3 transition hover:border-emerald-200/25 hover:bg-white/[0.035]">
+      <span className="text-[12px] font-bold text-[var(--fg-0)]">{label}</span>
+      <span className="mt-1 block text-[10px] leading-4 text-[var(--fg-3)]">{body}</span>
+    </Link>
+  );
+}
+
+function CoreStep({ label }: { label: string }) {
+  return <span className="rounded-lg border border-emerald-200/20 bg-black/10 px-2 py-2 font-semibold text-emerald-100">{label}</span>;
+}
+
+function ConverterWriter({ badge, title, body }: { badge: string; title: string; body: string }) {
+  return (
+    <div className="rounded-lg border border-emerald-200/15 bg-emerald-300/[0.045] p-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] font-bold text-[var(--fg-0)]">{title}</p>
+        <span className="rounded-full border border-emerald-200/20 px-1.5 py-0.5 font-mono text-[9px] uppercase text-emerald-100/80">
+          {badge}
         </span>
-      </dd>
-      <dt className="text-[var(--fg-2)]">version</dt>
-      <dd>{data.version}</dd>
-      <dt className="text-[var(--fg-2)]">mock mode</dt>
-      <dd>
-        {data.mock_mode ? (
-          <span className="text-amber-300">on</span>
-        ) : (
-          <span className="text-[var(--fg-1)]">off</span>
-        )}
-      </dd>
-    </dl>
+      </div>
+      <p className="mt-1 text-[10px] leading-4 text-[var(--fg-3)]">{body}</p>
+    </div>
   );
 }

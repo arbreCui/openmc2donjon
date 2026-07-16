@@ -12,6 +12,10 @@ import numpy as np
 
 from . import __version__
 from .hdf5_names import read_mixture_names
+from .openmc_provenance import (
+    provenance_before_hdf5_mutation,
+    refresh_openmc_provenance_after_hdf5_mutation,
+)
 from .sph_augment import load_sph_source
 
 
@@ -209,6 +213,7 @@ def apply_sph_to_hdf5(
         raise ValueError("output HDF5 must be different from input HDF5")
     if output_h5.exists() and not force:
         raise FileExistsError(f"output already exists; use --force to overwrite: {output_h5}")
+    openmc_provenance = provenance_before_hdf5_mutation(input_h5)
 
     with h5py.File(input_h5, "r") as h5:
         mixture_names = read_mixture_names(h5)
@@ -235,9 +240,11 @@ def apply_sph_to_hdf5(
         h5.attrs["sph_apply_operator"] = "divide-xs-by-nsph"
         h5.attrs["sph_applied_source"] = str(sph_source)
         h5.attrs["sph_package_version"] = __version__
-        if "sph_kind" in loaded.root_sph_attrs:
-            h5.attrs["sph_kind"] = loaded.root_sph_attrs["sph_kind"]
-        h5.attrs["sph_real"] = bool(loaded.root_sph_attrs.get("sph_real", True))
+        _copy_sph_provenance_attrs(h5, loaded.root_sph_attrs)
+    refresh_openmc_provenance_after_hdf5_mutation(
+        output_h5,
+        openmc_provenance,
+    )
 
     return SphApplyReport(
         input_h5=input_h5,
@@ -279,6 +286,7 @@ def apply_sph_to_openmc_mgxs_hdf5(
         raise ValueError("output HDF5 must be different from input HDF5")
     if output_h5.exists() and not force:
         raise FileExistsError(f"output already exists; use --force to overwrite: {output_h5}")
+    openmc_provenance = provenance_before_hdf5_mutation(input_h5)
 
     with h5py.File(input_h5, "r") as h5:
         energy_groups = _energy_groups(h5)
@@ -310,9 +318,11 @@ def apply_sph_to_openmc_mgxs_hdf5(
         h5.attrs["sph_package_version"] = __version__
         h5.attrs["sph_applied_mixture_names"] = np.asarray(mixture_names, dtype="S")
         h5.attrs["sph_applied_macroscopic_names"] = np.asarray(macroscopic_names, dtype="S")
-        if "sph_kind" in loaded.root_sph_attrs:
-            h5.attrs["sph_kind"] = loaded.root_sph_attrs["sph_kind"]
-        h5.attrs["sph_real"] = bool(loaded.root_sph_attrs.get("sph_real", True))
+        _copy_sph_provenance_attrs(h5, loaded.root_sph_attrs)
+    refresh_openmc_provenance_after_hdf5_mutation(
+        output_h5,
+        openmc_provenance,
+    )
 
     return SphApplyReport(
         input_h5=input_h5,
@@ -325,6 +335,29 @@ def apply_sph_to_openmc_mgxs_hdf5(
         sph_max=float(np.max(sph_matrix)),
         input_format="openmc-mgxs",
     )
+
+
+def _copy_sph_provenance_attrs(h5: Any, attrs: dict[str, Any]) -> None:
+    if "sph_kind" in attrs:
+        h5.attrs["sph_kind"] = attrs["sph_kind"]
+    h5.attrs["sph_real"] = bool(attrs.get("sph_real", True))
+    for name in (
+        "sph_derivation",
+        "sph_target",
+        "sph_flux_normalization",
+        "sph_raw_update_minimum",
+        "sph_raw_update_maximum",
+        "sph_max_update_residual",
+        "sph_zero_flux_policy",
+        "sph_identity_bin_count",
+        "sph_floored_bin_count",
+        "sph_frozen_group_bin_count",
+        "sph_tie_mixture_groups",
+        "sph_tied_bin_count",
+        "sph_clipped_count",
+    ):
+        if name in attrs:
+            h5.attrs[name] = attrs[name]
 
 
 def _apply_to_mixture_group(group: Any, sph: np.ndarray) -> int:

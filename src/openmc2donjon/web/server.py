@@ -41,6 +41,7 @@ from .files import (
     register_file_routes,
 )
 from .filesystem import FilesystemScope
+from .execution import register_execution_routes
 from .inspect import (
     INSPECT_SCHEMA as INSPECT_SCHEMA,
     MIXTURE_SCHEMA as MIXTURE_SCHEMA,
@@ -50,6 +51,7 @@ from .inspect import (
 from .openmc_workflow import register_openmc_workflow_routes
 from .openmc_sph_summary import register_openmc_sph_summary_routes
 from .pygan import register_pygan_routes
+from .project import register_project_routes
 from .text_preview import (
     TEXT_PREVIEW_SCHEMA as TEXT_PREVIEW_SCHEMA,
     register_text_preview_routes,
@@ -61,6 +63,8 @@ logger = get_logger("web.server")
 DEFAULT_CORS_ORIGINS: tuple[str, ...] = (
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
 )
 
 
@@ -146,7 +150,17 @@ def create_app(
     )
 
     register_convert_routes(app, mock_mode=mock_mode, filesystem_scope=filesystem_scope)
+    register_execution_routes(
+        app,
+        mock_mode=mock_mode,
+        filesystem_scope=filesystem_scope,
+    )
     register_bundle_routes(app, mock_mode=mock_mode, filesystem_scope=filesystem_scope)
+    register_project_routes(
+        app,
+        mock_mode=mock_mode,
+        filesystem_scope=filesystem_scope,
+    )
 
     if mock_mode:
         logger.info("openmc2donjon web server starting in MOCK mode")

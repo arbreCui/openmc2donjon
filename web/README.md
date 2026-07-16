@@ -3,19 +3,41 @@
 Next.js front-end for the openmc2donjon web UI. Talks to the FastAPI
 backend started by `openmc2donjon serve`.
 
-Current pages cover the command catalog, direct converter workflow, HDF5
-inspection, OpenMC-side SPH summaries, PyGan diagnostics, and localhost
-workflow builders. Additional command families are added as focused workflow
-pages rather than as a generic shell wrapper.
+The primary UI is Converter-centered and manifest-driven. A standalone user can
+convert one OpenMC MGXS HDF5 directly. A durable project adds
+`openmc2donjon.project.json` to declare any number of components, each input
+contract and output path, plus the project's downstream consumer. The current
+IRENA candidate is one 91-position fine reference with either 91 independent
+domains or 21 exact D3 orbits pooled during transport; it starts on HOLD. The
+older five-colorset reuse map is a withdrawn diagnostic, not an executable
+product or acceptance route. Command catalogs, builders, and PyGan diagnostics
+remain under advanced tools.
+
+The primary physical-equivalence route is Converter reference MACROLIB ->
+native DRAGON `SPH:` -> independent validation. That native-SPH acceptance
+route forbids ADF substitution and fitted empirical/global eigenvalue
+coefficients. Generic ADF/DF carry and sidecar helpers remain advanced support
+tools for other explicitly declared workflows; they do not weaken the
+native-SPH policy.
 
 ## Local development
 
-Two terminals: one for the backend, one for the frontend.
+From a fresh checkout, install the Python package and Web dependencies:
+
+```sh
+git clone https://github.com/arbreCui/openmc2donjon.git
+cd openmc2donjon
+python -m pip install -e ".[web]"
+cd web
+npm ci
+cd ..
+```
+
+Then use two terminals: one for the backend, one for the frontend.
 
 **Backend** (from the repo root):
 
 ```sh
-python -m pip install -e ".[web]"
 openmc2donjon serve            # FastAPI on http://localhost:8000
 openmc2donjon serve --mock     # serve fixture data instead of real APIs
 ```
@@ -36,12 +58,12 @@ home directory.
 **Frontend** (from this directory):
 
 ```sh
-npm install
+cd web
 npm run dev                    # Next.js on http://localhost:3000
 ```
 
-Open <http://localhost:3000> and the home page should report
-`status: ok` from the backend.
+Open <http://localhost:3000>. The home page presents the product boundary;
+live backend status appears on the workflow pages that need it.
 
 If the backend listens somewhere other than the default
 `http://localhost:8000`, copy `.env.local.example` to `.env.local` and
@@ -94,12 +116,19 @@ CI runs `npm ci`, `npm run lint`, `npm run typecheck`, and
 web/
   app/                Next.js App Router pages
     layout.tsx        Root layout + primary nav
-    page.tsx          Home (reads /api/health)
+    page.tsx          Home (product boundary + direct Converter quick start)
     commands/page.tsx /commands (CLI/web command catalog)
-    convert/page.tsx  /convert (direct HDF5 -> ASCII converter workflow)
-    inspect/page.tsx  /inspect (path input + summary + mixture table)
+    convert/page.tsx  /convert (generic HDF5 -> checked object + receipt)
+    openmc/page.tsx   /openmc (generic OpenMC handoff preparation)
+    equivalence/      /equivalence (native DRAGON SPH runner/validator; optional OpenMC-side and ADF support)
+    donjon/page.tsx   /donjon (generic consumer guide; IRENA template mode optional)
+    inspect/page.tsx  /inspect (read-only generic HDF5 structure + MGXS visualizations)
+    projects/page.tsx /projects (create, edit, and inspect manifest-driven projects)
+    pygan/page.tsx    /pygan (doctor + runnable semantic writer comparison)
+    docs/page.tsx     /docs (product boundary and guide entry points)
+    builder/page.tsx  /builder (non-mutating CLI builders; commands run in a shell)
     settings/page.tsx /settings (local browser preferences)
-    globals.css       Design tokens, glass utility, grad-text, button primitives
+    globals.css       Design tokens, surfaces, workflow steps, button primitives
   components/
     Nav.tsx           Top sticky nav
     inspect/          Inspect-page presentational pieces

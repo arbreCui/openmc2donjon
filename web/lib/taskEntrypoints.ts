@@ -1,38 +1,57 @@
 export interface TaskEntrypoint {
-  id: "direct-convert" | "openmc-sph" | "inspect";
+  id: "handoff" | "convert" | "consumer" | "inspect";
+  step: string;
   eyebrow: string;
   title: string;
   body: string;
+  artifact: string;
   href: string;
   cta: string;
 }
 
 export const TASK_ENTRYPOINTS: readonly TaskEntrypoint[] = [
   {
-    id: "direct-convert",
-    eyebrow: "I already have HDF5",
-    title: "Convert MGXS HDF5",
+    id: "handoff",
+    step: "01",
+    eyebrow: "Project-defined source",
+    title: "Prepare the handoff your model needs",
     body:
-      "Check the OpenMC handoff, write L_MULTICOMPO or L_MACROLIB ASCII, then preview the output.",
-    href: "/convert?intent=direct-convert&format=multicompo&check=1&production=1",
-    cta: "Open converter",
+      "Export an OpenMC MGXS HDF5 with the domains, energy structure, and optional equivalence evidence required by your project.",
+    artifact: "Validated project HDF5",
+    href: "/openmc",
+    cta: "Prepare handoff",
   },
   {
-    id: "openmc-sph",
-    eyebrow: "Need SPH first",
-    title: "Prepare CE/MG SPH",
+    id: "convert",
+    step: "Core",
+    eyebrow: "Validate → write",
+    title: "Convert one exact handoff",
     body:
-      "Use OpenMC CE as the reference, run OpenMC MG on the same geometry/output regions, then inject NSPH before conversion.",
-    href: "/openmc?workflow=two-step&equivalence=sph&format=macrolib&production=1",
-    cta: "Open SPH workflow",
+      "Validate one MGXS input, write L_MULTICOMPO or L_MACROLIB, and record a hash-linked receipt. Repeat only as the project manifest requires.",
+    artifact: "Converter object + receipt",
+    href: "/convert",
+    cta: "Open Converter",
+  },
+  {
+    id: "consumer",
+    step: "Next",
+    eyebrow: "Project-defined downstream",
+    title: "Connect the output to its consumer",
+    body:
+      "Use the geometry, mixture map, solver, boundaries, and acceptance observables belonging to your DRAGON/DONJON model.",
+    artifact: "Project-specific solver result",
+    href: "/donjon",
+    cta: "Open consumer",
   },
   {
     id: "inspect",
-    eyebrow: "Need to understand a file",
-    title: "Inspect HDF5 or output",
+    step: "Close",
+    eyebrow: "Acceptance",
+    title: "Inspect artifacts and close the result",
     body:
-      "Look at mixtures, energy groups, SPH/ADF metadata, spectra, and generated ASCII previews.",
+      "Review manifest contracts, Converter receipts, consumer runs, and the independent closure evidence defined for this project.",
+    artifact: "Auditable acceptance evidence",
     href: "/inspect",
-    cta: "Open inspector",
+    cta: "Inspect results",
   },
 ] as const;

@@ -5,6 +5,10 @@ import type {
   OpenmcWorkflowPlan,
 } from "./api";
 import { OPENMC_SPH_WORKFLOW_STEPS } from "./openmcSphWorkflow";
+import {
+  withProjectComponentContext,
+  type ProjectComponentRouteContext,
+} from "./projectWorkspace";
 
 export type OpenmcWalkthroughPhase = "source" | "plan" | "run" | "review" | "bundle";
 
@@ -17,6 +21,8 @@ export type OpenmcWalkthroughStatus =
   | "planning"
   | "blocked"
   | "planned"
+  | "written"
+  | "verified"
   | "optional";
 
 export interface OpenmcWalkthroughRun {
@@ -60,7 +66,8 @@ export function openmcWalkthroughStatuses({
   };
 }
 
-export const OPENMC_SPH_SIDECAR_FORM_HREF = "/equivalence?kind=openmc-sph-sidecar";
+export const OPENMC_SPH_SIDECAR_FORM_HREF =
+  "/equivalence?kind=openmc-sph-sidecar&contract=physical-sph";
 
 const OPENMC_SPH_SIDECAR_CHECK_NAME = "SPH sidecar";
 
@@ -101,6 +108,7 @@ export function openmcConvertHref(
   plan: OpenmcWorkflowPlan,
   format: ConvertFormat,
   production: boolean,
+  projectContext?: ProjectComponentRouteContext,
 ): string | null {
   const input = conversionInputArtifact(plan);
   const ascii = firstArtifact(plan.artifacts, "ascii");
@@ -114,7 +122,40 @@ export function openmcConvertHref(
     production: production ? "1" : "0",
     comment: `${plan.workflow_label} web handoff`,
   });
-  return `/convert?${params.toString()}`;
+  const href = `/convert?${params.toString()}`;
+  return projectContext
+    ? withProjectComponentContext(href, projectContext)
+    : href;
+}
+
+/** Build the "already have an HDF5" route before an OpenMC plan exists. */
+export function openmcDirectConvertHref(
+  inputPath: string,
+  outputPath: string,
+  format: ConvertFormat,
+  production: boolean,
+  projectContext?: ProjectComponentRouteContext,
+): string {
+  const input = inputPath.trim();
+  const output = outputPath.trim();
+  const hasProjectContext = Boolean(
+    projectContext?.projectRoot ||
+      projectContext?.componentId ||
+      projectContext?.contract,
+  );
+  if (!input && !output && !hasProjectContext) return "/convert";
+  const params = new URLSearchParams({
+    intent: "direct-convert",
+    format,
+    check: "1",
+    production: production ? "1" : "0",
+  });
+  if (input) params.set("input", input);
+  if (output) params.set("output", output);
+  const href = `/convert?${params.toString()}`;
+  return projectContext
+    ? withProjectComponentContext(href, projectContext)
+    : href;
 }
 
 export function openmcBundleBuilderHref(

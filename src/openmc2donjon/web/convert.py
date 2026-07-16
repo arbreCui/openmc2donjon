@@ -9,6 +9,7 @@ workflow back to a terminal or batch script.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import io
 import json
 from pathlib import Path
@@ -20,6 +21,11 @@ from ..macrolib import convert_mgxs_hdf5_to_macrolib
 from ..mgxs_input_contract import run_preflight
 from ..multicompo import DEFAULT_ROOT_NAME, convert_mgxs_hdf5
 from ..pygan_writer import convert_mgxs_hdf5_with_pygan
+from ..physical_sph_contract import physical_sph_issues
+from ..production_policy import (
+    effective_production_thresholds,
+    production_preflight_policy_payload,
+)
 from .files import _mock_file_status, record_mock_written_file
 from .filesystem import FilesystemScope
 from .text_preview import _is_mock_openmc_sph_path, _mock_ascii_preview_text
@@ -52,6 +58,13 @@ def register_convert_routes(
             HTTPException,
             scope,
         )
+        if bool(request["require_physical_sph"]):
+            sph_issues = physical_sph_issues(input_path)
+            if sph_issues:
+                raise HTTPException(
+                    status_code=422,
+                    detail="physical SPH gate failed: " + "; ".join(sph_issues),
+                )
         output_path = _resolve_convert_output_path(
             request["output_path"],
             input_path=input_path,
@@ -164,7 +177,7 @@ def _normalize_convert_request(
     if output_raw is not None and not isinstance(output_raw, str):
         raise http_exception(status_code=422, detail="output_path must be a string")
     mixtures = _optional_mixture_list(payload.get("mixtures"), http_exception)
-    return {
+    request = {
         "input_path": input_path,
         "output_path": output_raw.strip() if isinstance(output_raw, str) else None,
         "format": output_format,
@@ -193,6 +206,12 @@ def _normalize_convert_request(
             default=False,
             http_exception=http_exception,
         ),
+        "require_physical_sph": _optional_bool(
+            payload,
+            "require_physical_sph",
+            default=False,
+            http_exception=http_exception,
+        ),
         "warn_unknown_energy_mesh": _optional_bool(
             payload,
             "warn_unknown_energy_mesh",
@@ -205,6 +224,55 @@ def _normalize_convert_request(
             default=False,
             http_exception=http_exception,
         ),
+        "scatter_row_balance_fail": _optional_nullable_float(
+            payload,
+            "scatter_row_balance_fail",
+            http_exception,
+        ),
+        "transport_p1_fail": _optional_nullable_float(
+            payload,
+            "transport_p1_fail",
+            http_exception,
+        ),
+        "chi_sum_tolerance": _optional_nullable_float(
+            payload,
+            "chi_sum_tolerance",
+            http_exception,
+        ),
+        "uncertainty_warn": _optional_float(
+            payload,
+            "uncertainty_warn",
+            default=5.0e-2,
+            http_exception=http_exception,
+        ),
+        "uncertainty_fail": _optional_nullable_float(
+            payload,
+            "uncertainty_fail",
+            http_exception,
+        ),
+        "uncertainty_production_fail": _optional_nullable_float(
+            payload,
+            "uncertainty_production_fail",
+            http_exception,
+        ),
+        "uncertainty_mean_abs_floor": _optional_float(
+            payload,
+            "uncertainty_mean_abs_floor",
+            default=1.0e-12,
+            http_exception=http_exception,
+        ),
+        "no_uncertainty_check": _optional_bool(
+            payload,
+            "no_uncertainty_check",
+            default=False,
+            http_exception=http_exception,
+        ),
+        "require_std_dev_coverage": _optional_bool(
+            payload,
+            "require_std_dev_coverage",
+            default=False,
+            http_exception=http_exception,
+        ),
         "root_name": _optional_string(payload, "root_name", default=DEFAULT_ROOT_NAME),
         "comment": _optional_nullable_string(payload, "comment", http_exception),
         "burnup": _optional_nullable_float(payload, "burnup", http_exception),
@@ -214,7 +282,27 @@ def _normalize_convert_request(
             http_exception,
         ),
         "mixtures": mixtures,
+        "project_root": _optional_nullable_string(payload, "project_root", http_exception),
+        "component_id": _optional_nullable_string(payload, "component_id", http_exception),
     }
+    if request["production"] and request["no_uncertainty_check"]:
+        raise http_exception(
+            status_code=422,
+            detail=(
+                "production cannot disable uncertainty checks; the canonical "
+                "production policy requires uncertainty checks and complete "
+                "std-dev coverage"
+            ),
+        )
+    if request["production"] and request["h_factor_default"] is not None:
+        raise http_exception(
+            status_code=422,
+            detail=(
+                "production cannot use h_factor_default; export the physical "
+                "group-wise H-FACTOR / kappa-fission data in the input HDF5"
+            ),
+        )
+    return request
 
 
 def _required_string(payload: dict[str, Any], key: str, http_exception: Any) -> str:
@@ -269,6 +357,21 @@ def _optional_nullable_float(
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         raise http_exception(status_code=422, detail=f"{key} must be a number or null")
     return float(value)
+
+
+def _optional_float(
+    payload: dict[str, Any],
+    key: str,
+    *,
+    default: float,
+    http_exception: Any,
+) -> float:
+    if key not in payload:
+        return default
+    value = _optional_nullable_float(payload, key, http_exception)
+    if value is None:
+        raise http_exception(status_code=422, detail=f"{key} must be a number")
+    return value
 
 
 def _optional_mixture_list(value: Any, http_exception: Any) -> list[str] | None:
@@ -338,7 +441,10 @@ def _validate_convert_output_path(
 
 
 def _convert_summary_path(output_path: Path) -> Path:
-    return output_path.parent / "convert_summary.json"
+    # A project writes several component CPOs into the same directory.  The
+    # receipt must be output-specific or each conversion would overwrite the
+    # preceding component's provenance.
+    return output_path.with_name(f"{output_path.name}.convert.json")
 
 
 def _validate_convert_summary_path(
@@ -376,6 +482,30 @@ def _run_convert_preflight(
                 production=bool(request["production"]),
                 require_known_energy_mesh=bool(request["require_known_energy_mesh"]),
                 warn_unknown_energy_mesh=bool(request["warn_unknown_energy_mesh"]),
+                scatter_row_balance_fail=request["scatter_row_balance_fail"],
+                transport_p1_fail=request["transport_p1_fail"],
+                chi_sum_tolerance=request["chi_sum_tolerance"],
+                uncertainty_warn=(
+                    None
+                    if request["no_uncertainty_check"]
+                    else request["uncertainty_warn"]
+                ),
+                uncertainty_fail=(
+                    None
+                    if request["no_uncertainty_check"]
+                    else request["uncertainty_fail"]
+                ),
+                uncertainty_production_fail=(
+                    None
+                    if request["no_uncertainty_check"]
+                    else request["uncertainty_production_fail"]
+                ),
+                uncertainty_mean_abs_floor=request["uncertainty_mean_abs_floor"],
+                require_std_dev_coverage=(
+                    False
+                    if request["no_uncertainty_check"]
+                    else bool(request["require_std_dev_coverage"])
+                ),
                 summary_json=summary_path,
             )
         payload = json.loads(summary_path.read_text(encoding="utf-8"))
@@ -430,8 +560,20 @@ def _convert_response(
     output_size: int | None,
 ) -> dict[str, Any]:
     dry_run = bool(request["dry_run"])
+    production_requested = bool(request["production"])
+    preflight_executed = bool(request["check"]) or production_requested
     ok = bool(preflight_ok and (dry_run or converted))
     command = _convert_cli_command(request, input_path, output_path)
+    preflight_inputs = (
+        preflight.get("inputs") if isinstance(preflight, dict) else None
+    )
+    first_input = (
+        preflight_inputs[0]
+        if isinstance(preflight_inputs, list)
+        and preflight_inputs
+        and isinstance(preflight_inputs[0], dict)
+        else {}
+    )
     return {
         "schema": CONVERT_SCHEMA,
         "ok": ok,
@@ -439,8 +581,25 @@ def _convert_response(
         "converted": converted,
         "format": request["format"],
         "writer_backend": request["writer_backend"],
+        "root_name": request["root_name"],
+        "comment": request["comment"],
+        "burnup": request["burnup"],
+        "h_factor_default": request["h_factor_default"],
+        "mixtures": request["mixtures"],
+        "project_root": request["project_root"],
+        "component_id": request["component_id"],
+        "physical_sph_required": bool(request["require_physical_sph"]),
+        "production_requested": production_requested,
+        "preflight_policy": production_preflight_policy_payload(
+            production_requested=production_requested,
+            preflight_executed=preflight_executed,
+            thresholds=_web_production_thresholds(request),
+        ),
         "input_path": str(input_path),
+        "input_sha256": _file_sha256(input_path),
+        "openmc_provenance": first_input.get("openmc_provenance"),
         "output_path": str(output_path),
+        "output_sha256": _file_sha256(output_path) if converted else None,
         "summary_path": str(summary_path),
         "summary_written": summary_written,
         "output_exists": output_path.exists(),
@@ -450,6 +609,20 @@ def _convert_response(
         "cli_command": command,
         "cli_command_text": " ".join(shlex.quote(part) for part in command),
     }
+
+
+def _web_production_thresholds(request: dict[str, Any]) -> dict[str, float] | None:
+    if not request["production"]:
+        return None
+    return effective_production_thresholds(
+        scatter_row_balance_fail=request["scatter_row_balance_fail"],
+        transport_p1_fail=request["transport_p1_fail"],
+        chi_sum_tolerance=request["chi_sum_tolerance"],
+        uncertainty_warn=request["uncertainty_warn"],
+        uncertainty_fail=request["uncertainty_fail"],
+        uncertainty_production_fail=request["uncertainty_production_fail"],
+        uncertainty_mean_abs_floor=request["uncertainty_mean_abs_floor"],
+    )
 
 
 def _convert_cli_command(
@@ -482,11 +655,37 @@ def _convert_cli_command(
         command.append("--check")
     if request["production"]:
         command.append("--production")
+    if request["require_physical_sph"]:
+        command.append("--require-physical-sph")
     preflight_requested = bool(request["check"]) or bool(request["production"])
     if preflight_requested and request["warn_unknown_energy_mesh"]:
         command.append("--warn-unknown-energy-mesh")
     if preflight_requested and request["require_known_energy_mesh"]:
         command.append("--require-known-energy-mesh")
+    if preflight_requested:
+        for key in (
+            "scatter_row_balance_fail",
+            "transport_p1_fail",
+            "chi_sum_tolerance",
+            "uncertainty_fail",
+            "uncertainty_production_fail",
+        ):
+            value = request[key]
+            if value is not None:
+                command.extend([f"--{key.replace('_', '-')}", str(value)])
+        if request["uncertainty_warn"] != 5.0e-2:
+            command.extend(["--uncertainty-warn", str(request["uncertainty_warn"])])
+        if request["uncertainty_mean_abs_floor"] != 1.0e-12:
+            command.extend(
+                [
+                    "--uncertainty-mean-abs-floor",
+                    str(request["uncertainty_mean_abs_floor"]),
+                ]
+            )
+        if request["no_uncertainty_check"]:
+            command.append("--no-uncertainty-check")
+        if request["require_std_dev_coverage"]:
+            command.append("--require-std-dev-coverage")
     if request["h_factor_default"] is not None:
         command.extend(["--h-factor-default", str(request["h_factor_default"])])
     if request["burnup"] is not None:
@@ -516,11 +715,15 @@ def _mock_convert_response(request: dict[str, Any]) -> dict[str, Any]:
         text = _mock_ascii_preview_text(str(output_path))
         record_mock_written_file(str(output_path), len(text.encode("utf-8")))
     status = _mock_file_status(str(output_path))
+    preflight_input = _mock_preflight_input(str(input_path))
+    thresholds = _web_production_thresholds(request)
+    if thresholds is not None:
+        _apply_mock_production_thresholds(preflight_input, thresholds)
     preflight = {
         "schema": "openmc2donjon.mgxs-input-contract.v1",
         "decision": "mgxs_input_contract_passed",
         "output_issue": None,
-        "inputs": [_mock_preflight_input(str(input_path))],
+        "inputs": [preflight_input],
     }
     response = _convert_response(
         request,
@@ -544,8 +747,43 @@ def _mock_convert_response(request: dict[str, Any]) -> dict[str, Any]:
     return response
 
 
+def _apply_mock_production_thresholds(
+    preflight_input: dict[str, Any],
+    thresholds: dict[str, float],
+) -> None:
+    preflight_input["scatter_row_balance"]["fail_threshold"] = thresholds[
+        "scatter_row_balance_fail"
+    ]
+    physics = preflight_input["physics_checks"]
+    physics["chi_sum_tolerance"] = thresholds["chi_sum_tolerance"]
+    physics["transport_p1_fail_threshold"] = thresholds["transport_p1_fail"]
+    uncertainty = preflight_input["uncertainty"]
+    uncertainty.update(
+        {
+            "checked": True,
+            "warn_threshold": thresholds["uncertainty_warn"],
+            "fail_threshold": thresholds["uncertainty_fail"],
+            "production_fail_threshold": thresholds[
+                "uncertainty_production_fail"
+            ],
+            "mean_abs_floor": thresholds["uncertainty_mean_abs_floor"],
+            "require_coverage": True,
+        }
+    )
+
+
 def _write_convert_summary(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _file_sha256(path: Path) -> str | None:
+    if not path.is_file():
+        return None
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _mock_preflight_input(path: str) -> dict[str, Any]:

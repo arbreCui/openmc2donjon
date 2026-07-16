@@ -11,7 +11,7 @@ describe("bundlePrefillStatus", () => {
     });
 
     expect(status.prefilled).toBe(true);
-    expect(status.title).toBe("Prefilled from a converter result");
+    expect(status.title).toBe("Prefilled from a Converter result");
     expect(status.chips).toEqual([
       "bundle directory",
       "MGXS HDF5",

@@ -7,11 +7,33 @@ from openmc2donjon.from_openmc_summary import (
     FROM_OPENMC_SUMMARY_SCHEMA_V1,
     FROM_OPENMC_SUMMARY_SCHEMA_V2,
     FROM_OPENMC_SUMMARY_SCHEMA_V3,
+    FROM_OPENMC_SUMMARY_SCHEMA_V4,
     validate_from_openmc_summary,
+)
+from openmc2donjon.openmc_provenance import (
+    OPENMC_PROVENANCE_SCHEMA,
+    provenance_digest,
 )
 
 
 def valid_summary() -> dict[str, object]:
+    provenance: dict[str, object] = {
+        "schema": OPENMC_PROVENANCE_SCHEMA,
+        "status": "incomplete",
+        "artifacts": [
+            {
+                "role": "recipe",
+                "path": "/case/export_recipe.py",
+                "sha256": "1" * 64,
+            },
+            {
+                "role": "statepoint",
+                "path": "/case/statepoint.120.h5",
+                "sha256": "2" * 64,
+            },
+        ],
+    }
+    provenance["digest_sha256"] = provenance_digest(provenance)
     return {
         "burnup_axis": {"present": False},
         "check_passed": True,
@@ -21,12 +43,15 @@ def valid_summary() -> dict[str, object]:
         "format": "multicompo",
         "h_factor_default": None,
         "hdf5": "mgxs_library.h5",
+        "hdf5_sha256": "3" * 64,
         "hdf5_kept": True,
         "legendre_order": 1,
         "loaded_statepoint": True,
         "mixture_count": 2,
         "mixture_names": ["A", "B"],
         "output": "out.mcompo.txt",
+        "output_sha256": "4" * 64,
+        "openmc_provenance": provenance,
         "package_version": "0.1.2",
         "recipe": "/case/export_recipe.py",
         "root_name": "CPO",
@@ -49,12 +74,19 @@ class FromOpenMCSummaryTests(unittest.TestCase):
     def test_accepts_legacy_v3_summary(self) -> None:
         payload = valid_summary()
         payload["schema"] = FROM_OPENMC_SUMMARY_SCHEMA_V3
+        del payload["hdf5_sha256"]
+        del payload["output_sha256"]
+        del payload["openmc_provenance"]
         del payload["zero_flux_fill_macrolib"]
         del payload["zero_flux_fill_total_bins"]
         self.assertEqual(validate_from_openmc_summary(payload), [])
 
     def test_v4_fill_fields_validated(self) -> None:
         payload = valid_summary()
+        payload["schema"] = FROM_OPENMC_SUMMARY_SCHEMA_V4
+        del payload["hdf5_sha256"]
+        del payload["output_sha256"]
+        del payload["openmc_provenance"]
         payload["zero_flux_fill_macrolib"] = "/data/macrolib.h5"
         payload["zero_flux_fill_total_bins"] = 626
         self.assertEqual(validate_from_openmc_summary(payload), [])
@@ -65,6 +97,9 @@ class FromOpenMCSummaryTests(unittest.TestCase):
     def test_accepts_legacy_v1_summary(self) -> None:
         payload = valid_summary()
         payload["schema"] = FROM_OPENMC_SUMMARY_SCHEMA_V1
+        payload.pop("hdf5_sha256")
+        payload.pop("output_sha256")
+        payload.pop("openmc_provenance")
         payload.pop("zero_flux_fill_macrolib")
         payload.pop("zero_flux_fill_total_bins")
         payload.pop("checked")
@@ -78,6 +113,9 @@ class FromOpenMCSummaryTests(unittest.TestCase):
     def test_accepts_legacy_v2_summary(self) -> None:
         payload = valid_summary()
         payload["schema"] = FROM_OPENMC_SUMMARY_SCHEMA_V2
+        payload.pop("hdf5_sha256")
+        payload.pop("output_sha256")
+        payload.pop("openmc_provenance")
         payload.pop("zero_flux_fill_macrolib")
         payload.pop("zero_flux_fill_total_bins")
         payload.pop("std_dev_dataset_count")

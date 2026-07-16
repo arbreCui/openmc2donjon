@@ -13,6 +13,10 @@ import numpy as np
 from . import __version__
 from .constants import DONJON_ADF_NAME_WIDTH
 from .hdf5_names import read_mixture_names
+from .openmc_provenance import (
+    provenance_before_hdf5_mutation,
+    refresh_openmc_provenance_after_hdf5_mutation,
+)
 
 
 SCHEMA = "openmc2donjon.adf-augment.v1"
@@ -60,6 +64,7 @@ def augment_hdf5_with_adf(
     with h5py.File(input_h5, "r") as h5:
         mixture_names = _input_mixture_names(h5)
         ngroups = _energy_groups(h5)
+    openmc_provenance = provenance_before_hdf5_mutation(input_h5)
 
     sidecar = load_adf_source(
         adf_source,
@@ -81,6 +86,10 @@ def augment_hdf5_with_adf(
             adf_real=adf_real,
             adf_source_label=adf_source_label,
         )
+    refresh_openmc_provenance_after_hdf5_mutation(
+        output_h5,
+        openmc_provenance,
+    )
 
     report = AdfAugmentReport(
         input_h5=input_h5,

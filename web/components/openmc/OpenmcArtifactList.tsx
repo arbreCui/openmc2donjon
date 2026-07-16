@@ -6,8 +6,10 @@ import type { OpenmcWorkflowArtifact } from "@/lib/api";
 
 export default function OpenmcArtifactList({
   artifacts,
+  writtenHdf5Path = null,
 }: {
   artifacts: OpenmcWorkflowArtifact[];
+  writtenHdf5Path?: string | null;
 }) {
   return (
     <section className="glass rounded-xl p-5">
@@ -15,8 +17,8 @@ export default function OpenmcArtifactList({
         <div>
           <h2 className="text-base font-semibold tracking-tight">Artifacts</h2>
           <p className="mt-1 text-sm text-[var(--fg-2)]">
-            Planned files for this workflow. Inspect the MGXS HDF5 before
-            conversion; pass the ASCII output to DONJON.
+            This list is a plan, not evidence that a file exists. A written
+            MGXS HDF5 becomes inspectable only after export succeeds.
           </p>
         </div>
         <span className="rounded border border-[var(--edge)] px-2 py-1 font-mono text-[11px] uppercase tracking-wider text-[var(--fg-2)]">
@@ -25,7 +27,13 @@ export default function OpenmcArtifactList({
       </div>
 
       <div className="mt-3 space-y-2">
-        {artifacts.map((artifact) => (
+        {artifacts.map((artifact) => {
+          const written =
+            artifact.kind === "hdf5" &&
+            writtenHdf5Path != null &&
+            samePlannedOrResolvedPath(artifact.path, writtenHdf5Path);
+          const writtenPath = written ? writtenHdf5Path : null;
+          return (
           <article
             key={`${artifact.label}-${artifact.path}`}
             className="rounded-md border border-[var(--edge)] bg-white/[0.02] px-3 py-2"
@@ -45,7 +53,7 @@ export default function OpenmcArtifactList({
                         : "border-[var(--edge)] text-[var(--fg-3)]")
                     }
                   >
-                    {artifact.will_write ? "will write" : "skipped"}
+                    {written ? "written" : artifact.will_write ? "planned" : "skipped"}
                   </span>
                 </div>
                 <div className="mt-1 break-all font-mono text-[12px] text-[var(--fg-2)]">
@@ -53,13 +61,17 @@ export default function OpenmcArtifactList({
                 </div>
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
-                {artifact.kind === "hdf5" ? (
+                {artifact.kind === "hdf5" && writtenPath ? (
                   <Link
-                    href={`/inspect?path=${encodeURIComponent(artifact.path)}`}
+                    href={`/inspect?path=${encodeURIComponent(writtenPath)}`}
                     className="btn btn-secondary"
                   >
                     Inspect
                   </Link>
+                ) : artifact.kind === "hdf5" ? (
+                  <span className="rounded-md border border-[var(--edge)] px-3 py-2 text-[11px] text-[var(--fg-3)]">
+                    Inspect after write
+                  </span>
                 ) : null}
                 <CopyCliButton
                   value={artifact.path}
@@ -70,8 +82,16 @@ export default function OpenmcArtifactList({
               </div>
             </div>
           </article>
-        ))}
+          );
+        })}
       </div>
     </section>
   );
+}
+
+function samePlannedOrResolvedPath(planned: string, written: string): boolean {
+  if (planned === written) return true;
+  const normalizedPlanned = planned.replace(/\/+/g, "/");
+  const normalizedWritten = written.replace(/\/+/g, "/");
+  return normalizedWritten.endsWith(`/${normalizedPlanned.replace(/^\.\//, "")}`);
 }

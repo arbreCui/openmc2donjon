@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
 import type { PyGanBackendStatus } from "./api";
 import {
+  PYGAN_CONVERTER_HREF,
   pyganCompareAvailability,
   pyganMissingModulesLabel,
 } from "./pyganBackend";
 
 describe("pygan backend helpers", () => {
+  it("opens Converter with the PyGan writer and production checks selected", () => {
+    expect(PYGAN_CONVERTER_HREF).toBe(
+      "/convert?writer_backend=pygan&check=1&production=1#convert-component",
+    );
+  });
+
   it("keeps live writer comparison disabled while status is loading", () => {
     expect(pyganCompareAvailability(null)).toMatchObject({
       canRun: false,

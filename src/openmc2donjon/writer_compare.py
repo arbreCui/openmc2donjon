@@ -13,6 +13,7 @@ import numpy as np
 from . import lcm_ascii
 from .macrolib import convert_mgxs_hdf5_to_macrolib
 from .multicompo import DEFAULT_ROOT_NAME, convert_mgxs_hdf5
+from .pygan_backend import pygan_process_guard
 from .pygan_writer import convert_mgxs_hdf5_with_pygan
 
 
@@ -103,15 +104,41 @@ def compare_writer_backends(
 ) -> WriterComparisonReport:
     """Write with both backends and compare the resulting LCM trees."""
 
-    source = Path(input_h5).expanduser()
-    if output_format not in {"multicompo", "macrolib"}:
-        raise ValueError("output_format must be 'multicompo' or 'macrolib'")
-    suffix = ".macrolib.txt" if output_format == "macrolib" else ".mcompo.txt"
-    if keep_dir is None:
-        with tempfile.TemporaryDirectory() as tmpdir:
+    with pygan_process_guard():
+        source = Path(input_h5).expanduser().resolve()
+        summary_path = (
+            Path(summary_json).expanduser().resolve()
+            if summary_json is not None
+            else None
+        )
+        keep_path = (
+            Path(keep_dir).expanduser().resolve()
+            if keep_dir is not None
+            else None
+        )
+        if output_format not in {"multicompo", "macrolib"}:
+            raise ValueError("output_format must be 'multicompo' or 'macrolib'")
+        suffix = ".macrolib.txt" if output_format == "macrolib" else ".mcompo.txt"
+        if keep_path is None:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                report = _compare_in_dir(
+                    source,
+                    Path(tmpdir).resolve(),
+                    output_format=output_format,
+                    suffix=suffix,
+                    root_name=root_name,
+                    comment=comment,
+                    burnup=burnup,
+                    h_factor_default=h_factor_default,
+                    mixture_names=mixture_names,
+                    rtol=rtol,
+                    atol=atol,
+                )
+        else:
+            keep_path.mkdir(parents=True, exist_ok=True)
             report = _compare_in_dir(
                 source,
-                Path(tmpdir),
+                keep_path,
                 output_format=output_format,
                 suffix=suffix,
                 root_name=root_name,
@@ -122,28 +149,12 @@ def compare_writer_backends(
                 rtol=rtol,
                 atol=atol,
             )
-    else:
-        work = Path(keep_dir).expanduser()
-        work.mkdir(parents=True, exist_ok=True)
-        report = _compare_in_dir(
-            source,
-            work,
-            output_format=output_format,
-            suffix=suffix,
-            root_name=root_name,
-            comment=comment,
-            burnup=burnup,
-            h_factor_default=h_factor_default,
-            mixture_names=mixture_names,
-            rtol=rtol,
-            atol=atol,
-        )
-    if summary_json is not None:
-        Path(summary_json).expanduser().write_text(
-            json.dumps(report.as_dict(), indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-    return report
+        if summary_path is not None:
+            summary_path.write_text(
+                json.dumps(report.as_dict(), indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+        return report
 
 
 def print_writer_comparison_report(report: WriterComparisonReport, *, max_issues: int = 20) -> None:

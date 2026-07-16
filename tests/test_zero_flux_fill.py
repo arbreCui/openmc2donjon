@@ -224,6 +224,108 @@ class ZeroFluxFillTests(unittest.TestCase):
                 )
                 np.testing.assert_array_equal(fuel["total"][:], [10.0, 3.0, 30.0, 1.0])
 
+    def test_noise_criterion_fills_high_rel_std_dev_bins_when_opted_in(self) -> None:
+        # Micro-flux bins can tally a handful of scores: flux > 0 (zero-flux
+        # criterion misses them) and transport > 0, but the rate/flux ratio is
+        # an unphysical spike whose total rel std_dev is O(1). The opt-in
+        # noise criterion substitutes those bins; without the opt-in they are
+        # left untouched.
+        spec = _fuel_spec(
+            total=(10.0, 52.9, 30.0, 40.0),
+            transport=(9.0, 99.2, 29.0, 38.0),
+        )
+        spec["datasets"]["total_std_dev"] = (0.1, 74.8, 0.1, 0.1)  # bin 1 rel std ~ sqrt(2)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            macrolib = _touch_macrolib(root)
+
+            untouched = root / "untouched.h5"
+            _write_converter_h5(untouched, {"fuel": spec})
+            with _fake_openmc(_fake_library()):
+                report = fill_zero_flux_groups(untouched, macrolib=macrolib, in_place=True)
+            self.assertEqual(report.total_filled_bins, 0)
+
+            mgxs = root / "mgxs.h5"
+            _write_converter_h5(mgxs, {"fuel": spec})
+            with _fake_openmc(_fake_library()):
+                report = fill_zero_flux_groups(
+                    mgxs,
+                    macrolib=macrolib,
+                    in_place=True,
+                    max_total_rel_std_dev=0.5,
+                )
+            self.assertEqual(report.total_filled_bins, 1)
+            with h5py.File(mgxs, "r") as h5:
+                fuel = h5["mixtures/fuel"]
+                np.testing.assert_array_equal(
+                    fuel.attrs["zero_flux_filled_groups"], np.array([1], dtype=np.int64)
+                )
+                np.testing.assert_array_equal(fuel["total"][:], [10.0, 3.0, 30.0, 40.0])
+                self.assertEqual(fuel["total_std_dev"][1], 0.0)
+
+    def test_noise_criterion_fills_overscattering_rows_when_opted_in(self) -> None:
+        spec = _fuel_spec(
+            total=(10.0, 20.0, 30.0, 40.0),
+            transport=(9.0, 19.0, 29.0, 39.0),
+        )
+        matrix = np.zeros((2, GROUPS, GROUPS))
+        matrix[0, 1, 1] = 24.0  # P0 out-scatter is 20% above total.
+        spec["datasets"]["scatter_matrix"] = matrix
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            macrolib = _touch_macrolib(root)
+
+            untouched = root / "untouched.h5"
+            _write_converter_h5(untouched, {"fuel": spec})
+            with _fake_openmc(_fake_library()):
+                report = fill_zero_flux_groups(untouched, macrolib=macrolib, in_place=True)
+            self.assertEqual(report.total_filled_bins, 0)
+
+            mgxs = root / "mgxs.h5"
+            _write_converter_h5(mgxs, {"fuel": spec})
+            with _fake_openmc(_fake_library()):
+                report = fill_zero_flux_groups(
+                    mgxs,
+                    macrolib=macrolib,
+                    in_place=True,
+                    max_scatter_row_overshoot_rel=0.05,
+                )
+            self.assertEqual(report.total_filled_bins, 1)
+            self.assertEqual(report.max_scatter_row_overshoot_rel, 0.05)
+            with h5py.File(mgxs, "r") as h5:
+                fuel = h5["mixtures/fuel"]
+                np.testing.assert_array_equal(
+                    fuel.attrs["zero_flux_filled_groups"], np.array([1], dtype=np.int64)
+                )
+                np.testing.assert_array_equal(fuel["total"][:], [10.0, 3.0, 30.0, 40.0])
+                np.testing.assert_array_equal(
+                    fuel["scatter_matrix"][0, 1], [22.0, 20.0, 18.0, 16.0]
+                )
+
+    def test_noise_thresholds_must_be_finite_and_non_negative(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            macrolib = _touch_macrolib(root)
+            _write_converter_h5(mgxs, {"fuel": _fuel_spec()})
+            with _fake_openmc(_fake_library()):
+                for kwargs in (
+                    {"max_total_rel_std_dev": -0.1},
+                    {"max_total_rel_std_dev": float("nan")},
+                    {"max_scatter_row_overshoot_rel": -0.1},
+                    {"max_scatter_row_overshoot_rel": float("inf")},
+                ):
+                    with self.subTest(kwargs=kwargs):
+                        with self.assertRaisesRegex(ValueError, "finite and non-negative"):
+                            fill_zero_flux_groups(
+                                mgxs,
+                                macrolib=macrolib,
+                                in_place=True,
+                                **kwargs,
+                            )
+
     def test_fission_is_only_filled_for_fissionable_materials(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -285,6 +387,11 @@ class ZeroFluxFillTests(unittest.TestCase):
                 mgxs,
                 {"fuel": _fuel_spec(), "sodium": _sodium_spec()},
             )
+            with h5py.File(mgxs, "r+") as h5:
+                # A prior fill pass must remain visible in the provenance.
+                h5["mixtures/fuel"].attrs["zero_flux_filled_groups"] = np.array(
+                    [0], dtype=np.int64
+                )
 
             with _fake_openmc(_fake_library()):
                 report = fill_zero_flux_groups(mgxs, macrolib=macrolib, in_place=True)
@@ -294,7 +401,8 @@ class ZeroFluxFillTests(unittest.TestCase):
             with h5py.File(mgxs, "r") as h5:
                 fuel = h5["mixtures/fuel"]
                 np.testing.assert_array_equal(
-                    fuel.attrs["zero_flux_filled_groups"], np.array([2, 3], dtype=np.int64)
+                    fuel.attrs["zero_flux_filled_groups"],
+                    np.array([0, 2, 3], dtype=np.int64),
                 )
                 self.assertEqual(fuel.attrs["zero_flux_fill_source"], str(macrolib))
                 sodium = h5["mixtures/sodium"]
@@ -420,11 +528,13 @@ class ZeroFluxFillTests(unittest.TestCase):
             self.assertIn("openmc2donjon_zero_flux_fill_passed", stream.getvalue())
             self.assertEqual(_sha256(mgxs), input_digest)
             payload = json.loads(summary.read_text(encoding="utf-8"))
-            self.assertEqual(payload["schema"], "openmc2donjon.zero-flux-fill.v1")
+            self.assertEqual(payload["schema"], "openmc2donjon.zero-flux-fill.v2")
             self.assertEqual(payload["decision"], "openmc2donjon_zero_flux_fill_passed")
             self.assertEqual(payload["total_filled_bins"], 2)
             self.assertEqual(payload["filled_per_mixture"], {"fuel": 2})
             self.assertEqual(payload["label_attr"], "irena_mixture_label")
+            self.assertIsNone(payload["max_total_rel_std_dev"])
+            self.assertIsNone(payload["max_scatter_row_overshoot_rel"])
             with h5py.File(output, "r") as h5:
                 np.testing.assert_array_equal(
                     h5["mixtures/fuel"]["total"][:], [10.0, 20.0, 2.0, 1.0]

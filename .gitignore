@@ -4,9 +4,15 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.vite/
 .venv/
 build/
 dist/
 *.egg-info/
 *.log
 *.tmp
+.openmc2donjon-runs/
+
+# Local DRAGON/PyGan scratch objects
+/_DUMMY
+/_main001

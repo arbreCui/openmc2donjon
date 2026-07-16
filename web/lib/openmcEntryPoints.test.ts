@@ -20,15 +20,28 @@ describe("openmcEntryPoints", () => {
     expect(sph.equivalence).toBe("sph");
     expect(sph.production).toBe(true);
     expect(sph.secondaryHref).toContain("equivalence=sph");
-    expect(sph.secondaryHref).toContain("format=macrolib");
+    expect(sph.secondaryHref).toContain("format=multicompo");
+    expect(sph.secondaryHref).not.toContain("colorset=");
     // The label promises the summary card, so the href must land on it.
     expect(sph.secondaryHref).toContain("#openmc-sph-summary");
+  });
+
+  it("uses production checks for the direct Converter shortcut", () => {
+    const direct = openmcEntryPoint("direct-mgxs");
+    expect(direct.production).toBe(true);
+    expect(direct.secondaryHref).toContain("production=1");
   });
 
   it("describes record-attachment as attach, never inject", () => {
     for (const entry of OPENMC_ENTRY_POINTS) {
       expect(entry.body).not.toMatch(/inject/i);
     }
+  });
+
+  it("keeps the SPH entry generic about geometry and component count", () => {
+    const sph = openmcEntryPoint("openmc-sph");
+    expect(sph.body).toContain("project-declared domains");
+    expect(sph.body).not.toMatch(/seven|colorset|five|91-position/i);
   });
 
   it("identifies the active entry from the planner state", () => {

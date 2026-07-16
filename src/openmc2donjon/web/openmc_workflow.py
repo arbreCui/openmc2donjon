@@ -14,6 +14,7 @@ OPENMC_WORKFLOW_SCHEMA = "openmc2donjon.openmc-workflow-plan.v1"
 _FORMATS = {"multicompo", "macrolib"}
 _WORKFLOWS = {"one-step", "two-step"}
 _EQUIVALENCE = {"direct", "adf", "sph", "flux-ratio-adf"}
+_PLAN_SCOPES = {"export", "complete"}
 
 
 def register_openmc_workflow_routes(
@@ -49,8 +50,15 @@ def _normalize_request(payload: dict[str, Any], http_exception: Any) -> dict[str
         "equivalence",
         http_exception,
     )
-    return {
+    plan_scope = _choice(
+        payload.get("plan_scope", "complete"),
+        _PLAN_SCOPES,
+        "plan_scope",
+        http_exception,
+    )
+    request = {
         "workflow": workflow,
+        "plan_scope": plan_scope,
         "recipe_path": _string(payload.get("recipe_path", "")),
         "statepoint_path": _string(payload.get("statepoint_path", "")),
         "load_statepoint": _bool(payload.get("load_statepoint", True)),
@@ -70,6 +78,25 @@ def _normalize_request(payload: dict[str, Any], http_exception: Any) -> dict[str
         "build_flux_ratio_adf": equivalence == "flux-ratio-adf"
         or _bool(payload.get("build_flux_ratio_adf", False)),
     }
+    if request["production"] and request["h_factor_default"] is not None:
+        raise http_exception(
+            status_code=422,
+            detail=(
+                "production cannot use h_factor_default; the OpenMC export "
+                "must provide physical group-wise H-FACTOR / kappa-fission data"
+            ),
+        )
+    if request["production"] and (
+        not request["load_statepoint"] or not request["statepoint_path"]
+    ):
+        raise http_exception(
+            status_code=422,
+            detail=(
+                "production requires load_statepoint=true and a CE statepoint_path; "
+                "recipe-only mode is a non-production command scaffold"
+            ),
+        )
+    return request
 
 
 def _build_plan(
@@ -90,7 +117,11 @@ def _build_plan(
         "ok": all(check["status"] != "fail" for check in checks),
         "mock_mode": mock_mode,
         "workflow": request["workflow"],
-        "workflow_label": _workflow_label(str(request["workflow"])),
+        "plan_scope": request["plan_scope"],
+        "workflow_label": _workflow_label(
+            str(request["workflow"]),
+            export_only=request["plan_scope"] == "export",
+        ),
         "equivalence": request["equivalence"],
         "steps": _steps(request),
         "artifacts": artifacts,
@@ -132,18 +163,21 @@ def _readiness_checks(
             expected_suffix=".h5",
         ),
         _parent_check(
-            "ASCII output directory",
-            output,
-            must_exist=not mock_mode,
-            filesystem_scope=scope,
-        ),
-        _parent_check(
             "HDF5 handoff directory",
             hdf5,
             must_exist=not mock_mode,
             filesystem_scope=scope,
         ),
     ]
+    if request["plan_scope"] != "export":
+        checks.append(
+            _parent_check(
+                "ASCII output directory",
+                output,
+                must_exist=not mock_mode,
+                filesystem_scope=scope,
+            )
+        )
     if run_dir:
         checks.append(
             _directory_parent_check(
@@ -161,7 +195,7 @@ def _readiness_checks(
                 "message": "No managed run directory selected; artifacts will be less organized.",
             }
         )
-    if request["equivalence"] == "adf":
+    if request["plan_scope"] != "export" and request["equivalence"] == "adf":
         checks.append(
             _path_check(
                 "ADF sidecar",
@@ -172,7 +206,7 @@ def _readiness_checks(
                 expected_suffix=".h5",
             )
         )
-    if request["equivalence"] == "sph":
+    if request["plan_scope"] != "export" and request["equivalence"] == "sph":
         checks.append(
             _path_check(
                 "SPH sidecar",
@@ -183,7 +217,11 @@ def _readiness_checks(
                 expected_suffix=".h5",
             )
         )
-    if request["equivalence"] == "flux-ratio-adf" and not run_dir:
+    if (
+        request["plan_scope"] != "export"
+        and request["equivalence"] == "flux-ratio-adf"
+        and not run_dir
+    ):
         checks.append(
             {
                 "name": "flux-ratio ADF run directory",
@@ -191,7 +229,11 @@ def _readiness_checks(
                 "message": "Flux-ratio ADF construction requires a managed run directory.",
             }
         )
-    if request["workflow"] == "two-step" and request["equivalence"] == "flux-ratio-adf":
+    if (
+        request["plan_scope"] != "export"
+        and request["workflow"] == "two-step"
+        and request["equivalence"] == "flux-ratio-adf"
+    ):
         checks.append(
             {
                 "name": "two-step flux-ratio ADF",
@@ -332,6 +374,8 @@ def _steps(request: dict[str, Any]) -> list[dict[str, Any]]:
             "summary": "Build the openmc2donjon HDF5 handoff from the recipe/statepoint.",
         },
     ]
+    if request["plan_scope"] == "export":
+        return steps
     if request["equivalence"] == "adf":
         steps.append(
             {
@@ -399,8 +443,12 @@ def _artifacts(request: dict[str, Any]) -> list[dict[str, Any]]:
     run_dir = str(request["run_dir"]).strip()
     artifacts = [
         {"label": "MGXS HDF5 handoff", "path": hdf5, "kind": "hdf5", "will_write": True},
-        {"label": "DONJON ASCII output", "path": output, "kind": "ascii", "will_write": True},
     ]
+    if request["plan_scope"] == "export":
+        return artifacts
+    artifacts.append(
+        {"label": "DONJON ASCII output", "path": output, "kind": "ascii", "will_write": True}
+    )
     if request["workflow"] == "two-step" and request["equivalence"] in {"adf", "sph"}:
         kind = str(request["equivalence"])
         artifacts.insert(
@@ -433,6 +481,8 @@ def _artifacts(request: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _commands(request: dict[str, Any]) -> list[dict[str, Any]]:
+    if request["plan_scope"] == "export":
+        return [_command_payload("Export MGXS HDF5", _export_command(request))]
     if request["workflow"] == "two-step":
         commands = [_command_payload("Export MGXS HDF5", _export_command(request))]
         conversion_input = _default_hdf5(request)
@@ -572,6 +622,20 @@ def _command_payload(label: str, command: list[str]) -> dict[str, Any]:
 
 
 def _next_actions(request: dict[str, Any]) -> list[str]:
+    if request["plan_scope"] == "export":
+        actions = ["Run the export command, then inspect the MGXS HDF5 handoff."]
+        if request["equivalence"] == "sph":
+            actions.extend(
+                [
+                    "Continue to SPH with matched CE and homogenized-MG fluxes "
+                    "on the same declared domain map.",
+                    "Open Converter only after apply-sph has written the "
+                    "SPH-applied handoff.",
+                ]
+            )
+        else:
+            actions.append("Open the exported HDF5 directly in Converter.")
+        return actions
     actions = [
         "Run the recipe dry-run first if the recipe/statepoint pairing has not been checked.",
         "After export, inspect the HDF5 handoff before handing the ASCII to DONJON.",
@@ -590,7 +654,9 @@ def _next_actions(request: dict[str, Any]) -> list[str]:
     return actions
 
 
-def _workflow_label(workflow: str) -> str:
+def _workflow_label(workflow: str, *, export_only: bool = False) -> str:
+    if export_only:
+        return "OpenMC MGXS export"
     return "One-step export + convert" if workflow == "one-step" else "Two-step export then convert"
 
 

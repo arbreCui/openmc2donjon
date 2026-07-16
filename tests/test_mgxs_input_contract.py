@@ -10,9 +10,132 @@ import numpy as np
 
 from openmc2donjon import mgxs_input_contract as validator
 from openmc2donjon.energy_groups import energy_bounds_sha256, load_energy_mesh
+from openmc2donjon.mgxs_input_report import PASS_DECISION, write_summary
+from openmc2donjon.openmc_provenance import (
+    collect_openmc_provenance,
+    write_openmc_provenance,
+)
 
 
 class MgxsInputContractTests(unittest.TestCase):
+    def test_explicit_provenance_requirement_fails_closed_on_unmarked_input(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "generic.h5"
+            write_single_state_fixture(path, total=[0.3, 0.4])
+
+            explicit = validator.validate_input(
+                path,
+                require_openmc_provenance=True,
+            )
+            source_aware = validator.validate_input(
+                path,
+                require_openmc_provenance_if_openmc=True,
+            )
+
+            self.assertFalse(explicit.ok)
+            self.assertTrue(
+                any("explicitly required" in issue for issue in explicit.issues)
+            )
+            self.assertTrue(source_aware.ok, source_aware.issues)
+
+    def test_source_aware_requirement_rejects_legacy_openmc_input(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "legacy-openmc.h5"
+            write_single_state_fixture(path, total=[0.3, 0.4])
+            with h5py.File(path, "r+") as h5:
+                h5.attrs["source"] = "OpenMC mgxs.Library"
+
+            report = validator.validate_input(
+                path,
+                require_openmc_provenance_if_openmc=True,
+            )
+
+            self.assertFalse(report.ok)
+            self.assertTrue(
+                any("not reference-bound" in issue for issue in report.issues)
+            )
+
+    def test_openmc_production_requires_intact_reference_binding(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            path = root / "handoff.h5"
+            recipe = root / "recipe.py"
+            statepoint = root / "statepoint.10.h5"
+            write_single_state_fixture(path, total=[0.3, 0.4])
+            recipe.write_text("# source recipe\n", encoding="utf-8")
+            with h5py.File(statepoint, "w") as h5:
+                h5.attrs["filetype"] = "statepoint"
+                h5.attrs["openmc_version"] = "0.15.2"
+                h5.attrs["version"] = np.asarray([18, 1])
+            record = collect_openmc_provenance(
+                recipe_path=recipe,
+                statepoint_path=statepoint,
+                statepoint_loaded=True,
+            )
+            self.assertTrue(record["capabilities"]["reference_bound"])
+            self.assertFalse(record["capabilities"]["transport_reproducible"])
+            write_openmc_provenance(path, record)
+
+            report = validator.validate_input(
+                path,
+                require_openmc_provenance=True,
+            )
+            self.assertTrue(report.ok, report.issues)
+            self.assertEqual(report.openmc_provenance_status, "incomplete")
+            self.assertTrue(
+                any("transport replay" in warning for warning in report.warnings)
+            )
+
+            with h5py.File(path, "r+") as h5:
+                h5["mixtures/fuel/total"][0] = 9.0
+            payload_tampered = validator.validate_input(
+                path,
+                require_openmc_provenance=True,
+            )
+            self.assertFalse(payload_tampered.ok)
+            self.assertTrue(
+                any("integrity" in issue for issue in payload_tampered.issues)
+            )
+
+            write_openmc_provenance(path, record)
+
+            with h5py.File(path, "r+") as h5:
+                h5.attrs["openmc_provenance_sha256"] = "0" * 64
+            tampered = validator.validate_input(
+                path,
+                require_openmc_provenance=True,
+            )
+            self.assertFalse(tampered.ok)
+            self.assertTrue(
+                any("not reference-bound" in issue for issue in tampered.issues)
+            )
+
+    def test_reports_apply_sph_root_provenance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "sph_applied.h5"
+            write_single_state_fixture(path, total=[0.3, 0.4])
+            with h5py.File(path, "a") as h5:
+                h5.attrs["sph_applied"] = True
+                h5.attrs["sph_applied_source"] = "/runs/openmc_sph.h5"
+                h5.attrs["sph_apply_operator"] = "divide-xs-by-nsph"
+                h5.attrs["sph_kind"] = "openmc-ce-mg-global"
+
+            report = validator.validate_input(path)
+
+        self.assertTrue(report.ok, report.issues)
+        self.assertTrue(report.sph_applied)
+        self.assertEqual(report.sph_applied_source, "/runs/openmc_sph.h5")
+        self.assertEqual(report.sph_apply_operator, "divide-xs-by-nsph")
+        self.assertEqual(report.sph_kind, "openmc-ce-mg-global")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            summary = Path(tmpdir) / "summary.json"
+            write_summary(summary, [report], PASS_DECISION, None)
+            payload = json.loads(summary.read_text(encoding="utf-8"))["inputs"][0]
+        self.assertTrue(payload["sph_applied"])
+        self.assertEqual(payload["sph_kind"], "openmc-ce-mg-global")
+
     def test_validates_multistate_burnup_axis(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "multi.h5"

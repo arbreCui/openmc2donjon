@@ -34,10 +34,10 @@ export function commandWorkflowMapping(
     return {
       available: true,
       href: command.web_path,
-      surface: "Convert page",
-      title: "Direct converter workflow",
+      surface: "Converter page",
+      title: "openmc2donjon Converter workflow",
       summary:
-        "Opens the converter page with the output object and check mode selected, then continues to ASCII preview and bundle links after conversion.",
+        "Opens the product's core Converter with the output object and check mode selected, then continues to ASCII preview and bundle links after conversion.",
       presets: [
         `Output object: ${format === "macrolib" ? "MACROLIB" : "MULTICOMPO"}`,
         `Preflight (--check): ${check ? "on" : "off"}`,
@@ -52,7 +52,6 @@ export function commandWorkflowMapping(
   }
 
   if (parsed.pathname === "/openmc") {
-    const workflow = parsed.searchParams.get("workflow") ?? "one-step";
     const equivalence = parsed.searchParams.get("equivalence") ?? "direct";
     const production = flag(parsed.searchParams.get("production"));
     return {
@@ -61,9 +60,9 @@ export function commandWorkflowMapping(
       surface: "OpenMC page",
       title: "OpenMC production handoff workflow",
       summary:
-        "Opens the OpenMC prep page with the intended one-step or two-step workflow already selected.",
+        "Opens the OpenMC prep page to produce an MGXS HDF5; formal DONJON serialization remains a separate Converter step.",
       presets: [
-        `Workflow: ${workflow === "two-step" ? "two-step export then convert" : "one-step export + convert"}`,
+        "Workflow: OpenMC HDF5 export, then Converter",
         `Equivalence: ${equivalenceLabel(equivalence)}`,
         `Production checks (--production): ${production ? "on" : "off"}`,
       ],

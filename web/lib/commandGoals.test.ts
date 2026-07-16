@@ -40,8 +40,8 @@ describe("commandGoals", () => {
     const sph = goals.find((goal) => goal.id === "openmc-sph");
     expect(sph?.body).toContain("OpenMC CE");
     expect(sph?.actionHint).toContain("sidecar");
-    expect(sph?.body).toContain("MG reruns are optional");
-    expect(sph?.actionHint).toContain("damping study");
+    expect(sph?.body).toContain("physically validated factors");
+    expect(sph?.actionHint).toContain("converter-layout HDF5");
     expect(sph?.commands.map((command) => command.id)).toEqual([
       "export-volume-flux",
       "make-openmc-sph-sidecar",
