@@ -2643,12 +2643,21 @@ def _stage_working_directory(
             copied = 0
             try:
                 opened = os.fstat(descriptor)
-                identity = (opened.st_dev, opened.st_ino, opened.st_mode, opened.st_size)
+                identity = (
+                    opened.st_dev,
+                    opened.st_ino,
+                    opened.st_mode,
+                    opened.st_size,
+                    opened.st_mtime_ns,
+                    opened.st_ctime_ns,
+                )
                 expected_identity = (
                     expected.st_dev,
                     expected.st_ino,
                     expected.st_mode,
                     expected.st_size,
+                    expected.st_mtime_ns,
+                    expected.st_ctime_ns,
                 )
                 if not stat.S_ISREG(opened.st_mode) or identity != expected_identity:
                     raise RuntimeError(
@@ -2679,8 +2688,10 @@ def _stage_working_directory(
                 if (
                     after.st_dev != opened.st_dev
                     or after.st_ino != opened.st_ino
+                    or after.st_mode != opened.st_mode
                     or after.st_size != opened.st_size
                     or after.st_mtime_ns != opened.st_mtime_ns
+                    or after.st_ctime_ns != opened.st_ctime_ns
                     or copied != opened.st_size
                 ):
                     raise RuntimeError(

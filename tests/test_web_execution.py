@@ -646,6 +646,39 @@ class DonjonResultParserTests(unittest.TestCase):
             ), self.assertRaisesRegex(RuntimeError, "changed before"):
                 _stage_working_directory(source, root / "stage")
 
+    def test_staging_rejects_a_same_size_file_changed_after_inventory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source = root / "case"
+            source.mkdir()
+            input_path = source / "reference.txt"
+            input_path.write_text("original", encoding="utf-8")
+            original_mtime_ns = input_path.stat().st_mtime_ns
+            real_open = os.open
+            changed = False
+
+            def changing_open(
+                path: object,
+                flags: int,
+                *args: object,
+                **kwargs: object,
+            ) -> int:
+                nonlocal changed
+                if Path(path).name == input_path.name and not changed:
+                    changed = True
+                    input_path.write_text("modified", encoding="utf-8")
+                    os.utime(
+                        input_path,
+                        ns=(original_mtime_ns, original_mtime_ns + 1_000_000_000),
+                    )
+                return real_open(path, flags, *args, **kwargs)
+
+            with patch(
+                "openmc2donjon.web.execution.os.open",
+                side_effect=changing_open,
+            ), self.assertRaisesRegex(RuntimeError, "changed before"):
+                _stage_working_directory(source, root / "stage")
+
     def test_staging_never_writes_concurrently_appended_bytes(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
