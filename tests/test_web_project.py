@@ -1390,7 +1390,7 @@ def _write_receipt(input_path: Path, output: Path, *, require_physical_sph: bool
 
 
 def _production_preflight_input(
-    thresholds: dict[str, float],
+    thresholds: dict[str, float | None],
     *,
     path: str | None = None,
 ) -> dict[str, object]:

@@ -611,7 +611,9 @@ def _convert_response(
     }
 
 
-def _web_production_thresholds(request: dict[str, Any]) -> dict[str, float] | None:
+def _web_production_thresholds(
+    request: dict[str, Any],
+) -> dict[str, float | None] | None:
     if not request["production"]:
         return None
     return effective_production_thresholds(
@@ -749,7 +751,7 @@ def _mock_convert_response(request: dict[str, Any]) -> dict[str, Any]:
 
 def _apply_mock_production_thresholds(
     preflight_input: dict[str, Any],
-    thresholds: dict[str, float],
+    thresholds: dict[str, float | None],
 ) -> None:
     preflight_input["scatter_row_balance"]["fail_threshold"] = thresholds[
         "scatter_row_balance_fail"

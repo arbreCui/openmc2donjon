@@ -224,7 +224,9 @@ class CliTests(unittest.TestCase):
         self.assertFalse(output.exists())
         self.assertIn("cannot be combined with --h-factor-default", stderr.getvalue())
 
-    def test_direct_production_clamps_every_relaxing_threshold(self) -> None:
+    def test_direct_production_clamps_canonical_and_records_declared_threshold(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "mgxs.h5"
             output = Path(tmpdir) / "out.mcompo.txt"
@@ -268,7 +270,10 @@ class CliTests(unittest.TestCase):
         )
         effective = policy["effective_thresholds"]
         for name, maximum in PRODUCTION_CANONICAL_MAXIMUMS.items():
-            self.assertEqual(effective[name], maximum)
+            if maximum is None:
+                self.assertEqual(effective[name], 99.0)
+            else:
+                self.assertEqual(effective[name], maximum)
         preflight = payload["preflight"]["inputs"][0]
         self.assertEqual(
             preflight["scatter_row_balance"]["fail_threshold"],

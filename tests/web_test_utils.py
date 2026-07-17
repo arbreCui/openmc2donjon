@@ -40,9 +40,15 @@ def write_fake_hdf5(path: Path) -> None:
             mix.attrs["fissionable"] = bool(name == "M1_UO2")
             mix.create_dataset("total", data=np.full(ngroups, 0.5 * index))
             mix.create_dataset("absorption", data=np.full(ngroups, 0.05 * index))
-            fission = np.full(ngroups, 0.01 * index)
+            is_fissionable = name == "M1_UO2"
+            fission = (
+                np.full(ngroups, 0.01 * index)
+                if is_fissionable
+                else np.zeros(ngroups, dtype=float)
+            )
             chi = np.zeros(ngroups, dtype=float)
-            chi[0] = 1.0
+            if is_fissionable:
+                chi[0] = 1.0
             mix.create_dataset("fission", data=fission)
             mix.create_dataset("nu_fission", data=2.5 * fission)
             mix.create_dataset("chi", data=chi)

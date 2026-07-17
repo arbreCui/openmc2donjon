@@ -56,7 +56,7 @@ class ConvertEndpointTests(unittest.TestCase):
         self.assertIn("cannot disable uncertainty", response.json()["detail"])
         self.assertIn("std-dev coverage", response.json()["detail"])
 
-    def test_production_receipt_records_non_relaxable_effective_policy(self) -> None:
+    def test_production_receipt_records_canonical_and_declared_policy(self) -> None:
         from openmc2donjon.web.server import create_app
 
         client = TestClient(create_app(mock_mode=True))
@@ -84,7 +84,10 @@ class ConvertEndpointTests(unittest.TestCase):
             PRODUCTION_CANONICAL_MAXIMUMS,
         )
         for name, maximum in PRODUCTION_CANONICAL_MAXIMUMS.items():
-            self.assertEqual(policy["effective_thresholds"][name], maximum)
+            if maximum is None:
+                self.assertEqual(policy["effective_thresholds"][name], 99.0)
+            else:
+                self.assertEqual(policy["effective_thresholds"][name], maximum)
         preflight = payload["preflight"]["inputs"][0]
         self.assertEqual(
             preflight["scatter_row_balance"]["fail_threshold"],

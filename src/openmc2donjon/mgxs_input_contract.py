@@ -56,15 +56,11 @@ from .mgxs_input_uncertainty import (
 VALID_MULTICOMPO_EXTENSIONS = (".mco", ".mcompo.txt")
 VALID_MACROLIB_EXTENSIONS = (".macrolib.txt",)
 REQUIRED_DATASETS = ("total", "absorption", "fission", "nu_fission", "chi", "scatter_matrix")
-OPTIONAL_VECTOR_DATASETS = (
-    "transport_total",
+INVERSE_VELOCITY_DATASETS = (
     "inverse_velocity",
-    "h_factor",
-    "H-FACTOR",
-    "H_FACTOR",
-    "kappa_fission",
-    "kappa_fission_xs",
-    "kappa_fission_cross_section",
+    "inverse-velocity",
+    "OVERV",
+    "overv",
 )
 H_FACTOR_DATASETS = (
     "h_factor",
@@ -73,6 +69,11 @@ H_FACTOR_DATASETS = (
     "kappa_fission",
     "kappa_fission_xs",
     "kappa_fission_cross_section",
+)
+OPTIONAL_VECTOR_DATASETS = (
+    "transport_total",
+    *INVERSE_VELOCITY_DATASETS,
+    *H_FACTOR_DATASETS,
 )
 def production_preflight_defaults(
     *,
@@ -174,6 +175,59 @@ def production_preflight_defaults(
         ],
         "require_std_dev_coverage": True,
     }
+
+
+def validate_production_input(path: Path) -> InputReport:
+    """Run the canonical Converter production policy without writing output.
+
+    Inspect uses this entry point so its verdict cannot drift from Converter's
+    production preflight.  The function is intentionally read-only.
+    """
+
+    settings = production_preflight_defaults(
+        production=True,
+        require_transport_dataset=False,
+        require_volume=False,
+        require_h_factor=False,
+        scatter_row_balance_warn=None,
+        scatter_row_balance_fail=None,
+        uncertainty_warn=None,
+        uncertainty_fail=None,
+        uncertainty_production_fail=None,
+        uncertainty_mean_abs_floor=1.0e-12,
+    )
+    return validate_input(
+        path,
+        require_mixture_order=settings["require_mixture_order"],
+        require_domain_mode=settings["require_domain_mode"],
+        require_source_domain_metadata=settings["require_source_domain_metadata"],
+        require_openmc_provenance=settings["require_openmc_provenance"],
+        require_openmc_provenance_if_openmc=settings[
+            "require_openmc_provenance_if_openmc"
+        ],
+        require_openmc_volume_flux=settings["require_openmc_volume_flux"],
+        require_transport_dataset=settings["require_transport_dataset"],
+        require_volume=settings["require_volume"],
+        require_h_factor=settings["require_h_factor"],
+        require_known_energy_mesh=settings["require_known_energy_mesh"],
+        warn_unknown_energy_mesh=settings["warn_unknown_energy_mesh"],
+        energy_mesh_tolerance=settings["energy_mesh_tolerance"],
+        scatter_row_balance_warn=settings["scatter_row_balance_warn"],
+        scatter_row_balance_fail=settings["scatter_row_balance_fail"],
+        require_energy_bounds_consistency=settings[
+            "require_energy_bounds_consistency"
+        ],
+        chi_sum_tolerance=settings["chi_sum_tolerance"],
+        require_adf_face_consistency=settings["require_adf_face_consistency"],
+        transport_p1_fail=settings["transport_p1_fail"],
+        uncertainty=UncertaintyConfig(
+            warn_threshold=settings["uncertainty_warn"],
+            fail_threshold=settings["uncertainty_fail"],
+            production_fail_threshold=settings["uncertainty_production_fail"],
+            mean_abs_floor=settings["uncertainty_mean_abs_floor"],
+            require_coverage=settings["require_std_dev_coverage"],
+        ),
+    )
 
 
 def main() -> int:
@@ -360,7 +414,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--require-transport-dataset",
         action="store_true",
-        help="require an explicit transport_total dataset, not only P1-derived STRD",
+        help="require an explicit transport_total dataset",
     )
     parser.add_argument(
         "--require-volume",
@@ -460,8 +514,8 @@ def parse_args() -> argparse.Namespace:
         default=None,
         metavar="REL",
         help=(
-            "fail if explicit transport_total differs from total minus P1 "
-            "scatter out by more than REL"
+            "fail if explicit transport_total differs from the bound-flux "
+            "OpenMC P1 transport identity by more than REL"
         ),
     )
     parser.add_argument(
@@ -753,6 +807,16 @@ def validate_open_h5(
             )
         )
 
+    # Converter derives one direct-mixture flux weight from the root matrix.
+    # A single file-global matrix cannot be attributed to individual state
+    # points, and read_mgxs_hdf5_histories rejects this combination.  Keep the
+    # contract and the reader on the same fail-closed boundary.
+    if report.openmc_volume_flux_present and report.stateful_mixtures:
+        report.fail(
+            "/openmc_volume_flux cannot be attached to multi-state MGXS data; "
+            "provide one reference flux field per state"
+        )
+
     physics = evaluate_mgxs_physics(
         h5,
         mixture_names=mixture_names,
@@ -812,8 +876,13 @@ def apply_shared_physics_checks(
     report.nu_ratio_max = physics.nu_ratio_max
     report.nu_ratio_worst = physics.nu_ratio_worst
     report.nu_ratio_warning_count = physics.nu_ratio_warning_count
+    report.nu_ratio_support_mismatch_count = (
+        physics.nu_ratio_support_mismatch_count
+    )
     for warning in physics.nu_ratio_warnings:
         report.warn(warning)
+    for issue in physics.nu_ratio_errors:
+        report.fail(issue)
     report.adf_face_consistency_checked = bool(
         physics.adf_calculations or physics.adf_face_errors
     )
@@ -821,6 +890,7 @@ def apply_shared_physics_checks(
     for issue in physics.adf_face_errors:
         report.fail(issue)
     report.transport_p1_checked = physics.transport_p1_checked
+    report.transport_p1_skipped = physics.transport_p1_skipped
     report.transport_p1_max_rel = physics.transport_p1_max_rel
     report.transport_p1_max_abs = physics.transport_p1_max_abs
     report.transport_p1_worst = physics.transport_p1_worst
@@ -1510,11 +1580,26 @@ def validate_calculation(
         report.volume_defaulted += 1
     else:
         report.volume_attributes += 1
-    if volume is not None and float(volume) <= 0.0:
-        report.fail(f"mixture {name}: volume attribute must be positive")
+    if volume is not None:
+        try:
+            volume_value = float(volume)
+        except (TypeError, ValueError, OverflowError):
+            report.fail(f"mixture {name}: volume attribute must be a finite number")
+        else:
+            if not np.isfinite(volume_value) or volume_value <= 0.0:
+                report.fail(
+                    f"mixture {name}: volume attribute must be positive and finite"
+                )
 
     for field in REQUIRED_DATASETS[:-1]:
         validate_vector(group[field], ngroups, report, f"mixture {name}: {field}")
+
+    _validate_reaction_vector_physics(
+        group,
+        report,
+        name=name,
+        fissionable=fissionable,
+    )
 
     scatter = np.asarray(group["scatter_matrix"][:], dtype=float)
     axes = scatter_axes(group, h5, parent_group)
@@ -1531,6 +1616,7 @@ def validate_calculation(
     for field in OPTIONAL_VECTOR_DATASETS:
         if field in group:
             validate_vector(group[field], ngroups, report, f"mixture {name}: {field}")
+    _validate_optional_vector_physics(group, report, name=name, ngroups=ngroups)
 
     if has_h_factor(group):
         report.h_factor_datasets += 1
@@ -1560,7 +1646,14 @@ def validate_calculation(
         if values.shape == (ngroups,) and np.all(values > 0.0):
             report.transport_total_derivable += 1
     elif moments and moments > 1:
-        report.transport_total_derivable += 1
+        if require_transport_dataset:
+            report.fail(f"mixture {name}: transport_total dataset is required")
+        else:
+            report.fail(
+                f"mixture {name}: P1 scattering requires an explicit "
+                "transport_total dataset; OpenMC TransportXS cannot be "
+                "derived from a bare P1 row sum"
+            )
     elif require_transport_dataset:
         report.fail(f"mixture {name}: transport_total dataset is required")
     else:
@@ -1578,6 +1671,95 @@ def validate_calculation(
     sph_present_by_calc.append(sph_present)
     if sph_present:
         report.sph_calculations += 1
+
+
+def _validate_reaction_vector_physics(
+    group: h5py.Group,
+    report: InputReport,
+    *,
+    name: str,
+    fissionable: bool,
+) -> None:
+    """Reject vector signs or declarations Converter would silently alter."""
+
+    vectors: dict[str, np.ndarray] = {}
+    for field in ("total", "absorption", "fission", "nu_fission", "chi"):
+        try:
+            values = np.asarray(group[field][:], dtype=float).reshape(-1)
+        except (TypeError, ValueError, OSError):
+            continue
+        if not np.all(np.isfinite(values)):
+            continue
+        vectors[field] = values
+
+    total = vectors.get("total")
+    if total is not None and np.any(total <= 0.0):
+        report.fail(f"mixture {name}: total must be positive in every group")
+    for field in ("absorption", "fission", "nu_fission", "chi"):
+        values = vectors.get(field)
+        if values is not None and np.any(values < 0.0):
+            report.fail(f"mixture {name}: {field} must be non-negative")
+
+    if fissionable:
+        missing_source = [
+            field
+            for field in ("fission", "nu_fission", "chi")
+            if (values := vectors.get(field)) is not None
+            and not np.any(values > 0.0)
+        ]
+        if missing_source:
+            report.fail(
+                f"mixture {name}: fissionable=true requires nonzero "
+                f"{', '.join(missing_source)}; Converter cannot form a "
+                "fission source and must not silently reclassify the mixture"
+            )
+        return
+    for field in ("fission", "nu_fission", "chi"):
+        values = vectors.get(field)
+        if values is not None and np.any(values != 0.0):
+            report.fail(
+                f"mixture {name}: fissionable=false requires zero {field}; "
+                "Converter would otherwise discard the nonzero data"
+            )
+
+
+def _validate_optional_vector_physics(
+    group: h5py.Group,
+    report: InputReport,
+    *,
+    name: str,
+    ngroups: int,
+) -> None:
+    """Apply the same optional-vector sign boundary as Converter."""
+
+    for field in INVERSE_VELOCITY_DATASETS:
+        values = _valid_optional_vector_values(group, field, ngroups)
+        if values is not None and np.any(values <= 0.0):
+            report.fail(
+                f"mixture {name}: {field} must be positive and finite"
+            )
+    for field in H_FACTOR_DATASETS:
+        values = _valid_optional_vector_values(group, field, ngroups)
+        if values is not None and np.any(values < 0.0):
+            report.fail(
+                f"mixture {name}: {field} must be non-negative and finite"
+            )
+
+
+def _valid_optional_vector_values(
+    group: h5py.Group,
+    field: str,
+    ngroups: int,
+) -> np.ndarray | None:
+    if field not in group:
+        return None
+    try:
+        values = np.asarray(group[field][:], dtype=float).reshape(-1)
+    except (TypeError, ValueError, OSError):
+        return None
+    if values.shape != (ngroups,) or not np.all(np.isfinite(values)):
+        return None
+    return values
 
 
 def has_h_factor(group: h5py.Group) -> bool:

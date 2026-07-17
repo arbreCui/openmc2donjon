@@ -20,6 +20,9 @@ import { scatterMomentClickAction } from "@/lib/inspectScatterMoment";
 import { useSettings } from "@/lib/settings";
 import CrossSectionPlot from "@/components/inspect/CrossSectionPlot";
 import FileBrowserModal from "@/components/inspect/FileBrowserModal";
+import GroupVectorTable, {
+  type GroupVectorSeries,
+} from "@/components/inspect/GroupVectorTable";
 import MixtureTable from "@/components/inspect/MixtureTable";
 import ScatterHeatmap, {
   type Scale as ScatterScale,
@@ -43,6 +46,7 @@ type MixtureState =
       kind: "loading";
       mixture: string;
       moment: number;
+      calculationState: string | null;
       /** Last successful detail, kept so the panel keeps drawing while
        * the next request is in flight (avoids the chart flashing out
        * on every moment switch). */
@@ -53,6 +57,7 @@ type MixtureState =
       kind: "error";
       mixture: string;
       moment: number;
+      calculationState: string | null;
       message: string;
       status?: number;
       /** As above: keep the previous good payload on screen with an
@@ -119,6 +124,7 @@ function InspectPageContent() {
   // survives mixture switches (a user who picked log10 once usually
   // wants log10 for the next mixture too).
   const [scatterMoment, setScatterMoment] = useState(0);
+  const [calculationState, setCalculationState] = useState<string | null>(null);
   // Bumped to re-run the mixture fetch with otherwise-identical inputs
   // (retry after a failed moment fetch); part of the fetch effect's
   // dependency key.
@@ -153,6 +159,7 @@ function InspectPageContent() {
     setSelectedMixture(null);
     setMixtureState({ kind: "idle" });
     setScatterMoment(0);
+    setCalculationState(null);
     try {
       const data = await api.inspect(trimmed);
       setState({ kind: "ok", data, path: trimmed });
@@ -176,6 +183,7 @@ function InspectPageContent() {
     // New mixture = start at P0; scale preference is intentionally
     // preserved so users don't have to re-pick log10 after every row click.
     setScatterMoment(0);
+    setCalculationState(null);
   }, []);
 
   const retryScatterFetch = useCallback(() => {
@@ -208,15 +216,22 @@ function InspectPageContent() {
     if (state.kind !== "ok" || selectedMixture == null) return;
     const requested = selectedMixture;
     const requestedMoment = scatterMoment;
+    const requestedState = calculationState;
     setMixtureState((prev) => ({
       kind: "loading",
       mixture: requested,
       moment: requestedMoment,
+      calculationState: requestedState,
       previous: carryOverPreviousFor(prev, requested),
     }));
     let cancelled = false;
     api
-      .inspectMixture(state.path, requested, requestedMoment)
+      .inspectMixture(
+        state.path,
+        requested,
+        requestedMoment,
+        requestedState ?? undefined,
+      )
       .then((data) => {
         if (cancelled) return;
         setMixtureState({ kind: "ok", data });
@@ -229,6 +244,7 @@ function InspectPageContent() {
             kind: "error",
             mixture: requested,
             moment: requestedMoment,
+            calculationState: requestedState,
             message: base.message,
             status: base.status,
             previous: carryOverPreviousFor(prev, requested),
@@ -238,7 +254,13 @@ function InspectPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [state, selectedMixture, scatterMoment, scatterFetchToken]);
+  }, [
+    state,
+    selectedMixture,
+    scatterMoment,
+    calculationState,
+    scatterFetchToken,
+  ]);
 
   return (
     <main className="app-page">
@@ -247,9 +269,9 @@ function InspectPageContent() {
           step={acceptanceMode ? "Acceptance" : "Inspect"}
           eyebrow={acceptanceMode ? "Project acceptance" : "Read-only HDF5 inspection"}
           title={acceptanceMode ? "Close the project with evidence" : "Inspect and visualize an OpenMC HDF5"}
-          description={acceptanceMode ? "Review the components, input contracts, Converter receipts, consumer runs, and independent validation criteria declared by this project. Raw HDF5 inspection remains available below for diagnosis." : "Use Inspect by itself: open an HDF5 read-only, see its root attributes and top-level entries, and—when it follows the MGXS handoff schema—visualize mixtures, reaction spectra, and scattering moments. Embedded OpenMC provenance is shown when present. Nothing is converted or written."}
+          description={acceptanceMode ? "Review the components, input contracts, Converter receipts, consumer runs, and independent validation criteria declared by this project. Raw HDF5 inspection remains available below for diagnosis." : "Use Inspect by itself: open an HDF5 read-only, see its structure and provenance, and—when it follows the MGXS handoff schema—review multigroup constants, uncertainty, fission spectrum, calculation states, and scattering moments. Nothing is converted or written."}
           input={acceptanceMode ? "Manifest-driven project + project-specific references" : "One local HDF5; MGXS handoff or generic OpenMC HDF5"}
-          output={acceptanceMode ? "Auditable acceptance decision" : "Read-only structure, metadata, provenance, spectra, and scatter views"}
+          output={acceptanceMode ? "Auditable acceptance decision" : "Read-only structure, provenance, group constants, uncertainty, and scatter views"}
           actions={
             <Link
               href={
@@ -281,7 +303,7 @@ function InspectPageContent() {
         <FormStep
           number="A"
           title="Choose one HDF5 artifact"
-          description="Start at file level. After the summary loads, choose a mixture to reveal spectra and scattering details."
+          description="Start at file level. After the summary loads, choose a mixture—and a calculation state when present—to review its physical group data."
           className="surface"
         >
           <form
@@ -375,8 +397,10 @@ function InspectPageContent() {
                 selectedMixture={selectedMixture}
                 scatterMoment={scatterMoment}
                 scatterScale={scatterScale}
+                calculationState={calculationState}
                 onScatterMomentChange={handleScatterMomentChange}
                 onScatterScaleChange={setScatterScale}
+                onCalculationStateChange={setCalculationState}
                 onScatterRetry={retryScatterFetch}
               />
             ) : null}
@@ -396,7 +420,8 @@ function FileResultView({ state }: { state: State }) {
         Tip: with{" "}
         <code className="font-mono">openmc2donjon serve --mock</code>{" "}
         running, any path (even a fake one) returns the bundled
-        C5G7-shape fixture so you can preview the layout.
+        synthetic UI fixture so you can preview the layout. It is not physics
+        evidence.
       </p>
     );
   }
@@ -422,8 +447,10 @@ function MixturePanel({
   selectedMixture,
   scatterMoment,
   scatterScale,
+  calculationState,
   onScatterMomentChange,
   onScatterScaleChange,
+  onCalculationStateChange,
   onScatterRetry,
 }: {
   handoff: HandoffInspection;
@@ -431,14 +458,16 @@ function MixturePanel({
   selectedMixture: string | null;
   scatterMoment: number;
   scatterScale: ScatterScale;
+  calculationState: string | null;
   onScatterMomentChange: (m: number) => void;
   onScatterScaleChange: (s: ScatterScale) => void;
+  onCalculationStateChange: (state: string | null) => void;
   onScatterRetry: () => void;
 }) {
   if (selectedMixture == null) {
     return (
       <p className="text-sm text-[var(--fg-3)]">
-        Click a row above to load its reaction-rate cross sections.
+        Click a row above to load its multigroup constants and scattering data.
       </p>
     );
   }
@@ -475,12 +504,22 @@ function MixturePanel({
       {mixtureState.kind === "error" && mixtureState.previous != null ? (
         <MixtureErrorBanner state={mixtureState} onRetry={onScatterRetry} />
       ) : null}
+      {detail.available_states.length > 1 ? (
+        <CalculationStateSelector
+          states={detail.available_states}
+          value={calculationState ?? detail.selected_state ?? ""}
+          loading={mixtureState.kind === "loading"}
+          onChange={onCalculationStateChange}
+        />
+      ) : null}
       <MixtureMeta detail={detail} />
       {bounds.length >= 2 ? (
         <CrossSectionPlot
           energyBounds={bounds}
           crossSections={detail.cross_sections}
+          standardDeviations={detail.cross_section_std_dev}
           mixtureName={detail.mixture}
+          fissionable={detail.fissionable}
         />
       ) : (
         <div className="glass rounded-xl p-5 text-sm text-[var(--fg-3)]">
@@ -488,9 +527,15 @@ function MixturePanel({
           (legacy file). Cross sections are still available via the API.
         </div>
       )}
+      <GroupVectorTable
+        energyBounds={bounds}
+        series={auxiliaryGroupSeries(detail)}
+      />
       {detail.scatter ? (
         <ScatterHeatmap
           scatter={detail.scatter}
+          scatterStdDev={detail.scatter.std_dev_values}
+          energyBounds={bounds}
           mixtureName={detail.mixture}
           moment={scatterMoment}
           scale={scatterScale}
@@ -510,6 +555,105 @@ function displayedDetail(state: MixtureState): MixtureDetail | null {
     return state.previous ?? null;
   }
   return null;
+}
+
+function CalculationStateSelector({
+  states,
+  value,
+  loading,
+  onChange,
+}: {
+  states: readonly string[];
+  value: string;
+  loading: boolean;
+  onChange: (state: string | null) => void;
+}) {
+  return (
+    <section className="glass rounded-xl p-4 flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h3 className="text-sm font-semibold text-[var(--fg-1)]">
+          Calculation state
+        </h3>
+        <p className="mt-1 text-[12px] text-[var(--fg-3)]">
+          Values below come from one explicit <code>states/&lt;state&gt;</code>{" "}
+          group. Changing state reloads the state-bound mixture vectors and
+          scatter moment. A root reference-flux row, when shown, remains
+          file-global and is not attributed to the selected state.
+        </p>
+      </div>
+      <label className="flex min-w-[220px] flex-col gap-1 text-[11px] uppercase tracking-wider text-[var(--fg-3)]">
+        State
+        <select
+          value={value}
+          disabled={loading}
+          onChange={(event) => onChange(event.target.value || null)}
+          className="rounded-md border border-[var(--edge)] bg-[var(--bg-1)] px-3 py-2 font-mono text-sm normal-case tracking-normal text-[var(--fg-0)] focus:border-[var(--accent)] focus:outline-none disabled:opacity-60"
+          aria-label="Calculation state"
+        >
+          {states.map((state) => (
+            <option key={state} value={state}>
+              {state}
+            </option>
+          ))}
+        </select>
+      </label>
+    </section>
+  );
+}
+
+function auxiliaryGroupSeries(detail: MixtureDetail): GroupVectorSeries[] {
+  const xs = detail.cross_sections;
+  const uncertainty = detail.cross_section_std_dev;
+  return [
+    {
+      key: "kappa_fission",
+      label: "H-FACTOR / κΣf",
+      description:
+        "Energy-production constant consumed as DONJON H-FACTOR; kept separate from the reaction cross-section axis.",
+      units: "unit not verified from HDF5",
+      // Converter writes H-FACTOR whenever the dataset is present, including
+      // for a calculation declared non-fissionable. Inspect must preserve the
+      // raw vector instead of treating it like the fission / nu-fission / chi
+      // family whose declaration Converter validates separately.
+      values: xs.kappa_fission,
+      standardDeviations: uncertainty.kappa_fission,
+    },
+    {
+      key: "inverse_velocity",
+      label: "Inverse neutron velocity (1/v)",
+      description: "Groupwise inverse velocity consumed as DONJON OVERV.",
+      units: "unit not verified from HDF5",
+      values: xs.inverse_velocity,
+      standardDeviations: uncertainty.inverse_velocity,
+    },
+    {
+      key: "flux_weight",
+      label: "Legacy local flux-like vector (Inspect only)",
+      description:
+        "File-local flux_weight/flux/flux_integral vector. Converter does not consume this field; only the bound root openmc_volume_flux route supplies downstream flux weighting.",
+      units: "unit not verified from HDF5",
+      values: xs.flux_weight,
+      standardDeviations: uncertainty.flux_weight,
+    },
+    {
+      key: "openmc_volume_flux",
+      label: "OpenMC reference volume flux (file-global)",
+      description:
+        "Root reference-flux row matched through declared mixture_names and mgxs_donjon group order; it is not bound to the selected calculation state.",
+      units: "unit not verified from HDF5",
+      values: detail.openmc_volume_flux,
+      standardDeviations: detail.openmc_volume_flux_std_dev,
+    },
+    {
+      key: "sph",
+      label: "SPH / NSPH factor",
+      description:
+        "Declared groupwise equivalence factor. Its presence is not evidence that an SPH iteration converged.",
+      units: "dimensionless",
+      values: xs.sph,
+      standardDeviations: uncertainty.sph,
+    },
+  ];
 }
 
 function MixtureErrorCard({
@@ -541,15 +685,20 @@ function MixtureErrorBanner({
       </span>
       <span className="text-[var(--fg-1)]">{state.message}</span>
       <span className="text-[var(--fg-3)] text-[12px]">
-        — P{state.moment} did not load; keeping previous payload (P
-        {state.previous?.scatter?.moment_index ?? 0}).
+        — {state.calculationState ? `${state.calculationState} · ` : ""}P
+        {state.moment} did not load; keeping previous payload (
+        {state.previous?.selected_state
+          ? `${state.previous.selected_state} · `
+          : ""}
+        P{state.previous?.scatter?.moment_index ?? 0}).
       </span>
       <button
         type="button"
         onClick={onRetry}
         className="btn-link"
       >
-        Retry P{state.moment}
+        Retry {state.calculationState ? `${state.calculationState} · ` : ""}P
+        {state.moment}
       </button>
     </div>
   );
@@ -603,6 +752,24 @@ function MixtureMeta({ detail }: { detail: MixtureDetail }) {
       detail.temperature == null
         ? "—"
         : `${detail.temperature.toFixed(0)} K`,
+  });
+  items.push({
+    label: "Declared fissionable",
+    value:
+      detail.fissionable == null ? "unknown" : detail.fissionable ? "yes" : "no",
+  });
+  if (detail.selected_state) {
+    items.push({ label: "State", value: detail.selected_state });
+  }
+  const availableMeans = Object.values(detail.cross_sections).filter(
+    (values) => values != null,
+  ).length;
+  const availableUncertainties = Object.values(
+    detail.cross_section_std_dev,
+  ).filter((values) => values != null).length;
+  items.push({
+    label: "Uncertainty",
+    value: `${availableUncertainties}/${availableMeans} vectors`,
   });
   if (detail.scatter) {
     items.push({

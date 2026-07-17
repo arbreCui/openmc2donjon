@@ -48,7 +48,7 @@ class InspectEndpointTests(unittest.TestCase):
         # energy_bounds is required for the S3 spectrum chart X axis.
         bounds = payload["energy_bounds"]
         self.assertEqual(len(bounds), 8)
-        self.assertGreater(bounds[0], bounds[-1])  # descending CASMO-7
+        self.assertLess(bounds[0], bounds[-1])  # ascending HDF5 contract order
         # M3-C: peek surface for non-handoff files; mock fixture
         # carries sample values.
         attr_names = {a["name"] for a in payload["root_attrs"]}
@@ -82,6 +82,29 @@ class InspectEndpointTests(unittest.TestCase):
         self.assertEqual(payload["scatter"]["moment_index"], 0)
         self.assertEqual(len(payload["scatter"]["values"]), 7)
         self.assertEqual(len(payload["scatter"]["values"][0]), 7)
+        self.assertEqual(payload["available_states"], [])
+        self.assertIsNone(payload["selected_state"])
+        self.assertIsNone(payload["openmc_volume_flux"])
+        self.assertIsNone(payload["scatter"]["std_dev_values"])
+        self.assertTrue(payload["fissionable"])
+        self.assertTrue(
+            all(value is None for value in payload["cross_section_std_dev"].values())
+        )
+
+    def test_mock_mode_direct_mixture_rejects_state_query(self) -> None:
+        from openmc2donjon.web.server import create_app
+
+        response = TestClient(create_app(mock_mode=True)).get(
+            "/api/inspect/mixture",
+            params={
+                "path": "/any.h5",
+                "mixture": "M3_MOX_70",
+                "state": "00000001",
+            },
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("state not found", response.json()["detail"])
 
     def test_mock_mode_mixture_endpoint_honors_mixture_param(self) -> None:
         from openmc2donjon.web.server import create_app
@@ -267,6 +290,8 @@ class InspectEndpointTests(unittest.TestCase):
             self.assertEqual(payload["std_dev_expected_datasets"], 14)
             self.assertIsNotNone(payload["mesh_match"])
             self.assertEqual(payload["mesh_match"]["id"], "casmo_7")
+            self.assertIsNotNone(payload["production_audit"])
+            self.assertFalse(payload["production_audit"]["ok"])
             mixture_names = sorted(m["name"] for m in payload["mixtures"])
             self.assertEqual(mixture_names, ["M1_UO2", "M2_MOD"])
             # energy_bounds is read from the same h5 open as the mesh ID
@@ -274,6 +299,37 @@ class InspectEndpointTests(unittest.TestCase):
             self.assertEqual(len(payload["energy_bounds"]), 8)
             self.assertAlmostEqual(payload["energy_bounds"][0], 9.999999999999999e-06)
             self.assertAlmostEqual(payload["energy_bounds"][-1], 10000000.0)
+
+    def test_live_mode_production_audit_rejects_invalid_overv_alias(self) -> None:
+        import h5py
+        import numpy as np
+
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "invalid_overv.h5"
+            _write_fake_hdf5(path)
+            with h5py.File(path, "a") as h5:
+                h5["mixtures/M1_UO2"].create_dataset(
+                    "OVERV",
+                    data=np.array([1.0] * 6 + [0.0]),
+                )
+
+            response = TestClient(create_app(mock_mode=False)).get(
+                "/api/inspect",
+                params={"path": str(path)},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        audit = response.json()["production_audit"]
+        self.assertFalse(audit["ok"])
+        self.assertTrue(
+            any(
+                "OVERV must be positive and finite" in issue
+                for issue in audit["issues"]
+            ),
+            audit["issues"],
+        )
 
     def test_live_mode_reports_pre_applied_sph_provenance(self) -> None:
         import h5py
@@ -318,10 +374,348 @@ class InspectEndpointTests(unittest.TestCase):
             self.assertEqual(payload["schema"], MIXTURE_SCHEMA)
             self.assertEqual(payload["mixture"], "M1_UO2")
             self.assertEqual(payload["energy_groups"], 7)
+            self.assertTrue(payload["fissionable"])
             self.assertEqual(len(payload["cross_sections"]["total"]), 7)
             self.assertEqual(payload["scatter"]["shape"], [1, 7, 7])
             self.assertEqual(payload["scatter"]["axes"], "moment,from,to")
             self.assertEqual(len(payload["scatter"]["values"]), 7)
+            self.assertEqual(payload["available_states"], [])
+            self.assertIsNone(payload["selected_state"])
+            self.assertIsNone(payload["openmc_volume_flux"])
+            self.assertIsNone(payload["openmc_volume_flux_std_dev"])
+            self.assertIsNone(payload["openmc_volume_flux_scope"])
+            self.assertEqual(
+                set(payload["cross_sections"]),
+                {
+                    "total",
+                    "transport_total",
+                    "absorption",
+                    "fission",
+                    "nu_fission",
+                    "chi",
+                    "kappa_fission",
+                    "inverse_velocity",
+                    "flux_weight",
+                    "sph",
+                },
+            )
+            self.assertTrue(
+                all(
+                    value is None
+                    for value in payload["cross_section_std_dev"].values()
+                )
+            )
+
+    def test_live_mode_multistate_detail_selects_state_and_full_physics(
+        self,
+    ) -> None:
+        import h5py
+        import numpy as np
+
+        from openmc2donjon.web.server import create_app
+
+        def write_state(group: object, offset: float) -> None:
+            vectors = {
+                "total": [offset + 0.5, offset + 0.6],
+                "transport_total": [offset + 0.45, offset + 0.55],
+                "absorption": [offset + 0.05, offset + 0.06],
+                "fission": [offset + 0.01, offset + 0.02],
+                "nu_fission": [offset + 0.025, offset + 0.05],
+                "chi": [1.0, 0.0],
+                "H-FACTOR": [offset + 200.0, offset + 201.0],
+                "OVERV": [offset + 1.0e-7, offset + 2.0e-7],
+                "flux_integral": [offset + 10.0, offset + 20.0],
+                "NSPH": [offset + 1.0, offset + 1.1],
+            }
+            for name, values in vectors.items():
+                group.create_dataset(name, data=np.asarray(values, dtype=float))
+                group.create_dataset(
+                    f"{name}_std_dev",
+                    data=np.full(2, 0.01 + offset / 1000.0),
+                )
+            scatter = np.asarray(
+                [
+                    [[offset + 0.2, 0.04], [0.0, offset + 0.3]],
+                    [[offset + 0.02, -0.004], [0.0, offset + 0.03]],
+                ],
+                dtype=float,
+            )
+            group.create_dataset("scatter_matrix", data=scatter)
+            group.create_dataset(
+                "scatter_matrix_std_dev",
+                data=np.full((2, 2, 2), 0.002 + offset / 1000.0),
+            )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "multistate.h5"
+            with h5py.File(path, "w") as h5:
+                h5.attrs["energy_groups"] = 2
+                h5.attrs["legendre_order"] = 1
+                h5.create_dataset(
+                    "mixture_names",
+                    data=np.asarray(["mod", "fuel"], dtype="S"),
+                )
+                mixtures = h5.create_group("mixtures")
+                mixtures.create_group("mod")
+                fuel = mixtures.create_group("fuel")
+                fuel.attrs["volume"] = 9.5
+                fuel.attrs["temperature"] = 600.0
+                fuel.attrs["fissionable"] = True
+                fuel.attrs["scatter_axes"] = "moment,from,to"
+                states = fuel.create_group("states")
+                state_10 = states.create_group("10")
+                state_10.attrs["temperature"] = 750.0
+                write_state(state_10, 10.0)
+                write_state(states.create_group("2"), 2.0)
+
+                flux = h5.create_dataset(
+                    "openmc_volume_flux",
+                    data=np.asarray([[10.0, 20.0], [30.0, 40.0]]),
+                )
+                flux.attrs["mixture_names"] = np.asarray(["mod", "fuel"], dtype="S")
+                flux.attrs["group_order"] = "mgxs_donjon"
+                flux_std = h5.create_dataset(
+                    "openmc_volume_flux_std_dev",
+                    data=np.asarray([[0.1, 0.2], [0.3, 0.4]]),
+                )
+                flux_std.attrs["mixture_names"] = np.asarray(
+                    ["mod", "fuel"], dtype="S"
+                )
+                flux_std.attrs["group_order"] = "mgxs_donjon"
+
+            client = TestClient(create_app(mock_mode=False))
+            default = client.get(
+                "/api/inspect/mixture",
+                params={"path": str(path), "mixture": "fuel"},
+            )
+            self.assertEqual(default.status_code, 200, default.text)
+            self.assertEqual(default.json()["available_states"], ["2", "10"])
+            self.assertEqual(default.json()["selected_state"], "2")
+            self.assertEqual(default.json()["cross_sections"]["total"], [2.5, 2.6])
+
+            response = client.get(
+                "/api/inspect/mixture",
+                params={
+                    "path": str(path),
+                    "mixture": "fuel",
+                    "state": "10",
+                    "moment": 1,
+                },
+            )
+            self.assertEqual(response.status_code, 200, response.text)
+            payload = response.json()
+            self.assertEqual(payload["available_states"], ["2", "10"])
+            self.assertEqual(payload["selected_state"], "10")
+            self.assertEqual(payload["volume"], 9.5)  # inherited from mixture
+            self.assertEqual(payload["temperature"], 750.0)  # state override
+            self.assertTrue(payload["fissionable"])  # inherited from mixture
+            self.assertEqual(payload["cross_sections"]["total"], [10.5, 10.6])
+            self.assertEqual(
+                payload["cross_sections"]["transport_total"], [10.45, 10.55]
+            )
+            self.assertEqual(
+                payload["cross_sections"]["kappa_fission"], [210.0, 211.0]
+            )
+            self.assertEqual(
+                payload["cross_sections"]["inverse_velocity"],
+                [10.0000001, 10.0000002],
+            )
+            self.assertEqual(
+                payload["cross_sections"]["flux_weight"], [20.0, 30.0]
+            )
+            self.assertEqual(payload["cross_sections"]["sph"], [11.0, 11.1])
+            self.assertEqual(
+                payload["cross_section_std_dev"]["kappa_fission"], [0.02, 0.02]
+            )
+            self.assertEqual(payload["openmc_volume_flux"], [30.0, 40.0])
+            self.assertEqual(payload["openmc_volume_flux_std_dev"], [0.3, 0.4])
+            self.assertEqual(payload["openmc_volume_flux_scope"], "file-global")
+            self.assertEqual(payload["scatter"]["moment_index"], 1)
+            self.assertEqual(payload["scatter"]["values"][0][1], -0.004)
+            self.assertEqual(payload["scatter"]["std_dev_shape"], [2, 2, 2])
+            self.assertEqual(payload["scatter"]["std_dev_values"][0][0], 0.012)
+
+            missing = client.get(
+                "/api/inspect/mixture",
+                params={
+                    "path": str(path),
+                    "mixture": "fuel",
+                    "state": "999",
+                },
+            )
+            self.assertEqual(missing.status_code, 404)
+            self.assertIn("state not found", missing.json()["detail"])
+
+    def test_live_detail_uses_converter_scatter_axes_not_dataset_local_hint(
+        self,
+    ) -> None:
+        import h5py
+        import numpy as np
+
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "scatter_axes_conflict.h5"
+            with h5py.File(path, "w") as h5:
+                h5.attrs["energy_groups"] = 2
+                h5.attrs["legendre_order"] = 1
+                h5.attrs["scatter_axes"] = "moment,from,to"
+                mixture = h5.create_group("mixtures").create_group("fuel")
+                mixture.attrs["fissionable"] = True
+                scatter = mixture.create_dataset(
+                    "scatter_matrix",
+                    data=np.arange(8, dtype=float).reshape(2, 2, 2),
+                )
+                # Outside the Converter contract. Inspect must not let this
+                # contradictory dataset hint change which P1 plane it shows.
+                scatter.attrs["axes"] = "from,to,moment"
+
+            response = TestClient(create_app(mock_mode=False)).get(
+                "/api/inspect/mixture",
+                params={"path": str(path), "mixture": "fuel", "moment": 1},
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertEqual(payload["scatter"]["axes"], "moment,from,to")
+        self.assertEqual(payload["scatter"]["values"], [[4.0, 5.0], [6.0, 7.0]])
+
+    def test_live_mode_omits_root_flux_when_declared_order_mismatches(self) -> None:
+        import h5py
+        import numpy as np
+
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "bad_flux_order.h5"
+            _write_fake_hdf5(path)
+            with h5py.File(path, "a") as h5:
+                h5.create_dataset(
+                    "mixture_names",
+                    data=np.asarray(["M1_UO2", "M2_MOD"], dtype="S"),
+                )
+                flux = h5.create_dataset(
+                    "openmc_volume_flux",
+                    data=np.asarray([[1.0] * 7, [2.0] * 7]),
+                )
+                flux.attrs["mixture_names"] = np.asarray(
+                    ["M2_MOD", "M1_UO2"], dtype="S"
+                )
+                flux.attrs["group_order"] = "mgxs_donjon"
+
+            response = TestClient(create_app(mock_mode=False)).get(
+                "/api/inspect/mixture",
+                params={"path": str(path), "mixture": "M1_UO2"},
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertIsNone(response.json()["openmc_volume_flux"])
+            self.assertIsNone(response.json()["openmc_volume_flux_scope"])
+
+    def test_live_mode_omits_root_flux_without_complete_order_metadata(
+        self,
+    ) -> None:
+        import h5py
+        import numpy as np
+
+        from openmc2donjon.web.server import create_app
+
+        cases = (
+            ("missing-mixtures", None, "mgxs_donjon"),
+            (
+                "missing-group-order",
+                np.asarray(["M1_UO2", "M2_MOD"], dtype="S"),
+                None,
+            ),
+            (
+                "wrong-group-order",
+                np.asarray(["M1_UO2", "M2_MOD"], dtype="S"),
+                "ascending_energy",
+            ),
+        )
+        for label, declared_names, group_order in cases:
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / f"{label}.h5"
+                _write_fake_hdf5(path)
+                with h5py.File(path, "a") as h5:
+                    h5.create_dataset(
+                        "mixture_names",
+                        data=np.asarray(["M1_UO2", "M2_MOD"], dtype="S"),
+                    )
+                    flux = h5.create_dataset(
+                        "openmc_volume_flux",
+                        data=np.asarray([[1.0] * 7, [2.0] * 7]),
+                    )
+                    if declared_names is not None:
+                        flux.attrs["mixture_names"] = declared_names
+                    if group_order is not None:
+                        flux.attrs["group_order"] = group_order
+
+                response = TestClient(create_app(mock_mode=False)).get(
+                    "/api/inspect/mixture",
+                    params={"path": str(path), "mixture": "M1_UO2"},
+                )
+                self.assertEqual(response.status_code, 200, response.text)
+                self.assertIsNone(response.json()["openmc_volume_flux"])
+                self.assertIsNone(response.json()["openmc_volume_flux_scope"])
+
+    def test_live_mode_omits_flux_std_dev_without_its_own_order_metadata(
+        self,
+    ) -> None:
+        import h5py
+        import numpy as np
+
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "bad_flux_std_order.h5"
+            _write_fake_hdf5(path)
+            names = np.asarray(["M1_UO2", "M2_MOD"], dtype="S")
+            with h5py.File(path, "a") as h5:
+                h5.create_dataset("mixture_names", data=names)
+                flux = h5.create_dataset(
+                    "openmc_volume_flux",
+                    data=np.asarray([[1.0] * 7, [2.0] * 7]),
+                )
+                flux.attrs["mixture_names"] = names
+                flux.attrs["group_order"] = "mgxs_donjon"
+                flux_std = h5.create_dataset(
+                    "openmc_volume_flux_std_dev",
+                    data=np.asarray([[0.1] * 7, [0.2] * 7]),
+                )
+                flux_std.attrs["mixture_names"] = names
+
+            response = TestClient(create_app(mock_mode=False)).get(
+                "/api/inspect/mixture",
+                params={"path": str(path), "mixture": "M1_UO2"},
+            )
+            self.assertEqual(response.status_code, 200, response.text)
+            payload = response.json()
+            self.assertEqual(payload["openmc_volume_flux"], [1.0] * 7)
+            self.assertIsNone(payload["openmc_volume_flux_std_dev"])
+            self.assertEqual(payload["openmc_volume_flux_scope"], "file-global")
+
+    def test_live_mode_rejects_non_vector_group_dataset(self) -> None:
+        import h5py
+        import numpy as np
+
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "bad_vector_shape.h5"
+            _write_fake_hdf5(path)
+            with h5py.File(path, "a") as h5:
+                total = h5["mixtures/M1_UO2/total"][:]
+                del h5["mixtures/M1_UO2/total"]
+                h5["mixtures/M1_UO2"].create_dataset(
+                    "total", data=np.asarray(total).reshape(1, 7)
+                )
+
+            response = TestClient(create_app(mock_mode=False)).get(
+                "/api/inspect/mixture",
+                params={"path": str(path), "mixture": "M1_UO2"},
+            )
+            self.assertEqual(response.status_code, 422, response.text)
+            self.assertIn("expected shape (7,)", response.json()["detail"])
 
     def test_live_mode_mixture_not_found_returns_404(self) -> None:
         from openmc2donjon.web.server import create_app
@@ -387,6 +781,116 @@ class InspectEndpointTests(unittest.TestCase):
             self.assertEqual(top["surface_flux"]["kind"], "group")
             self.assertEqual(top["energy_bounds"]["kind"], "dataset")
             self.assertEqual(top["energy_bounds"]["shape"], [5])
+
+    def test_live_detail_rejects_invalid_uncertainty_and_reference_flux(self) -> None:
+        import h5py
+        import numpy as np
+
+        from openmc2donjon.web.server import create_app
+
+        cases = ("vector-std", "scatter-std", "reference-flux", "flux-std")
+        for case in cases:
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / f"{case}.h5"
+                _write_fake_hdf5(path)
+                with h5py.File(path, "a") as h5:
+                    fuel = h5["mixtures/M1_UO2"]
+                    if case == "vector-std":
+                        fuel.create_dataset(
+                            "total_std_dev", data=np.asarray([-0.1] + [0.1] * 6)
+                        )
+                    elif case == "scatter-std":
+                        values = np.zeros((1, 7, 7))
+                        values[0, 0, 0] = -0.1
+                        fuel.create_dataset("scatter_matrix_std_dev", data=values)
+                    else:
+                        names = np.asarray(["M1_UO2", "M2_MOD"], dtype="S")
+                        h5.create_dataset("mixture_names", data=names)
+                        flux_values = np.ones((2, 7))
+                        if case == "reference-flux":
+                            flux_values[0, 0] = -1.0
+                        flux = h5.create_dataset(
+                            "openmc_volume_flux", data=flux_values
+                        )
+                        flux.attrs["mixture_names"] = names
+                        flux.attrs["group_order"] = "mgxs_donjon"
+                        if case == "flux-std":
+                            std_values = np.full((2, 7), 0.1)
+                            std_values[0, 0] = -0.1
+                            std = h5.create_dataset(
+                                "openmc_volume_flux_std_dev", data=std_values
+                            )
+                            std.attrs["mixture_names"] = names
+                            std.attrs["group_order"] = "mgxs_donjon"
+
+                response = TestClient(create_app(mock_mode=False)).get(
+                    "/api/inspect/mixture",
+                    params={"path": str(path), "mixture": "M1_UO2"},
+                )
+
+                self.assertEqual(response.status_code, 422, response.text)
+                self.assertIn("failed", response.json()["detail"])
+
+    def test_live_detail_rejects_nonfinite_volume_instead_of_rendering_null(self) -> None:
+        import h5py
+
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "bad_volume.h5"
+            _write_fake_hdf5(path)
+            with h5py.File(path, "a") as h5:
+                h5["mixtures/M1_UO2"].attrs["volume"] = float("nan")
+
+            response = TestClient(create_app(mock_mode=False)).get(
+                "/api/inspect/mixture",
+                params={"path": str(path), "mixture": "M1_UO2"},
+            )
+
+            self.assertEqual(response.status_code, 422, response.text)
+            self.assertIn("volume", response.json()["detail"])
+            self.assertIn("finite", response.json()["detail"])
+
+    def test_live_detail_rejects_scatter_group_instead_of_returning_500(self) -> None:
+        import h5py
+
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "scatter_group.h5"
+            _write_fake_hdf5(path)
+            with h5py.File(path, "a") as h5:
+                fuel = h5["mixtures/M1_UO2"]
+                del fuel["scatter_matrix"]
+                fuel.create_group("scatter_matrix")
+
+            response = TestClient(create_app(mock_mode=False)).get(
+                "/api/inspect/mixture",
+                params={"path": str(path), "mixture": "M1_UO2"},
+            )
+
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertIn("not an HDF5 dataset", response.json()["detail"])
+
+    def test_live_inspect_handles_energy_bounds_group_without_500(self) -> None:
+        import h5py
+
+        from openmc2donjon.web.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "bounds_group.h5"
+            _write_fake_hdf5(path)
+            with h5py.File(path, "a") as h5:
+                del h5["energy_bounds"]
+                h5.create_group("energy_bounds")
+
+            response = TestClient(create_app(mock_mode=False)).get(
+                "/api/inspect", params={"path": str(path)}
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertFalse(response.json()["ok"])
+        self.assertIsNone(response.json()["energy_bounds"])
 
     def test_live_mode_inspect_peek_caps_root_attrs_and_reports_total(
         self,

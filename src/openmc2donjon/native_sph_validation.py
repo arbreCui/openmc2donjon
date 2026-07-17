@@ -1707,6 +1707,8 @@ def _require_effective_threshold(
 
 
 def _same_numeric_value(left: Any, right: Any) -> bool:
+    if left is None or right is None:
+        return left is None and right is None
     if (
         not isinstance(left, (int, float))
         or isinstance(left, bool)

@@ -98,6 +98,7 @@ control, or other branch coordinates cannot be silently dropped.
 - Scatter triplets use contiguous incoming-group spans in descending incoming
   group order.
 - Legendre scattering values are bare moments.
-- `STRD` comes from `transport_total` when available, otherwise from P1-derived
-  transport correction, otherwise `NTOT0`.
+- `STRD` comes from explicit `transport_total` whenever P1+ scattering is
+  present. With P0-only scattering it may fall back to `NTOT0`; Converter does
+  not reconstruct OpenMC `TransportXS` from a bare P1 row sum.
 - ADF payloads are optional per-mixture datasets under `/mixtures/<name>/adf/`.

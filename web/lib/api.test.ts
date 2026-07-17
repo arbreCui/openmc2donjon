@@ -25,6 +25,30 @@ describe("baseUrl fallback", () => {
   });
 });
 
+describe("api.inspectMixture", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("sends the selected calculation state with the scatter moment", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 200 }));
+
+    await api.inspectMixture(
+      "/runs/case/mgxs_library.h5",
+      "fuel",
+      2,
+      "state_0004",
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/inspect/mixture?path=%2Fruns%2Fcase%2Fmgxs_library.h5&mixture=fuel&moment=2&state=state_0004",
+      { cache: "no-store" },
+    );
+  });
+});
+
 describe("api.pyganDoctor", () => {
   afterEach(() => {
     vi.restoreAllMocks();

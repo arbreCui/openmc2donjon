@@ -75,6 +75,10 @@ class KeywordOnlyFakeLibrary:
             (102, "total"): np.array([0.2, 0.3, 0.4]),
             (102, "absorption"): np.array([0.01, 0.02, 0.03]),
             (102, "scatter matrix"): np.eye(3),
+            # The exporter pads every domain to the library-wide P1 order.
+            # MOD has an exactly zero P1 moment, so its explicit TransportXS
+            # equals its total cross section.
+            (102, "transport"): np.array([0.2, 0.3, 0.4]),
         }
 
     def get_mgxs(self, *, domain: FakeDomain, mgxs_type: str) -> FakeMGXS:
@@ -82,6 +86,29 @@ class KeywordOnlyFakeLibrary:
         if key not in self._data:
             raise KeyError(key)
         return FakeMGXS(self._data[key])
+
+
+class FissionFamilyFakeLibrary:
+    def __init__(
+        self,
+        *,
+        fissionable: bool,
+        family: dict[str, np.ndarray],
+    ) -> None:
+        self.energy_groups = FakeEnergyGroups()
+        self.domain = FakeDomain("fuel", 1, 3.0, fissionable)
+        self.domains = [self.domain]
+        self.data = {
+            "total": np.array([0.5, 0.6, 0.7]),
+            "absorption": np.array([0.05, 0.06, 0.07]),
+            "scatter matrix": np.eye(3),
+            **family,
+        }
+
+    def get_mgxs(self, domain: FakeDomain, mgxs_type: str) -> FakeMGXS:
+        if domain is not self.domain or mgxs_type not in self.data:
+            raise KeyError((domain, mgxs_type))
+        return FakeMGXS(self.data[mgxs_type])
 
 
 class SubdomainFakeMGXS:
@@ -162,7 +189,7 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
         self.assertEqual(summary.energy_groups, 3)
         self.assertEqual(summary.legendre_order, 1)
         self.assertEqual(summary.std_dev_dataset_count, 0)
-        self.assertEqual(summary.std_dev_expected_dataset_count, 12)
+        self.assertEqual(summary.std_dev_expected_dataset_count, 13)
         self.assertEqual([domain.name for domain in summary.domains], ["ASM_Y1_X1", "MOD"])
         self.assertEqual(mixture_names, ("ASM_Y1_X1", "MOD"))
         self.assertEqual(source_domain_index, 1)
@@ -181,6 +208,7 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
         self.assertFalse(by_name["MOD"].fissionable)
         self.assertEqual(by_name["ASM_Y1_X1"].volume, 4.0)
         np.testing.assert_allclose(by_name["ASM_Y1_X1"].transport_total, [0.45, 0.55, 0.65])
+        np.testing.assert_allclose(by_name["MOD"].transport_total, [0.2, 0.3, 0.4])
         np.testing.assert_allclose(
             by_name["ASM_Y1_X1"].h_factor,
             [3.2e-12, 3.1e-12, 3.0e-12],
@@ -300,6 +328,127 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
         self.assertFalse(strict_report.ok)
         self.assertIn("mixture fuel: volume attribute is missing", strict_report.issues)
 
+    def test_rejects_fissionable_export_with_incomplete_or_zero_family(self) -> None:
+        cases = {
+            "missing chi": (
+                {
+                    "fission": np.array([0.01, 0.02, 0.03]),
+                    "nu-fission": np.array([0.025, 0.05, 0.075]),
+                },
+                "fissionable=true requires OpenMC MGXS chi",
+            ),
+            "zero nu fission": (
+                {
+                    "fission": np.array([0.01, 0.02, 0.03]),
+                    "nu-fission": np.zeros(3),
+                    "chi": np.array([1.0, 0.0, 0.0]),
+                },
+                "fissionable=true requires nonzero nu_fission",
+            ),
+        }
+
+        for label, (family, message) in cases.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as tmpdir:
+                path = Path(tmpdir) / "mgxs.h5"
+                with self.assertRaisesRegex(ValueError, message):
+                    export_openmc_mgxs_library(
+                        FissionFamilyFakeLibrary(
+                            fissionable=True,
+                            family=family,
+                        ),
+                        path,
+                    )
+                self.assertFalse(path.exists())
+
+    def test_rejects_nonfissionable_export_with_nonzero_fission_family(self) -> None:
+        family = {
+            "fission": np.array([0.01, 0.02, 0.03]),
+            "nu-fission": np.array([0.025, 0.05, 0.075]),
+            "chi": np.array([1.0, 0.0, 0.0]),
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "mgxs.h5"
+            with self.assertRaisesRegex(
+                ValueError,
+                "fissionable=false requires zero fission, nu_fission, chi",
+            ):
+                export_openmc_mgxs_library(
+                    FissionFamilyFakeLibrary(
+                        fissionable=False,
+                        family=family,
+                    ),
+                    path,
+                )
+            self.assertFalse(path.exists())
+
+    def test_rejects_misaligned_fission_and_nu_fission_support(self) -> None:
+        family = {
+            "fission": np.array([0.01, 0.0, 0.03]),
+            "nu-fission": np.array([0.0, 0.05, 0.075]),
+            "chi": np.array([1.0, 0.0, 0.0]),
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "mgxs.h5"
+            with self.assertRaisesRegex(
+                ValueError,
+                r"identical positive group support; mismatch in group\(s\) 1, 2",
+            ):
+                export_openmc_mgxs_library(
+                    FissionFamilyFakeLibrary(
+                        fissionable=True,
+                        family=family,
+                    ),
+                    path,
+                )
+            self.assertFalse(path.exists())
+
+    def test_rejects_non_normalized_chi_before_writing(self) -> None:
+        family = {
+            "fission": np.array([0.01, 0.02, 0.03]),
+            "nu-fission": np.array([0.025, 0.05, 0.075]),
+            "chi": np.array([0.8, 0.0, 0.0]),
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "mgxs.h5"
+            with self.assertRaisesRegex(ValueError, "chi sum error"):
+                export_openmc_mgxs_library(
+                    FissionFamilyFakeLibrary(
+                        fissionable=True,
+                        family=family,
+                    ),
+                    path,
+                )
+            self.assertFalse(path.exists())
+
+    def test_domain_attrs_cannot_override_reserved_fissionable_declaration(self) -> None:
+        family = {
+            "fission": np.array([0.01, 0.02, 0.03]),
+            "nu-fission": np.array([0.025, 0.05, 0.075]),
+            "chi": np.array([1.0, 0.0, 0.0]),
+        }
+        library = FissionFamilyFakeLibrary(fissionable=True, family=family)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "mgxs.h5"
+            with self.assertRaisesRegex(
+                ValueError,
+                "must not override the reserved fissionable attribute",
+            ):
+                export_openmc_mgxs_library(
+                    library,
+                    path,
+                    domain_specs=[
+                        DomainExportSpec(
+                            domain=library.domain,
+                            attrs={"fissionable": False},
+                        )
+                    ],
+                )
+            self.assertFalse(path.exists())
+
     def test_exports_mgxs_standard_deviations_when_available(self) -> None:
         class StdDevMGXS:
             def __init__(self, mean: np.ndarray, std_dev: np.ndarray) -> None:
@@ -410,6 +559,9 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
                     "nu-fission": np.array([0.025, 0.05]),
                     "chi": np.array([1.0, 0.0]),
                     "scatter matrix": self.scatter,
+                    # Equal group fluxes make the incoming-flux-weighted P1
+                    # correction equal to the column sums [0.042, 0.053].
+                    "transport": np.array([0.458, 0.547]),
                 }
 
             def get_mgxs(self, domain: FakeDomain, mgxs_type: str) -> FakeMGXS:
@@ -445,6 +597,7 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
                     "nu-fission": np.array([0.025]),
                     "chi": np.array([1.0]),
                     "scatter matrix": self.scatter,
+                    "transport": np.array([0.46]),
                 }
 
             def get_mgxs(self, domain: FakeDomain, mgxs_type: str) -> FakeMGXS:
@@ -465,11 +618,24 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
         self.assertEqual(stored_scatter.shape, (2, 1, 1))
         np.testing.assert_allclose(stored_scatter[:, 0, 0], [0.45, 0.04])
 
+    def test_rejects_p1_export_when_any_domain_lacks_transport_mgxs(self) -> None:
+        library = KeywordOnlyFakeLibrary()
+        del library._data[(102, "transport")]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "mgxs.h5"
+            with self.assertRaisesRegex(
+                ValueError,
+                "P1 or higher scattering requires an explicit OpenMC TransportXS",
+            ):
+                export_openmc_mgxs_library(library, path)
+            self.assertFalse(path.exists())
+
     def test_rejects_nu_scatter_as_default_donjon_scatter(self) -> None:
         class Library:
             def __init__(self) -> None:
                 self.energy_groups = FakeEnergyGroups()
-                self.domain = FakeDomain("fuel", 1, 3.0, True)
+                self.domain = FakeDomain("fuel", 1, 3.0, False)
                 self.domains = [self.domain]
                 self.data = {
                     "total": np.array([0.5, 0.6, 0.7]),
@@ -490,7 +656,7 @@ class ExportOpenMCMGXSTests(unittest.TestCase):
         class Library:
             def __init__(self) -> None:
                 self.energy_groups = FakeEnergyGroups()
-                self.domain = FakeDomain("fuel", 1, 3.0, True)
+                self.domain = FakeDomain("fuel", 1, 3.0, False)
                 self.domains = [self.domain]
                 self.data = {
                     "total": np.array([0.5, 0.6, 0.7]),

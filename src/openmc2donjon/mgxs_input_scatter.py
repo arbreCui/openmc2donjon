@@ -47,6 +47,10 @@ def validate_scatter(
                 f"mixture {mix_name}: 2D scatter_matrix is valid only for legendre_order=0"
             )
             return None
+        if np.any(values < 0.0):
+            report.fail(
+                f"mixture {mix_name}: P0 scatter values must be non-negative"
+            )
         return 1
 
     if values.ndim != 3:
@@ -94,6 +98,9 @@ def validate_scatter(
     if shape != expected:
         report.fail(f"mixture {mix_name}: scatter_matrix shape {shape} expected {expected}")
         return None
+    p0 = p0_scatter_matrix(values, axes, ngroups, legendre_order)
+    if p0 is not None and np.any(p0 < 0.0):
+        report.fail(f"mixture {mix_name}: P0 scatter values must be non-negative")
     return expected_moments
 
 

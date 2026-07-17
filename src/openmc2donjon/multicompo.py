@@ -196,6 +196,7 @@ def read_mgxs_hdf5_histories(
                         expected_moments=expected_moments,
                         h_factor_default=h_factor_default,
                         parent_attrs=g.attrs,
+                        root_attrs=h5.attrs,
                         flux_weight=None,
                     )
                     for state_name in _sorted_state_names(states_group)
@@ -209,6 +210,7 @@ def read_mgxs_hdf5_histories(
                         expected_moments=expected_moments,
                         h_factor_default=h_factor_default,
                         parent_attrs=None,
+                        root_attrs=h5.attrs,
                         flux_weight=(
                             None
                             if reference_flux_weights is None
@@ -663,6 +665,7 @@ def _mixture_from_hdf5_group(
     expected_moments: int | None,
     h_factor_default: float | None,
     parent_attrs,
+    root_attrs,
     flux_weight: np.ndarray | None,
 ) -> MixtureXS:
     scatter = _scatter_matrix_from_hdf5(
@@ -671,6 +674,7 @@ def _mixture_from_hdf5_group(
         mix_name,
         expected_moments=expected_moments,
         parent_attrs=parent_attrs,
+        root_attrs=root_attrs,
     )
 
     total = _vector(group["total"][:], ngroups, mix_name, "total")
@@ -680,17 +684,45 @@ def _mixture_from_hdf5_group(
     nu_fission = _optional_vector(group, "nu_fission", ngroups)
     chi = _optional_vector(group, "chi", ngroups)
     inverse_velocity = _inverse_velocity_from_hdf5(group, ngroups, mix_name)
-    fission_attr = bool(_attr_with_parent(group.attrs, parent_attrs, "fissionable", True))
-    has_fission_source = (
-        np.sum(np.abs(nu_fission)) > 1e-12 and np.sum(np.abs(chi)) > 1e-12
+    fission_attr_raw = _attr_with_parent(
+        group.attrs, parent_attrs, "fissionable", None
     )
-    fissionable = fission_attr and has_fission_source
-    if not fissionable:
-        fission = np.zeros(ngroups, dtype=float)
-        nu_fission = np.zeros(ngroups, dtype=float)
-        chi = np.zeros(ngroups, dtype=float)
+    if fission_attr_raw is None:
+        raise ValueError(f"mixture {mix_name}: fissionable attribute is required")
+    fissionable = bool(fission_attr_raw)
+    fission_family = {
+        "fission": fission,
+        "nu_fission": nu_fission,
+        "chi": chi,
+    }
+    if fissionable:
+        missing_source = [
+            field for field, values in fission_family.items() if not np.any(values > 0.0)
+        ]
+        if missing_source:
+            raise ValueError(
+                f"mixture {mix_name}: fissionable=true requires nonzero "
+                f"{', '.join(missing_source)}; Converter will not silently "
+                "reclassify or erase the fission family"
+            )
+    else:
+        contradictory = [
+            field for field, values in fission_family.items() if np.any(values != 0.0)
+        ]
+        if contradictory:
+            raise ValueError(
+                f"mixture {mix_name}: fissionable=false requires zero "
+                f"{', '.join(contradictory)}; Converter will not silently "
+                "discard nonzero fission data"
+            )
 
-    return MixtureXS(
+    volume = float(_attr_with_parent(group.attrs, parent_attrs, "volume", 1.0))
+    if not np.isfinite(volume) or volume <= 0.0:
+        raise ValueError(
+            f"mixture {mix_name}: volume attribute must be positive and finite"
+        )
+
+    mixture = MixtureXS(
         name=mix_name,
         total=total,
         absorption=absorption,
@@ -699,7 +731,7 @@ def _mixture_from_hdf5_group(
         chi=chi,
         scatter_matrix=scatter,
         fissionable=fissionable,
-        volume=float(_attr_with_parent(group.attrs, parent_attrs, "volume", 1.0)),
+        volume=volume,
         flux_weight=flux_weight,
         inverse_velocity=inverse_velocity,
         transport_total=transport_total,
@@ -712,6 +744,8 @@ def _mixture_from_hdf5_group(
         adf=_adf_from_hdf5(group, ngroups, mix_name),
         sph=_sph_from_hdf5(group, ngroups, mix_name),
     )
+    _validate_mixture(mixture, ngroups)
+    return mixture
 
 
 def _reference_flux_weights(
@@ -861,7 +895,11 @@ def _transport_total_from_hdf5(
     if "transport_total" in group:
         transport_total = _vector(group["transport_total"][:], ngroups, mix_name, "transport_total")
     elif scatter.shape[0] > 1:
-        transport_total = total - scatter[1].sum(axis=1)
+        raise ValueError(
+            f"mixture {mix_name}: P1 scattering requires an explicit "
+            "transport_total dataset; Converter cannot derive OpenMC "
+            "TransportXS from a bare P1 row sum"
+        )
     else:
         return None
 
@@ -1002,6 +1040,7 @@ def _scatter_matrix_from_hdf5(
     *,
     expected_moments: int | None,
     parent_attrs=None,
+    root_attrs=None,
 ) -> np.ndarray:
     raw = np.asarray(group["scatter_matrix"][:], dtype=float)
     if raw.ndim == 2:
@@ -1012,10 +1051,7 @@ def _scatter_matrix_from_hdf5(
             ngroups,
             mix_name,
             expected_moments=expected_moments,
-            axes=_attr_text(
-                _attr_with_parent(group.attrs, parent_attrs, "scatter_axes", None)
-            )
-            or _attr_text(_attr_with_parent(group.attrs, parent_attrs, "axes", None)),
+            axes=_scatter_axes_from_attrs(group.attrs, parent_attrs, root_attrs),
         )
     else:
         raise ValueError(f"mixture {mix_name}: scatter_matrix must be 2D or 3D")
@@ -1031,6 +1067,19 @@ def _scatter_matrix_from_hdf5(
             f"expected {expected_moments} from legendre_order"
         )
     return np.ascontiguousarray(scatter, dtype=float)
+
+
+def _scatter_axes_from_attrs(group_attrs, parent_attrs, root_attrs) -> str | None:
+    """Use the same calculation → mixture → root precedence as the contract."""
+
+    for attrs in (group_attrs, parent_attrs, root_attrs):
+        if attrs is None:
+            continue
+        for name in ("scatter_axes", "axes"):
+            value = _attr_text(attrs.get(name))
+            if value:
+                return value
+    return None
 
 
 def _normalise_scatter_axes(
@@ -1108,17 +1157,71 @@ def _vector(values: np.ndarray, ngroups: int, mix_name: str, dataset: str) -> np
     return out
 
 
-def _validate_mixture(mix: MixtureXS, ngroups: int) -> None:
+def _validate_mixture(
+    mix: MixtureXS,
+    ngroups: int,
+    *,
+    require_fission_xs: bool = True,
+) -> None:
     for field in ("total", "absorption", "fission", "nu_fission", "chi"):
         values = np.asarray(getattr(mix, field), dtype=float).reshape(-1)
         if values.shape != (ngroups,):
             raise ValueError(f"mixture {mix.name}: {field} must have {ngroups} values")
+        if not np.all(np.isfinite(values)):
+            raise ValueError(f"mixture {mix.name}: {field} must be finite")
+        if field == "total" and np.any(values <= 0.0):
+            raise ValueError(f"mixture {mix.name}: total must be positive")
+        if field != "total" and np.any(values < 0.0):
+            raise ValueError(f"mixture {mix.name}: {field} must be non-negative")
     scatter = np.asarray(mix.scatter_matrix, dtype=float)
     if scatter.ndim != 3 or scatter.shape[1:] != (ngroups, ngroups):
         raise ValueError(
             f"mixture {mix.name}: scatter_matrix must have shape "
             f"[moment, {ngroups}, {ngroups}]"
         )
+    if not np.all(np.isfinite(scatter)):
+        raise ValueError(f"mixture {mix.name}: scatter_matrix must be finite")
+    if np.any(scatter[0] < 0.0):
+        raise ValueError(f"mixture {mix.name}: P0 scatter values must be non-negative")
+    if not np.isfinite(float(mix.volume)) or float(mix.volume) <= 0.0:
+        raise ValueError(f"mixture {mix.name}: volume must be positive and finite")
+    fission_family = {
+        field: np.asarray(getattr(mix, field), dtype=float)
+        for field in ("fission", "nu_fission", "chi")
+    }
+    if mix.fissionable:
+        required_source_fields = ("nu_fission", "chi")
+        if require_fission_xs:
+            required_source_fields = ("fission", *required_source_fields)
+        missing_source = [
+            field
+            for field in required_source_fields
+            if not np.any(fission_family[field] > 0.0)
+        ]
+        if missing_source:
+            raise ValueError(
+                f"mixture {mix.name}: fissionable=true requires nonzero "
+                f"{', '.join(missing_source)}"
+            )
+        if require_fission_xs:
+            fission_support = fission_family["fission"] > 0.0
+            nu_fission_support = fission_family["nu_fission"] > 0.0
+            mismatch = np.flatnonzero(fission_support != nu_fission_support)
+            if mismatch.size:
+                groups = ", ".join(str(int(index) + 1) for index in mismatch)
+                raise ValueError(
+                    f"mixture {mix.name}: fission and nu_fission must have "
+                    f"identical positive group support; mismatch in group(s) {groups}"
+                )
+    else:
+        contradictory = [
+            field for field, values in fission_family.items() if np.any(values != 0.0)
+        ]
+        if contradictory:
+            raise ValueError(
+                f"mixture {mix.name}: fissionable=false requires zero "
+                f"{', '.join(contradictory)}"
+            )
     if mix.adf:
         for name, values in mix.adf.items():
             _adf_name(name, mix.name)
@@ -1127,11 +1230,32 @@ def _validate_mixture(mix: MixtureXS, ngroups: int) -> None:
                 raise ValueError(
                     f"mixture {mix.name}: ADF {name!r} must have {ngroups} values"
                 )
+            if not np.all(np.isfinite(values)) or np.any(values <= 0.0):
+                raise ValueError(
+                    f"mixture {mix.name}: ADF {name!r} must be positive and finite"
+                )
+    for field in ("inverse_velocity", "transport_total", "flux_weight"):
+        raw = getattr(mix, field)
+        if raw is None:
+            continue
+        values = np.asarray(raw, dtype=float).reshape(-1)
+        if values.shape != (ngroups,):
+            raise ValueError(
+                f"mixture {mix.name}: {field} must have {ngroups} values"
+            )
+        if not np.all(np.isfinite(values)) or np.any(values <= 0.0):
+            raise ValueError(
+                f"mixture {mix.name}: {field} must be positive and finite"
+            )
     if mix.h_factor is not None:
         values = np.asarray(mix.h_factor, dtype=float).reshape(-1)
         if values.shape != (ngroups,):
             raise ValueError(
                 f"mixture {mix.name}: h_factor must have {ngroups} values"
+            )
+        if not np.all(np.isfinite(values)) or np.any(values < 0.0):
+            raise ValueError(
+                f"mixture {mix.name}: h_factor must be non-negative and finite"
             )
     if mix.sph is not None:
         values = np.asarray(mix.sph, dtype=float).reshape(-1)

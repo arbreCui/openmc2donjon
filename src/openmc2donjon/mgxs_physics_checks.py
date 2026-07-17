@@ -8,7 +8,9 @@ from typing import Any
 
 import numpy as np
 
+from .constants import MGXS_DONJON_GROUP_ORDER
 from .energy_groups import validate_energy_bounds_internal
+from .hdf5_names import decode_hdf5_names
 from .mgxs_input_scatter import (
     MOMENT_FIRST_SCATTER_AXES,
     MOMENT_LAST_SCATTER_AXES,
@@ -19,12 +21,14 @@ from .mgxs_input_scatter import (
 
 DEFAULT_SCATTER_ROW_BALANCE_REL = 5.0e-2
 DEFAULT_CHI_SUM_TOLERANCE = 1.0e-6
-DEFAULT_NU_RATIO_MINIMUM = 2.0
-DEFAULT_NU_RATIO_MAXIMUM = 3.5
+# There is no universal physical interval for nu*Sigma_f / Sigma_f.  The
+# effective neutron yield depends on nuclide mix and incident energy.  These
+# names remain import-compatible, but range warnings are opt-in only.
+DEFAULT_NU_RATIO_MINIMUM: float | None = None
+DEFAULT_NU_RATIO_MAXIMUM: float | None = None
 DEFAULT_TRANSPORT_P1_REL = 5.0e-2
 LOCAL_ENERGY_BOUNDS_RTOL = 1.0e-10
 LOCAL_ENERGY_BOUNDS_ATOL = 0.0
-FISSION_RATE_FLOOR = 1.0e-30
 
 
 @dataclass(frozen=True)
@@ -47,10 +51,13 @@ class MgxsPhysicsCheckReport:
     nu_ratio_worst: str | None = None
     nu_ratio_warning_count: int = 0
     nu_ratio_warnings: tuple[str, ...] = ()
+    nu_ratio_support_mismatch_count: int = 0
+    nu_ratio_errors: tuple[str, ...] = ()
     adf_calculations: int = 0
     adf_faces: tuple[str, ...] = ()
     adf_face_errors: tuple[str, ...] = ()
     transport_p1_checked: int = 0
+    transport_p1_skipped: int = 0
     transport_p1_max_rel: float | None = None
     transport_p1_max_abs: float | None = None
     transport_p1_worst: str | None = None
@@ -76,10 +83,13 @@ class _MutablePhysicsReport:
     nu_ratio_max: float | None = None
     nu_ratio_worst: str | None = None
     nu_ratio_warnings: list[str] = field(default_factory=list)
+    nu_ratio_support_mismatch_count: int = 0
+    nu_ratio_errors: list[str] = field(default_factory=list)
     adf_calculations: int = 0
     adf_faces: tuple[str, ...] = ()
     adf_face_errors: list[str] = field(default_factory=list)
     transport_p1_checked: int = 0
+    transport_p1_skipped: int = 0
     transport_p1_max_rel: float | None = None
     transport_p1_max_abs: float | None = None
     transport_p1_worst: str | None = None
@@ -105,10 +115,13 @@ class _MutablePhysicsReport:
             nu_ratio_worst=self.nu_ratio_worst,
             nu_ratio_warning_count=len(self.nu_ratio_warnings),
             nu_ratio_warnings=tuple(self.nu_ratio_warnings),
+            nu_ratio_support_mismatch_count=self.nu_ratio_support_mismatch_count,
+            nu_ratio_errors=tuple(self.nu_ratio_errors),
             adf_calculations=self.adf_calculations,
             adf_faces=self.adf_faces,
             adf_face_errors=tuple(self.adf_face_errors),
             transport_p1_checked=self.transport_p1_checked,
+            transport_p1_skipped=self.transport_p1_skipped,
             transport_p1_max_rel=self.transport_p1_max_rel,
             transport_p1_max_abs=self.transport_p1_max_abs,
             transport_p1_worst=self.transport_p1_worst,
@@ -129,8 +142,8 @@ def evaluate_mgxs_physics(
     chi_sum_tolerance: float | None = None,
     require_adf_face_consistency: bool = False,
     transport_p1_rel: float | None = None,
-    nu_ratio_minimum: float = DEFAULT_NU_RATIO_MINIMUM,
-    nu_ratio_maximum: float = DEFAULT_NU_RATIO_MAXIMUM,
+    nu_ratio_minimum: float | None = DEFAULT_NU_RATIO_MINIMUM,
+    nu_ratio_maximum: float | None = DEFAULT_NU_RATIO_MAXIMUM,
 ) -> MgxsPhysicsCheckReport:
     """Evaluate production physics guardrails without mutating the HDF5 file."""
 
@@ -144,8 +157,15 @@ def evaluate_mgxs_physics(
             energy_groups=energy_groups,
         )
 
+    reference_flux = _root_reference_flux_by_mixture(
+        h5,
+        mixture_names=mixture_names,
+        energy_groups=energy_groups,
+    )
     adf_names_by_calc: list[tuple[str, ...]] = []
-    for label, group, parent_group in _iter_calculations(h5, mixture_names):
+    for mixture_name, label, group, parent_group in _iter_calculations(
+        h5, mixture_names
+    ):
         parent_attrs = None if parent_group is None else parent_group.attrs
         fissionable = bool(
             _attr_with_parent(group.attrs, parent_attrs, "fissionable", False)
@@ -203,6 +223,11 @@ def evaluate_mgxs_physics(
                 axes=axes,
                 energy_groups=energy_groups,
                 legendre_order=legendre_order,
+                reference_flux=(
+                    reference_flux.get(mixture_name)
+                    if parent_group is None
+                    else None
+                ),
                 threshold=transport_p1_rel,
             )
 
@@ -371,18 +396,45 @@ def _check_nu_ratio(
     fission: np.ndarray | None,
     nu_fission: np.ndarray | None,
     fissionable: bool,
-    minimum: float,
-    maximum: float,
+    minimum: float | None,
+    maximum: float | None,
 ) -> None:
     if not fissionable or fission is None or nu_fission is None:
         return
     if not (np.all(np.isfinite(fission)) and np.all(np.isfinite(nu_fission))):
         return
-    mask = fission > FISSION_RATE_FLOOR
+    fission_positive = fission > 0.0
+    nu_fission_positive = nu_fission > 0.0
+    support_mismatch = fission_positive != nu_fission_positive
+    if np.any(support_mismatch):
+        mismatch_groups = np.flatnonzero(support_mismatch)
+        report.nu_ratio_support_mismatch_count += int(mismatch_groups.size)
+        rendered_groups = ", ".join(str(int(index) + 1) for index in mismatch_groups)
+        report.nu_ratio_errors.append(
+            f"mixture {label}: fission and nu_fission must have identical "
+            f"positive group support; mismatch in group(s) {rendered_groups}"
+        )
+
+    # The ratio is the group-wise effective neutron yield.  Record it only
+    # where both reaction vectors are positive; its magnitude is not subject
+    # to a universal isotope- and energy-independent acceptance interval.
+    mask = fission_positive & nu_fission_positive
     if not np.any(mask):
         return
     ratio = nu_fission[mask] / fission[mask]
     groups = np.nonzero(mask)[0]
+    finite = np.isfinite(ratio) & (ratio > 0.0)
+    if not np.all(finite):
+        invalid_groups = groups[~finite]
+        rendered_groups = ", ".join(str(int(index) + 1) for index in invalid_groups)
+        report.nu_ratio_errors.append(
+            f"mixture {label}: nu_fission/fission must be finite and positive "
+            f"on common positive support; invalid group(s) {rendered_groups}"
+        )
+    ratio = ratio[finite]
+    groups = groups[finite]
+    if ratio.size == 0:
+        return
     report.nu_ratio_checked_bins += int(ratio.size)
     local_min = float(np.min(ratio))
     local_max = float(np.max(ratio))
@@ -392,18 +444,29 @@ def _check_nu_ratio(
     report.nu_ratio_max = (
         local_max if report.nu_ratio_max is None else max(report.nu_ratio_max, local_max)
     )
-    low = ratio < minimum
-    high = ratio > maximum
+    low = np.zeros(ratio.shape, dtype=bool)
+    high = np.zeros(ratio.shape, dtype=bool)
+    if minimum is not None:
+        low = ratio < minimum
+    if maximum is not None:
+        high = ratio > maximum
     if not np.any(low | high):
         return
-    distance = np.maximum(minimum - ratio, ratio - maximum)
+    distance = np.zeros(ratio.shape, dtype=float)
+    if minimum is not None:
+        distance = np.maximum(distance, minimum - ratio)
+    if maximum is not None:
+        distance = np.maximum(distance, ratio - maximum)
     index = int(np.argmax(np.where(low | high, distance, -np.inf)))
     group_index = int(groups[index])
     value = float(ratio[index])
     report.nu_ratio_worst = f"{label}: group={group_index + 1} nu={value:.6e}"
+    lower = "-inf" if minimum is None else f"{minimum:.6e}"
+    upper = "+inf" if maximum is None else f"{maximum:.6e}"
     report.nu_ratio_warnings.append(
         f"mixture {label}: nu_fission/fission={value:.6e} in group "
-        f"{group_index + 1} is outside [{minimum:.6e}, {maximum:.6e}]"
+        f"{group_index + 1} is outside explicitly configured "
+        f"[{lower}, {upper}]"
     )
 
 
@@ -417,6 +480,7 @@ def _check_transport_p1(
     axes: str | None,
     energy_groups: int,
     legendre_order: int,
+    reference_flux: np.ndarray | None,
     threshold: float,
 ) -> None:
     if total is None or transport_total is None or scatter is None:
@@ -424,14 +488,26 @@ def _check_transport_p1(
     p1 = scatter_moment_matrix(scatter, axes, energy_groups, legendre_order, moment=1)
     if p1 is None:
         return
+    # OpenMC's transport correction is an outgoing-group quantity.  It needs
+    # the incoming-group flux used to tally P1; a bare row sum is not the
+    # TransportXS definition and can produce large false failures.  A
+    # root-level flux is deliberately not attached to stateful calculations,
+    # because it is file-global rather than state-bound.
+    if reference_flux is None:
+        report.transport_p1_skipped += 1
+        return
     if not (
         np.all(np.isfinite(total))
         and np.all(np.isfinite(transport_total))
         and np.all(np.isfinite(p1))
+        and np.all(np.isfinite(reference_flux))
+        and np.all(reference_flux > 0.0)
     ):
+        report.transport_p1_skipped += 1
         return
     report.transport_p1_checked += 1
-    derived = total - p1.sum(axis=1)
+    correction = np.sum(reference_flux[:, np.newaxis] * p1, axis=0) / reference_flux
+    derived = total - correction
     residual = transport_total - derived
     _, max_abs, max_rel, index = _relative_worst(residual, transport_total)
     _update_worst(
@@ -448,7 +524,7 @@ def _check_transport_p1(
     )
     if max_rel > threshold:
         report.transport_p1_errors.append(
-            "transport_total/P1 max relative residual "
+            "flux-weighted transport_total/P1 max relative residual "
             f"{max_rel:.6e} (abs {max_abs:.6e}) at {label}: group={index + 1} "
             f"exceeds fail threshold {threshold:.6e}"
         )
@@ -503,16 +579,61 @@ def _finalize_adf_faces(
 
 def _iter_calculations(
     h5: Any, mixture_names: tuple[str, ...]
-) -> Iterator[tuple[str, Any, Any]]:
+) -> Iterator[tuple[str, str, Any, Any]]:
     mixtures = h5["mixtures"]
     for mixture_name in mixture_names:
         mixture = mixtures[mixture_name]
         if "states" in mixture:
             states = mixture["states"]
             for state_name in _sorted_state_names(states):
-                yield f"{mixture_name}/states/{state_name}", states[state_name], mixture
+                yield (
+                    mixture_name,
+                    f"{mixture_name}/states/{state_name}",
+                    states[state_name],
+                    mixture,
+                )
         else:
-            yield mixture_name, mixture, None
+            yield mixture_name, mixture_name, mixture, None
+
+
+def _root_reference_flux_by_mixture(
+    h5: Any,
+    *,
+    mixture_names: tuple[str, ...],
+    energy_groups: int,
+) -> dict[str, np.ndarray]:
+    """Return canonical direct-mixture OpenMC flux rows, or no rows.
+
+    The transport/P1 identity is meaningful only when the flux row is bound to
+    the same mixture ordering and the same high-to-low group convention as the
+    MGXS arrays.  Fail closed on incomplete metadata instead of guessing.
+    """
+
+    if "openmc_volume_flux" not in h5:
+        return {}
+    dataset = h5["openmc_volume_flux"]
+    try:
+        values = np.asarray(dataset[:], dtype=float)
+    except (TypeError, ValueError, OSError):
+        return {}
+    if values.shape != (len(mixture_names), energy_groups):
+        return {}
+    if "mixture_names" not in dataset.attrs:
+        return {}
+    try:
+        declared_names = decode_hdf5_names(dataset.attrs["mixture_names"])
+    except (TypeError, ValueError, UnicodeDecodeError):
+        return {}
+    if declared_names != mixture_names:
+        return {}
+    if _attr_text(dataset.attrs.get("group_order")) != MGXS_DONJON_GROUP_ORDER:
+        return {}
+    if not np.all(np.isfinite(values)) or np.any(values <= 0.0):
+        return {}
+    return {
+        mixture_name: np.asarray(values[index], dtype=float)
+        for index, mixture_name in enumerate(mixture_names)
+    }
 
 
 def _sorted_state_names(states_group: Any) -> list[str]:

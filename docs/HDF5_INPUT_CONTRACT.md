@@ -138,6 +138,9 @@ For each spatial domain:
 /mixtures/<domain_name>/
     total
     absorption
+    fission
+    nu_fission
+    chi
     scatter_matrix
 ```
 
@@ -147,27 +150,28 @@ Required datasets:
 | --- | --- | --- |
 | `total` | `(G,)` | `NTOT0` |
 | `absorption` | `(G,)` | used for balance checks and macrolib fields |
+| `fission` | `(G,)` | `NFTOT` when the mixture is fissionable; exact zeros otherwise |
+| `nu_fission` | `(G,)` | `NUSIGF` when the mixture is fissionable; exact zeros otherwise |
+| `chi` | `(G,)` | `CHI` when the mixture is fissionable; exact zeros otherwise |
 | `scatter_matrix` | `(L + 1, G_in, G_out)` or `(G_in, G_out, L + 1)` | `SIGSxx` and `SCATxx` |
 
-Fission datasets are required only for domains with a physical fission source:
-
-| Dataset | Shape | DONJON field |
-| --- | --- | --- |
-| `nu_fission` | `(G,)` | `NUSIGF` |
-| `chi` | `(G,)` | `CHI` |
-
-The writer suppresses fission fields when `nu_fission` or `chi` is effectively
-zero. This avoids carrying Monte Carlo noise as a real fission spectrum in
-non-fuel domains.
+The `fissionable` attribute is an explicit contract, not a display hint.
+`fissionable=true` requires nonzero `fission`, `nu_fission`, and `chi`
+vectors. `fissionable=false` requires those three vectors to be exactly zero.
+Converter rejects either contradiction instead of silently clearing or
+reclassifying the fission source. For a fissionable calculation, `fission`
+and `nu_fission` must also have identical positive group support. Their ratio
+is the group-wise effective neutron yield; Converter records its observed
+minimum and maximum but applies no universal magnitude range.
 
 Recommended mixture attributes:
 
 | Attribute | Type | Meaning |
 | --- | --- | --- |
-| `fissionable` | bool | source-domain hint |
+| `fissionable` | bool | required physical fission-source declaration |
 | `scatter_format` | string | normally `legendre` |
 | `scatter_axes` | string | normally `moment,from,to` |
-| `volume` | float | spatial-domain volume |
+| `volume` | float | spatial-domain volume; when present, strictly positive and finite |
 
 ## Optional Mixture Items
 
@@ -176,18 +180,39 @@ Recommended mixture attributes:
 | `transport_total` | `(G,)` | `STRD` |
 | `inverse_velocity`, `inverse-velocity`, `OVERV`, or `overv` | `(G,)` | `OVERV` |
 | `volume` | scalar | mixture volume |
-| `flux` or `flux_integral` | `(G,)` | `FLUX-INTG` when writing root `L_MACROLIB` |
+| `flux_weight`, `flux`, or `flux_integral` | `(G,)` | legacy Inspect-only data; Converter does not consume it |
 | `h_factor`, `H-FACTOR`, `H_FACTOR`, `kappa_fission`, `kappa_fission_xs`, or `kappa_fission_cross_section` | `(G,)` | `H-FACTOR` |
+
+All accepted inverse-velocity spellings must contain positive, finite values.
+All accepted H-factor spellings must contain non-negative, finite values. These
+are the same value-domain checks applied by Converter when it builds the
+DRAGON/DONJON object.
 | `sph`, `SPH`, or `NSPH` | `(G,)` | `NSPH` |
 
-If `transport_total` is absent and P1 scattering is present, the converter
-derives:
+If P1 or higher scattering is present, `transport_total` is required.  A bare
+P1 row sum is not the OpenMC `TransportXS` definition, so Converter does not
+silently derive `STRD` from the scattering matrix.  Export OpenMC's
+`transport` MGXS from the same calculation instead.
+
+When a calculation also carries a strictly positive, mixture-ordered
+`/openmc_volume_flux`, preflight can evaluate the diagnostic identity
 
 ```text
-STRD = NTOT0 - sum_out(SCAT01)
+transport_total[g_out]
+  = total[g_out]
+    - sum_g_in(flux[g_in] * P1[g_in -> g_out]) / flux[g_out]
 ```
 
-If neither is available, `STRD` falls back to `NTOT0`.
+The check is skipped when the flux cannot be bound to the calculation.  This
+diagnostic does not replace the explicit `transport_total` dataset and its
+uncertainty; it is not a row-sum reconstruction rule.  With P0-only
+scattering, absence of `transport_total` means `STRD` falls back to `NTOT0`.
+
+Converter writes `FLUX-INTG` only from the mixture-ordered root
+`/openmc_volume_flux` contract below. It does not infer a reference flux from
+the ambiguous calculation-local `flux_weight`, `flux`, or `flux_integral`
+names. Those legacy vectors remain visible in Inspect so existing files can be
+diagnosed without silently assigning them new physics semantics.
 
 ## Optional Statistical Uncertainty Datasets
 
@@ -227,15 +252,19 @@ openmc2donjon check mgxs_library.h5 \
   --uncertainty-fail 0.20
 ```
 
-Production mode keeps the same data model and applies the configured
-production uncertainty gate to available `*_std_dev / |mean|` values above the
-mean floor. Missing or incomplete `*_std_dev` coverage is reported as a warning
-unless a stricter workflow gate is added by the caller:
+Production mode keeps the same data model, requires matching `*_std_dev`
+coverage for every eligible mean dataset, and applies its production-critical
+uncertainty gate to available `*_std_dev / |mean|` values above the mean floor.
+The production-critical mask contains all one-dimensional MGXS fields and P0
+scatter. P1 and higher signed scatter moments remain fully covered and are
+reported through the all-data maximum, warnings, and top findings, but have no
+default universal hard relative-error gate. A declared `--uncertainty-fail`
+value adds that all-data gate and is recorded in the receipt:
 
 ```sh
 openmc2donjon check mgxs_library.h5 \
   --production \
-  --require-std-dev-coverage
+  --uncertainty-fail <model-specific-relative-limit>
 ```
 
 OpenMC-side SPH workflows should apply the same policy before writing the final

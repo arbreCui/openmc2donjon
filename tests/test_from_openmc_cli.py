@@ -252,7 +252,7 @@ class FromOpenMCCliTests(unittest.TestCase):
         self.assertIn("require_adf_face_consistency: yes", rendered)
         self.assertIn("transport_p1_fail: 0.05", rendered)
         self.assertIn("uncertainty_production_fail: 0.1", rendered)
-        self.assertIn("uncertainty_fail: 0.1", rendered)
+        self.assertIn("uncertainty_fail: none", rendered)
         self.assertIn("require_std_dev_coverage: yes", rendered)
 
     def test_check_can_fail_on_exported_std_dev_uncertainty(self) -> None:

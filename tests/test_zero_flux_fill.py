@@ -25,10 +25,26 @@ FUEL_TOTAL_ASC = np.array([1.0, 2.0, 3.0, 4.0])
 FUEL_ABSORPTION_ASC = np.array([0.1, 0.2, 0.3, 0.4])
 FUEL_FISSION_ASC = np.array([0.05, 0.06, 0.07, 0.08])
 FUEL_NU_FISSION_ASC = np.array([0.125, 0.15, 0.175, 0.2])
-FUEL_SCATTER_ASC = np.arange(32, dtype=float).reshape(4, 4, 2)  # (g_in, g_out, order)
+FUEL_SCATTER_ASC = np.zeros((4, 4, 2), dtype=float)  # (g_in, g_out, order)
+FUEL_SCATTER_ASC[:, :, 0] = np.array(
+    [
+        [0.50, 0.10, 0.00, 0.00],
+        [0.05, 1.00, 0.10, 0.00],
+        [0.00, 0.05, 1.50, 0.10],
+        [0.00, 0.00, 0.05, 2.00],
+    ]
+)
+FUEL_SCATTER_ASC[:, :, 1] = np.array(
+    [
+        [0.02, 0.01, 0.00, 0.00],
+        [0.00, 0.04, 0.01, 0.00],
+        [0.00, 0.00, 0.05, 0.01],
+        [0.00, 0.00, 0.00, 0.08],
+    ]
+)
 SODIUM_TOTAL_ASC = np.array([5.0, 6.0, 7.0, 8.0])
 SODIUM_ABSORPTION_ASC = np.array([0.5, 0.6, 0.7, 0.8])
-SODIUM_SCATTER_ASC = 0.5 * np.arange(32, dtype=float).reshape(4, 4, 2)
+SODIUM_SCATTER_ASC = 0.5 * FUEL_SCATTER_ASC
 
 
 class _FakeXSData:
@@ -43,10 +59,13 @@ class _FakeXSData:
         nu_fission: np.ndarray | None = None,
         fissionable: bool = False,
         temperatures: tuple[float, ...] = (294.0,),
+        scatter_format: str = "legendre",
     ) -> None:
         self.name = name
         self.temperatures = list(temperatures)
         self.fissionable = fissionable
+        self.scatter_format = scatter_format
+        self.order = int(np.asarray(scatter).shape[-1] - 1)
         self.total = [np.asarray(total, dtype=float)]
         self.absorption = [np.asarray(absorption, dtype=float)]
         self.scatter_matrix = [np.asarray(scatter, dtype=float)]
@@ -188,14 +207,18 @@ class ZeroFluxFillTests(unittest.TestCase):
                 np.testing.assert_array_equal(fuel["fission"][:], [0.5, 0.5, 0.06, 0.05])
                 np.testing.assert_array_equal(fuel["nu_fission"][:], [1.2, 1.2, 0.15, 0.125])
                 matrix = fuel["scatter_matrix"][:]
-                np.testing.assert_array_equal(matrix[0][2], [14.0, 12.0, 10.0, 8.0])
-                np.testing.assert_array_equal(matrix[1][2], [15.0, 13.0, 11.0, 9.0])
-                np.testing.assert_array_equal(matrix[0][3], [6.0, 4.0, 2.0, 0.0])
-                np.testing.assert_array_equal(matrix[1][3], [7.0, 5.0, 3.0, 1.0])
+                np.testing.assert_array_equal(matrix[0][2], [0.0, 0.1, 1.0, 0.05])
+                np.testing.assert_array_equal(matrix[1][2], [0.0, 0.01, 0.04, 0.0])
+                np.testing.assert_array_equal(matrix[0][3], [0.0, 0.0, 0.1, 0.5])
+                np.testing.assert_array_equal(matrix[1][3], [0.0, 0.0, 0.01, 0.02])
                 np.testing.assert_array_equal(matrix[0][0], np.full(GROUPS, 9.0))
-                # transport_total = total - P1 out-scatter row sum.
+                # Material-macrolib Legendre P1 out-scatter correction.
                 np.testing.assert_array_equal(
-                    fuel["transport_total"][:], [9.0, 19.0, 2.0 - 48.0, 1.0 - 16.0]
+                    fuel["transport_total"][:], [9.0, 19.0, 1.95, 0.97]
+                )
+                self.assertEqual(
+                    fuel.attrs["zero_flux_transport_method"],
+                    "macrolib_p1_outscatter",
                 )
 
     def test_fills_nonpositive_transport_bins_even_when_total_is_positive(self) -> None:
@@ -301,7 +324,7 @@ class ZeroFluxFillTests(unittest.TestCase):
                 )
                 np.testing.assert_array_equal(fuel["total"][:], [10.0, 3.0, 30.0, 40.0])
                 np.testing.assert_array_equal(
-                    fuel["scatter_matrix"][0, 1], [22.0, 20.0, 18.0, 16.0]
+                    fuel["scatter_matrix"][0, 1], [0.1, 1.5, 0.05, 0.0]
                 )
 
     def test_noise_thresholds_must_be_finite_and_non_negative(self) -> None:
@@ -422,6 +445,66 @@ class ZeroFluxFillTests(unittest.TestCase):
             with h5py.File(mgxs, "r") as h5:
                 fuel = h5["mixtures/fuel"]
                 np.testing.assert_array_equal(fuel["transport_total"][:], [9.0, 19.0, 2.0, 1.0])
+                self.assertEqual(
+                    fuel.attrs["zero_flux_transport_method"],
+                    "macrolib_p0_total",
+                )
+
+    def test_rejects_non_legendre_macrolib_before_mutating_input(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            macrolib = _touch_macrolib(root)
+            _write_converter_h5(mgxs, {"fuel": _fuel_spec()})
+            digest = _sha256(mgxs)
+            library = _fake_library()
+            library.xsdatas[0].scatter_format = "histogram"
+
+            with _fake_openmc(library):
+                with self.assertRaisesRegex(ValueError, "requires a Legendre macrolib"):
+                    fill_zero_flux_groups(
+                        mgxs, macrolib=macrolib, in_place=True
+                    )
+
+            self.assertEqual(_sha256(mgxs), digest)
+
+    def test_rejects_nonpositive_material_transport_before_mutating_input(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            macrolib = _touch_macrolib(root)
+            _write_converter_h5(mgxs, {"fuel": _fuel_spec()})
+            digest = _sha256(mgxs)
+            library = _fake_library()
+            bad_scatter = library.xsdatas[0].scatter_matrix[0].copy()
+            bad_scatter[0, :, 1] = 1.0
+            library.xsdatas[0].scatter_matrix[0] = bad_scatter
+
+            with _fake_openmc(library):
+                with self.assertRaisesRegex(
+                    ValueError, "produced non-positive or non-finite"
+                ):
+                    fill_zero_flux_groups(
+                        mgxs, macrolib=macrolib, in_place=True
+                    )
+
+            self.assertEqual(_sha256(mgxs), digest)
+
+    def test_zeroes_unrepresented_higher_moments_in_filled_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            mgxs = root / "mgxs.h5"
+            macrolib = _touch_macrolib(root)
+            _write_converter_h5(mgxs, {"fuel": _fuel_spec(orders=3)})
+
+            with _fake_openmc(_fake_library(fuel_orders=2)):
+                fill_zero_flux_groups(mgxs, macrolib=macrolib, in_place=True)
+
+            with h5py.File(mgxs, "r") as h5:
+                np.testing.assert_array_equal(
+                    h5["mixtures/fuel/scatter_matrix"][2, 2:, :],
+                    np.zeros((2, GROUPS)),
+                )
 
     def test_custom_label_attr_selects_macrolib_material(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -683,6 +766,7 @@ def _reference_fill(mgxs_path: Path, library: _FakeMGXSLibrary, macrolib_arg: st
                 fill_dataset(group, fill, "nu_fission", group_vector(xsdata.nu_fission[temp_idx]))
 
             matrix = group["scatter_matrix"][:]
+            matrix[:, fill, :] = 0.0
             for order in range(min(matrix.shape[0], n_orders_mac)):
                 matrix[order][fill, :] = scatter[order][fill, :]
             group["scatter_matrix"][...] = matrix
@@ -697,6 +781,13 @@ def _reference_fill(mgxs_path: Path, library: _FakeMGXSLibrary, macrolib_arg: st
                 else:
                     correction = np.zeros_like(mac_total)
                 fill_dataset(group, fill, "transport_total", mac_total - correction)
+                group.attrs["zero_flux_transport_method"] = (
+                    "macrolib_p1_outscatter"
+                    if n_orders_mac > 1
+                    else "macrolib_p0_total"
+                )
+                group.attrs["zero_flux_scatter_format"] = xsdata.scatter_format
+                group.attrs["zero_flux_scatter_order"] = xsdata.order
 
             group.attrs["zero_flux_filled_groups"] = fill.astype(np.int64)
             group.attrs["zero_flux_fill_source"] = macrolib_arg

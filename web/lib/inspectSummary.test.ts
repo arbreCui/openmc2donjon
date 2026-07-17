@@ -20,13 +20,14 @@ const BASE: InspectProductionInput = {
   mixture_count: 4,
   transport_total: 4,
   h_factor: 2,
+  inverse_velocity: 4,
   fissionable_mixtures: 2,
   std_dev_datasets: 8,
   std_dev_expected_datasets: 8,
 };
 
 describe("inspect production stats", () => {
-  it("marks a fully covered production file as pass on all four stats", () => {
+  it("marks a fully covered production file as pass on all inventory stats", () => {
     const stats = inspectProductionStats(BASE);
     expect(stats.mesh).toEqual({
       value: "SHEM361 (361g)",
@@ -37,18 +38,24 @@ describe("inspect production stats", () => {
       value: "4 / 4",
       tone: "pass",
       detail:
-        "Explicit transport_total supports the deterministic diffusion/SPN route.",
+        "Dataset presence only; the audit checks flux-weighted P1 consistency when a bound flux exists.",
     });
     expect(stats.hFactor).toEqual({
       value: "2 / 4",
       tone: "pass",
       detail: "Needed for power normalization in fissionable mixtures.",
     });
+    expect(stats.inverseVelocity).toEqual({
+      value: "4 / 4",
+      tone: "pass",
+      detail:
+        "Needed for kinetics/transients; incomplete coverage means steady-state use only.",
+    });
     expect(stats.stdDev).toEqual({
       value: "8 / 8",
       tone: "pass",
       detail:
-        "Tally uncertainty is optional by default but important for production audits.",
+        "Coverage says data exist; the production audit separately checks their magnitude.",
     });
   });
 
@@ -62,15 +69,17 @@ describe("inspect production stats", () => {
     });
   });
 
-  it("warns on incomplete transport, H-factor, and std_dev coverage", () => {
+  it("warns on incomplete transport, H-factor, inverse-velocity, and std_dev coverage", () => {
     const stats = inspectProductionStats({
       ...BASE,
       transport_total: 3,
       h_factor: 1,
+      inverse_velocity: 0,
       std_dev_datasets: 2,
     });
     expect(stats.transport).toMatchObject({ value: "3 / 4", tone: "warn" });
     expect(stats.hFactor).toMatchObject({ value: "1 / 4", tone: "warn" });
+    expect(stats.inverseVelocity).toMatchObject({ value: "0 / 4", tone: "warn" });
     expect(stats.stdDev).toMatchObject({ value: "2 / 8", tone: "warn" });
   });
 

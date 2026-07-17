@@ -186,6 +186,9 @@ export interface HandoffInspection {
    * hint when this is set. */
   peek_truncated: boolean;
   openmc_provenance: OpenmcProvenance | null;
+  /** Read-only execution of Converter's current canonical production policy.
+   * Structural inspection can pass while this audit fails. */
+  production_audit?: ConvertPreflightInput | null;
   root_attr_keys: string[];
   burnup_axis: string | null;
   burnup_axis_values: number | null;
@@ -312,28 +315,55 @@ async function pyganDoctor(): Promise<PyGanBackendStatus> {
 
 export interface CrossSections {
   total: number[] | null;
+  transport_total: number[] | null;
   absorption: number[] | null;
   fission: number[] | null;
   nu_fission: number[] | null;
   chi: number[] | null;
+  /** Canonical H-FACTOR / kappa-fission vector selected from the
+   * converter-supported aliases. It is not overlaid on the cross-section
+   * chart because its physical dimension differs from the reaction XS. */
+  kappa_fission: number[] | null;
+  inverse_velocity: number[] | null;
+  /** Legacy file-local flux-like vector shown for inspection only. Converter
+   * derives its flux_weight exclusively from bound root openmc_volume_flux. */
+  flux_weight: number[] | null;
+  sph: number[] | null;
 }
+
+export type CrossSectionStandardDeviations = {
+  [K in keyof CrossSections]: number[] | null;
+};
 
 export interface ScatterMoment {
   axes: string | null;
   shape: number[];
   moment_index: number;
   values: number[][];
+  std_dev_shape: number[] | null;
+  std_dev_values: number[][] | null;
 }
 
 export interface MixtureDetail {
   schema: string;
   path: string;
   mixture: string;
+  /** Named calculation states under /mixtures/<name>/states. Empty for the
+   * legacy direct-mixture layout. */
+  available_states: string[];
+  selected_state: string | null;
   energy_groups: number | null;
   legendre_order: number | null;
   volume: number | null;
   temperature: number | null;
+  fissionable: boolean | null;
   cross_sections: CrossSections;
+  cross_section_std_dev: CrossSectionStandardDeviations;
+  openmc_volume_flux: number[] | null;
+  openmc_volume_flux_std_dev: number[] | null;
+  /** Root-level reference flux is file-global, never implicitly bound to a
+   * selected /mixtures/<name>/states/<state> calculation. */
+  openmc_volume_flux_scope: "file-global" | null;
   scatter: ScatterMoment | null;
 }
 
@@ -967,7 +997,12 @@ export interface ConvertPreflightInput {
     chi_checked?: number | null;
     chi_sum_max_abs_error?: number | null;
     nu_ratio_warning_count?: number | null;
+    nu_ratio_support_mismatch_count?: number | null;
     transport_p1_checked?: number | null;
+    transport_p1_skipped?: number | null;
+    transport_p1_max_abs?: number | null;
+    transport_p1_max_rel?: number | null;
+    transport_p1_worst?: string | null;
   };
   uncertainty?: {
     checked?: boolean;
@@ -975,6 +1010,8 @@ export interface ConvertPreflightInput {
     datasets?: number | null;
     missing_datasets?: number | null;
     max_rel?: number | null;
+    production_max_rel?: number | null;
+    production_worst?: string | null;
   };
   issues: string[];
   warnings: string[];
@@ -1390,11 +1427,17 @@ export const api = {
     }),
   inspect: (path: string) =>
     getJson<HandoffInspection>("/api/inspect", { path }),
-  inspectMixture: (path: string, mixture: string, moment: number = 0) =>
+  inspectMixture: (
+    path: string,
+    mixture: string,
+    moment: number = 0,
+    state?: string,
+  ) =>
     getJson<MixtureDetail>("/api/inspect/mixture", {
       path,
       mixture,
       moment,
+      state,
     }),
   listFiles: (path: string) => getJson<FileListing>("/api/files", { path }),
   fileStatus: (path: string) =>

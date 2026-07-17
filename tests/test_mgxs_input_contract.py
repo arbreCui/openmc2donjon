@@ -11,6 +11,7 @@ import numpy as np
 from openmc2donjon import mgxs_input_contract as validator
 from openmc2donjon.energy_groups import energy_bounds_sha256, load_energy_mesh
 from openmc2donjon.mgxs_input_report import PASS_DECISION, write_summary
+from openmc2donjon.multicompo import read_mgxs_hdf5
 from openmc2donjon.openmc_provenance import (
     collect_openmc_provenance,
     write_openmc_provenance,
@@ -161,6 +162,24 @@ class MgxsInputContractTests(unittest.TestCase):
         self.assertEqual(report.fissionable_mixtures, 1)
         self.assertEqual(report.scatter_axes, ["moment,from,to"])
 
+    def test_rejects_file_global_reference_flux_on_stateful_data(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "multi_with_global_flux.h5"
+            write_multistate_fixture(path)
+            append_openmc_volume_flux(path)
+
+            report = validator.validate_input(
+                path,
+                require_openmc_volume_flux=True,
+            )
+
+        self.assertFalse(report.ok)
+        self.assertIn(
+            "/openmc_volume_flux cannot be attached to multi-state MGXS data; "
+            "provide one reference flux field per state",
+            report.issues,
+        )
+
     def test_wrong_type_dataset_reports_fail_without_crashing(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "wrong_type.h5"
@@ -182,6 +201,34 @@ class MgxsInputContractTests(unittest.TestCase):
             ),
             report.issues,
         )
+
+    def test_rejects_negative_p0_scatter_for_every_supported_layout(self) -> None:
+        p0 = np.array([[0.2, -0.04], [0.0, 0.3]])
+        p1 = np.array([[0.01, -0.01], [0.02, -0.02]])
+        cases = (
+            ("2d", 0, "moment,from,to", p0),
+            ("moment-first", 1, "moment,from,to", np.stack((p0, p1))),
+            ("moment-last", 1, "from,to,moment", np.stack((p0, p1), axis=-1)),
+        )
+
+        for label, order, axes, scatter in cases:
+            with self.subTest(layout=label), tempfile.TemporaryDirectory() as tmpdir:
+                path = Path(tmpdir) / f"negative-p0-{label}.h5"
+                write_single_state_fixture(
+                    path,
+                    total=[0.3, 0.4],
+                    legendre_order=order,
+                    scatter_axes=axes,
+                    scatter=scatter,
+                )
+
+                report = validator.validate_input(path)
+
+                self.assertFalse(report.ok)
+                self.assertIn(
+                    "mixture fuel: P0 scatter values must be non-negative",
+                    report.issues,
+                )
 
     def test_multistate_requires_burnup_axis(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -393,6 +440,31 @@ class MgxsInputContractTests(unittest.TestCase):
         self.assertIsNotNone(report.scatter_row_balance_max_rel)
         self.assertLess(float(report.scatter_row_balance_max_rel), 1.0e-15)
 
+    def test_p1_without_explicit_transport_is_not_claimed_derivable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "p1_without_transport.h5"
+            write_single_state_fixture(
+                path,
+                total=[0.29, 0.38],
+                legendre_order=1,
+                scatter=np.array(
+                    [
+                        [[0.2, 0.04], [0.0, 0.3]],
+                        [[0.01, 0.02], [0.03, 0.04]],
+                    ]
+                ),
+            )
+            with h5py.File(path, "a") as h5:
+                del h5["mixtures/fuel/transport_total"]
+
+            report = validator.validate_input(path)
+
+        self.assertFalse(report.ok)
+        self.assertEqual(report.transport_total_derivable, 0)
+        self.assertTrue(
+            any("P1 scattering requires an explicit" in issue for issue in report.issues)
+        )
+
     def test_local_energy_bounds_must_match_root_when_required(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "local_bounds.h5"
@@ -434,8 +506,11 @@ class MgxsInputContractTests(unittest.TestCase):
             with h5py.File(bad, "a") as h5:
                 h5["mixtures/fuel/chi"][:] = np.array([0.8, 0.0])
             with h5py.File(moderator, "a") as h5:
-                h5["mixtures/fuel"].attrs["fissionable"] = False
-                h5["mixtures/fuel/chi"][:] = np.array([0.0, 0.0])
+                fuel = h5["mixtures/fuel"]
+                fuel.attrs["fissionable"] = False
+                fuel["fission"][:] = np.array([0.0, 0.0])
+                fuel["nu_fission"][:] = np.array([0.0, 0.0])
+                fuel["chi"][:] = np.array([0.0, 0.0])
 
             bad_report = validator.validate_input(
                 bad,
@@ -453,7 +528,7 @@ class MgxsInputContractTests(unittest.TestCase):
         self.assertTrue(moderator_report.ok, moderator_report.issues)
         self.assertEqual(moderator_report.chi_checked, 0)
 
-    def test_nu_ratio_outlier_warns_without_failing_contract(self) -> None:
+    def test_nu_ratio_is_observed_without_universal_warning(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "nu_outlier.h5"
             summary = Path(tmpdir) / "summary.json"
@@ -469,13 +544,32 @@ class MgxsInputContractTests(unittest.TestCase):
         self.assertTrue(ok)
         self.assertEqual(report.nu_ratio_checked_bins, 2)
         self.assertAlmostEqual(report.nu_ratio_max or 0.0, 10.0)
-        self.assertEqual(report.nu_ratio_warning_count, 1)
+        self.assertEqual(report.nu_ratio_warning_count, 0)
+        self.assertEqual(report.nu_ratio_support_mismatch_count, 0)
         self.assertEqual(
             payload["inputs"][0]["physics_checks"]["nu_ratio_warning_count"],
-            1,
+            0,
         )
+        self.assertEqual(
+            payload["inputs"][0]["physics_checks"][
+                "nu_ratio_support_mismatch_count"
+            ],
+            0,
+        )
+
+    def test_fission_and_nu_fission_require_identical_positive_support(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "nu_support_mismatch.h5"
+            write_single_state_fixture(path, total=[0.29, 0.38])
+            with h5py.File(path, "a") as h5:
+                h5["mixtures/fuel/nu_fission"][:] = np.array([0.025, 0.0])
+
+            report = validator.validate_input(path)
+
+        self.assertFalse(report.ok)
+        self.assertEqual(report.nu_ratio_support_mismatch_count, 1)
         self.assertTrue(
-            any("nu_fission/fission" in warning for warning in report.warnings)
+            any("identical positive group support" in issue for issue in report.issues)
         )
 
     def test_adf_face_consistency_gate_fails_when_only_some_calculations_have_adf(
@@ -526,8 +620,12 @@ class MgxsInputContractTests(unittest.TestCase):
                 legendre_order=1,
                 scatter=scatter,
             )
+            append_openmc_volume_flux(bad)
+            append_openmc_volume_flux(good)
             with h5py.File(good, "a") as h5:
-                h5["mixtures/fuel/transport_total"][:] = np.array([0.26, 0.31])
+                # TransportXS[g_out] = total[g_out] -
+                # sum_g_in(phi[g_in] * P1[g_in, g_out]) / phi[g_out].
+                h5["mixtures/fuel/transport_total"][:] = np.array([0.22, 0.33])
 
             bad_report = validator.validate_input(
                 bad,
@@ -548,6 +646,30 @@ class MgxsInputContractTests(unittest.TestCase):
         self.assertEqual(good_report.transport_p1_checked, 1)
         self.assertIsNotNone(good_report.transport_p1_max_rel)
         self.assertLess(float(good_report.transport_p1_max_rel), 1.0e-12)
+
+    def test_transport_total_p1_gate_skips_without_bound_reference_flux(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "no_reference_flux.h5"
+            scatter = np.stack(
+                (
+                    np.array([[0.2, 0.04], [0.0, 0.3]]),
+                    np.array([[0.01, 0.02], [0.03, 0.04]]),
+                ),
+                axis=0,
+            )
+            write_single_state_fixture(
+                path,
+                total=[0.29, 0.38],
+                legendre_order=1,
+                scatter=scatter,
+            )
+
+            report = validator.validate_input(path, transport_p1_fail=5.0e-2)
+
+        self.assertTrue(report.ok, report.issues)
+        self.assertEqual(report.transport_p1_checked, 0)
+        self.assertEqual(report.transport_p1_skipped, 1)
+        self.assertIsNone(report.transport_p1_max_rel)
 
     def test_missing_volume_is_reported_before_it_becomes_default_one(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -605,7 +727,11 @@ class MgxsInputContractTests(unittest.TestCase):
             path = Path(tmpdir) / "moderator.h5"
             write_single_state_fixture(path, total=[0.29, 0.38])
             with h5py.File(path, "a") as h5:
-                h5["mixtures/fuel"].attrs["fissionable"] = False
+                fuel = h5["mixtures/fuel"]
+                fuel.attrs["fissionable"] = False
+                fuel["fission"][:] = np.array([0.0, 0.0])
+                fuel["nu_fission"][:] = np.array([0.0, 0.0])
+                fuel["chi"][:] = np.array([0.0, 0.0])
 
             report = validator.validate_input(path, require_h_factor=True)
 
@@ -613,6 +739,124 @@ class MgxsInputContractTests(unittest.TestCase):
         self.assertEqual(report.fissionable_mixtures, 0)
         self.assertEqual(report.h_factor_datasets, 0)
 
+    def test_inverse_velocity_aliases_must_be_positive(self) -> None:
+        for alias in validator.INVERSE_VELOCITY_DATASETS:
+            with self.subTest(alias=alias), tempfile.TemporaryDirectory() as tmpdir:
+                path = Path(tmpdir) / "invalid_inverse_velocity.h5"
+                write_single_state_fixture(path, total=[0.29, 0.38])
+                with h5py.File(path, "a") as h5:
+                    h5["mixtures/fuel"].create_dataset(
+                        alias,
+                        data=np.array([1.0e-8, 0.0]),
+                    )
+
+                report = validator.validate_input(path)
+
+            self.assertFalse(report.ok)
+            self.assertTrue(
+                any(
+                    f"{alias} must be positive and finite" in issue
+                    for issue in report.issues
+                ),
+                report.issues,
+            )
+
+    def test_h_factor_aliases_must_be_non_negative(self) -> None:
+        for alias in validator.H_FACTOR_DATASETS:
+            with self.subTest(alias=alias), tempfile.TemporaryDirectory() as tmpdir:
+                path = Path(tmpdir) / "invalid_h_factor.h5"
+                write_single_state_fixture(path, total=[0.29, 0.38])
+                with h5py.File(path, "a") as h5:
+                    h5["mixtures/fuel"].create_dataset(
+                        alias,
+                        data=np.array([3.2e-12, -1.0e-12]),
+                    )
+
+                report = validator.validate_input(path)
+
+            self.assertFalse(report.ok)
+            self.assertTrue(
+                any(
+                    f"{alias} must be non-negative and finite" in issue
+                    for issue in report.issues
+                ),
+                report.issues,
+            )
+
+    def test_zero_h_factor_is_accepted_by_both_contract_and_converter(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "zero_h_factor.h5"
+            write_single_state_fixture(path, total=[0.29, 0.38])
+            with h5py.File(path, "a") as h5:
+                h5["mixtures/fuel"].create_dataset(
+                    "H-FACTOR",
+                    data=np.array([3.2e-12, 0.0]),
+                )
+
+            report = validator.validate_input(path)
+            mixtures, _energy_bounds = read_mgxs_hdf5(path)
+
+        self.assertTrue(report.ok, report.issues)
+        np.testing.assert_allclose(mixtures[0].h_factor, [3.2e-12, 0.0])
+
+    def test_nonfissionable_declaration_rejects_nonzero_fission_family(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "contradictory_nonfission.h5"
+            write_single_state_fixture(path, total=[0.29, 0.38])
+            with h5py.File(path, "a") as h5:
+                fuel = h5["mixtures/fuel"]
+                fuel.attrs["fissionable"] = False
+                fuel["fission"][:] = [0.01, 0.02]
+                fuel["nu_fission"][:] = [0.025, 0.05]
+                fuel["chi"][:] = [1.0, 0.0]
+
+            report = validator.validate_input(path)
+
+        self.assertFalse(report.ok)
+        self.assertTrue(
+            any(
+                "fissionable=false requires zero fission" in issue
+                for issue in report.issues
+            )
+        )
+        self.assertTrue(
+            any(
+                "Converter would otherwise discard" in issue
+                for issue in report.issues
+            )
+        )
+
+    def test_fissionable_declaration_rejects_incomplete_fission_source(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "incomplete_fission.h5"
+            write_single_state_fixture(path, total=[0.29, 0.38])
+            with h5py.File(path, "a") as h5:
+                h5["mixtures/fuel/nu_fission"][:] = [0.0, 0.0]
+
+            report = validator.validate_input(path)
+
+        self.assertFalse(report.ok)
+        self.assertTrue(
+            any(
+                "fissionable=true requires nonzero nu_fission" in issue
+                for issue in report.issues
+            )
+        )
+
+    def test_volume_attribute_must_be_positive_and_finite(self) -> None:
+        for volume in (float("nan"), float("inf"), float("-inf"), 0.0, -1.0):
+            with self.subTest(volume=volume), tempfile.TemporaryDirectory() as tmpdir:
+                path = Path(tmpdir) / "bad_volume.h5"
+                write_single_state_fixture(path, total=[0.29, 0.38])
+                with h5py.File(path, "a") as h5:
+                    h5["mixtures/fuel"].attrs["volume"] = volume
+
+                report = validator.validate_input(path)
+
+            self.assertFalse(report.ok)
+            self.assertTrue(
+                any("volume attribute must be positive and finite" in issue for issue in report.issues)
+            )
     def test_require_mixture_order_gates_declared_names_and_indices(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "order.h5"
@@ -941,7 +1185,9 @@ class MgxsInputContractTests(unittest.TestCase):
         self.assertTrue(any("absorption_std_dev shape" in item for item in report.issues))
         self.assertTrue(any("exceeds fail threshold" in item for item in report.issues))
 
-    def test_uncertainty_production_fail_ignores_higher_scatter_moments(self) -> None:
+    def test_production_preset_warns_but_does_not_gate_higher_scatter_moments(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "p1_uncertain.h5"
             scatter = np.array(
@@ -962,15 +1208,32 @@ class MgxsInputContractTests(unittest.TestCase):
                 std[1, 1, 1] = 0.5
                 h5["mixtures/fuel"].create_dataset("scatter_matrix_std_dev", data=std)
 
+            settings = validator.production_preflight_defaults(
+                production=True,
+                require_transport_dataset=False,
+                require_volume=False,
+                require_h_factor=False,
+                scatter_row_balance_warn=None,
+                scatter_row_balance_fail=None,
+                uncertainty_warn=None,
+                uncertainty_fail=None,
+                uncertainty_production_fail=None,
+                uncertainty_mean_abs_floor=1.0e-12,
+            )
             report = validator.validate_input(
                 path,
                 uncertainty=validator.UncertaintyConfig(
-                    warn_threshold=0.05,
-                    production_fail_threshold=0.1,
+                    warn_threshold=settings["uncertainty_warn"],
+                    fail_threshold=settings["uncertainty_fail"],
+                    production_fail_threshold=settings[
+                        "uncertainty_production_fail"
+                    ],
+                    mean_abs_floor=settings["uncertainty_mean_abs_floor"],
                 ),
             )
 
         self.assertTrue(report.ok, report.issues)
+        self.assertIsNone(report.uncertainty_fail_threshold)
         self.assertGreater(report.uncertainty_max_rel or 0.0, 10.0)
         self.assertLess(report.uncertainty_production_max_rel or 1.0, 0.1)
         self.assertIn("moment=1", report.uncertainty_worst or "")

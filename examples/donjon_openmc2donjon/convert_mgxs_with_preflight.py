@@ -118,7 +118,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--require-transport-dataset",
         action="store_true",
-        help="require explicit transport_total instead of P1-derived STRD",
+        help="require explicit transport_total (mandatory for P1+ scattering)",
     )
     parser.add_argument(
         "--require-volume",

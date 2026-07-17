@@ -21,6 +21,7 @@ import numpy as np
 
 from .energy_groups import energy_bounds_sha256
 from .hdf5_names import write_string_dataset
+from .mgxs_physics_checks import DEFAULT_CHI_SUM_TOLERANCE
 
 
 MGXS_TYPE_ALIASES: dict[str, tuple[str, ...]] = {
@@ -139,10 +140,18 @@ def export_openmc_mgxs_library(
     std_dev_expected_dataset_count = 0
     for index, spec in enumerate(specs, start=1):
         name = _domain_name(spec.domain, index, domain_names, used_names, spec.name)
+        attrs = dict(spec.attrs or {})
+        if any(str(key) == "fissionable" for key in attrs):
+            raise ValueError(
+                f"mixture {name}: DomainExportSpec.attrs must not override the "
+                "reserved fissionable attribute; declare fissionability on the "
+                "OpenMC domain or its fill"
+            )
         data = _domain_data(
             library,
             spec.domain,
             ngroups,
+            mixture_name=name,
             xs_kwargs=spec.xs_kwargs,
             scatter_mgxs_type=scatter_mgxs_type,
         )
@@ -160,9 +169,23 @@ def export_openmc_mgxs_library(
                     xs_kwargs=spec.xs_kwargs,
                     scatter_mgxs_type=str(data["scatter_mgxs_type"]),
                 ),
-                data | {"attrs": spec.attrs or {}},
+                data | {"attrs": attrs},
             )
         )
+
+    if legendre_order > 0:
+        missing_transport = [
+            domain.name
+            for domain, data in exported
+            if data.get("transport_total") is None
+        ]
+        if missing_transport:
+            names = ", ".join(missing_transport)
+            raise ValueError(
+                "P1 or higher scattering requires an explicit OpenMC "
+                "TransportXS for every exported domain; missing transport "
+                f"MGXS for: {names}"
+            )
 
     path.parent.mkdir(parents=True, exist_ok=True)
     with h5py.File(path, "w") as h5:
@@ -267,6 +290,7 @@ def _domain_data(
     domain: Any,
     ngroups: int,
     *,
+    mixture_name: str,
     xs_kwargs: Mapping[str, Any] | None,
     scatter_mgxs_type: str | None,
 ) -> dict[str, Any]:
@@ -313,11 +337,17 @@ def _domain_data(
         ngroups,
         xs_kwargs=xs_kwargs,
     )
-    has_fission_source = (
-        nu_fission is not None
-        and chi is not None
-        and np.sum(np.abs(nu_fission)) > 1.0e-12
-        and np.sum(np.abs(chi)) > 1.0e-12
+    inferred_fissionable = all(
+        values is not None and np.any(values > 0.0)
+        for values in (fission, nu_fission, chi)
+    )
+    fissionable = bool(_domain_fissionable(domain, inferred_fissionable))
+    _validate_fission_family_for_export(
+        mixture_name=mixture_name,
+        fissionable=fissionable,
+        fission=fission,
+        nu_fission=nu_fission,
+        chi=chi,
     )
     if fission is None:
         fission = np.zeros(ngroups, dtype=float)
@@ -395,7 +425,7 @@ def _domain_data(
             xs_kwargs=xs_kwargs,
         ),
         "volume": _domain_volume(domain),
-        "fissionable": bool(_domain_fissionable(domain, has_fission_source)),
+        "fissionable": fissionable,
         "_std_dev_expected_keys": _std_dev_expected_keys(
             fission_present=fission_present,
             kappa_fission_present=kappa_fission is not None,
@@ -405,6 +435,80 @@ def _domain_data(
             inverse_velocity_present=inverse_velocity is not None,
         ),
     }
+
+
+def _validate_fission_family_for_export(
+    *,
+    mixture_name: str,
+    fissionable: bool,
+    fission: np.ndarray | None,
+    nu_fission: np.ndarray | None,
+    chi: np.ndarray | None,
+) -> None:
+    """Keep the canonical exporter on the same physical boundary as Converter."""
+
+    family = {
+        "fission": fission,
+        "nu_fission": nu_fission,
+        "chi": chi,
+    }
+    for field, values in family.items():
+        if values is None:
+            continue
+        if not np.all(np.isfinite(values)):
+            raise ValueError(f"mixture {mixture_name}: {field} must be finite")
+        if np.any(values < 0.0):
+            raise ValueError(f"mixture {mixture_name}: {field} must be non-negative")
+
+    if not fissionable:
+        contradictory = [
+            field
+            for field, values in family.items()
+            if values is not None and np.any(values != 0.0)
+        ]
+        if contradictory:
+            raise ValueError(
+                f"mixture {mixture_name}: fissionable=false requires zero "
+                f"{', '.join(contradictory)}; exporter will not discard nonzero "
+                "OpenMC fission data"
+            )
+        return
+
+    missing = [field for field, values in family.items() if values is None]
+    if missing:
+        raise ValueError(
+            f"mixture {mixture_name}: fissionable=true requires OpenMC MGXS "
+            f"{', '.join(missing)}"
+        )
+
+    zero = [
+        field
+        for field, values in family.items()
+        if values is not None and not np.any(values > 0.0)
+    ]
+    if zero:
+        raise ValueError(
+            f"mixture {mixture_name}: fissionable=true requires nonzero "
+            f"{', '.join(zero)}"
+        )
+
+    assert fission is not None
+    assert nu_fission is not None
+    assert chi is not None
+    support_mismatch = np.flatnonzero((fission > 0.0) != (nu_fission > 0.0))
+    if support_mismatch.size:
+        groups = ", ".join(str(int(index) + 1) for index in support_mismatch)
+        raise ValueError(
+            f"mixture {mixture_name}: fission and nu_fission must have identical "
+            f"positive group support; mismatch in group(s) {groups}"
+        )
+
+    chi_sum_error = abs(float(np.sum(chi)) - 1.0)
+    if chi_sum_error > DEFAULT_CHI_SUM_TOLERANCE:
+        raise ValueError(
+            f"mixture {mixture_name}: chi sum error {chi_sum_error:.6e} exceeds "
+            f"tolerance {DEFAULT_CHI_SUM_TOLERANCE:.6e}"
+        )
 
 
 def _std_dev_expected_keys(

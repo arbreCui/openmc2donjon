@@ -74,9 +74,11 @@ class InputReport:
     nu_ratio_max: float | None = None
     nu_ratio_worst: str | None = None
     nu_ratio_warning_count: int = 0
+    nu_ratio_support_mismatch_count: int = 0
     adf_face_consistency_checked: bool = False
     adf_face_consistency_errors: int = 0
     transport_p1_checked: int = 0
+    transport_p1_skipped: int = 0
     transport_p1_fail_threshold: float | None = None
     transport_p1_max_abs: float | None = None
     transport_p1_max_rel: float | None = None
@@ -248,12 +250,14 @@ def write_summary(
         "schema": SCHEMA,
         "decision": decision,
         "output_issue": output_issue,
-        "inputs": [_report_payload(report) for report in reports],
+        "inputs": [input_report_payload(report) for report in reports],
     }
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def _report_payload(report: InputReport) -> dict[str, object]:
+def input_report_payload(report: InputReport) -> dict[str, object]:
+    """Serialize one contract report for receipts and read-only web audits."""
+
     return {
         "path": report.path,
         "ok": report.ok,
@@ -310,9 +314,13 @@ def _report_payload(report: InputReport) -> dict[str, object]:
             "nu_ratio_max": report.nu_ratio_max,
             "nu_ratio_worst": report.nu_ratio_worst,
             "nu_ratio_warning_count": report.nu_ratio_warning_count,
+            "nu_ratio_support_mismatch_count": (
+                report.nu_ratio_support_mismatch_count
+            ),
             "adf_face_consistency_checked": report.adf_face_consistency_checked,
             "adf_face_consistency_errors": report.adf_face_consistency_errors,
             "transport_p1_checked": report.transport_p1_checked,
+            "transport_p1_skipped": report.transport_p1_skipped,
             "transport_p1_fail_threshold": report.transport_p1_fail_threshold,
             "transport_p1_max_abs": report.transport_p1_max_abs,
             "transport_p1_max_rel": report.transport_p1_max_rel,
@@ -354,6 +362,11 @@ def _report_payload(report: InputReport) -> dict[str, object]:
     }
 
 
+# Kept for downstream callers that imported the old private helper before it
+# became part of the Inspect production-audit API.
+_report_payload = input_report_payload
+
+
 def _uncertainty_line(report: InputReport) -> str:
     prefix = "        uncertainty="
     if not report.uncertainty_checked:
@@ -385,9 +398,11 @@ def _physics_checks_line(report: InputReport) -> str:
         f"chi_sum_error={_format_optional(report.chi_sum_max_abs_error)} "
         f"nu_bins={report.nu_ratio_checked_bins} "
         f"nu_warn={report.nu_ratio_warning_count} "
+        f"nu_support_mismatch={report.nu_ratio_support_mismatch_count} "
         f"nu_min={_format_optional(report.nu_ratio_min)} "
         f"nu_max={_format_optional(report.nu_ratio_max)} "
         f"transport_p1={report.transport_p1_checked} "
+        f"transport_p1_skipped={report.transport_p1_skipped} "
         f"transport_p1_rel={_format_optional(report.transport_p1_max_rel)}"
     )
 

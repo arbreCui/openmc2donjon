@@ -355,7 +355,7 @@ def build_check_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--require-transport-dataset",
         action="store_true",
-        help="require an explicit transport_total dataset, not only P1-derived STRD",
+        help="require an explicit transport_total dataset",
     )
     parser.add_argument(
         "--require-volume",
@@ -443,8 +443,8 @@ def build_check_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="REL",
         help=(
-            "fail if explicit transport_total differs from total minus P1 "
-            "scatter out by more than REL"
+            "fail if explicit transport_total differs from the bound-flux "
+            "OpenMC P1 transport identity by more than REL"
         ),
     )
     parser.add_argument(

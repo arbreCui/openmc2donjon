@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import {
+  type ConvertPreflightInput,
   HandoffAttrValue,
   HandoffInspection,
   HandoffRootAttr,
@@ -67,21 +68,45 @@ export default function Summary({ data }: { data: HandoffInspection }) {
           />
           <Stat
             label="SPH"
-            value={data.sph_applied ? "applied" : data.sph_calculations}
-            tone={
-              data.sph_applied || data.sph_calculations > 0
-                ? "pass"
-                : undefined
+            value={
+              data.sph_applied
+                ? "declared applied"
+                : data.sph_calculations > 0
+                  ? `${data.sph_calculations} payload(s)`
+                  : "absent"
             }
             detail={
               data.sph_applied
-                ? `Cross sections already corrected${data.sph_kind ? ` · ${data.sph_kind}` : ""}.`
-                : undefined
+                ? `Presence only${data.sph_kind ? ` · ${data.sph_kind}` : ""}; not evidence of convergence or physical acceptance.`
+                : data.sph_calculations > 0
+                  ? "Payload presence is not evidence of convergence or physical equivalence."
+                  : undefined
             }
           />
           <Stat
             label="Scatter"
             value={data.scatter_shapes.length > 0 ? "available" : "—"}
+          />
+          <Stat
+            label="Use scope"
+            value={
+              data.calculation_count > 0 &&
+              data.inverse_velocity >= data.calculation_count
+                ? "inverse velocity complete"
+                : "steady-state only"
+            }
+            tone={
+              data.calculation_count > 0 &&
+              data.inverse_velocity >= data.calculation_count
+                ? undefined
+                : "warn"
+            }
+            detail={
+              data.calculation_count > 0 &&
+              data.inverse_velocity >= data.calculation_count
+                ? "OVERV is present for every calculation. This alone does not prove kinetics readiness; delayed-neutron and case-level dynamics inputs are outside this Inspect verdict."
+                : `Inverse velocity is ${data.inverse_velocity}/${data.calculation_count}; do not use this handoff for kinetics/transients.`
+            }
           />
         </dl>
       ) : (
@@ -131,6 +156,10 @@ export default function Summary({ data }: { data: HandoffInspection }) {
         </div>
       ) : null}
 
+      {isMgxsHandoff && data.production_audit ? (
+        <ProductionAuditCard audit={data.production_audit} />
+      ) : null}
+
       {data.issues.length > 0 ? (
         <div className="mt-5 text-[13px]">
           <div className="text-amber-300 font-semibold mb-1">
@@ -160,11 +189,13 @@ export default function Summary({ data }: { data: HandoffInspection }) {
       {isMgxsHandoff ? (
         <details className="mt-5 border-t border-[var(--edge)] pt-4 text-[13px]">
           <summary className="cursor-pointer select-none text-[var(--fg-2)] hover:text-[var(--fg-0)]">
-            Optional: Converter readiness and next steps
+            Optional: Converter input inventory and next steps
           </summary>
           <p className="mt-2 text-[12px] leading-5 text-[var(--fg-3)]">
-            These checks matter only if you later choose to convert this file.
-            They do not affect read-only visualization.
+            These are dataset-presence counts, not a readiness verdict. The
+            canonical production audit above decides whether Converter may use
+            this input in production; neither result proves SPH or reactor
+            physics closure. Read-only visualization remains available.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <ReadinessStat label="Energy mesh" stat={production.mesh}>
@@ -175,7 +206,11 @@ export default function Summary({ data }: { data: HandoffInspection }) {
               stat={production.transport}
             />
             <ReadinessStat label="H-factor" stat={production.hFactor} />
-            <ReadinessStat label="std_dev" stat={production.stdDev} />
+            <ReadinessStat
+              label="Inverse velocity"
+              stat={production.inverseVelocity}
+            />
+            <ReadinessStat label="std_dev coverage" stat={production.stdDev} />
           </div>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <Link
@@ -344,13 +379,145 @@ function formatAttrValue(value: HandoffAttrValue): string {
 function ReadableHdf5Badge({ isMgxsHandoff }: { isMgxsHandoff: boolean }) {
   return isMgxsHandoff ? (
     <span className="rounded border border-emerald-300/25 bg-emerald-300/[0.06] px-2 py-1 text-[11px] font-semibold text-emerald-200">
-      READABLE HDF5 · MGXS HANDOFF
+      READABLE HDF5 · MGXS STRUCTURE
     </span>
   ) : (
     <span className="rounded border border-sky-300/25 bg-sky-300/[0.06] px-2 py-1 text-[11px] font-semibold text-sky-100">
       READABLE HDF5 · NOT AN MGXS HANDOFF
     </span>
   );
+}
+
+function ProductionAuditCard({ audit }: { audit: ConvertPreflightInput }) {
+  const physics = audit.physics_checks;
+  const uncertainty = audit.uncertainty;
+  const checked = physics?.transport_p1_checked ?? 0;
+  const skipped = physics?.transport_p1_skipped ?? 0;
+  return (
+    <section
+      className={
+        "mt-5 rounded-lg border p-4 " +
+        (audit.ok
+          ? "border-emerald-300/25 bg-emerald-300/[0.05]"
+          : "border-rose-300/25 bg-rose-300/[0.05]")
+      }
+      aria-labelledby="converter-production-audit-heading"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3
+            id="converter-production-audit-heading"
+            className="text-sm font-semibold text-[var(--fg-1)]"
+          >
+            Converter production audit
+          </h3>
+          <p className="mt-1 text-[12px] leading-5 text-[var(--fg-3)]">
+            Current canonical, read-only preflight for this exact file. This is
+            an input decision—not SPH convergence, DONJON validation, or
+            full-model physics acceptance.
+          </p>
+        </div>
+        <span
+          className={
+            "rounded border px-2 py-1 text-[11px] font-semibold tracking-wider " +
+            (audit.ok
+              ? "border-emerald-300/30 text-emerald-200"
+              : "border-rose-300/30 text-rose-200")
+          }
+        >
+          {audit.ok ? "PASS" : "FAIL"}
+        </span>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 text-[12px] sm:grid-cols-4">
+        <AuditMetric
+          label="P0 balance"
+          value={formatPercent(audit.scatter_row_balance?.max_rel)}
+          detail="max relative residual"
+        />
+        <AuditMetric
+          label="Transport / P1"
+          value={formatPercent(physics?.transport_p1_max_rel)}
+          detail={`${checked} checked${skipped ? ` · ${skipped} unbound` : ""}`}
+        />
+        <AuditMetric
+          label="Production σ"
+          value={formatPercent(uncertainty?.production_max_rel)}
+          detail="max production-critical relative 1σ"
+        />
+        <AuditMetric
+          label="std_dev"
+          value={
+            uncertainty?.datasets == null ||
+            uncertainty?.expected_datasets == null
+              ? "—"
+              : `${uncertainty.datasets} / ${uncertainty.expected_datasets}`
+          }
+          detail="coverage only"
+        />
+      </div>
+
+      {audit.issues.length > 0 ? (
+        <div className="mt-3">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-rose-200">
+            Blocking findings ({audit.issues.length})
+          </div>
+          <ul className="mt-1 list-disc space-y-1 pl-5 text-[12px] leading-5 text-[var(--fg-1)]">
+            {audit.issues.slice(0, 4).map((issue, index) => (
+              <li key={index}>{issue}</li>
+            ))}
+          </ul>
+          {audit.issues.length > 4 ? (
+            <div className="mt-1 text-[11px] text-[var(--fg-3)]">
+              {audit.issues.length - 4} more finding(s); Converter shows the
+              complete preflight report.
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      {audit.warnings.length > 0 ? (
+        <details className="mt-3 text-[12px] text-amber-100">
+          <summary className="cursor-pointer select-none">
+            Warnings ({audit.warnings.length})
+          </summary>
+          <ul className="mt-1 list-disc space-y-1 pl-5 leading-5 text-[var(--fg-2)]">
+            {audit.warnings.map((warning, index) => (
+              <li key={index}>{warning}</li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </section>
+  );
+}
+
+function AuditMetric({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+}) {
+  return (
+    <div className="rounded border border-[var(--edge)] bg-black/15 p-2">
+      <div className="text-[10px] uppercase tracking-wider text-[var(--fg-3)]">
+        {label}
+      </div>
+      <div className="mt-1 font-mono font-semibold text-[var(--fg-1)]">
+        {value}
+      </div>
+      <div className="mt-1 text-[10px] leading-4 text-[var(--fg-3)]">
+        {detail}
+      </div>
+    </div>
+  );
+}
+
+function formatPercent(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return `${(value * 100).toPrecision(4)}%`;
 }
 
 function ReadinessStat({

@@ -12,28 +12,32 @@ from .mgxs_physics_checks import (
 )
 
 
-PRODUCTION_PREFLIGHT_POLICY_ID = "openmc2donjon.production-preflight.v1"
+PRODUCTION_PREFLIGHT_POLICY_ID = "openmc2donjon.production-preflight.v2"
 PRODUCTION_UNCERTAINTY_WARN = 5.0e-2
 
 # Every numeric item is an upper bound: a smaller requested value is stricter.
-# Keep these values in one module so execution, receipts, and acceptance
-# validation cannot silently drift apart.
-PRODUCTION_CANONICAL_MAXIMUMS: dict[str, float] = {
+# A None entry means that no universal gate exists and only an explicitly
+# declared threshold is applied. Keep the policy in one module so execution,
+# receipts, and acceptance validation cannot silently drift apart.
+PRODUCTION_CANONICAL_MAXIMUMS: dict[str, float | None] = {
     "scatter_row_balance_fail": DEFAULT_SCATTER_ROW_BALANCE_REL,
     "transport_p1_fail": DEFAULT_TRANSPORT_P1_REL,
     "chi_sum_tolerance": DEFAULT_CHI_SUM_TOLERANCE,
     "uncertainty_warn": PRODUCTION_UNCERTAINTY_WARN,
-    # A formal handoff must not accept a production-critical tally whose
-    # one-sigma uncertainty is comparable to its mean.  Ten percent is the
-    # same hard precision ceiling used by the native-SPH flux evidence; the
-    # five-percent warning remains an earlier statistical-quality signal.
-    "uncertainty_fail": 1.0e-1,
+    # All available uncertainties remain visible and subject to the warning
+    # threshold, but there is no universal hard relative-sigma criterion for
+    # signed higher Legendre moments near zero.  A caller may explicitly
+    # declare an all-data criterion; None is the canonical default.
+    "uncertainty_fail": None,
+    # A formal handoff must not accept a production-critical 1-D/P0 tally
+    # whose one-sigma uncertainty is comparable to its mean.  This is an
+    # auditable production-quality policy, not a physical correction factor.
     "uncertainty_production_fail": 1.0e-1,
     "uncertainty_mean_abs_floor": 1.0e-12,
 }
 
 
-def canonical_production_thresholds() -> dict[str, float]:
+def canonical_production_thresholds() -> dict[str, float | None]:
     """Return a fresh copy of the canonical effective threshold set."""
 
     return dict(PRODUCTION_CANONICAL_MAXIMUMS)
@@ -48,12 +52,14 @@ def effective_production_thresholds(
     uncertainty_fail: float | None,
     uncertainty_production_fail: float | None,
     uncertainty_mean_abs_floor: float,
-) -> dict[str, float]:
-    """Return production thresholds, clamping every request to canonical safety.
+) -> dict[str, float | None]:
+    """Return canonical gates plus any explicitly declared all-data criterion.
 
     A user can make a production check stricter, but a larger threshold (or a
-    missing threshold) resolves to the canonical value.  Engineering checks do
-    not use this helper and remain fully configurable.
+    missing threshold) resolves to the canonical value. The one exception is
+    the all-data uncertainty gate: no universal maximum is invented, while an
+    explicit model-specific value is preserved in the receipt. Engineering
+    checks do not use this helper and remain fully configurable.
     """
 
     requested = {
@@ -66,7 +72,11 @@ def effective_production_thresholds(
         "uncertainty_mean_abs_floor": uncertainty_mean_abs_floor,
     }
     effective = {
-        name: _at_most(requested[name], maximum)
+        name: (
+            _optional_declared_threshold(requested[name])
+            if maximum is None
+            else _at_most(requested[name], maximum)
+        )
         for name, maximum in PRODUCTION_CANONICAL_MAXIMUMS.items()
     }
     return effective
@@ -76,7 +86,7 @@ def production_preflight_policy_payload(
     *,
     production_requested: bool,
     preflight_executed: bool,
-    thresholds: Mapping[str, float] | None = None,
+    thresholds: Mapping[str, float | None] | None = None,
 ) -> dict[str, Any]:
     """Build the auditable policy block stored in a Converter receipt."""
 
@@ -135,14 +145,23 @@ def canonical_production_policy_issues(policy: Any) -> list[str]:
         issues.append("Converter receipt has no effective production thresholds")
         return issues
     for name, maximum in PRODUCTION_CANONICAL_MAXIMUMS.items():
-        value = _finite_number(effective.get(name))
-        if value is None:
+        if name not in effective:
             issues.append(f"Converter receipt production threshold {name} is missing")
+            continue
+        raw_value = effective[name]
+        if maximum is None and raw_value is None:
+            continue
+        value = _finite_number(raw_value)
+        if value is None:
+            issues.append(
+                f"Converter receipt production threshold {name} must be a "
+                "finite number or null when no canonical all-data gate exists"
+            )
         elif value < 0.0:
             issues.append(
                 f"Converter receipt production threshold {name} must be non-negative"
             )
-        elif value > maximum:
+        elif maximum is not None and value > maximum:
             issues.append(
                 f"Converter receipt production threshold {name}={value:g} "
                 f"exceeds canonical maximum {maximum:g}"
@@ -157,6 +176,19 @@ def _at_most(value: float | None, maximum: float) -> float:
     if not math.isfinite(number):
         return maximum
     return min(number, maximum)
+
+
+def _optional_declared_threshold(value: float | None) -> float | None:
+    """Preserve an explicit all-data gate; do not invent one by default."""
+
+    if value is None:
+        return None
+    number = float(value)
+    if not math.isfinite(number):
+        # Preserve fail-closed behaviour: configuration validation rejects
+        # this sentinel instead of silently disabling an explicit criterion.
+        return -1.0
+    return number
 
 
 def _finite_number(value: Any) -> float | None:

@@ -16,12 +16,15 @@ when that dataset is present, or one of the opt-in noise criteria is met:
 
 - total, absorption, fission, nu_fission        <- macrolib material data
 - scatter_matrix[:, g, :] (all shared orders)    <- macrolib scatter rows
-- transport_total = total - sum_g' P1(g -> g')   (out-scatter correction)
+- transport_total = total - sum_g' P1(g -> g')   (material-macrolib
+  Legendre out-scatter correction, not an OpenMC CE TransportXS reconstruction)
 - matching *_std_dev entries                     <- 0 (exact library value)
 
 Filled group indices are recorded per mixture in the
 ``zero_flux_filled_groups`` attribute (converter order, index 0 = highest
 energy group) together with the ``zero_flux_fill_source`` provenance path.
+When ``transport_total`` is touched, ``zero_flux_transport_method``
+records either ``macrolib_p1_outscatter`` or ``macrolib_p0_total``.
 
 Mixtures are matched to macrolib materials through a label attribute on the
 mixture group (default ``irena_mixture_label``); pass ``label_attr`` to use
@@ -224,6 +227,67 @@ def fill_zero_flux_groups(
             mac_absorption = _group_vector(xsdata.absorption[temp_idx])
             scatter = _dense_scatter(xsdata, temp_idx)
             n_orders_mac = scatter.shape[0]
+            scatter_format = str(
+                getattr(xsdata, "scatter_format", "")
+            ).strip().lower()
+            if scatter_format != "legendre":
+                raise ValueError(
+                    f"{label}: zero-flux fill requires a Legendre macrolib; "
+                    f"scatter_format={scatter_format or '<missing>'!r}"
+                )
+            expected_groups = int(np.asarray(total).size)
+            if (
+                mac_total.shape != (expected_groups,)
+                or mac_absorption.shape != (expected_groups,)
+                or scatter.ndim != 3
+                or scatter.shape[1:] != (expected_groups, expected_groups)
+            ):
+                raise ValueError(
+                    f"{label}: macrolib group dimensions do not match the "
+                    f"{expected_groups}-group handoff"
+                )
+            if (
+                not np.all(np.isfinite(mac_total))
+                or np.any(mac_total <= 0.0)
+                or not np.all(np.isfinite(mac_absorption))
+                or np.any(mac_absorption < 0.0)
+                or not np.all(np.isfinite(scatter))
+                or np.any(scatter[0] < 0.0)
+            ):
+                raise ValueError(
+                    f"{label}: macrolib total/absorption/P0 scatter data must "
+                    "be finite and physically signed"
+                )
+            p0_residual = (
+                mac_total - mac_absorption - scatter[0].sum(axis=1)
+            )
+            p0_tolerance = 1.0e-12 * np.maximum(np.abs(mac_total), 1.0)
+            if np.any(p0_residual < -p0_tolerance):
+                worst = int(np.argmin(p0_residual))
+                raise ValueError(
+                    f"{label}: macrolib P0 scatter plus absorption exceeds "
+                    f"total in group {worst + 1}"
+                )
+
+            transport_method: str | None = None
+            mac_transport: np.ndarray | None = None
+            if "transport_total" in group:
+                if n_orders_mac > 1:
+                    correction = scatter[1].sum(axis=1)
+                    transport_method = "macrolib_p1_outscatter"
+                else:
+                    correction = np.zeros_like(mac_total)
+                    transport_method = "macrolib_p0_total"
+                mac_transport = mac_total - correction
+                selected_transport = mac_transport[fill]
+                if (
+                    not np.all(np.isfinite(selected_transport))
+                    or np.any(selected_transport <= 0.0)
+                ):
+                    raise ValueError(
+                        f"{label}: {transport_method} produced non-positive or "
+                        "non-finite transport_total in a group selected for fill"
+                    )
 
             _fill_dataset(group, fill, "total", mac_total)
             _fill_dataset(group, fill, "absorption", mac_absorption)
@@ -232,6 +296,9 @@ def fill_zero_flux_groups(
                 _fill_dataset(group, fill, "nu_fission", _group_vector(xsdata.nu_fission[temp_idx]))
 
             matrix = group["scatter_matrix"][:]
+            # Do not retain noisy higher moments in a substituted material row
+            # when the source macrolib carries fewer Legendre orders.
+            matrix[:, fill, :] = 0.0
             for order in range(min(matrix.shape[0], n_orders_mac)):
                 matrix[order][fill, :] = scatter[order][fill, :]
             group["scatter_matrix"][...] = matrix
@@ -241,11 +308,14 @@ def fill_zero_flux_groups(
                 group["scatter_matrix_std_dev"][...] = std
 
             if "transport_total" in group:
-                if n_orders_mac > 1:
-                    correction = scatter[1].sum(axis=1)
-                else:
-                    correction = np.zeros_like(mac_total)
-                _fill_dataset(group, fill, "transport_total", mac_total - correction)
+                assert mac_transport is not None
+                assert transport_method is not None
+                _fill_dataset(group, fill, "transport_total", mac_transport)
+                group.attrs["zero_flux_transport_method"] = transport_method
+                group.attrs["zero_flux_scatter_format"] = scatter_format
+                group.attrs["zero_flux_scatter_order"] = int(
+                    getattr(xsdata, "order", n_orders_mac - 1)
+                )
 
             # Preserve provenance when a file is filled in more than one pass
             # (for example zero-flux first and an opt-in noise criterion

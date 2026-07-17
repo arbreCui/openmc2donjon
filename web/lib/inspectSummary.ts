@@ -23,6 +23,7 @@ export type InspectProductionInput = Pick<
   | "mixture_count"
   | "transport_total"
   | "h_factor"
+  | "inverse_velocity"
   | "fissionable_mixtures"
   | "std_dev_datasets"
   | "std_dev_expected_datasets"
@@ -32,6 +33,7 @@ export interface InspectProductionStats {
   mesh: InspectProductionStat;
   transport: InspectProductionStat;
   hFactor: InspectProductionStat;
+  inverseVelocity: InspectProductionStat;
   stdDev: InspectProductionStat;
 }
 
@@ -53,12 +55,18 @@ export function inspectProductionStats(
       value: `${data.transport_total} / ${calcCount}`,
       tone: data.transport_total === calcCount ? "pass" : "warn",
       detail:
-        "Explicit transport_total supports the deterministic diffusion/SPN route.",
+        "Dataset presence only; the audit checks flux-weighted P1 consistency when a bound flux exists.",
     },
     hFactor: {
       value: `${data.h_factor} / ${data.mixture_count}`,
       tone: data.h_factor >= data.fissionable_mixtures ? "pass" : "warn",
       detail: "Needed for power normalization in fissionable mixtures.",
+    },
+    inverseVelocity: {
+      value: `${data.inverse_velocity} / ${calcCount}`,
+      tone: data.inverse_velocity === calcCount ? "pass" : "warn",
+      detail:
+        "Needed for kinetics/transients; incomplete coverage means steady-state use only.",
     },
     stdDev: {
       value: stdDevCoverageLabel(data),
@@ -68,7 +76,7 @@ export function inspectProductionStats(
           ? "pass"
           : "warn",
       detail:
-        "Tally uncertainty is optional by default but important for production audits.",
+        "Coverage says data exist; the production audit separately checks their magnitude.",
     },
   };
 }

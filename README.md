@@ -274,8 +274,9 @@ layers, the handoff contains 3860 spatial mixtures.
 - energy-bound consistency and known mesh audit metadata;
 - scatter row-balance, chi normalization, ADF face consistency, and
   transport/P1 consistency gates;
-- statistical-uncertainty visibility when `*_std_dev` datasets are present,
-  with optional hard coverage gates for production workflows.
+- complete `*_std_dev` coverage in production, a hard uncertainty gate for
+  one-dimensional/P0 production data, and warning-level disclosure of noisy
+  P1+ moments unless a model-specific all-data criterion is declared.
 
 Details:
 

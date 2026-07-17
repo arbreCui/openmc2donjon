@@ -225,7 +225,11 @@ def build_macrolib_blocks(
             "HDF5 input contract; the DONJON ENERGY block is derived by reversal"
         )
     for mix in mixtures:
-        _validate_mixture(mix, ngroups)
+        # L_MACROLIB carries the fission source as NUSIGF and CHI but has no
+        # NFTOT record from which to recover sigma-fission.  This matters when
+        # an accepted MACROLIB is read and assembled into another MACROLIB.
+        # HDF5 handoffs and L_MULTICOMPO writes remain strict about fission XS.
+        _validate_mixture(mix, ngroups, require_fission_xs=False)
         _validate_macrolib_vectors(mix, ngroups)
     _validate_adf_layout(mixtures)
     _validate_sph_layout(mixtures)

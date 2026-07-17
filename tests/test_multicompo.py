@@ -401,7 +401,7 @@ class MultiCompoSmokeTests(unittest.TestCase):
 
         np.testing.assert_allclose(mixtures[0].inverse_velocity, [1.0e-8, 2.0e-6])
 
-    def test_nonfissionable_mixture_ignores_fission_noise(self) -> None:
+    def test_nonfissionable_mixture_rejects_fission_noise(self) -> None:
         mixture = MixtureXS(
             name="moderator",
             total=np.array([0.5]),
@@ -413,14 +413,110 @@ class MultiCompoSmokeTests(unittest.TestCase):
             fissionable=False,
         )
 
-        blocks = build_multicompo_blocks(
-            [mixture],
-            np.array([1.0e-5, 1.0e7]),
-            root_name="CPO",
-            comment="noise guard",
-        )
+        with self.assertRaisesRegex(
+            ValueError, "fissionable=false requires zero fission, nu_fission, chi"
+        ):
+            build_multicompo_blocks(
+                [mixture],
+                np.array([1.0e-5, 1.0e7]),
+                root_name="CPO",
+                comment="noise guard",
+            )
 
-        self.assertNotIn("NUSIGF", {block.name for block in blocks if block.name})
+    def test_read_mgxs_hdf5_rejects_incomplete_declared_fission_source(self) -> None:
+        import h5py
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "incomplete_fission.h5"
+            with h5py.File(path, "w") as h5:
+                h5.attrs["energy_groups"] = 1
+                h5.attrs["legendre_order"] = 0
+                h5.create_dataset("energy_bounds", data=[1.0e-5, 1.0e7])
+                fuel = h5.create_group("mixtures").create_group("fuel")
+                fuel.attrs["fissionable"] = True
+                fuel.attrs["scatter_axes"] = "moment,from,to"
+                fuel.create_dataset("total", data=[0.5])
+                fuel.create_dataset("absorption", data=[0.05])
+                fuel.create_dataset("fission", data=[0.01])
+                fuel.create_dataset("nu_fission", data=[0.0])
+                fuel.create_dataset("chi", data=[1.0])
+                fuel.create_dataset("scatter_matrix", data=[[[0.1]]])
+
+            with self.assertRaisesRegex(
+                ValueError, "fissionable=true requires nonzero nu_fission"
+            ):
+                read_mgxs_hdf5(path)
+
+    def test_read_mgxs_hdf5_rejects_fission_source_support_mismatch(self) -> None:
+        import h5py
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "fission_support_mismatch.h5"
+            with h5py.File(path, "w") as h5:
+                h5.attrs["energy_groups"] = 2
+                h5.attrs["legendre_order"] = 0
+                h5.create_dataset("energy_bounds", data=[1.0e-5, 1.0, 1.0e7])
+                fuel = h5.create_group("mixtures").create_group("fuel")
+                fuel.attrs["fissionable"] = True
+                fuel.attrs["scatter_axes"] = "moment,from,to"
+                fuel.create_dataset("total", data=[0.5, 0.6])
+                fuel.create_dataset("absorption", data=[0.05, 0.06])
+                fuel.create_dataset("fission", data=[0.01, 0.02])
+                fuel.create_dataset("nu_fission", data=[0.025, 0.0])
+                fuel.create_dataset("chi", data=[1.0, 0.0])
+                fuel.create_dataset(
+                    "scatter_matrix", data=[[[0.1, 0.0], [0.0, 0.2]]]
+                )
+
+            with self.assertRaisesRegex(
+                ValueError, "identical positive group support"
+            ):
+                read_mgxs_hdf5(path)
+
+    def test_read_and_write_reject_nonfinite_volume(self) -> None:
+        import h5py
+
+        for volume in (float("nan"), float("inf"), float("-inf")):
+            with self.subTest(volume=volume), tempfile.TemporaryDirectory() as tmpdir:
+                path = Path(tmpdir) / "bad_volume.h5"
+                with h5py.File(path, "w") as h5:
+                    h5.attrs["energy_groups"] = 1
+                    h5.attrs["legendre_order"] = 0
+                    h5.create_dataset("energy_bounds", data=[1.0e-5, 1.0e7])
+                    mod = h5.create_group("mixtures").create_group("mod")
+                    mod.attrs["fissionable"] = False
+                    mod.attrs["scatter_axes"] = "moment,from,to"
+                    mod.attrs["volume"] = volume
+                    mod.create_dataset("total", data=[0.5])
+                    mod.create_dataset("absorption", data=[0.05])
+                    mod.create_dataset("fission", data=[0.0])
+                    mod.create_dataset("nu_fission", data=[0.0])
+                    mod.create_dataset("chi", data=[0.0])
+                    mod.create_dataset("scatter_matrix", data=[[[0.1]]])
+
+                with self.assertRaisesRegex(
+                    ValueError, "volume attribute must be positive and finite"
+                ):
+                    read_mgxs_hdf5(path)
+
+        mixture = MixtureXS(
+            name="mod",
+            total=np.array([0.5]),
+            absorption=np.array([0.05]),
+            fission=np.array([0.0]),
+            nu_fission=np.array([0.0]),
+            chi=np.array([0.0]),
+            scatter_matrix=np.array([[[0.1]]]),
+            fissionable=False,
+            volume=float("nan"),
+        )
+        with self.assertRaisesRegex(ValueError, "volume must be positive and finite"):
+            build_multicompo_blocks(
+                [mixture],
+                np.array([1.0e-5, 1.0e7]),
+                root_name="CPO",
+                comment="bad volume",
+            )
 
     def test_writes_multiple_legendre_moments(self) -> None:
         mixture = MixtureXS(
@@ -553,6 +649,11 @@ class MultiCompoSmokeTests(unittest.TestCase):
                 fuel.create_dataset("nu_fission", data=[0.0, 0.0, 0.0])
                 fuel.create_dataset("chi", data=[0.0, 0.0, 0.0])
                 fuel.create_dataset("scatter_matrix", data=raw_scatter)
+                fuel.create_dataset(
+                    "transport_total",
+                    data=np.array([0.5, 0.6, 0.7])
+                    - raw_scatter[:, :, 1].sum(axis=1),
+                )
 
             mixtures, _ = read_mgxs_hdf5(path)
 
@@ -563,6 +664,63 @@ class MultiCompoSmokeTests(unittest.TestCase):
             mixtures[0].transport_total,
             np.array([0.5, 0.6, 0.7]) - raw_scatter[:, :, 1].sum(axis=1),
         )
+
+    def test_read_mgxs_hdf5_rejects_p1_without_explicit_transport(self) -> None:
+        import h5py
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "p1_without_transport.h5"
+            with h5py.File(path, "w") as h5:
+                h5.attrs["energy_groups"] = 2
+                h5.attrs["legendre_order"] = 1
+                h5.attrs["scatter_axes"] = "moment,from,to"
+                h5.create_dataset("energy_bounds", data=[1.0e-5, 1.0, 1.0e7])
+                fuel = h5.create_group("mixtures").create_group("fuel")
+                fuel.attrs["fissionable"] = False
+                fuel.create_dataset("total", data=[0.5, 0.6])
+                fuel.create_dataset("absorption", data=[0.05, 0.06])
+                fuel.create_dataset("fission", data=[0.0, 0.0])
+                fuel.create_dataset("nu_fission", data=[0.0, 0.0])
+                fuel.create_dataset("chi", data=[0.0, 0.0])
+                fuel.create_dataset(
+                    "scatter_matrix",
+                    data=np.array(
+                        [
+                            [[0.1, 0.2], [0.0, 0.3]],
+                            [[0.01, 0.02], [0.03, 0.04]],
+                        ]
+                    ),
+                )
+
+            with self.assertRaisesRegex(
+                ValueError, "P1 scattering requires an explicit transport_total"
+            ):
+                read_mgxs_hdf5(path)
+
+    def test_read_mgxs_hdf5_uses_root_scatter_axes_for_cubic_p1(self) -> None:
+        import h5py
+
+        raw_scatter = np.arange(8, dtype=float).reshape(2, 2, 2)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "root_axes_p1.h5"
+            with h5py.File(path, "w") as h5:
+                h5.attrs["energy_groups"] = 2
+                h5.attrs["legendre_order"] = 1
+                h5.attrs["scatter_axes"] = "moment,from,to"
+                h5.create_dataset("energy_bounds", data=[1.0e-5, 1.0, 1.0e7])
+                fuel = h5.create_group("mixtures").create_group("fuel")
+                fuel.attrs["fissionable"] = False
+                fuel.create_dataset("total", data=[20.0, 21.0])
+                fuel.create_dataset("transport_total", data=[19.0, 20.0])
+                fuel.create_dataset("absorption", data=[1.0, 1.1])
+                fuel.create_dataset("fission", data=[0.0, 0.0])
+                fuel.create_dataset("nu_fission", data=[0.0, 0.0])
+                fuel.create_dataset("chi", data=[0.0, 0.0])
+                fuel.create_dataset("scatter_matrix", data=raw_scatter)
+
+            mixtures, _ = read_mgxs_hdf5(path)
+
+        np.testing.assert_allclose(mixtures[0].scatter_matrix, raw_scatter)
 
     def test_read_mgxs_hdf5_prefers_transport_total_dataset(self) -> None:
         import h5py

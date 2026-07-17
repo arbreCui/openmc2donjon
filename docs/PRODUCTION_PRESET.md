@@ -21,8 +21,11 @@ physics inputs, not for early format debugging.
 | CHI normalization | hard fail | Ensure fission spectra are usable probability vectors. |
 | ADF face consistency | hard fail when ADF exists | Prevent mixed face naming across calculations. |
 | Transport/P1 consistency | hard fail when both are present | Catch inconsistent explicit and derived transport data. |
-| NU ratio | warning | Flag suspicious `nu_fission / fission` values without rejecting valid fuel variations. |
-| MGXS statistical uncertainty coverage | warning by default; optional hard fail | Keep OpenMC MGXS tally noise visible in the audit trail. |
+| Fission-source support | hard fail | Require `fission` and `nu_fission` to have identical positive group support. |
+| Effective neutron yield | information | Record `nu_fission / fission` extrema without imposing a universal empirical interval. |
+| MGXS statistical uncertainty coverage | hard fail | Require matching `*_std_dev` data for every eligible exported MGXS dataset. |
+| Production-critical uncertainty | hard fail | Apply the canonical statistical-quality ceiling to 1D MGXS data and P0 scatter. |
+| Higher scatter moments | warning by default | Preserve full coverage and disclose all-data maxima/top findings; require an explicit model-specific `--uncertainty-fail` criterion to hard-gate P1+. |
 
 ## OpenMC-Side SPH Evidence
 
@@ -44,23 +47,27 @@ For SPH handoffs, production review should record:
   explicit `NSPH` data in the handoff;
 - the same MGXS preflight checks listed above.
 
-A single isolated assembly generally does not need SPH. Colorsets and
-full-core macro models do, because the downstream deterministic problem has
-multiple homogenized output regions/media.
+A single isolated assembly often does not need SPH. Colorsets and full-core
+macro models may need it when the declared coarse-model equivalence cannot be
+accepted without a native SPH closure; region count alone never makes SPH
+mandatory.
 
-Statistical uncertainty coverage has an opt-in shape, with two separate
-inputs:
+Statistical uncertainty has two separate inputs:
 
 - MGXS `*_std_dev` datasets describe uncertainty on the exported cross-section
-  means. Production preflight reports missing coverage as audit information by
-  default; use `--require-std-dev-coverage` or
-  `acceptance.require_mgxs_std_dev_coverage = true` when the workflow policy
-  requires OpenMC tally uncertainty to be present for every eligible MGXS field.
+  means. Converter production preflight requires complete coverage for every
+  eligible MGXS field. Engineering checks may keep coverage optional.
 - The OpenMC CE reference flux used for SPH may carry a sibling
   `openmc_volume_flux_std_dev` (or `<reference_dataset>_std_dev`) dataset. Use
   workflow-specific checks when the SPH derivation must prove reference-flux
   uncertainty coverage, and use a relative uncertainty ceiling when the case
   policy needs one.
+
+The default production hard gate applies to one-dimensional MGXS fields and
+P0 scatter. P1 and higher signed moments stay visible in coverage, all-data
+maxima, warnings, and top findings, but are not assigned a universal hard
+relative-error bound. A caller can declare such a model-specific criterion
+with `--uncertainty-fail`; that explicit value is recorded in the receipt.
 
 ## What This Preset Does Not Prove
 

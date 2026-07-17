@@ -310,7 +310,8 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="REL",
         help=(
             "with --check, fail if explicit transport_total differs from "
-            "total minus P1 scatter out by more than REL"
+            "the flux-weighted incoming-to-outgoing P1 transport identity by "
+            "more than REL (requires a bound /openmc_volume_flux)"
         ),
     )
     parser.add_argument(
@@ -747,7 +748,9 @@ def _direct_convert_summary_payload(
     }
 
 
-def _direct_production_thresholds(args: argparse.Namespace) -> dict[str, float] | None:
+def _direct_production_thresholds(
+    args: argparse.Namespace,
+) -> dict[str, float | None] | None:
     if not args.production:
         return None
     return effective_production_thresholds(
