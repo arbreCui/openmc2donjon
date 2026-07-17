@@ -30,6 +30,66 @@ one declared MGXS HDF5
   -> user- or project-defined DRAGON/DONJON consumer
 ```
 
+## Web Interface Quick Start
+
+The local Web interface exposes the same Converter and validation code as the
+CLI. Python 3.10 or newer is required; Node.js 20 is the CI-tested frontend
+runtime.
+
+Install both parts from a fresh checkout:
+
+```sh
+git clone https://github.com/arbreCui/openmc2donjon.git
+cd openmc2donjon
+python -m pip install -e ".[web]"
+cd web
+npm ci
+cd ..
+```
+
+Start the backend from the repository root in the first terminal:
+
+```sh
+openmc2donjon serve              # http://localhost:8000
+```
+
+Start the frontend in a second terminal:
+
+```sh
+cd web
+npm run dev                      # http://localhost:3000
+```
+
+Then open <http://localhost:3000>. Start on the page that matches the job:
+
+| Page | Use it when |
+| --- | --- |
+| [`/convert`](http://localhost:3000/convert) | You already have an MGXS HDF5 and want the required checked `L_MULTICOMPO` or `L_MACROLIB` handoff. |
+| [`/inspect`](http://localhost:3000/inspect) | You only want to browse and visualize an OpenMC MGXS HDF5 without converting it. |
+| [`/openmc`](http://localhost:3000/openmc) | You do not yet have a Converter-ready OpenMC MGXS HDF5 and need to prepare one first. |
+| [`/equivalence`](http://localhost:3000/equivalence) | The declared model requires physical SPH equivalence after the reference conversion. |
+| [`/projects`](http://localhost:3000/projects) | You need to coordinate repeated, multi-component, or full-core jobs. |
+| [`/pygan`](http://localhost:3000/pygan) | You want to check PyGan availability or compare the ASCII and PyGan writers. |
+| [`/donjon`](http://localhost:3000/donjon) | You are ready to consume or verify the converted object in DONJON. |
+
+`openmc2donjon serve` is live mode: it reads real local files and runs the real
+package APIs. For a frontend-only demonstration, use `openmc2donjon serve
+--mock`; mock mode serves fixtures and does not perform a production
+conversion.
+
+PyGan is optional. To enable it in the Web interface, start the backend from
+the same Python environment in which this command reports
+`pygan_backend=available`:
+
+```sh
+openmc2donjon pygan-doctor
+```
+
+If PyGan is unavailable, Converter remains fully usable through its built-in
+ASCII writer. See [Web Interface Details](#web-interface-details) and
+[`web/README.md`](web/README.md) for custom backend addresses and development
+notes.
+
 When physical SPH is selected, the primary route sends the fine OpenMC
 reference through Converter first, then solves native DRAGON `SPH:` on the
 project-declared coarse geometry and verifies the corrected object in DONJON.
@@ -415,7 +475,7 @@ CI runs the same unit-test matrix on Python 3.10, 3.11, and 3.12, plus Ruff,
 the whitelisted strict mypy gate, and a frontend job that lints, type-checks,
 and builds the `web/` Next.js project.
 
-## Web UI (preview)
+## Web Interface Details
 
 A localhost-only Next.js + FastAPI web UI lives in [`web/`](web/), wired to
 the same Python package as the CLI. It includes a command workspace
@@ -424,15 +484,8 @@ the same Python package as the CLI. It includes a command workspace
 project coordination (`Projects`), PyGan integration (`PyGan`), DONJON guidance
 (`DONJON`), and generic CLI command builders (`Builder`).
 
-```sh
-python -m pip install -e ".[web]"
-openmc2donjon serve              # FastAPI on http://localhost:8000
-
-# In another shell:
-cd web
-npm install
-npm run dev                      # Next.js on http://localhost:3000
-```
+For installation, the two-terminal launch sequence, and direct page links,
+follow [Web Interface Quick Start](#web-interface-quick-start).
 
 `openmc2donjon serve --mock` returns fixture data instead of calling the
 real package APIs — useful for frontend-only development. See
